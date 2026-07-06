@@ -13,12 +13,40 @@ export default function AiSettingsCard() {
   const [localLlmUrl, setLocalLlmUrl] = useState("http://localhost:11434");
   const [localLlmModel, setLocalLlmModel] = useState("gemma2");
   
+  // Ollama 서버에 기설치된 모델 목록 관리 상태
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  
   // 연결 테스트를 위한 상태
   const [isTesting, setIsTesting] = useState(false);
   const [testStatus, setTestStatus] = useState<"idle" | "success" | "failed">("idle");
   const [testError, setTestError] = useState("");
   
   const [isSaved, setIsSaved] = useState(false);
+
+  // 로컬 Ollama 모델 목록을 비동기 조회하는 헬퍼 함수
+  const fetchLlmModels = async (url: string) => {
+    if (!url) return;
+    setIsLoadingModels(true);
+    try {
+      const res = await apiFetch('/api/settings/local-llm-models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ local_llm_url: url })
+      });
+      const data = await res.json();
+      if (data.success && data.models) {
+        setAvailableModels(data.models);
+      } else {
+        setAvailableModels([]);
+      }
+    } catch (err) {
+      console.error("로컬 모델 목록 로드 실패:", err);
+      setAvailableModels([]);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
 
   useEffect(() => {
     // 1. 기존 Gemini AI 모델명 불러오기
@@ -61,7 +89,10 @@ export default function AiSettingsCard() {
     apiFetch('/api/settings?key=local_llm_url')
       .then(res => res.json())
       .then(data => {
-        if (data.success && data.value) setLocalLlmUrl(data.value);
+        if (data.success && data.value) {
+          setLocalLlmUrl(data.value);
+          fetchLlmModels(data.value);
+        }
       })
       .catch(e => console.error(e));
 
@@ -91,6 +122,7 @@ export default function AiSettingsCard() {
       const data = await res.json();
       if (data.success) {
         setTestStatus("success");
+        fetchLlmModels(localLlmUrl); // 연결 성공 시 모델 목록 페칭
       } else {
         setTestStatus("failed");
         setTestError(data.error || "연결 테스트 실패");
@@ -297,14 +329,33 @@ export default function AiSettingsCard() {
                     <div className="pl-4 pr-3 flex items-center justify-center shrink-0">
                       <Cpu className="h-4 w-4 text-indigo-400" />
                     </div>
-                    <input
-                      type="text"
-                      placeholder="gemma2, gemma:2b, llama3 등"
-                      value={localLlmModel}
-                      onChange={(e) => setLocalLlmModel(e.target.value)}
-                      className="w-full py-2.5 outline-none text-xs font-bold placeholder-indigo-300 bg-transparent text-indigo-950"
-                      title="Local Model Name"
-                    />
+                    {isLoadingModels ? (
+                      <div className="w-full py-2.5 px-1 text-xs font-bold text-slate-400 bg-transparent animate-pulse">
+                        설치된 모델 목록을 조회 중...
+                      </div>
+                    ) : availableModels.length > 0 ? (
+                      <select
+                        value={localLlmModel}
+                        onChange={(e) => setLocalLlmModel(e.target.value)}
+                        className="w-full py-2.5 outline-none text-xs font-bold bg-transparent text-indigo-950 px-1 border-none cursor-pointer"
+                        title="Local Model Name"
+                      >
+                        {availableModels.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="연결 테스트를 클릭해 모델을 로드하세요"
+                        value={localLlmModel}
+                        onChange={(e) => setLocalLlmModel(e.target.value)}
+                        className="w-full py-2.5 outline-none text-xs font-bold placeholder-indigo-300 bg-transparent text-indigo-950"
+                        title="Local Model Name"
+                      />
+                    )}
                   </div>
                 </div>
 
