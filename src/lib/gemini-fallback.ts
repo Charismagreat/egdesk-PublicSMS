@@ -117,7 +117,9 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
   // 4. 원래 구글 API가 반환하던 JSON 구조와 호환되는 가짜 Gemini Response 객체 리턴
   let text = '';
   if (callerRes && typeof callerRes === 'object') {
-    if ('text' in callerRes) {
+    if ('content' in callerRes && callerRes.content !== undefined && callerRes.content !== null) {
+      text = String(callerRes.content);
+    } else if ('text' in callerRes) {
       text = String(callerRes.text);
     } else {
       text = JSON.stringify(callerRes);

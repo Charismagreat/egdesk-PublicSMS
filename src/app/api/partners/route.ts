@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, deleteRows, executeSQL } from '../../../../egdesk-helpers';
-import { getTenantId } from '@/lib/tenant';
 
 /**
  * 📇 B2B 거래처 담당자(명함첩) 데이터 힐링 헬퍼
@@ -108,11 +107,6 @@ async function healPartnerContactsData() {
  */
 export async function GET(req: Request) {
   try {
-    const tenantId = await getTenantId();
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: '인증이 필요합니다.' }, { status: 401 });
-    }
-
     // 백그라운드 데이터 힐링 프로세스 기동 (타입 Affinity 및 이전 임시 ID로 인한 외래키 매칭 깨짐 자동 보정)
     await healPartnerContactsData();
 
@@ -125,7 +119,7 @@ export async function GET(req: Request) {
     // 0-0. 기존 명함 대장 조회 (AI 추천용)
     // ────────────────────────────────────────────────────────
     if (action === 'contacts') {
-      const contactsRes = await queryTable('crm_partner_contacts', { filters: { tenant_id: tenantId } });
+      const contactsRes = await queryTable('crm_partner_contacts', {});
       const contacts = (contactsRes.rows || []).filter((c: any) => !c.deleted_at);
       return NextResponse.json({ success: true, contacts });
     }
@@ -245,18 +239,18 @@ export async function GET(req: Request) {
     // ────────────────────────────────────────────────────────
     // 2. 전체 거래처 리스트 조회 및 실시간 거래 지표 합계 산출
     // ────────────────────────────────────────────────────────
-    const partnersRes = await queryTable('crm_partners', { filters: { tenant_id: tenantId } });
+    const partnersRes = await queryTable('crm_partners', {});
     const partners = (partnersRes.rows || []).filter((pt: any) => !pt.deleted_at);
 
     // 각 거래처별 수/발주 총 거래액을 집계하기 위해 전체 발주/수주 테이블 마이닝
     let allPos: any[] = [];
     let allSos: any[] = [];
     try {
-      const poRes = await executeSQL('SELECT vendor_name, status, total_amount FROM crm_purchase_orders WHERE deleted_at IS NULL');
-      allPos = (poRes && (poRes as any).rows) ? (poRes as any).rows : (Array.isArray(poRes) ? poRes : []);
+      const poRes = await queryTable('crm_purchase_orders', {});
+      allPos = (poRes.rows || []).filter((r: any) => !r.deleted_at);
       
-      const soRes = await executeSQL('SELECT customer_name, status, total_amount FROM crm_sales_orders WHERE deleted_at IS NULL');
-      allSos = (soRes && (soRes as any).rows) ? (soRes as any).rows : (Array.isArray(soRes) ? soRes : []);
+      const soRes = await queryTable('crm_sales_orders', {});
+      allSos = (soRes.rows || []).filter((r: any) => !r.deleted_at);
     } catch (e) {
       console.error('SCM 집계용 베이스 마이닝 지연:', e);
     }
@@ -339,11 +333,6 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
   try {
-    const tenantId = await getTenantId();
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: '인증이 필요합니다.' }, { status: 401 });
-    }
-
     const body = await req.json();
     const { 
       type, 
@@ -374,7 +363,6 @@ export async function POST(req: Request) {
 
     await insertRows('crm_partners', [{
       id: partnerId,
-      tenant_id: tenantId,
       type: finalType,
       company_name,
       business_number,
