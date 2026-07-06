@@ -7,7 +7,7 @@ import {
   ClipboardList, CreditCard, CalendarDays, Truck, Send, 
   PackageSearch, Package, UserCog, Zap, Ticket, Landmark, Globe, Briefcase, HelpCircle,
   ArrowRightLeft, Handshake, Sparkles, Coins, Database, Compass,
-  ChevronUp, ChevronDown, Check, Save, ShieldAlert, GripVertical, Shield, CheckSquare, Wrench, Award, Scale, Key, Mic
+  ChevronUp, ChevronDown, Check, Save, ShieldAlert, GripVertical, Shield, CheckSquare, Wrench, Award, Scale, Key, Mic, Bot
 } from "lucide-react";
 
 // 커스텀 인스타그램 아이콘 SVG
@@ -105,7 +105,8 @@ const MENU_METADATA_MAP: Record<string, { label: string; icon: any; color: strin
   "/rnd-management": { label: "연구소 관리 AI", icon: Award, color: "text-amber-550" },
   "/form-management-new": { label: "양식 관리 AI", icon: ClipboardList, color: "text-emerald-500" },
   "/meeting-minutes": { label: "회의 기록 AI", icon: Mic, color: "text-purple-550" },
-  "/import-customs": { label: "수입 통관 AI", icon: Truck, color: "text-indigo-600" }
+  "/import-customs": { label: "수입 통관 AI", icon: Truck, color: "text-indigo-600" },
+  "/ai-settings": { label: "AI 비서 설정", icon: Bot, color: "text-indigo-400" }
 };
 
 // 💡 업무 종류별(카테고리) 정렬 기준 정의
@@ -157,7 +158,8 @@ const CATEGORY_MAP: Record<string, number> = {
   "/lawyer-ai": 4,
   "/rnd-management": 4,
   "/meeting-minutes": 4,
-  "/ai-briefing": 4
+  "/ai-briefing": 4,
+  "/ai-settings": 4
 };
 
 interface MenuSettingItem {

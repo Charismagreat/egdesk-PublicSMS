@@ -52,6 +52,7 @@ function DynamicTitleHandler() {
       "/form-management-new": "양식 관리 AI",
       "/meeting-minutes": "회의 기록 AI",
       "/settings": "시스템 설정",
+      "/ai-settings": "AI 비서 및 하이브리드 라우팅 설정",
       "/login": "로그인",
     };
 
