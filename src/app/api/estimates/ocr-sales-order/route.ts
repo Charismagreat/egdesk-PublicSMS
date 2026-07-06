@@ -25,6 +25,13 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    try {
+      const debugDocs = await queryTable('crm_knowledge_documents', {});
+      console.log('🔍 [DEBUG RAG DOCUMENTS]:', JSON.stringify(debugDocs.rows || [], null, 2));
+    } catch (e: any) {
+      console.log('🔍 [DEBUG RAG FAILURE]:', e.message);
+    }
+
     const { searchParams } = new URL(req.url);
     const action = searchParams.get('action') || 'analyze';
 
