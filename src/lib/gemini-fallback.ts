@@ -41,16 +41,18 @@ export async function callAiCallerTool(
   toolName: string,
   args: Record<string, any> = {}
 ): Promise<any> {
-  const body = JSON.stringify({ tool: toolName, arguments: args });
   const apiUrl = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) || EGDESK_CONFIG.apiUrl;
   
-  const response = await fetch(`${apiUrl}/ai-caller/tools/call`, {
-    method: 'POST',
-    headers: buildServerEgdeskHeaders(),
-    body
-  });
-
-  return parseEgdeskMcpToolResponse(response);
+  try {
+    const listRes = await fetch(`${apiUrl}/conversations/tools`, {
+      method: 'GET',
+      headers: buildServerEgdeskHeaders()
+    });
+    const listData = await listRes.text();
+    throw new Error(`[DEBUG CONVERSATIONS TOOLS]: ${listData}`);
+  } catch (err: any) {
+    throw new Error(err.message);
+  }
 }
 
 export async function callAiCaller(prompt: string, options: AiCallerCallOptions = {}) {
