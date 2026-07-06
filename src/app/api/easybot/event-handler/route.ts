@@ -1,21 +1,37 @@
 import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, executeSQL } from '../../../../../egdesk-helpers';
-import { getAppSetting } from '@/lib/app-settings';
-import { getTenantId } from '@/lib/tenant';
+import { queryTable, insertRows, executeSQL, getGeminiApiKey } from '../../../../../egdesk-helpers';
 
 // 시스템 설정에서 Google API Key 및 모델 조회
 async function getAiConfig() {
   try {
-    const tenantId = await getTenantId();
-    const apiKey = await getAppSetting('google_ai_api_key', tenantId);
-    const modelValue = await getAppSetting('google_ai_model', tenantId);
-    const model = modelValue || 'gemini-3.5-flash';
+    const keyRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } });
+    let googleApiKey = keyRes.rows && keyRes.rows.length > 0 ? keyRes.rows[0].value : null;
+
+    // 만약 DB에 키가 없거나 실물 구글 API 키 형식이 아닌 경우 (SaaS 환경 / ai-caller 활용 등)
+    // 이지데스크 프록시를 통해 복호화된 키를 수신하여 구동합니다.
+    if (!googleApiKey || !googleApiKey.startsWith('AIzaSy')) {
+      try {
+        const decryptedKeyRes = await getGeminiApiKey({ name: googleApiKey || '' });
+        if (decryptedKeyRes && decryptedKeyRes.success && decryptedKeyRes.apiKey) {
+          googleApiKey = decryptedKeyRes.apiKey;
+        }
+      } catch (keyErr: any) {
+        console.error('⚠️ EGDesk에서 실제 구글 API 키를 해독해오는 데 실패했습니다:', keyErr.message);
+      }
+    }
+
+    const apiKey = googleApiKey || 'wonconduct';
+
+    const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
+    const model = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
+      ? modelRes.rows[0].value
+      : 'gemini-3.5-flash';
 
     return { apiKey, model };
   } catch (err) {
     console.error('[EasyBot Event Handler] AI 설정 로드 실패:', err);
-    return { apiKey: null, model: 'gemini-3.5-flash' };
+    return { apiKey: 'wonconduct', model: 'gemini-3.5-flash' };
   }
 }
 
@@ -164,8 +180,10 @@ export async function POST(req: Request) {
         // 🏢 DB에서 동적 회사 컨텍스트 조회
         let companyContext = "";
         try {
-          const tenantId = await getTenantId();
-          companyContext = await getAppSetting('easybot_company_context', tenantId) ?? "";
+          const companyContextRes = await queryTable('system_settings', { filters: { key: 'easybot_company_context' } });
+          if (companyContextRes.rows && companyContextRes.rows.length > 0) {
+            companyContext = companyContextRes.rows[0].value || "";
+          }
         } catch (dbErr) {
           console.warn('[EasyBot Event Handler] 회사 컨텍스트 조회 중 DB 오류:', dbErr);
         }

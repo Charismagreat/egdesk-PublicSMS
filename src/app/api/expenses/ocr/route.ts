@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows } from '@/../egdesk-helpers';
+import { queryTable, insertRows, getGeminiApiKey } from '@/../egdesk-helpers';
 
 export async function POST(req: Request) {
   try {
@@ -11,13 +11,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: '분석할 영수증 파일 데이터(Base64)가 누락되었습니다.' }, { status: 400 });
     }
 
-    // 1. DB에서 API 키 조회
+    // 1. DB에서 API 키 조회 및 이지데스크 연동 키 로드
     let apiKey: string | null = null;
     try {
       const settingsRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } });
-      apiKey = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
+      let googleApiKey = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
+
+      // 만약 DB에 키가 없거나 실물 구글 API 키 형식이 아닌 경우 (SaaS 환경 / ai-caller 활용 등)
+      // 이지데스크 프록시를 통해 복호화된 키를 수신하여 구동합니다.
+      if (!googleApiKey || !googleApiKey.startsWith('AIzaSy')) {
+        try {
+          const decryptedKeyRes = await getGeminiApiKey({ name: googleApiKey || '' });
+          if (decryptedKeyRes && decryptedKeyRes.success && decryptedKeyRes.apiKey) {
+            googleApiKey = decryptedKeyRes.apiKey;
+          }
+        } catch (keyErr: any) {
+          console.error('⚠️ EGDesk에서 실제 구글 API 키를 해독해오는 데 실패했습니다:', keyErr.message);
+        }
+      }
+      apiKey = googleApiKey || 'wonconduct';
     } catch (e) {
       console.error('Failed to get api key, using high-fidelity mockup OCR fallback');
+      apiKey = 'wonconduct';
     }
 
     // Base64 프리픽스 제거

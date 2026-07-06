@@ -1,28 +1,7 @@
 import { NextResponse } from 'next/server';
-import { queryTable } from '@/../egdesk-helpers';
+import { fetchGeminiWithFallback } from '../../../../../lib/gemini-fallback';
+import { queryTable, getGeminiApiKey } from '@/../egdesk-helpers';
 import crypto from 'crypto';
-import { getTenantId } from '@/lib/tenant';
-import { callAI } from '@/lib/ai-router';
-
-// JSON 문자열 내부에 포함된 실제 개행 문자(ASCII 10, 13)를 안전하게 이스케이프 처리하여 JSON 파싱 오류를 방지하는 헬퍼 함수
-function sanitizeJsonString(raw: string): string {
-  let inString = false;
-  let escaped = false;
-  let result = '';
-  for (let i = 0; i < raw.length; i++) {
-    const char = raw[i];
-    if (char === '"' && !escaped) {
-      inString = !inString;
-    }
-    if (inString && (char === '\n' || char === '\r')) {
-      result += '\\n';
-    } else {
-      result += char;
-    }
-    escaped = (char === '\\' && !escaped);
-  }
-  return result;
-}
 
 export const maxDuration = 60; // 60초 타임아웃
 export const dynamic = 'force-dynamic';
@@ -68,8 +47,30 @@ export async function POST(req: Request) {
       }
     }
 
-    // tenantId 가져오기
-    const tenantId = await getTenantId();
+    // 1. DB에서 구글 AI 설정 정보 로드 및 이지데스크 연동 키 조회
+    const settingsRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } });
+    let googleApiKey = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
+
+    // 만약 DB에 키가 없거나 실물 구글 API 키 형식이 아닌 경우 (SaaS 환경 / ai-caller 활용 등)
+    // 이지데스크 프록시를 통해 복호화된 키를 수신하여 구동합니다.
+    if (!googleApiKey || !googleApiKey.startsWith('AIzaSy')) {
+      try {
+        const decryptedKeyRes = await getGeminiApiKey({ name: googleApiKey || '' });
+        if (decryptedKeyRes && decryptedKeyRes.success && decryptedKeyRes.apiKey) {
+          googleApiKey = decryptedKeyRes.apiKey;
+        }
+      } catch (keyErr: any) {
+        console.error('⚠️ EGDesk에서 실제 구글 API 키를 해독해오는 데 실패했습니다:', keyErr.message);
+      }
+    }
+
+    // 여전히 키가 없다면 이지데스크가 중계할 수 있도록 'wonconduct'로 폴백 세팅합니다.
+    const apiKey = googleApiKey || 'wonconduct';
+
+    const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
+    const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
+      ? modelRes.rows[0].value
+      : 'gemini-3.5-flash';
 
     // 2. 사내 품목 대장 사전 정보를 로딩하여 Fuzzy 매칭 정확도 향상 유도 (type 컬럼도 함께 전송)
     const itemsRes = await queryTable('inventory_items', {});
@@ -124,26 +125,72 @@ ${itemReferenceText}
 Do NOT output anything other than this JSON string. No markdown block wrapper.
 `;
 
-    const aiRes = await callAI({
-      prompt: prompt,
-      purpose: 'INBOUND_OCR_SCAN',
-      imageInput: `data:${mimeType};base64,${base64Image}`,
-      responseMimeType: 'application/json',
-      tenantId
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`;
+
+    const response = await fetchGeminiWithFallback(geminiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Image
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          maxOutputTokens: 8192,
+          temperature: 0.7,
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              partnerName: { type: "STRING" },
+              inboundDate: { type: "STRING" },
+              originalTotalAmount: { type: "INTEGER" },
+              originalTotalQuantity: { type: "INTEGER" },
+              items: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    itemName: { type: "STRING" },
+                    spec: { type: "STRING" },
+                    barcode: { type: "STRING" },
+                    quantity: { type: "INTEGER" },
+                    price: { type: "INTEGER" },
+                    matchedItemId: { type: "STRING" },
+                    itemType: { type: "STRING" },
+                    note: { type: "STRING" }
+                  },
+                  required: ["itemName", "quantity", "price"]
+                }
+              }
+            },
+            required: ["partnerName", "items"]
+          }
+        }
+      })
     });
 
-    if (!aiRes.success) {
-      throw new Error('Gemini OCR API 호출 실패');
+    if (!response.ok) {
+      throw new Error(`Gemini OCR API 통신 실패: HTTP ${response.status}`);
     }
 
-    let responseText = aiRes.text;
-
+    const aiData = await response.json();
+    let responseText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
     // JSON 응답 정제 (혹시 있을 수 있는 마크다운 블록 래퍼 제거)
     responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
 
     try {
-      const sanitized = sanitizeJsonString(responseText);
-      const parsedOcr = JSON.parse(sanitized);
+      const parsedOcr = JSON.parse(responseText);
 
       // 2차 거래 메타데이터 조합 중복 검사
       let isMetaDuplicate = false;

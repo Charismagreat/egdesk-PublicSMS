@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import { executeSQL, insertRows, queryTable, listBusinessIdentitySnapshots, listKnowledgeDocuments, getKnowledgeDocument } from '../../../../../egdesk-helpers';
+import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
+import { executeSQL, insertRows, queryTable, listBusinessIdentitySnapshots, listKnowledgeDocuments, getKnowledgeDocument, getGeminiApiKey } from '../../../../../egdesk-helpers';
 import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
-import { getTenantId } from '@/lib/tenant';
-import { getAppSetting } from '@/lib/app-settings';
-import { callAI } from '@/lib/ai-router';
 
 // 최고 관리자(SUPER_ADMIN/PRESIDENT) 권한 검증 헬퍼
 async function verifyAdminRole() {
@@ -20,26 +18,6 @@ async function verifyAdminRole() {
   } catch {
     return { isAuthorized: false, role: 'SUB_OPERATOR', username: '' };
   }
-}
-
-// JSON 문자열 내부에 포함된 실제 개행 문자(ASCII 10, 13)를 안전하게 이스케이프 처리하여 JSON 파싱 오류를 방지하는 헬퍼 함수
-function sanitizeJsonString(raw: string): string {
-  let inString = false;
-  let escaped = false;
-  let result = '';
-  for (let i = 0; i < raw.length; i++) {
-    const char = raw[i];
-    if (char === '"' && !escaped) {
-      inString = !inString;
-    }
-    if (inString && (char === '\n' || char === '\r')) {
-      result += '\\n';
-    } else {
-      result += char;
-    }
-    escaped = (char === '\\' && !escaped);
-  }
-  return result;
 }
 
 export const maxDuration = 60; // 60초 타임아웃
@@ -176,8 +154,30 @@ export async function POST(req: Request) {
 
     const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
 
-    // tenantId 가져오기
-    const tenantId = await getTenantId();
+    // 1. DB에서 구글 AI 설정 정보 로드 및 이지데스크 연동 키 조회
+    const settingsRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } });
+    let googleApiKey = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
+
+    // 만약 DB에 키가 없거나 실물 구글 API 키 형식이 아닌 경우 (SaaS 환경 / ai-caller 활용 등)
+    // 이지데스크 프록시를 통해 복호화된 키를 수신하여 구동합니다.
+    if (!googleApiKey || !googleApiKey.startsWith('AIzaSy')) {
+      try {
+        const decryptedKeyRes = await getGeminiApiKey({ name: googleApiKey || '' });
+        if (decryptedKeyRes && decryptedKeyRes.success && decryptedKeyRes.apiKey) {
+          googleApiKey = decryptedKeyRes.apiKey;
+        }
+      } catch (keyErr: any) {
+        console.error('⚠️ EGDesk에서 실제 구글 API 키를 해독해오는 데 실패했습니다:', keyErr.message);
+      }
+    }
+
+    // 여전히 키가 없다면 이지데스크가 중계할 수 있도록 'wonconduct'로 폴백 세팅합니다.
+    const apiKey = googleApiKey || 'wonconduct';
+
+    const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
+    const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
+      ? modelRes.rows[0].value
+      : 'gemini-3.5-flash';
 
     // RAG 지식 규정 마이닝
     let rlsRulesText = '';
@@ -230,9 +230,9 @@ export async function POST(req: Request) {
     // 본사 프로필 로드 (기본값 주식회사 원컨덕터트레이딩/2428700357)
     let myCompanyProfile = { companyName: '주식회사 원컨덕터트레이딩', businessNumber: '2428700357' };
     try {
-      const myCompanySettingValue = await getAppSetting('my_company_profile', tenantId);
-      if (myCompanySettingValue) {
-        const parsed = JSON.parse(myCompanySettingValue);
+      const myCompanySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
+      if (myCompanySetting && myCompanySetting.rows && myCompanySetting.rows.length > 0) {
+        const parsed = JSON.parse(myCompanySetting.rows[0].value);
         if (parsed.companyName) myCompanyProfile.companyName = parsed.companyName;
         if (parsed.businessNumber) myCompanyProfile.businessNumber = parsed.businessNumber;
       }
@@ -274,19 +274,38 @@ export async function POST(req: Request) {
 `;
 
     
-    const aiResPass1 = await callAI({
-      prompt: promptPass1,
-      purpose: 'DIRECT_SO_OCR_1PASS',
-      imageInput: fileDataUri,
-      tenantId
+const geminiUrlPass1 = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`;
+
+    const responsePass1 = await fetchGeminiWithFallback(geminiUrlPass1, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: promptPass1 },
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Image
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: "text/plain"
+        }
+      })
     });
 
-    if (!aiResPass1.success) {
-      throw new Error('Gemini OCR Pass 1 API 호출 실패');
+    if (!responsePass1.ok) {
+      throw new Error(`Gemini OCR Pass 1 API 통신 실패: HTTP ${responsePass1.status}`);
     }
 
-    const responseTextPass1 = aiResPass1.text;
-
+    const aiDataPass1 = await responsePass1.json();
+    const responseTextPass1 = aiDataPass1.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
     if (!responseTextPass1) {
       throw new Error('1차 AI 판독 결과 텍스트가 비어 있습니다.');
     }
@@ -386,29 +405,61 @@ ${rlsRulesText}
 Do NOT output anything other than this JSON string. No markdown block wrapper.
 `;
 
-    const aiResPass2 = await callAI({
-      prompt: promptPass2,
-      purpose: 'DIRECT_SO_OCR_2PASS',
-      responseMimeType: 'application/json',
-      tenantId
+    const geminiUrlPass2 = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`;
+
+    const responsePass2 = await fetchGeminiWithFallback(geminiUrlPass2, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: promptPass2 }
+            ]
+          }
+        ],
+        generationConfig: {
+          
+          responseMimeType: "application/json"
+        }
+      })
     });
 
-    if (!aiResPass2.success) {
-      throw new Error('Gemini OCR Pass 2 API 호출 실패');
+    if (!responsePass2.ok) {
+      throw new Error(`Gemini OCR Pass 2 API 통신 실패: HTTP ${responsePass2.status}`);
     }
 
-    const responseTextPass2 = aiResPass2.text;
+    const aiDataPass2 = await responsePass2.json();
+    const responseTextPass2 = aiDataPass2.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+
+    // AI 토큰 사용량 로깅
+    try {
+      const prompt_tokens = (aiDataPass1.usageMetadata?.promptTokenCount || 0) + (aiDataPass2.usageMetadata?.promptTokenCount || 0);
+      const completion_tokens = (aiDataPass1.usageMetadata?.candidatesTokenCount || 0) + (aiDataPass2.usageMetadata?.candidatesTokenCount || 0);
+      const total_tokens = prompt_tokens + completion_tokens;
+      const logId = `TKC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const logTime = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+      await insertRows('ai_token_usage_logs', [{
+        id: logId,
+        model: selectedModel || 'gemini-3.5-flash',
+        purpose: 'DIRECT_SO_OCR_2PASS',
+        prompt_tokens,
+        completion_tokens,
+        total_tokens,
+        created_at: logTime
+      }]);
+    } catch (e: any) {
+      console.error('AI 토큰 로깅 실패:', e.message);
+    }
 
     let parsedData;
     let innerErrMsg = '';
     try {
       const cleanJson = responseTextPass2.replace(/```json/g, '').replace(/```/g, '').trim();
-      const sanitized = sanitizeJsonString(cleanJson);
-      parsedData = JSON.parse(sanitized);
+      parsedData = JSON.parse(cleanJson);
       if (parsedData && parsedData.content && typeof parsedData.content === 'string') {
         try {
-          const innerSanitized = sanitizeJsonString(parsedData.content);
-          parsedData = JSON.parse(innerSanitized);
+          parsedData = JSON.parse(parsedData.content);
         } catch (innerErr: any) {
           innerErrMsg = innerErr.message;
           console.error('Inner JSON parse failed:', innerErr.message, parsedData.content);
