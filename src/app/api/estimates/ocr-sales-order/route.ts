@@ -159,6 +159,15 @@ export async function POST(req: Request) {
 
     console.log(`📌 [AI OCR SCAN (SalesOrder)]: 수신 파일명='${filename}', Base64 길이=${base64Image.length}`);
 
+    try {
+      const fs = require('fs');
+      const debugBuffer = Buffer.from(base64Image, 'base64');
+      fs.writeFileSync('C:\\dev\\egdesk-FreeSMS\\public\\debug_uploaded_image.png', debugBuffer);
+      console.log('📌 [DEBUG IMAGE SAVED] public/debug_uploaded_image.png');
+    } catch (e: any) {
+      console.log('📌 [DEBUG IMAGE SAVE FAILED]', e.message);
+    }
+
     const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
 
     // 1. DB에서 구글 AI 설정 정보 로드 및 이지데스크 연동 키 조회
