@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes morph {
+  0% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  50% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+}
+.animate-morph {
+  animation: morph 4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(37,99,235,0.3); }
+  50% { transform: scale(1.02); box-shadow: 0 0 30px rgba(37,99,235,0.6); }
+}
+.animate-breathe {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.animate-scale-up {
+  animation: scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* 스크롤바를 숨기기 위한 유틸리티 클래스 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* 대화 메시지 로그 프레임용 세련되고 얇은 프리미엄 둥근 스크롤바 */
+.chat-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4);
+  border-radius: 9999px;
+}
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.65);
+}
+
+
+/* 유튜브 쇼츠 AI 상단 배너 강제 그라디언트 배경 설정 */
+.shorts-banner-gradient {
+  background: linear-gradient(135deg, #dc2626 0%, #f43f5e 50%, #f97316 100%) !important;
+}
+
+
+/* 이지봇 위젯 글로벌 반응형 스타일 */
+.easybot-widget {
+  /* 기본 상태 */
+  bottom: 96px;
+  right: 24px;
+  width: 480px;
+  min-width: 360px;
+  max-width: calc(100vw - 300px);
+  height: calc(100vh - 130px);
+  max-height: 680px;
+  border-radius: 28px;
+  /* 애니메이션 트랜지션 (React transition 덮어쓰기 안전) */
+  transition: width 0.3s ease, height 0.3s ease, border-radius 0.3s ease;
+}
+
+/* 와이드(확대) 모드 */
+.easybot-widget.is-wide {
+  width: 800px;
+  min-width: auto;
+}
+
+/* 모바일 화면 (가로 해상도 640px 이하) - 100% 꽉 채우기 */
+@media (max-width: 640px) {
+  .easybot-widget {
+    bottom: 0;
+    right: 0;
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+}
+
+/* 📠 프리미엄 인쇄 및 PDF 저장 대응 미디어 쿼리 */
+@media print {
+  /* 인쇄 시 방해가 되는 모든 글로벌 레이아웃 및 플로팅 요소 숨김 */
+  aside,
+  header,
+  footer,
+  nav,
+  .print-hidden,
+  .print\:hidden,
+  [class*="Sidebar"],
+  [class*="easybot"],
+  [class*="AIHelpManager"],
+  #easybot-widget,
+  .easybot-widget {
+    display: none !important;
+  }
+
+  /* 인쇄 배경색 및 폰트 컬러 최적화 (흑백 정밀 인쇄 대응) */
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* 메인 콘텐츠 영역 여백 제거 및 전체 가로폭 확보 */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+}

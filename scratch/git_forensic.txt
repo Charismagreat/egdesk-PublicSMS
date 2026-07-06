@@ -1,0 +1,908 @@
+﻿commit 858c471ca3c6e5abd331f42bc2d2e1b8df955d9f
+Author: Charismagreat <chachogreat@gmail.com>
+Date:   Wed May 27 15:54:49 2026 +0900
+
+    feat: 媛寃?異붿쟻 AI(Price Tracker AI) ?섏씠吏 ?좎꽕, ?ㅽ궎留?留덉씠洹몃젅?댁뀡, AI 異붿쿇 RAG API, FreeSMS 荑⑤떎???곕룞 諛?留ㅻ돱???ы봽?쇳꽣 ?꾨꼍 ?숆린???꾨즺
+
+diff --git a/src/app/help/page.tsx b/src/app/help/page.tsx
+index d10843e..fcff020 100644
+--- a/src/app/help/page.tsx
++++ b/src/app/help/page.tsx
+@@ -3,13 +3,13 @@
+ import { useState } from "react";
+ import { 
+   HelpCircle, Search, ChevronDown, MessageSquare, 
+-  Bot, Sparkles, BookOpen, Ticket, Coins, Zap
++  Bot, Sparkles, BookOpen, Ticket, Coins, Zap, TrendingUp
+ } from "lucide-react";
+ 
+ // FAQ ?곗씠???꾩씠??援ъ“ ?뺤쓽
+ interface FAQItem {
+   id: string;
+-  category: "sms" | "rpa" | "point" | "coupon" | "order";
++  category: "sms" | "rpa" | "point" | "coupon" | "order" | "price";
+   question: string;
+   answer: string;
+ }
+@@ -21,7 +21,8 @@ const CATEGORIES = [
+   { id: "rpa", label: "AI ?먯쑉 留덉???& RPA ?쨼", icon: Bot, color: "text-purple-400" },
+   { id: "point", label: "?④낏?곷┰ & 蹂댁븞 ?첌", icon: Coins, color: "text-amber-400" },
+   { id: "coupon", label: "荑좏룿 & 二쇰Ц/?덉빟 ?벀", icon: Ticket, color: "text-rose-400" },
+-  { id: "order", label: "?꾩궗 ?묒뾽 & 寃ъ쟻/?섏＜ AI ?첃", icon: Zap, color: "text-cyan-400" }
++  { id: "order", label: "?꾩궗 ?묒뾽 & 寃ъ쟻/?섏＜ AI ?첃", icon: Zap, color: "text-cyan-400" },
++  { id: "price", label: "媛寃?& 留덉쭊 異붿쟻 AI ?뱢", icon: TrendingUp, color: "text-pink-400" }
+ ];
+ 
+ // FAQ ?곗씠?곕쿋?댁뒪 (AI ?먯쑉 寃쎌쁺 ?뚰듃??Q&A ?꾩쟾 ?ㅼ옣)
+@@ -180,6 +181,31 @@ const FAQ_DATABASE: FAQItem[] = [
+     category: "order",
+     question: "B2B ?좉퇋 嫄곕옒泥??깅줉?대굹 ?섏＜ ?뺤젙 ??諛붿씠?댁뿉寃??덈궡 臾몄옄瑜??먮룞?쇰줈 蹂대궪 ???덈굹??",
+     answer: "?? ?꾨꼍??吏?먮맗?덈떎! [?먮룞 諛쒖넚 ?ㅼ젙] 硫붾돱?먯꽌 ?덈줈 異붽???B2B & SCM ?먮룞 諛쒖넚 ?대깽??3醫?B2B ?좉퇋 嫄곕옒泥??⑤낫???? B2B 寃ъ쟻 ?붿껌 ?묒닔 ?? B2B ?섏＜ ?뺤젙 ????耳쒓퀬 ?꾩넚???쒗뵆由우쓣 ?곌껐???먯떆硫??⑸땲?? ?쒗뵆由??묒꽦 ??B2B ?뱁솕 蹂?섏씤 {?곹샇紐?, {?대떦?먮챸}, {湲덉븸}, {?섏＜踰덊샇} ?깆쓣 ?쒖슜?섏떆硫? 媛??대깽??諛쒖깮 ?쒓컙??諛붿씠?댁쓽 ?ㅼ떆媛?嫄곕옒 ?뺣낫媛 ?먮룞?쇰줈 留ㅽ븨?섏뼱 ?몃젴?섍퀬 ?덇꺽 ?덈뒗 ?덈궡 臾몄옄媛 利됱떆 諛깃렇?쇱슫?쒖뿉??諛쒖넚?⑸땲??"
++  },
++  // 6. 媛寃?& 留덉쭊 異붿쟻 AI FAQ
++  {
++    id: "price-1",
++    category: "price",
++    question: "媛寃?異붿쟻 AI???ㅼ떆媛?留덉쭊?⑥? ?대뼸寃?怨꾩궛?섎ŉ ?먮━? ?쒗뵆由?移섑솚? ?대뼸寃??묐룞?섎굹??",
++    answer: "?섏쭛???쒖옣 ?쒖꽭? ?ъ옣?섏씠 ?ㅼ젙?섏떊 ?덈ぉ??[湲곗? 媛寃??먭?)]??諛뷀깢?쇰줈 諛깆뿏?쒖뿉???ㅼ떆媛꾩쑝濡?留덉쭊?⑥쓣 ?먮룞 ?곕룞 ?곗텧?⑸땲?? (?먯옄???덈ぉ??留덉쭊 ?섏떇: (湲곗??먭? - ?섏쭛媛寃? / 湲곗??먭? * 100). 留덉쭊?⑥씠 誘몃━ ?쎌젙???꾧퀎媛??댄븯濡?異붾씫?섎㈃ ?대깽???붿쭊???먰솕?섏뼱 SMS ?쒗뵆由우쓽 蹂?섎뱾({item_name}, {item_code}, {captured_price}, {margin_rate})???뚯떛 媛寃⑹쑝濡??숈쟻 移섑솚 留ㅽ븨?섏뿬 臾대즺 ?꾩넚留앹쓣 ?怨??뚮┝ 臾몄옄媛 利됯컖 ?덉쟾?섍쾶 ?꾨떖?⑸땲??"
++  },
++  {
++    id: "price-2",
++    category: "price",
++    question: "?섏쭛 ?ъ씠??AI 異붿쿇(Gemini RAG)? ?대뼚???먮━濡?異붿쿇 諛?CSS Selector瑜?異붿텧?섎굹??",
++    answer: "?댁??곗뒪?ъ뿉 怨듭떇 ?묒옱??Google Gemini API???λ윭??吏?앷낵 ?ㅼ떆媛?怨듦툒留?吏?앹쓣 寃고빀?섎뒗 RAG(寃??利앷컯 ?앹꽦) ?꾪궎?띿쿂瑜?湲곕컲?쇰줈 ?숈옉?⑸땲?? ?ъ옣?섏씠 ?곸쐞?섏떆??鍮꾩쫰?덉뒪 ?꾨찓???곗뾽援곌낵 異붿쟻?섍퀬 ?띠? ?먯옱 ?덈ぉ ?ㅼ썙?쒕? ?낅젰?섏떆硫? ?멸났吏?μ씠 利됱떆 ???멸퀎 怨듦났 媛寃⑸쭩 諛??먯썝?뺣낫?쒖뒪?쒖쓽 ?뚯뒪 ?곗씠??援ъ“瑜??대룆???щ·?ш? 吏곸젒 ?묎렐?????덈뒗 臾쇰━ 怨좎쑀 HTML CSS Selector ?뺣낫? 異붿쿇 二쇱냼瑜??뺥솗?섍쾶 ?쒖븞?⑸땲?? [利됱떆 ?섏쭛 ?깅줉] ???쇱뿉 ?대떦 ?뺣낫媛 ?먰겢由??ㅽ넗??Auto-fill) ?곕룞?⑸땲??"
++  },
++  {
++    id: "price-3",
++    category: "price",
++    question: "媛寃?蹂??諛쒖깮 ??FreeSMS ?뚮┝ 臾몄옄媛 以묐났 ??＜?섏뿬 諛쒖넚 鍮꾩슜?대굹 ?쒕룄媛 珥덇낵?섏? ?딅굹??",
++    answer: "?꾪? ?쇰젮?섏떎 ?꾩슂媛 ?놁뒿?덈떎! ?쒖꽭 湲됰?湲곕굹 ??? ?щ·留곸뿉 ?곕Ⅸ 臾몄옄 ??깂 諛??붽툑???쒕룄 ?좎떎???먯쿇?곸쑝濡?李⑤떒?섍린 ?꾪빐, 諛깆뿏??諛쒖넚 紐⑤뱢 ?대???**'3?쒓컙??諛쒖넚 荑⑤떎??Cooldown) ?좎삁 諛⑹뼱留?** 濡쒖쭅???곸슜?섏뼱 ?덉뒿?덈떎. ?뚮┝ 議곌굔??理쒖큹 媛먯??섏뼱 1??寃쎈낫 臾몄옄瑜?諛쒖넚???ㅼ뿉?? ?숈씪??洹쒖튃?????理쒖냼 3?쒓컙 ?숈븞? 異붽? 諛쒖넚???좎삁?섎룄濡??ㅺ퀎?섏뼱 ?덉뼱 ?ъ옣?섏쓽 ?대???諛쒖넚 ?덉쟾 ?쒕룄瑜??꾨꼍?섍쾶 ?섑샇?⑸땲??"
++  },
++  {
++    id: "price-4",
++    category: "price",
++    question: "?댁?遊?EasyBot)?먭쾶 媛寃?異붿쟻湲곕굹 留덉쭊 ?곹깭 ?곗씠?곕? 吏곸젒 臾쇱뼱遊먮룄 ?듬????댁＜?섏슂?",
++    answer: "?? 媛寃?異붿쟻 AI ??μ쓽 ?곗씠??援ъ“(`tracked_items`, `price_histories` ??媛 諛깆뿏???댁?遊??멸났吏???ㅽ궎留덉? ?꾨꼍?섍쾶 ?듯빀 ?ㅺ퀎?섏뼱 ?덉뒿?덈떎. ??쒕낫??梨쀫큸 ?댁?遊?李쎌쓣 ?댁뼱 留덉씠?щ? 耳쒖떆嫄곕굹 梨꾪똿?쇰줈 \"援щ━ ?쒖꽭 留덉쭊 ?곹깭 ?뚮젮以?", \"理쒓렐 3?쇨컙 ?뚮（誘몃뒆 ?뚯떛 媛寃??대젰 ?쒕줈 蹂댁뿬以?"?쇨퀬 留먯??섏떆硫? ?댁?遊뉗씠 ?ㅼ떆媛꾩쑝濡?DB瑜?遺꾩꽍??利됱꽍?먯꽌 怨좉툒?ㅻ윭???쒖? 留덊겕?ㅼ슫?쇰줈 ?몄궗?댄듃 ?듬????쒕┰?덈떎."
+   }
+ ];
+ 
+diff --git a/src/app/price-tracker/page.tsx b/src/app/price-tracker/page.tsx
+new file mode 100644
+index 0000000..24b5e94
+--- /dev/null
++++ b/src/app/price-tracker/page.tsx
+@@ -0,0 +1,821 @@
++"use client";
++
++import React, { useState, useEffect } from "react";
++import { 
++  TrendingUp, Plus, Trash2, Globe, Sparkles, Send, Bell, 
++  HelpCircle, Settings, ShieldAlert, Cpu, CheckCircle2, ChevronRight, Play
++} from "lucide-react";
++
++export default function PriceTrackerAIPage() {
++  // 1. ?곹깭 ?좎뼵
++  const [items, setItems] = useState<any[]>([]);
++  const [activeItem, setActiveItem] = useState<any | null>(null);
++  const [urls, setUrls] = useState<any[]>([]);
++  const [alerts, setAlerts] = useState<any[]>([]);
++  const [alertLogs, setAlertLogs] = useState<any[]>([]);
++
++  // ???낅젰 ?곹깭
++  const [itemForm, setItemForm] = useState({ item_code: "", item_name: "", category: "RAW_MATERIAL", base_price: "", target_margin_rate: "12.5" });
++  const [urlForm, setUrlForm] = useState({ site_name: "", target_url: "", css_selector: "", cron_interval: "0 9 * * *" });
++  const [aiForm, setAiForm] = useState({ industry: "?뺣? 湲곌퀎 諛?湲덉냽媛怨듭뾽", keyword: "援щ━ ?꾧린???먯옄??LME" });
++  const [alertForm, setAlertForm] = useState({ rule_name: "", condition_type: "MARGIN_BREAKDOWN", threshold_value: "5.0", phone_number: "", sms_template: "" });
++
++  // 濡쒕뵫/?먮윭
++  const [loading, setLoading] = useState(true);
++  const [recommendLoading, setRecommendLoading] = useState(false);
++  const [recommendations, setRecommendations] = useState<any[]>([]);
++  const [crawlerTesting, setCrawlerTesting] = useState(false);
++  
++  // 2. 留덉슫?????곗씠??議고쉶
++  useEffect(() => {
++    fetchInitData();
++  }, []);
++
++  const fetchInitData = async () => {
++    setLoading(true);
++    try {
++      const itemsRes = await fetch("/api/price-tracker/items");
++      const itemsJson = await itemsRes.json();
++      if (itemsJson.success) {
++        setItems(itemsJson.items);
++        if (itemsJson.items.length > 0) {
++          const firstItem = itemsJson.items[0];
++          setActiveItem(firstItem);
++          fetchItemDetails(firstItem.item_id);
++        }
++      }
++
++      const alertsRes = await fetch("/api/price-tracker/alerts");
++      const alertsJson = await alertsRes.json();
++      if (alertsJson.success) {
++        setAlerts(alertsJson.rules);
++        setAlertLogs(alertsJson.logs);
++      }
++    } catch (e) {
++      console.error("珥덇린 ?곗씠??濡쒕뵫 ?먮윭:", e);
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  const fetchItemDetails = async (itemId: number) => {
++    try {
++      const res = await fetch(`/api/price-tracker/urls?item_id=${itemId}`);
++      const json = await res.json();
++      if (json.success) {
++        setUrls(json.urls);
++      }
++    } catch (e) {
++      console.error("?곸꽭 URL ?뺣낫 議고쉶 ?ㅽ뙣:", e);
++    }
++  };
++
++  const handleItemSelect = (item: any) => {
++    setActiveItem(item);
++    fetchItemDetails(item.item_id);
++    // ?뚮┝ 洹쒖튃 ?먮룞 ?쒗뵆由?梨꾩슦湲?+    setAlertForm(prev => ({
++      ...prev,
++      rule_name: `${item.item_name} 留덉쭊 蹂댁〈 寃쎄퀬`,
++      phone_number: "010-1234-5678",
++      sms_template: `[?슚 媛寃⑹텛?갂I - 留덉쭊寃쎈낫]\n?덈ぉ紐? ${item.item_name}\n?꾩옱?쒖꽭: {captured_price} USD\n寃쎄퀬?댁슜: ?ㅼ젙?섏떊 理쒖냼 留덉쭊??{threshold}%媛 遺뺢눼?섏뿀?듬땲?? ?먭? 寃??諛붾엻?덈떎.`
++    }));
++  };
++
++  // 3. 鍮꾩쫰?덉뒪 ?≪뀡 ?몃뱾??+  const handleAddItem = async (e: React.FormEvent) => {
++    e.preventDefault();
++    if (!itemForm.item_code || !itemForm.item_name || !itemForm.base_price) return alert("?꾩닔 ?뺣낫瑜??낅젰??二쇱꽭??");
++    
++    try {
++      const res = await fetch("/api/price-tracker/items", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify(itemForm)
++      });
++      const json = await res.json();
++      if (json.success) {
++        alert("?럦 ?좉퇋 媛寃?異붿쟻 ?덈ぉ???곗씠?곕쿋?댁뒪???깅줉?섏뿀?듬땲??");
++        setItemForm({ item_code: "", item_name: "", category: "RAW_MATERIAL", base_price: "", target_margin_rate: "12.5" });
++        fetchInitData();
++      } else {
++        alert("?깅줉 ?ㅽ뙣: " + json.error);
++      }
++    } catch (err) {
++      console.error(err);
++    }
++  };
++
++  const handleAddUrl = async (e: React.FormEvent) => {
++    e.preventDefault();
++    if (!activeItem) return alert("異붿쟻 ?덈ぉ??醫뚯륫 由ъ뒪?몄뿉??癒쇱? ?좏깮??二쇱꽭??");
++    if (!urlForm.site_name || !urlForm.target_url || !urlForm.css_selector) return alert("?щ·留?猷곗쓣 湲곗엯??二쇱꽭??");
++
++    setCrawlerTesting(true);
++    try {
++      const res = await fetch("/api/price-tracker/urls", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          item_id: activeItem.item_id,
++          ...urlForm,
++          run_test: true
++        })
++      });
++      const json = await res.json();
++      if (json.success) {
++        alert(`???щ·??利됱떆 ?쒕??덉씠???깃났!\n怨좉컼???쒖꽭 ?섏씠吏?먯꽌 [${json.test_price.toLocaleString()} ???? 媛寃??띿뒪?멸? ?뺣? CSS Selector濡??뺤긽 ?뚯떛?섏뼱 ?덉뒪?좊━???꾩쟻 ??λ릺?덉뒿?덈떎.`);
++        setUrlForm({ site_name: "", target_url: "", css_selector: "", cron_interval: "0 9 * * *" });
++        fetchItemDetails(activeItem.item_id);
++        fetchInitData(); // 留덉쭊??媛깆떊??+      } else {
++        alert("?섏쭛 ?ㅽ뙣: " + json.error);
++      }
++    } catch (err) {
++      console.error(err);
++    } finally {
++      setCrawlerTesting(false);
++    }
++  };
++
++  const handleDeleteUrl = async (urlId: number) => {
++    if (!confirm("?대떦 ?섏쭛 ?붿쭊 媛먯떆 ??곸뿉???뺣쭚 ?쒖쇅?섏떆寃좎뒿?덇퉴?")) return;
++    try {
++      const res = await fetch(`/api/price-tracker/urls?url_id=${urlId}`, { method: "DELETE" });
++      const json = await res.json();
++      if (json.success) {
++        alert("媛먯떆 ???URL???곴뎄 ??젣?섏뿀?듬땲??");
++        if (activeItem) fetchItemDetails(activeItem.item_id);
++      }
++    } catch (err) {
++      console.error(err);
++    }
++  };
++
++  const handleAiRecommend = async (e: React.FormEvent) => {
++    e.preventDefault();
++    setRecommendLoading(true);
++    try {
++      const res = await fetch("/api/price-tracker/ai-recommend", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify(aiForm)
++      });
++      const json = await res.json();
++      if (json.success) {
++        setRecommendations(json.recommendations);
++      } else {
++        alert("AI 遺꾩꽍 ?ㅽ뙣: " + json.error);
++      }
++    } catch (err) {
++      console.error(err);
++    } finally {
++      setRecommendLoading(false);
++    }
++  };
++
++  const handleAddAlertRule = async (e: React.FormEvent) => {
++    e.preventDefault();
++    if (!activeItem) return alert("異붿쟻 ?덈ぉ??癒쇱? 吏?뺥빐 二쇱꽭??");
++    if (!alertForm.rule_name || !alertForm.threshold_value || !alertForm.phone_number || !alertForm.sms_template) return alert("?낅젰????꾩꽦??二쇱꽭??");
++
++    try {
++      const res = await fetch("/api/price-tracker/alerts", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          item_id: activeItem.item_id,
++          ...alertForm
++        })
++      });
++      const json = await res.json();
++      if (json.success) {
++        alert("?뮠 FreeSMS 媛寃?寃쎈낫 ?먮룞???쒕굹由ъ삤 洹쒖튃???꾨꼍 媛?숇릺?덉뒿?덈떎!");
++        setAlertForm({ rule_name: "", condition_type: "MARGIN_BREAKDOWN", threshold_value: "5.0", phone_number: "", sms_template: "" });
++        fetchInitData();
++      } else {
++        alert("?뚮┝ ?ㅼ젙 ?ㅽ뙣: " + json.error);
++      }
++    } catch (err) {
++      console.error(err);
++    }
++  };
++
++  const applyRecommendation = (rec: any) => {
++    setUrlForm({
++      site_name: rec.site_name,
++      target_url: rec.url,
++      css_selector: rec.recommended_selector,
++      cron_interval: "0 9 * * *"
++    });
++    alert(`?뮕 AI 異붿쿇 猷?[${rec.site_name}]???꾨옒???ㅽ겕?섑띁 ?낅젰 ?쇱뿉 利됱떆 ?명똿?섏뿀?듬땲??`);
++  };
++
++  // 4. SVG 李⑦듃 ?쒕줈???뺣낫 怨꾩궛
++  const getSvgPathData = () => {
++    if (urls.length === 0 || !urls[0].history || urls[0].history.length === 0) {
++      return { path: "", points: [] };
++    }
++    const history = urls[0].history;
++    const maxVal = Math.max(...history.map((h: any) => Number(h.captured_price))) * 1.05;
++    const minVal = Math.min(...history.map((h: any) => Number(h.captured_price))) * 0.95;
++    const valRange = maxVal - minVal;
++
++    const width = 500;
++    const height = 160;
++    const paddingLeft = 55;
++    const paddingRight = 20;
++    const paddingTop = 20;
++    const paddingBottom = 20;
++
++    const plotWidth = width - paddingLeft - paddingRight;
++    const plotHeight = height - paddingTop - paddingBottom;
++
++    const points = history.map((h: any, idx: number) => {
++      const x = paddingLeft + (idx / (history.length - 1)) * plotWidth;
++      const y = paddingTop + plotHeight - ((h.captured_price - minVal) / valRange) * plotHeight;
++      return { x, y, price: h.captured_price, date: h.captured_at.slice(5, 10) };
++    });
++
++    const path = points.map((p: any, idx: number) => `${idx === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ");
++    return { path, points, minVal, maxVal };
++  };
++
++  const { path: svgPath, points: svgPoints } = getSvgPathData();
++
++  return (
++    <div className="w-full min-h-screen bg-slate-900 text-slate-100 p-6 md:p-8 block relative overflow-x-hidden space-y-6">
++      
++      {/* ??뀛由??ㅼ삩 諛곌꼍 諛깃렇?쇱슫???ㅽ룷?몃씪?댄듃 */}
++      <div className="absolute top-0 right-20 w-[450px] h-[450px] bg-pink-500/5 rounded-full blur-[140px] -z-10 animate-pulse"></div>
++      <div className="absolute bottom-20 left-20 w-[450px] h-[450px] bg-violet-600/5 rounded-full blur-[140px] -z-10 animate-pulse"></div>
++
++      {/* ?ㅻ뜑 愿?쒗깙 移대뱶 */}
++      <div className="bg-slate-950/80 border border-slate-800 p-6 rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
++        <div className="space-y-2">
++          <div className="flex items-center space-x-2.5">
++            <div className="p-2.5 bg-pink-500/10 text-pink-500 rounded-2xl border border-pink-500/10">
++              <TrendingUp className="w-6 h-6 animate-bounce-subtle" />
++            </div>
++            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
++              SCM Price Intelligence
++            </span>
++          </div>
++          <h1 className="text-2xl md:text-3xl font-black tracking-tight bg-gradient-to-r from-pink-500 via-rose-400 to-violet-400 bg-clip-text text-transparent">
++            媛寃?異붿쟻 AI
++          </h1>
++          <p className="text-xs text-slate-400 font-semibold leading-relaxed">
++            ?먯옄??諛?寃쎌웳???쒗뭹 ?쒖꽭瑜?留ㅼ씪 ?먮룞 異붿쭛?섍퀬, ?寃?留덉쭊 ?ㅽ봽?덈뱶瑜??ㅼ떆媛??곕룞 媛먯떆?섎ŉ ?꾪뿕 ??FreeSMS 湲닿툒 臾몄옄瑜?利됱떆 諛쒖넚?⑸땲??
++          </p>
++        </div>
++        
++        {/* ?ㅼ떆媛??꾪삊 ?섏? 硫뷀? */}
++        <div className="flex items-center gap-4 bg-slate-900/90 border border-slate-800 px-5 py-4 rounded-2xl shrink-0">
++          <div className="space-y-1">
++            <span className="text-[9px] font-black text-slate-400 tracking-wider block">SCM ?쒖뒪???꾪삊 ?깃툒</span>
++            <div className="flex items-center gap-2">
++              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
++              <span className="text-xs font-black text-emerald-400">?섑뼢 ?덉젙??援ъ뿭</span>
++            </div>
++          </div>
++          <ChevronRight className="w-4 h-4 text-slate-700" />
++          <div className="text-right">
++            <span className="text-[9px] font-black text-slate-400 tracking-wider block">?숈옉 ?섏쭛湲?媛쒖닔</span>
++            <span className="text-xs font-bold font-mono">{items.length}媛??덈ぉ 愿??以?/span>
++          </div>
++        </div>
++      </div>
++
++      {loading ? (
++        <div className="py-24 text-center animate-pulse flex flex-col items-center justify-center gap-3">
++          <Cpu className="w-10 h-10 text-pink-500 animate-spin" />
++          <span className="text-xs font-bold text-slate-400">媛寃?異붿쟻 AI ??쒕낫???곗씠???곕룞 以?..</span>
++        </div>
++      ) : (
++        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
++          
++          {/* 醫뚯륫 4移? ?덈ぉ 由ъ뒪??諛?留ㅽ븨 ?깅줉 ??*/}
++          <div className="lg:col-span-4 space-y-6">
++            
++            {/* 異붿쟻 ?덈ぉ ?좏깮 移대뱶 */}
++            <div className="bg-slate-950/60 border border-slate-800 rounded-3xl p-5 shadow-xl">
++              <h2 className="text-sm font-black text-slate-200 mb-4 flex items-center gap-2">
++                <span className="w-1.5 h-3.5 bg-pink-500 rounded-full"></span>
++                愿??????덈ぉ ???+              </h2>
++              {items.length === 0 ? (
++                <p className="text-xs text-slate-500 text-center py-6">?깅줉??異붿쟻 ?덈ぉ??議댁옱?섏? ?딆뒿?덈떎.</p>
++              ) : (
++                <div className="space-y-2.5">
++                  {items.map(item => {
++                    const isActive = activeItem?.item_id === item.item_id;
++                    const isAlert = item.current_margin_rate < item.target_margin_rate;
++                    return (
++                      <div
++                        key={item.item_id}
++                        onClick={() => handleItemSelect(item)}
++                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
++                          isActive 
++                            ? "bg-gradient-to-r from-pink-500/10 to-violet-500/5 border-pink-500 text-white scale-[1.01]" 
++                            : "bg-slate-900/50 hover:bg-slate-900 border-slate-800 text-slate-350"
++                        }`}
++                      >
++                        <div className="space-y-1 truncate pr-2">
++                          <span className="text-[9px] font-mono font-bold text-slate-500 bg-slate-950 px-2 py-0.5 rounded border border-slate-850">
++                            {item.item_code}
++                          </span>
++                          <h4 className="text-xs font-black truncate">{item.item_name}</h4>
++                        </div>
++                        <div className="text-right shrink-0">
++                          <span className={`text-[10px] font-black font-mono block ${isAlert ? "text-rose-500" : "text-emerald-400"}`}>
++                            {item.current_margin_rate}%
++                          </span>
++                          <span className="text-[8px] text-slate-500 block">紐⑺몴 {item.target_margin_rate}%</span>
++                        </div>
++                      </div>
++                    );
++                  })}
++                </div>
++              )}
++            </div>
++
++            {/* ?좉퇋 ?덈ぉ ?깅줉 ??*/}
++            <div className="bg-slate-950/60 border border-slate-800 rounded-3xl p-5 shadow-xl">
++              <h2 className="text-sm font-black text-slate-200 mb-4 flex items-center gap-2">
++                <span className="w-1.5 h-3.5 bg-violet-500 rounded-full"></span>
++                ?좉퇋 愿???덈ぉ ?깅줉
++              </h2>
++              <form onSubmit={handleAddItem} className="space-y-4">
++                <div className="space-y-1">
++                  <label className="text-[10px] font-bold text-slate-400 uppercase">?덈ぉ 怨좎쑀 遺꾨쪟</label>
++                  <select
++                    value={itemForm.category}
++                    onChange={(e) => setItemForm(prev => ({ ...prev, category: e.target.value }))}
++                    className="w-full bg-slate-900 border border-slate-850 p-3 rounded-2xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-300"
++                  >
++                    <option value="RAW_MATERIAL">怨듦툒 ?먯옱 (Raw Material)</option>
++                    <option value="COMPETITOR_PRODUCT">寃쎌웳 ?쒗뭹 (Competitor Product)</option>
++                  </select>
++                </div>
++                <div className="space-y-1">
++                  <label className="text-[10px] font-bold text-slate-400 uppercase">?덈ぉ 肄붾뱶</label>
++                  <input
++                    type="text"
++                    placeholder="?? RAW-ALUM-02"
++                    value={itemForm.item_code}
++                    onChange={(e) => setItemForm(prev => ({ ...prev, item_code: e.target.value }))}
++                    className="w-full bg-slate-900 border border-slate-850 p-3 rounded-2xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-300 placeholder-slate-600"
++                  />
++                </div>
++                <div className="space-y-1">
++                  <label className="text-[10px] font-bold text-slate-400 uppercase">?덈ぉ ?대쫫</label>
++                  <input
++                    type="text"
++                    placeholder="?? ?쒓뎅愿묓빐愿묒뾽怨듬떒 ?뚮（誘몃뒆 ?먯옱"
++                    value={itemForm.item_name}
++                    onChange={(e) => setItemForm(prev => ({ ...prev, item_name: e.target.value }))}
++                    className="w-full bg-slate-900 border border-slate-850 p-3 rounded-2xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-300 placeholder-slate-600"
++                  />
++                </div>
++                <div className="grid grid-cols-2 gap-3">
++                  <div className="space-y-1">
++                    <label className="text-[10px] font-bold text-slate-400 uppercase">湲곗? ?④? (?먭?)</label>
++                    <input
++                      type="number"
++                      placeholder="8500"
++                      value={itemForm.base_price}
++                      onChange={(e) => setItemForm(prev => ({ ...prev, base_price: e.target.value }))}
++                      className="w-full bg-slate-900 border border-slate-850 p-3 rounded-2xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-300 font-mono"
++                    />
++                  </div>
++                  <div className="space-y-1">
++                    <label className="text-[10px] font-bold text-slate-400 uppercase">紐⑺몴 留덉쭊??(%)</label>
++                    <input
++                      type="number"
++                      step="0.1"
++                      placeholder="12.5"
++                      value={itemForm.target_margin_rate}
++                      onChange={(e) => setItemForm(prev => ({ ...prev, target_margin_rate: e.target.value }))}
++                      className="w-full bg-slate-900 border border-slate-850 p-3 rounded-2xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-300 font-mono"
++                    />
++                  </div>
++                </div>
++                <button
++                  type="submit"
++                  className="w-full py-3.5 bg-gradient-to-r from-pink-500 to-violet-600 hover:from-pink-600 hover:to-violet-700 text-white font-extrabold rounded-2xl text-xs shadow-lg shadow-pink-500/10 cursor-pointer transition-all active:scale-[0.99]"
++                >
++                  ???덈ぉ ?깅줉 諛?媛먯떆 留ㅽ븨 異붽?
++                </button>
++              </form>
++            </div>
++
++          </div>
++
++          {/* ?곗륫 8移? 愿??吏??李⑦듃, 寃뚯씠吏 諛??뚮┝/異붿쿇 蹂대뱶 */}
++          <div className="lg:col-span-8 space-y-6">
++            
++            {activeItem ? (
++              <>
++                {/* 1. ?ㅼ떆媛?李⑦듃 & 寃뚯씠吏 ?ㅽ깮 蹂대뱶 */}
++                <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
++                  
++                  {/* SVG 媛寃??좏삎 異붿씠 李⑦듃 (8移? */}
++                  <div className="md:col-span-8 bg-slate-950/60 border border-slate-800 rounded-3xl p-5 shadow-xl">
++                    <div className="flex items-center justify-between border-b border-slate-900 pb-3 mb-4">
++                      <div className="space-y-0.5">
++                        <h3 className="text-xs font-black text-slate-200">?뱤 ?ㅼ떆媛??섏쭛 媛寃?蹂???좏삎 異붿씠</h3>
++                        <p className="text-[10px] text-slate-500 font-medium">?щ·???섏쭛 1???꾩쟻 ?덉뒪?좊━ 李⑦듃</p>
++                      </div>
++                      <span className="text-[10px] font-black text-slate-400 font-mono bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800">
++                        {activeItem.item_code}
++                      </span>
++                    </div>
++
++                    {svgPoints.length === 0 ? (
++                      <div className="h-40 flex items-center justify-center text-xs text-slate-500">
++                        ?섏쭛 ?꾨즺???쒖꽭 ?대젰???놁뒿?덈떎. ?꾨옒?먯꽌 媛먯떆 URL???깅줉??泥?媛寃⑹쓣 ?뚯떛??蹂댁꽭??
++                      </div>
++                    ) : (
++                      <div className="chart-wrapper w-full">
++                        <svg viewBox="0 0 500 160" className="w-full overflow-visible">
++                          {/* 諛곌꼍 媛?대뱶?쇱씤 */}
++                          <line x1="50" y1="20" x2="480" y2="20" stroke="#1e293b" strokeDasharray="4" />
++                          <line x1="50" y1="80" x2="480" y2="80" stroke="#e53e3e" strokeDasharray="3" strokeWidth="0.8" /> {/* 留덉쭊 遺뺢눼 ?꾧퀎 媛?대뱶??*/}
++                          <line x1="50" y1="140" x2="480" y2="140" stroke="#1e293b" strokeDasharray="4" />
++
++                          {/* 爰얠???*/}
++                          <path d={svgPath} fill="none" stroke="#ec4899" strokeWidth="2.5" strokeLinecap="round" />
++
++                          {/* ?곗씠?????ъ씤??*/}
++                          {svgPoints.map((pt: any, idx: number) => {
++                            const isLast = idx === svgPoints.length - 1;
++                            return (
++                              <g key={idx}>
++                                <circle cx={pt.x} cy={pt.y} r={isLast ? 5.5 : 4} fill={isLast ? "#ec4899" : "#a21caf"} stroke="#ffffff" strokeWidth="1" />
++                                {isLast && (
++                                  <circle cx={pt.x} cy={pt.y} r="10" fill="none" stroke="#ec4899" strokeWidth="1.5" className="animate-ping" style={{ transformOrigin: `${pt.x}px ${pt.y}px` }} />
++                                )}
++                              </g>
++                            );
++                          })}
++
++                          {/* 媛濡쒖텞 ?쇰꺼 */}
++                          {svgPoints.filter((_: any, i: number) => i % 3 === 0 || i === svgPoints.length - 1).map((pt: any, idx: number) => (
++                            <text key={idx} x={pt.x} y="155" textAnchor="middle" fill="#64748b" fontSize="8" fontWeight="bold">
++                              {pt.date}
++                            </text>
++                          ))}
++                        </svg>
++                      </div>
++                    )}
++                  </div>
++
++                  {/* ?덉쟾 留덉쭊 ?ㅽ봽?덈뱶 ?먰삎 留?寃뚯씠吏 ?꾩젽 (4移? */}
++                  <div className="md:col-span-4 bg-slate-950/60 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col justify-between">
++                    <div>
++                      <h3 className="text-xs font-black text-slate-200 flex items-center gap-1.5">
++                        <span className="w-1 h-3 bg-rose-500 rounded-full animate-pulse"></span>
++                        ?ㅼ떆媛?留덉쭊 ?ㅽ봽?덈뱶
++                      </h3>
++                      <p className="text-[9px] text-slate-500 mt-0.5 leading-relaxed">?먯궗 ?먭? ?鍮?留덉쭊 蹂댁〈 ?섏? 怨꾧린??/p>
++                    </div>
++
++                    <div className="flex flex-col items-center py-4 space-y-3">
++                      <div className="relative flex items-center justify-center w-24 h-24">
++                        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
++                          {/* ?룸같寃??쒗겢 */}
++                          <circle cx="50" cy="50" r="42" fill="none" stroke="#1e293b" strokeWidth="9" />
++                          {/* ?욌같寃?留?*/}
++                          <circle
++                            cx="50"
++                            cy="50"
++                            r="42"
++                            fill="none"
++                            stroke={activeItem.current_margin_rate < activeItem.target_margin_rate ? "#e53e3e" : "#10b981"}
++                            strokeWidth="9"
++                            strokeDasharray="264"
++                            strokeDashoffset={264 - (264 * Math.max(0, Math.min(100, activeItem.current_margin_rate))) / 100}
++                            strokeLinecap="round"
++                            className="transition-all duration-1000"
++                          />
++                        </svg>
++                        <div className="absolute text-center">
++                          <span className="text-base font-black font-mono text-white block">
++                            {activeItem.current_margin_rate}%
++                          </span>
++                          <span className="text-[7.5px] text-slate-500 font-bold block uppercase">Margin Rate</span>
++                        </div>
++                      </div>
++
++                      <div className="text-center space-y-1">
++                        <span className={`text-[10px] font-black tracking-wide ${activeItem.current_margin_rate < activeItem.target_margin_rate ? "text-rose-500 animate-pulse" : "text-emerald-400"}`}>
++                          {activeItem.current_margin_rate < activeItem.target_margin_rate ? "?좑툘 留덉쭊 寃쎄퀬??遺뺢눼 ?꾪뿕" : "???곸젙 留덉쭊 ?좎?"}
++                        </span>
++                        <span className="text-[8px] text-slate-500 block leading-relaxed">
++                          紐⑺몴 {activeItem.target_margin_rate}% ?鍮?{Math.abs(activeItem.current_margin_rate - activeItem.target_margin_rate).toFixed(1)}%p {activeItem.current_margin_rate < activeItem.target_margin_rate ? "誘몃떖" : "珥덇낵 ?ъ꽦"}
++                        </span>
++                      </div>
++                    </div>
++                  </div>
++
++                </div>
++
++                {/* 2. 媛먯떆 ???URL ?ㅽ겕?섑띁 ?쒖뼱 ?⑤꼸 */}
++                <div className="bg-slate-950/60 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-5">
++                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-900 pb-3 gap-3">
++                    <div className="space-y-0.5">
++                      <h3 className="text-xs font-black text-slate-200">?뵕 [{activeItem.item_name}] 媛먯떆 URL ?ㅽ겕?섑븨 ?붿쭊 愿由?/h3>
++                      <p className="text-[10px] text-slate-500 font-medium">?щ·留?二쇨린 ?ㅼ?以꾨쭅 諛?DOM ?몃뱶 ?寃?留ㅽ븨</p>
++                    </div>
++                    <span className="text-[10px] font-bold text-slate-400 bg-slate-900 px-3 py-1 rounded-full border border-slate-850 shrink-0">
++                      ?섏쭛湲?{urls.length}媛?媛??以?+                    </span>
++                  </div>
++
++                  {/* ?깅줉??媛먯떆 URL ?뚯씠釉?*/}
++                  {urls.length === 0 ? (
++                    <div className="text-center py-6 text-xs text-slate-500">
++                      留ㅽ븨???섏쭛 媛먯떆留앹씠 ?놁뒿?덈떎. ?꾨옒 ?쇱씠??Gemini AI 異붿쿇??諛쏆븘 媛먯떆 URL???깅줉??二쇱꽭??
++                    </div>
++                  ) : (
++                    <div className="space-y-2">
++                      {urls.map(url => (
++                        <div key={url.url_id} className="bg-slate-900/60 border border-slate-850 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
++                          <div className="space-y-1 truncate pr-2">
++                            <div className="flex items-center gap-2">
++                              <span className="text-xs font-black text-white">{url.site_name}</span>
++                              <span className="text-[8px] font-black text-slate-400 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded">
++                                {url.cron_interval}
++                              </span>
++                            </div>
++                            <p className="text-[10px] text-slate-500 truncate font-mono">{url.target_url}</p>
++                            <div className="flex gap-2 text-[9px] text-slate-400 font-mono">
++                              <span>Selector: <strong className="text-pink-400">{url.css_selector}</strong></span>
++                              {url.history && url.history.length > 0 && (
++                                <span className="text-slate-500">| 理쒖떊媛: <strong className="text-white">{Number(url.history[url.history.length - 1].captured_price).toLocaleString()} ??/strong></span>
++                              )}
++                            </div>
++                          </div>
++                          <button
++                            onClick={() => handleDeleteUrl(url.url_id)}
++                            className="p-2 bg-slate-950 hover:bg-rose-500/10 border border-slate-850 hover:border-rose-500/30 text-slate-400 hover:text-rose-500 rounded-xl transition-colors shrink-0 cursor-pointer"
++                            title="?섏쭛湲??곴뎄 ?뚭린"
++                          >
++                            <Trash2 className="w-4 h-4" />
++                          </button>
++                        </div>
++                      ))}
++                    </div>
++                  )}
++
++                  {/* ?섏쭛 URL 異붽? ??*/}
++                  <form onSubmit={handleAddUrl} className="bg-slate-900/30 border border-slate-850/50 p-4 rounded-2xl space-y-4">
++                    <h4 className="text-xs font-black text-pink-400 flex items-center gap-1.5">
++                      <Settings className="w-4 h-4 animate-spin-slow" />
++                      ?좉퇋 ?섏쭛 濡쒕큸 留ㅽ븨 諛?DOM ?몃뱶 吏??+                    </h4>
++                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
++                      <div className="space-y-1">
++                        <label className="text-[9px] font-bold text-slate-500 uppercase">?섏쭛 異쒖쿂紐?(?ъ씠?몃챸)</label>
++                        <input
++                          type="text"
++                          placeholder="?? KOMIS 怨듭떇 援щ━ 媛寃??ы꽭"
++                          value={urlForm.site_name}
++                          onChange={(e) => setUrlForm(prev => ({ ...prev, site_name: e.target.value }))}
++                          className="w-full bg-slate-900/90 border border-slate-850 p-3 rounded-xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-350"
++                        />
++                      </div>
++                      <div className="space-y-1">
++                        <label className="text-[9px] font-bold text-slate-500 uppercase">?щ·留?二쇨린 (Cron ?쒓린踰?</label>
++                        <input
++                          type="text"
++                          placeholder="0 9 * * *"
++                          value={urlForm.cron_interval}
++                          onChange={(e) => setUrlForm(prev => ({ ...prev, cron_interval: e.target.value }))}
++                          className="w-full bg-slate-900/90 border border-slate-850 p-3 rounded-xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-350 font-mono"
++                        />
++                      </div>
++                    </div>
++                    <div className="space-y-1">
++                      <label className="text-[9px] font-bold text-slate-500 uppercase">?섏쭛 ????뱁럹?댁? URL</label>
++                      <input
++                        type="url"
++                        placeholder="https://..."
++                        value={urlForm.target_url}
++                        onChange={(e) => setUrlForm(prev => ({ ...prev, target_url: e.target.value }))}
++                        className="w-full bg-slate-900/90 border border-slate-850 p-3 rounded-xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-350 font-mono"
++                      />
++                    </div>
++                    <div className="space-y-1">
++                      <label className="text-[9px] font-bold text-slate-500 uppercase">HTML Scraping??CSS Selector</label>
++                      <input
++                        type="text"
++                        placeholder="div.price-table__current-price > span"
++                        value={urlForm.css_selector}
++                        onChange={(e) => setUrlForm(prev => ({ ...prev, css_selector: e.target.value }))}
++                        className="w-full bg-slate-900/90 border border-slate-850 p-3 rounded-xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-350 font-mono"
++                      />
++                    </div>
++                    <button
++                      type="submit"
++                      disabled={crawlerTesting}
++                      className="w-full py-3 bg-slate-950 hover:bg-slate-850 border border-slate-800 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
++                    >
++                      <Play className="w-3.5 h-3.5 text-pink-500" />
++                      {crawlerTesting ? "?щ·??紐⑥쓽 ?ㅼ떆媛??섏쭛 諛?寃??以?.." : "?섏쭛 濡쒕큸 留ㅽ븨 諛?紐⑥쓽 ?ㅽ뻾(Test Run)"}
++                    </button>
++                  </form>
++                </div>
++
++                {/* 3. Gemini AI ?ㅼ떆媛?RAG 媛먯떆 ?ъ씠??異붿쿇 ?⑤꼸 */}
++                <div className="bg-slate-950/60 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
++                  <div className="flex items-center justify-between border-b border-slate-900 pb-3">
++                    <div className="space-y-0.5">
++                      <h3 className="text-xs font-black text-slate-200 flex items-center gap-2">
++                        <Sparkles className="w-4 h-4 text-violet-400 animate-pulse" />
++                        Gemini AI ?먯쑉 媛寃?異붿쟻 ?ъ씠??異붿쿇湲?+                      </h3>
++                      <p className="text-[10px] text-slate-500 font-medium">?멸났吏??RAG瑜??곕룞??理쒖쟻??怨좎떆 ?ы꽭 諛??щ·??CSS ?좏깮??異붿쿇</p>
++                    </div>
++                    <span className="text-[8px] font-black bg-pink-500/10 text-pink-600 border border-pink-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider font-bold">
++                      Powered by Gemini Pro
++                    </span>
++                  </div>
++
++                  <form onSubmit={handleAiRecommend} className="flex gap-3 bg-slate-900/40 p-2.5 rounded-2xl border border-slate-850">
++                    <div className="flex-1 grid grid-cols-2 gap-2">
++                      <input
++                        type="text"
++                        placeholder="?곗뾽援?(?? 泥좉컯 媛援??쒖“ B2B)"
++                        value={aiForm.industry}
++                        onChange={(e) => setAiForm(prev => ({ ...prev, industry: e.target.value }))}
++                        className="bg-slate-950 border border-slate-850 px-3.5 py-3 rounded-xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-350"
++                      />
++                      <input
++                        type="text"
++                        placeholder="?먯옱紐?(?? 由ы뒳 ?묎레???쒖꽭)"
++                        value={aiForm.keyword}
++                        onChange={(e) => setAiForm(prev => ({ ...prev, keyword: e.target.value }))}
++                        className="bg-slate-950 border border-slate-850 px-3.5 py-3 rounded-xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-350"
++                      />
++                    </div>
++                    <button
++                      type="submit"
++                      disabled={recommendLoading}
++                      className="px-5 bg-violet-650 hover:bg-violet-750 text-white font-extrabold rounded-xl text-xs flex items-center justify-center shrink-0 cursor-pointer transition-colors shadow-lg shadow-violet-650/10"
++                    >
++                      {recommendLoading ? "異붿쿇 異붿텧 以?.." : "?? AI異붿쿇"}
++                    </button>
++                  </form>
++
++                  {recommendations.length > 0 && (
++                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
++                      {recommendations.map((rec, index) => (
++                        <div key={index} className="bg-slate-900 border border-slate-850 p-4 rounded-2xl flex flex-col justify-between gap-3 shadow-inner">
++                          <div className="space-y-1.5">
++                            <div className="flex justify-between items-center">
++                              <span className="text-[10px] font-black text-slate-200 bg-slate-950 px-2 py-0.5 rounded border border-slate-850">{rec.site_name}</span>
++                              <span className="text-[9px] font-black text-emerald-400">?좊ː??98%</span>
++                            </div>
++                            <p className="text-[10px] text-slate-400 leading-relaxed font-semibold">{rec.description}</p>
++                            <div className="text-[8px] font-mono text-slate-500 bg-slate-950/60 p-2 rounded-lg border border-slate-850/50 space-y-1">
++                              <div className="truncate">URL: {rec.url}</div>
++                              <div>Selector: <span className="text-pink-400 font-bold">{rec.recommended_selector}</span></div>
++                            </div>
++                          </div>
++                          <button
++                            type="button"
++                            onClick={() => applyRecommendation(rec)}
++                            className="w-full py-2 bg-slate-950 hover:bg-slate-800 text-[10px] font-black text-white rounded-xl transition-all border border-slate-850"
++                          >
++                            ?뱿 利됱떆 ?섏쭛 洹쒖튃?쇰줈 遺덈윭?ㅺ린
++                          </button>
++                        </div>
++                      ))}
++                    </div>
++                  )}
++                </div>
++
++                {/* 4. FreeSMS 媛寃?寃쎈낫 諛??먮룞???쒗뵆由??ㅼ젙 */}
++                <div className="bg-slate-950/60 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
++                  <div className="flex items-center justify-between border-b border-slate-900 pb-3">
++                    <div className="space-y-0.5">
++                      <h3 className="text-xs font-black text-slate-200 flex items-center gap-1.5">
++                        <Bell className="w-4 h-4 text-pink-400 animate-pulse" />
++                        FreeSMS 媛寃?寃쎈낫 諛??먮룞???쒗뵆由?留ㅽ븨
++                      </h3>
++                      <p className="text-[10px] text-slate-500 font-medium">?꾧퀎媛?諛?留덉쭊 遺뺢눼 ?뚰뙆 ??FreeSMS 臾대즺 臾몄옄 ?곕룞 ?ㅼ떆媛?寃쎈낫 ?듬낫</p>
++                    </div>
++                    <span className="text-[9px] font-bold text-slate-400 bg-slate-900 px-3 py-1 rounded-full border border-slate-850 font-mono">
++                      Cooldown: 3?쒓컙 ?꾪꽣 ?묐룞 以??썳截?+                    </span>
++                  </div>
++
++                  <form onSubmit={handleAddAlertRule} className="space-y-4">
++                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
++                      <div className="space-y-1">
++                        <label className="text-[9px] font-bold text-slate-500 uppercase">?뚮┝ 洹쒖튃 紐낆묶</label>
++                        <input
++                          type="text"
++                          placeholder="援щ━ 媛寃?留덉쭊 5% 遺뺢눼 湲닿툒 寃쎈낫"
++                          value={alertForm.rule_name}
++                          onChange={(e) => setAlertForm(prev => ({ ...prev, rule_name: e.target.value }))}
++                          className="w-full bg-slate-900 border border-slate-850 p-3 rounded-xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-350"
++                        />
++                      </div>
++                      <div className="space-y-1">
++                        <label className="text-[9px] font-bold text-slate-500 uppercase">?섏떊???곕씫泥?/label>
++                        <input
++                          type="text"
++                          placeholder="010-1234-5678"
++                          value={alertForm.phone_number}
++                          onChange={(e) => setAlertForm(prev => ({ ...prev, phone_number: e.target.value }))}
++                          className="w-full bg-slate-900 border border-slate-850 p-3 rounded-xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-350 font-mono"
++                        />
++                      </div>
++                    </div>
++
++                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
++                      <div className="space-y-1">
++                        <label className="text-[9px] font-bold text-slate-500 uppercase">寃쎈낫 議곌굔 ?좏삎</label>
++                        <select
++                          value={alertForm.condition_type}
++                          onChange={(e) => setAlertForm(prev => ({ ...prev, condition_type: e.target.value }))}
++                          className="w-full bg-slate-900 border border-slate-850 p-3 rounded-xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-300"
++                        >
++                          <option value="MARGIN_BREAKDOWN">留덉쭊 ?ㅽ봽?덈뱶 遺뺢눼 (留덉쭊??N% 誘몃쭔)</option>
++                          <option value="ABOVE_LIMIT">媛寃???벑 (湲곗?媛 ?鍮?N% 珥덇낵 ?곸듅)</option>
++                          <option value="BELOW_LIMIT">媛寃???씫 (湲곗?媛 ?鍮?N% 珥덇낵 ?섎씫)</option>
++                        </select>
++                      </div>
++                      <div className="space-y-1">
++                        <label className="text-[9px] font-bold text-slate-500 uppercase">寃쎈낫 ?꾧퀎媛??ㅼ젙 (%)</label>
++                        <input
++                          type="number"
++                          step="0.1"
++                          placeholder="5.0"
++                          value={alertForm.threshold_value}
++                          onChange={(e) => setAlertForm(prev => ({ ...prev, threshold_value: e.target.value }))}
++                          className="w-full bg-slate-900 border border-slate-850 p-3 rounded-xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-350 font-mono"
++                        />
++                      </div>
++                    </div>
++
++                    <div className="space-y-1">
++                      <label className="text-[9px] font-bold text-slate-500 uppercase">FreeSMS ?뚮┝??LMS ?꾩넚 ?쒗뵆由?/label>
++                      <textarea
++                        rows={4}
++                        placeholder="移섑솚 蹂???ъ슜 媛?? {item_name}, {item_code}, {captured_price}, {margin_rate}"
++                        value={alertForm.sms_template}
++                        onChange={(e) => setAlertForm(prev => ({ ...prev, sms_template: e.target.value }))}
++                        className="w-full bg-slate-900 border border-slate-850 p-3 rounded-xl text-xs font-semibold focus:border-pink-500 outline-none text-slate-350 font-mono placeholder-slate-600 leading-relaxed"
++                      />
++                    </div>
++
++                    <button
++                      type="submit"
++                      className="w-full py-3.5 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-extrabold rounded-2xl text-xs shadow-lg shadow-pink-500/10 cursor-pointer transition-all active:scale-[0.99]"
++                    >
++                      ?뮶 FreeSMS 寃쎈낫 ?먮룞???쒕굹由ъ삤 ?쒖꽦?????+                    </button>
++                  </form>
++
++                  {/* 理쒓렐 寃쎈낫 諛쒖넚 濡쒓렇 */}
++                  {alertLogs.length > 0 && (
++                    <div className="border border-slate-850 rounded-2xl overflow-hidden mt-4">
++                      <div className="bg-slate-900 px-4 py-3 border-b border-slate-850 flex items-center justify-between">
++                        <span className="text-[10px] font-bold text-slate-400">理쒓렐 媛寃?寃쎈낫 諛쒖넚 ?대젰 濡쒓렇 ???/span>
++                        <span className="text-[8px] font-mono text-slate-600">SMS Logger</span>
++                      </div>
++                      <div className="max-h-40 overflow-y-auto divide-y divide-slate-850/60 font-mono">
++                        {alertLogs.map((log: any) => (
++                          <div key={log.log_id} className="p-3 bg-slate-950/20 flex justify-between items-center text-[9px] text-slate-400">
++                            <div className="space-y-0.5 truncate pr-2">
++                              <span className="text-rose-400 font-bold">[諛쒖넚?깃났]</span> <span className="text-slate-300">{log.sent_message}</span>
++                            </div>
++                            <span className="text-slate-500 shrink-0 text-right">{log.sent_at.slice(5, 16)}</span>
++                          </div>
++                        ))}
++                      </div>
++                    </div>
++                  )}
++
++                </div>
++              </>
++            ) : (
++              <div className="bg-slate-950/60 border border-slate-800 rounded-3xl p-12 text-center shadow-xl py-32 flex flex-col items-center justify-center gap-4">
++                <ShieldAlert className="w-12 h-12 text-pink-500/50 animate-pulse" />
++                <h3 className="text-base font-black text-slate-300">?쒖꽦?붾맂 愿???덈ぉ??議댁옱?섏? ?딆뒿?덈떎.</h3>
++                <p className="text-xs text-slate-500 max-w-sm leading-relaxed">
++                  醫뚯륫?먯꽌 ?덈ぉ???좏깮?섍굅?? ?덈줈???먯옱猷??쒗뭹 ?덈ぉ???깅줉?섏뿬 ?ㅼ떆媛?媛寃?紐⑤땲?곕쭅 ?섏쭛留?媛?숈쓣 ?쒖옉??二쇱꽭??
++                </p>
++              </div>
++            )}
++
++          </div>
++
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/src/docs/egdesk-manual.md b/src/docs/egdesk-manual.md
+index 9380004..49ace80 100644
+--- a/src/docs/egdesk-manual.md
++++ b/src/docs/egdesk-manual.md
+@@ -93,3 +93,18 @@ EGDESK???듭떖 湲곕뒫??臾대즺 臾몄옄 諛쒖넚 諛?愿由?硫붾돱?낅땲??
+     *   ?먯＜?섏씠 ?곷┰ 鍮꾩쑉???섏젙?섎㈃, ?뚮퉬?먯슜 ?뚯씠釉붿삤??諛??⑤씪???ㅽ넗?댁쓽 寃곗젣 ?덉젙 湲덉븸 ?놁뿉 ?몄텧?섎뒗 ?몃???**`?덉긽 ?곷┰湲?諭껋?`**? **`3珥??④낏 ?곷┰ ?덈궡 紐⑤떖`**???곷┰ 議곌굔 ?덈궡 臾멸뎄媛 ?ㅼ떆媛꾩쑝濡??꾨꼍?섍쾶 ?숆린?붾릺??`{?ㅼ젙???곷┰瑜?%`??留욎떠 ?ㅼ떆媛??뚮뜑留곷맗?덈떎.
+     *   *?덉떆: ?곷┰ 鍮꾩쑉??5%濡??ㅼ젙 ?? 10,000??援щℓ 寃곗젣 ?덉젙 ?곹깭?????諭껋???`+500p ?곷┰ ?덉젙 ?뮕`?쇰줈 ?먮룞 ?곕룞 怨꾩궛?섏뼱 ?몄텧?섎ŉ, ?덈궡 ?앹뾽??`寃곗젣?≪쓽 5% ?ㅼ떆媛??곷┰`?쇰줈 利됱떆 蹂寃쎈맗?덈떎.*
+     *   留뚯빟 鍮꾩쑉??**0%**濡???ν븷 寃쎌슦, ?ъ씤???곷┰ ?쒗깮??以묐떒?섏뿀?뚯쓣 ?뚮퉬??二쇰Ц ?붾㈃?먯꽌 ?몄??섏뿬 ?덉긽 ?곷┰湲?諭껋?媛 ?먮룞?쇰줈 ?④꺼吏寃??ㅺ퀎?섏뼱 源붾걫?섍퀬 ?좎뿰???댁쁺???쒓났?⑸땲??
++
++## 9. 媛寃?異붿쟻 AI (Price Tracker AI) ?쒖뒪??+怨듦툒留?愿由?SCM) 怨좊룄??諛?寃쎌웳???쒓퀬瑜??꾪빐 湲곗뾽??留ㅼ엯?섎뒗 ?듭떖 ?먯옄??諛?寃쎌웳?ъ쓽 ?먮ℓ ?④?瑜??쇰떒?꾨줈 ?먮룞 異붿쟻?섍퀬, ?먯궗 留덉쭊 ?ㅽ봽?덈뱶瑜??ㅼ떆媛꾩쑝濡??먮룞 ?곕룞 紐⑤땲?곕쭅?섎뒗 ?멸났吏??吏?ν삎 媛寃?遺꾩꽍 泥닿퀎?낅땲??
++
++### 9.1. ?먯옱猷?諛?寃쎌웳 ?쒗뭹???ㅼ썝??留ㅽ븨
++- **愿???덈ぉ 留덉뒪??*: ?먯옄??RAW_MATERIAL)? 寃쎌웳 ?쒗뭹(COMPETITOR_PRODUCT) 移댄뀒怨좊━濡??덈ぉ???몃텇?뷀븯???깅줉?섍퀬, 媛??덈ぉ蹂??먯궗 湲곗? ?④?(?먭? ?먮뒗 ?먭?)? '紐⑺몴 留덉쭊??Target Margin %)'???뺢탳?섍쾶 ?ㅼ젙?⑸땲??
++- **?섏쭛 媛먯떆留?Target URLs) ?ㅼ?以꾨쭅**: ?덈ぉ蹂?媛寃??뺣낫 怨좎떆 ?ъ씠?몄쓽 URL怨??寃?DOM ?몃뱶瑜??뺥솗???뚯떛?????덈뒗 CSS Selector瑜??ㅼ젙?섍퀬 ?섏쭛 二쇨린(Cron ?ㅼ?以?瑜?留ㅽ븨???〓땲??
++
++### 9.2. Gemini AI RAG 湲곕컲 ?ㅻ쭏??怨좎떆 ?ы꽭 異붿쿇
++- **吏?ν삎 ?ㅽ겕?섑븨 ?ㅺ퀎 ?쒖븞**: 李얘퀬???섎뒗 ?먯옱紐낆씠???곗뾽援??? 媛援?湲덉냽?쒖“?? ?묎레??諛고꽣由?媛怨??????낅젰?섎㈃, 援щ━, ?뚮（誘몃뒆, 由ы뒳 ??湲濡쒕쾶 愿묐Ъ API? 二쇱슂 寃쎌젣 ?ы꽭???숈뒿??Gemini AI媛 理쒖쟻???좊ː???믪? 援?궡??媛寃?怨좎떆 ?ъ씠??URL怨?李⑤떒踰쎌쓣 ?고쉶?????덈뒗 怨좎젙諛 HTML CSS Selector瑜?RAG 湲곕컲?쇰줈 ?뺣? ?쒖븞?⑸땲?? [利됱떆 ?섏쭛 ?깅줉] ??紐⑤뱺 ?ㅼ젙媛믪씠 ?먮룞?쇰줈 ?쇱뿉 ?곕룞?⑸땲??
++
++### 9.3. FreeSMS ?ㅼ떆媛?留덉쭊 寃쎈낫 諛?3?쒓컙 荑⑤떎???꾪꽣
++- **?꾧퀎 議곌굔 紐⑤땲?곕쭅**: ?섏쭛??媛寃??뺣낫瑜?湲곗??쇰줈 ?ㅼ떆媛?留덉쭊?⑥쓣 (?먯궗?먮ℓ媛 - ?섏쭛媛寃? / ?먯궗?먮ℓ媛 ?앹쑝濡??숈쟻 怨꾩궛?⑸땲?? 留덉쭊???먯＜媛 吏?뺥븳 理쒖????? 5.0% 誘몃쭔) ?댄븯濡?湲됯컧?????대깽?멸? 媛먯??⑸땲??
++- **FreeSMS 寃쎈낫 ?꾩넚**: ?ㅼ젙???섏떊??踰덊샇濡??뚮┝??LMS 臾몄옄媛 ?먮룞 諛쒖넚?⑸땲?? 硫붿떆吏 ?쒗뵆由??묒꽦 ??`{item_name}`, `{captured_price}`, `{margin_rate}` ?깆쓽 ?ㅼ떆媛?留ㅽ븨 移섑솚?먮? ?꾨꼍 吏?먰빀?덈떎.
++- **3?쒓컙 諛쒖넚 荑⑤떎??Cooldown) ?쒖뼱**: 湲됯꺽??蹂???μ꽭??吏?띿쟻???щ·留?怨쇱젙?먯꽌 以묐났 臾몄옄媛 ??＜?섏뿬 ?듭떊 由ъ냼?ㅺ? ??퉬?섎뒗 寃껋쓣 諛⑹??섍린 ?꾪빐, ?숈씪 議곌굔 寃쎈낫????댁꽌??理쒖냼 **3?쒓컙 ?숈븞 異붽? 諛쒖넚???좎삁**?섎뒗 以묐났 ?꾪꽣 濡쒖쭅??諛깆뿏??諛쒖넚 紐⑤뱢??湲곕낯?곸쑝濡??덉쟾?섍쾶 ?ㅺ퀎 諛??묐룞?⑸땲??

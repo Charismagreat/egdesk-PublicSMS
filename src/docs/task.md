@@ -1,0 +1,30 @@
+# 설비관리 AI 개발 작업 목록
+
+- [x] 설비관리 AI 페이지 백엔드 모의 API 개발
+  - [x] `/api/facility/predictive/route.ts` 신설
+  - [x] `/api/facility/oee/route.ts` 신설
+  - [x] `/api/facility/calendar/route.ts` 신설
+  - [x] `/api/facility/repair/route.ts` 신설
+  - [x] `/api/facility/checklist/route.ts` 신설
+- [ ] 설비관리 AI PC용 관제 대시보드 개발 (`/facility-management`)
+  - [ ] `src/app/facility-management/types.ts` (타입 정의)
+  - [ ] `src/app/facility-management/hooks/useFacilityManagement.ts` (비즈니스 훅)
+  - [ ] `src/app/facility-management/components/PredictiveMaintenanceCard.tsx` (예지보전 잔여수명 모니터)
+  - [ ] `src/app/facility-management/components/OeeMetricsCard.tsx` (OEE 가동률 & 비가동 파레토 차트)
+  - [ ] `src/app/facility-management/components/MaintenanceCalendarCard.tsx` (점검 일정 & 자재 수명 관리)
+  - [ ] `src/app/facility-management/components/RepairLogCard.tsx` (수리 대장 & RAG 고장 해결 챗봇)
+  - [ ] `src/app/facility-management/page.tsx` (오케스트레이션 메인 페이지)
+- [ ] 설비관리 AI 모바일 예방 점검 채널 개발 (`/m/facility-management`)
+  - [ ] `src/app/m/facility-management/hooks/useMobileMaintenance.ts` (모바일 훅)
+  - [ ] `src/app/m/facility-management/components/MobileMaintenanceForm.tsx` (모바일 점검 폼)
+  - [ ] `src/app/m/facility-management/page.tsx` (모바일 메인 페이지)
+- [ ] 시스템 메뉴 설정 및 모바일 허브 연동
+  - [ ] `src/components/SidebarMenu.tsx` (좌측 사이드바 연동)
+  - [ ] `src/app/settings/MenuSettingsCard.tsx` (시스템 설정 동적 메뉴 연동)
+  - [ ] `src/app/api/settings/menu/route.ts` (기본 설정 DB 백필 추가)
+  - [ ] `src/components/MobileHubWidget.tsx` (대시보드 모바일 허브 위젯 연동)
+- [ ] 헬프센터 도움말 FAQ 업데이트
+  - [ ] `src/app/help/constants.ts` (FAQ 항목 보강)
+- [ ] 빌드 검증 및 깃 푸시
+  - [ ] `npm run build` 확인
+  - [ ] Git 커밋 및 Push

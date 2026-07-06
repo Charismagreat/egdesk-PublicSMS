@@ -1,0 +1,709 @@
+﻿diff --git a/src/app/form-management/components/FormTemplateEditor.tsx b/src/app/form-management/components/FormTemplateEditor.tsx
+index 40ea437..b442f29 100644
+--- a/src/app/form-management/components/FormTemplateEditor.tsx
++++ b/src/app/form-management/components/FormTemplateEditor.tsx
+@@ -17,31 +17,27 @@ import {
+   RefreshCw
+ } from 'lucide-react';
+ 
+-// 諛붿씤??媛?ν븳 ?꾨뱶 由ъ뒪???뺤쓽
+-export const FIELD_DEFINITIONS = [
+-  // 怨듯넻 ?묒떇 ?붿냼
+-  { key: 'common_date', label: '?쇱옄 (?щ젰 ?좏깮)', category: '怨듯넻 ?묒떇 ?붿냼' },
+-  { key: 'common_input', label: '?낅젰 諛뺤뒪 (?띿뒪??湲곗엯)', category: '怨듯넻 ?묒떇 ?붿냼' },
+-  { key: 'common_stamp', label: '?꾩옣 (?뚯궗 吏곸씤 ?ㅻ쾭?덉씠)', category: '怨듯넻 ?묒떇 ?붿냼' },
+-  { key: 'common_tag', label: '?쒓렇 (蹂닿????쒖텧???좏깮)', category: '怨듯넻 ?묒떇 ?붿냼' },
+-
+-  // 湲곗〈 DB ?꾨뱶
+-  { key: 'estimate_id', label: '寃ъ쟻踰덊샇', category: '寃ъ쟻 留덉뒪?? },
+-  { key: 'partner_name', label: '?섏떊泥?嫄곕옒泥??곹샇)', category: '寃ъ쟻 留덉뒪?? },
+-  { key: 'partner_phone', label: '?섏떊泥??곕씫泥?, category: '寃ъ쟻 留덉뒪?? },
+-  { key: 'total_amount', label: '珥?寃ъ쟻?⑷퀎 湲덉븸 (??', category: '寃ъ쟻 留덉뒪?? },
+-  { key: 'total_amount_krw', label: '珥?寃ъ쟻?⑷퀎 ?쒓? ?쒓린', category: '寃ъ쟻 留덉뒪?? },
+-  { key: 'created_at_date', label: '寃ъ쟻?쇱옄 (YYYY-MM-DD)', category: '寃ъ쟻 留덉뒪?? },
+-  { key: 'created_at_year', label: '寃ъ쟻?쇱옄 (??', category: '寃ъ쟻 留덉뒪?? },
+-  { key: 'created_at_month', label: '寃ъ쟻?쇱옄 (??', category: '寃ъ쟻 留덉뒪?? },
+-  { key: 'created_at_day', label: '寃ъ쟻?쇱옄 (??', category: '寃ъ쟻 留덉뒪?? },
+-  { key: 'company_name', label: '怨듦툒???먯궗 ?곹샇)', category: '?먯궗 ?뺣낫' },
+-  { key: 'company_biz_num', label: '怨듦툒???ъ뾽?먮쾲??, category: '?먯궗 ?뺣낫' },
+-  { key: 'company_owner', label: '怨듦툒????쒖옄紐?, category: '?먯궗 ?뺣낫' },
+-  { key: 'company_address', label: '怨듦툒??二쇱냼', category: '?먯궗 ?뺣낫' },
+-  { key: 'company_phone', label: '怨듦툒???곕씫泥?, category: '?먯궗 ?뺣낫' },
+-  { key: 'estimate_items_table', label: '?덈ぉ ?곸꽭 ?댁뿭 ?뚯씠釉?(??', category: '?덈ぉ ?곸꽭(?뱀닔)' }
+-];
++// (李멸퀬) 怨좎젙 留ㅽ븨 ?꾨뱶 ??? ?ъ슜?먭? ?곗씠???뚯뒪 ?좏깮 ???대떦 ?뚯씠釉붿쓽 ?ㅽ궎留?諛?SQL 遺꾩꽍???듯빐 留ㅽ븨 ?꾨뱶瑜??숈쟻?쇰줈 ?먮룞 援ъ꽦?⑸땲??
++
++
++// SQL 荑쇰━臾몄쑝濡쒕???而щ읆紐낅뱾??異붿텧?섎뒗 ?좏떥由ы떚
++const parseColumnsFromQuery = (sql: string): string[] => {
++  if (!sql) return [];
++  const selectMatch = sql.match(/select\s+(.+?)\s+from/i);
++  if (!selectMatch) return [];
++  const selectClause = selectMatch[1];
++  if (selectClause.trim() === '*') {
++    return [];
++  }
++  return selectClause
++    .split(',')
++    .map(col => {
++      const parts = col.trim().split(/\s+as\s+/i);
++      const colName = parts[parts.length - 1].trim().split('.').pop() || '';
++      return colName.replace(/[`"']/g, '');
++    })
++    .filter(name => name && !/^[0-9]+$/.test(name));
++};
+ 
+ interface MappingItem {
+   id?: number;
+@@ -62,7 +58,7 @@ interface FormTemplateEditorProps {
+ 
+ export default function FormTemplateEditor({ templateId, onBack, onSaved }: FormTemplateEditorProps) {
+   const [templateName, setTemplateName] = useState('');
+-  const [documentType, setDocumentType] = useState('crm_estimates');
++  const [documentType, setDocumentType] = useState('');
+   const [filePath, setFilePath] = useState('');
+   const [orientation, setOrientation] = useState('portrait');
+   const [isActive, setIsActive] = useState(true);
+@@ -82,6 +78,118 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+   const [rawFileBase64, setRawFileBase64] = useState<string>('');
+   const [uploadFilename, setUploadFilename] = useState<string>('');
+ 
++  // ?숈쟻 SQL 諛??뚮씪誘명꽣 ?뺤쓽 ?곹깭
++  const [querySql, setQuerySql] = useState('');
++  const [queryParams, setQueryParams] = useState('[]');
++  const [bindingFields, setBindingFields] = useState<any[]>([]);
++
++  // AI 異붿쿇 ?뚯씠釉?諛?諛깃렇?쇱슫???먮룆???곹깭 異붽?
++  const [aiRecommendedTable, setAiRecommendedTable] = useState<{ name: string; displayName: string; confidence: number } | null>(null);
++  const [aiRecommendedData, setAiRecommendedData] = useState<any>(null);
++  const [isRecommending, setIsRecommending] = useState(false);
++
++  // A4 ?묒떇 ?대?吏 ?낅줈??媛먯? ??諛깃렇?쇱슫?쒕줈 AI ?뚯씠釉?異붿쿇 諛?醫뚰몴 留ㅽ븨 遺꾩꽍 ?묐룞
++  useEffect(() => {
++    if (!filePath) {
++      setAiRecommendedTable(null);
++      setAiRecommendedData(null);
++      return;
++    }
++    
++    // 湲곗〈 ?쒗뵆由??섏젙 以묒씪 ?뚮뒗 諛깃렇?쇱슫??異붿쿇 ?ㅽ궢
++    if (templateId) return;
++
++    const runBackgroundRecommendation = async () => {
++      setIsRecommending(true);
++      try {
++        let base64Data = rawFileBase64;
++        if (!base64Data) {
++          try {
++            base64Data = await urlToBase64(filePath);
++          } catch (err) {
++            console.error('URL Base64 蹂???ㅽ뙣:', err);
++          }
++        }
++
++        if (!base64Data) return;
++
++        // ?꾩껜 媛???뚯씠釉?紐⑸줉??湲곕컲?쇰줈 AI 異붿쿇 ?뚯떛 援щ룞
++        const res = await fetch('/api/templates/auto-map', {
++          method: 'POST',
++          headers: { 'Content-Type': 'application/json' },
++          body: JSON.stringify({
++            imageBase64: base64Data,
++            filename: uploadFilename || filePath.split('/').pop(),
++            selectedTables: availableTables.map(t => t.name)
++          })
++        });
++
++        const data = await res.json();
++        if (data.success) {
++          // 異붿쿇???뚯씠釉??대쫫??留ㅼ묶?섎뒗 ?쒓? ?대쫫 ?띾뱷
++          const matchedTable = availableTables.find(t => t.name === data.suggested_document_type) || {
++            name: data.suggested_document_type,
++            displayName: data.suggested_document_type === 'rnd_staffs' ? '?곌뎄????? : 
++                         data.suggested_document_type === 'crm_estimates' ? '寃ъ쟻????? : 
++                         data.suggested_document_type === 'crm_customers' ? '怨좉컼 紐낅떒' : '誘몄????뚯씠釉?,
++            count: 0
++          };
++
++          setAiRecommendedTable({
++            name: data.suggested_document_type,
++            displayName: matchedTable.displayName,
++            confidence: data.confidence_score || 0.95
++          });
++
++          setAiRecommendedData(data);
++        }
++      } catch (err) {
++        console.error('諛깃렇?쇱슫??AI ?뚯씠釉?異붿쿇 ?ㅽ뙣:', err);
++      } finally {
++        setIsRecommending(false);
++      }
++    };
++
++    if (availableTables.length > 0) {
++      runBackgroundRecommendation();
++    }
++  }, [filePath, rawFileBase64, availableTables, templateId]);
++
++  // AI 1珥??먮룞 留ㅽ븨 ?ㅽ뻾 ?몃뱾??(?ъ쟾 罹먯떆??諛깃렇?쇱슫??異붿쿇 ?곗씠?곕? ?쒖슜)
++  const handleApplyAiMapping = () => {
++    if (!aiRecommendedData) {
++      if (isRecommending) {
++        alert('AI媛 ?묒떇 ?대?吏瑜??뺣? 遺꾩꽍?섍퀬 ?덉뒿?덈떎. 遺꾩꽍 ?꾨즺 ???ㅼ떆 ?쒕룄??二쇱꽭??');
++      } else {
++        alert('異붿쿇??AI 遺꾩꽍 ?곗씠?곌? 議댁옱?섏? ?딆뒿?덈떎. ?뚯씪???ㅼ떆 ?낅줈?쒗빐 二쇱꽭??');
++      }
++      return;
++    }
++
++    const data = aiRecommendedData;
++    setDocumentType(data.suggested_document_type);
++    setQuerySql(data.suggested_query || '');
++    setQueryParams(JSON.stringify(data.suggested_params || [], null, 2));
++    
++    const generatedMappings = data.mappings.map((m: any, idx: number) => ({
++      id: Date.now() + idx,
++      field_key: m.field_key,
++      field_label: m.field_label,
++      pos_x: m.pos_x,
++      pos_y: m.pos_y,
++      font_size: m.field_key === 'estimate_items_table' ? 11 : 13,
++      font_weight: 'bold',
++      text_align: m.field_key === 'estimate_items_table' || m.field_key === 'company_address' ? 'left' : 'center'
++    }));
++    
++    setMappings(generatedMappings);
++    if (generatedMappings.length > 0) {
++      setSelectedMappingId(generatedMappings[0].id);
++    }
++    
++    alert(`AI ?먮룞 留ㅽ븨 ?곸슜 ?꾨즺!\n異붿쿇 ?뚯씠釉? '${data.suggested_document_type}' (${aiRecommendedTable?.displayName || ''})`);
++  };
++
+   // 臾쇰━ ?뚯씠釉?紐⑸줉 ?숈쟻 API ?곕룞
+   useEffect(() => {
+     async function fetchDBTables() {
+@@ -120,86 +228,107 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+     }
+     fetchDBTables();
+   }, []);
++
++  // ?숈쟻 ?꾨뱶 鍮뚮뱶 useEffect
++  useEffect(() => {
++    const commonFields = [
++      { key: 'common_date', label: '?쇱옄 (?щ젰 ?좏깮)', category: '怨듯넻 ?묒떇 ?붿냼' },
++      { key: 'common_input', label: '?낅젰 諛뺤뒪 (?띿뒪??湲곗엯)', category: '怨듯넻 ?묒떇 ?붿냼' },
++      { key: 'common_stamp', label: '?꾩옣 (?뚯궗 吏곸씤 ?ㅻ쾭?덉씠)', category: '怨듯넻 ?묒떇 ?붿냼' },
++      { key: 'common_tag', label: '?쒓렇 (蹂닿????쒖텧???좏깮)', category: '怨듯넻 ?묒떇 ?붿냼' },
++    ];
++
++    const parsedCols = parseColumnsFromQuery(querySql);
++
++    if (parsedCols.length > 0) {
++      const dbFields = parsedCols.map(col => ({
++        key: col,
++        label: `${col} (SQL 異붿텧)`,
++        category: '?숈쟻 SQL ?꾨뱶'
++      }));
++      setBindingFields([...commonFields, ...dbFields]);
++    } else if (documentType) {
++      fetch(`/api/db?action=schema&tableName=${documentType}`)
++        .then(res => res.json())
++        .then(data => {
++          if (data.success && data.schema) {
++            const dbFields = data.schema
++              .filter((c: any) => {
++                const skipCols = ['uuid', 'updated_at', 'updated_by', 'deleted_at', 'deleted_by', 'restored_at', 'restored_by', 'password_hash'];
++                return !skipCols.includes(c.name);
++              })
++              .map((c: any) => ({
++                key: c.name,
++                label: `${c.name} (${c.type})`,
++                category: `?뚯씠釉? ${documentType}`
++              }));
++            setBindingFields([...commonFields, ...dbFields]);
++          } else {
++            setBindingFields(commonFields);
++          }
++        })
++        .catch(err => {
++          console.error('?숈쟻 ?꾨뱶 濡쒕뱶 ?ㅽ뙣:', err);
++          setBindingFields(commonFields);
++        });
++    } else {
++      setBindingFields(commonFields);
++    }
++  }, [documentType, querySql]);
+   
+   // ?쒕옒洹??곹깭 愿由?   const canvasRef = useRef<HTMLDivElement>(null);
+   const dragItemRef = useRef<{ index: number; startX: number; startY: number; startLeft: number; startTop: number } | null>(null);
+ 
+-  // ?꾩떆 ?몄뀡 ?쒕옒?꾪듃 蹂듭썝 愿???곹깭
+-  const [draftData, setDraftData] = useState<any>(null);
+-  const [showDraftBanner, setShowDraftBanner] = useState(false);
+-  const isInitialLoadRef = useRef(true);
++  // 2) ?섎룞 ?꾩떆 ???泥섎━ (?쒓굅??
+ 
+-  // 1) 留덉슫???꾨즺 ???꾩떆 ??λ낯(Draft) ?뺤씤
++  // 4) ?섏씠吏 ?댄깉 / ?덈줈怨좎묠 寃쎄퀬 泥섎━ (beforeunload 諛??대씪?댁뼵???ъ씠???대룞 李⑤떒)
+   useEffect(() => {
+-    try {
+-      const savedDraft = localStorage.getItem('egdesk_form_editor_draft');
+-      if (savedDraft) {
+-        const parsed = JSON.parse(savedDraft);
+-        // ?꾩옱 ?대젮?덈뒗 templateId? ?쇱튂?섎뒗 ?쒕옒?꾪듃媛 ?덇굅?? ?????좉퇋??寃쎌슦
+-        if (parsed.templateId === templateId) {
+-          setDraftData(parsed);
+-          setShowDraftBanner(true);
++    const hasUnsavedChanges = filePath || templateName || mappings.length > 0;
++    if (!hasUnsavedChanges) return;
++
++    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
++      e.preventDefault();
++      e.returnValue = '?묒꽦 以묒씤 ?묒떇 ?ㅼ젙 ?댁뿭???덉뒿?덈떎. ?뺣쭚 ?섍??쒓쿋?듬땲源?';
++      return '?묒꽦 以묒씤 ?묒떇 ?ㅼ젙 ?댁뿭???덉뒿?덈떎. ?뺣쭚 ?섍??쒓쿋?듬땲源?';
++    };
++
++    const handleAnchorClick = (e: MouseEvent) => {
++      const target = e.target as HTMLElement;
++      const anchor = target.closest('a');
++
++      if (anchor) {
++        const href = anchor.getAttribute('href');
++        // ?대? ?듭빱媛 ?꾨땶 ?ㅼ젣 ?쇱슦??留곹겕???뚮쭔 寃쎄퀬 泥섎━
++        if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
++          if (!confirm('?묒꽦 以묒씤 ?묒떇 ?ㅼ젙 ?댁뿭???덉뒿?덈떎. ??ν븯吏 ?딄퀬 ?ㅻⅨ ?섏씠吏濡??대룞?섏떆硫??묒뾽 ?댁슜???щ씪吏묐땲?? ?뺣쭚 ?대룞?섏떆寃좎뒿?덇퉴?')) {
++            e.preventDefault();
++            e.stopPropagation();
++          }
+         }
+       }
+-    } catch (e) {
+-      console.error('?쒕옒?꾪듃 ?뺤씤 ?ㅽ뙣:', e);
+-    }
+-  }, [templateId]);
++    };
+ 
+-  // 2) ?ㅼ떆媛??먮룞 ???(濡쒕뵫 ?꾨즺 ?꾩뿉留??숈옉)
+-  useEffect(() => {
+-    if (loading) return; // 濡쒕뵫 以묒뿉?????李⑤떒
++    window.addEventListener('beforeunload', handleBeforeUnload);
++    document.addEventListener('click', handleAnchorClick, true);
+ 
+-    // 理쒖큹 留덉슫????泥?蹂寃??꾧퉴吏???먮룞 ????ㅽ궢?섏뿬 ??뼱?곌린 諛⑹?
+-    if (isInitialLoadRef.current) {
+-      isInitialLoadRef.current = false;
+-      return;
+-    }
++    return () => {
++      window.removeEventListener('beforeunload', handleBeforeUnload);
++      document.removeEventListener('click', handleAnchorClick, true);
++    };
++  }, [filePath, templateName, mappings]);
+ 
+-    try {
+-      const draft = {
+-        templateId,
+-        templateName,
+-        documentType,
+-        filePath,
+-        orientation,
+-        isActive,
+-        mappings
+-      };
+-      // 理쒖냼?쒖쓽 ?섎? ?덈뒗 媛믪씠 ?낅젰?섏뿀???뚮쭔 ?몄뀡 ?꾩떆 蹂닿?
+-      if (filePath || templateName || mappings.length > 0) {
+-        localStorage.setItem('egdesk_form_editor_draft', JSON.stringify(draft));
++  const handleBackWithWarning = () => {
++    const hasUnsavedChanges = filePath || templateName || mappings.length > 0;
++    if (hasUnsavedChanges) {
++      if (!confirm('?묒꽦 以묒씤 ?묒떇 ?ㅼ젙 ?댁뿭???덉뒿?덈떎. ??ν븯吏 ?딄퀬 ?ㅻ줈 媛?쒕㈃ ?묒뾽 ?댁슜???щ씪吏묐땲?? ?뺣쭚 ?섍??쒓쿋?듬땲源?')) {
++        return;
+       }
+-    } catch (e) {
+-      console.error('?쒕옒?꾪듃 ?먮룞 ????ㅽ뙣:', e);
+     }
+-  }, [loading, templateId, templateName, documentType, filePath, orientation, isActive, mappings]);
+-
+-  // 3) ?쒕옒?꾪듃 蹂듭썝 諛?臾댁떆(??젣) ?몃뱾??-  const handleRestoreDraft = () => {
+-    if (!draftData) return;
+-    setTemplateName(draftData.templateName || '');
+-    setDocumentType(draftData.documentType || 'crm_estimates');
+-    setFilePath(draftData.filePath || '');
+-    setOrientation(draftData.orientation || 'portrait');
+-    setIsActive(draftData.isActive !== false);
+-    setMappings(draftData.mappings || []);
+-    if (draftData.mappings && draftData.mappings.length > 0) {
+-      setSelectedMappingId(draftData.mappings[0].id || null);
+-    }
+-    setShowDraftBanner(false);
++    onBack();
+   };
+ 
+-  const handleDiscardDraft = () => {
+-    try {
+-      localStorage.removeItem('egdesk_form_editor_draft');
+-    } catch (e) {
+-      console.error('?쒕옒?꾪듃 ??젣 ?ㅽ뙣:', e);
+-    }
+-    setShowDraftBanner(false);
+-    setDraftData(null);
+-  };
++
+ 
+   // URL -> Base64 ?ы띁 ?⑥닔
+   const urlToBase64 = async (url: string): Promise<string> => {
+@@ -221,67 +350,7 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+     );
+   };
+ 
+-  const handleAutoMappingByAI = async () => {
+-    if (!filePath) return;
+-    setIsAnalyzing(true);
+-
+-    try {
+-      let base64Data = rawFileBase64;
+-      if (!base64Data) {
+-        try {
+-          base64Data = await urlToBase64(filePath);
+-        } catch (err) {
+-          console.error('URL Base64 蹂???ㅽ뙣:', err);
+-        }
+-      }
+ 
+-      if (!base64Data) {
+-        alert('?묒떇 ?대?吏??Base64 ?곗씠?곕? 異붿텧?????놁뒿?덈떎. ?뚯씪???ㅼ떆 ?낅줈?쒗빐 二쇱꽭??');
+-        setIsAnalyzing(false);
+-        return;
+-      }
+-
+-      const res = await fetch('/api/templates/auto-map', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({
+-          imageBase64: base64Data,
+-          filename: uploadFilename || filePath.split('/').pop(),
+-          selectedTables
+-        })
+-      });
+-
+-      const data = await res.json();
+-      if (data.success) {
+-        setDocumentType(data.suggested_document_type);
+-        
+-        const generatedMappings = data.mappings.map((m: any, idx: number) => ({
+-          id: Date.now() + idx,
+-          field_key: m.field_key,
+-          field_label: m.field_label,
+-          pos_x: m.pos_x,
+-          pos_y: m.pos_y,
+-          font_size: m.field_key === 'estimate_items_table' ? 11 : 13,
+-          font_weight: 'bold',
+-          text_align: m.field_key === 'estimate_items_table' || m.field_key === 'company_address' ? 'left' : 'center'
+-        }));
+-        
+-        setMappings(generatedMappings);
+-        if (generatedMappings.length > 0) {
+-          setSelectedMappingId(generatedMappings[0].id);
+-        }
+-        
+-        alert(`AI 遺꾩꽍 ?꾨즺! ?좊ː??${(data.confidence_score * 100).toFixed(0)}%)\n諛곌꼍 ?쒖떇??遺꾩꽍?섏뿬 '${data.suggested_document_type}' ?곗씠???뚯뒪??留욎텣 ${generatedMappings.length}媛??꾨뱶瑜??먮룞 諛곗튂?섏??듬땲??`);
+-      } else {
+-        alert(`AI ?먮룞 留ㅽ븨 遺꾩꽍 ?ㅽ뙣: ${data.error}`);
+-      }
+-    } catch (e: any) {
+-      console.error(e);
+-      alert('AI 遺꾩꽍 ?듭떊 以??먮윭媛 諛쒖깮?덉뒿?덈떎.');
+-    } finally {
+-      setIsAnalyzing(false);
+-    }
+-  };
+ 
+   // ?쒗뵆由??섏젙 ??湲곗〈 ?뺣낫 濡쒕뱶
+   useEffect(() => {
+@@ -302,6 +371,8 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+         setFilePath(template.file_path);
+         setOrientation(template.orientation || 'portrait');
+         setIsActive(template.is_active === 1);
++        setQuerySql(template.query_sql || '');
++        setQueryParams(template.query_params || '[]');
+         
+         // mappings???대씪?댁뼵???앸퀎??怨좎쑀 ?꾩떆 ID(idx) 遺??         const formattedMappings = loadedMappings.map((m: any, idx: number) => ({
+@@ -361,7 +432,7 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+ 
+   // 罹붾쾭?ㅼ뿉 留듯븨 ??ぉ 異붽?
+   const handleAddField = (fieldKey: string) => {
+-    const fieldDef = FIELD_DEFINITIONS.find(f => f.key === fieldKey);
++    const fieldDef = bindingFields.find(f => f.key === fieldKey);
+     if (!fieldDef) return;
+ 
+     // 以묐났 異붽? 諛⑹?
+@@ -488,6 +559,8 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+         file_path: filePath,
+         orientation,
+         is_active: isActive ? 1 : 0,
++        query_sql: querySql,
++        query_params: queryParams,
+         mappings: mappings.map(m => ({
+           field_key: m.field_key,
+           field_label: m.field_label,
+@@ -508,11 +581,6 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+ 
+       if (data.success) {
+         alert(templateId ? '?쒗뵆由우씠 ?깃났?곸쑝濡??섏젙?섏뿀?듬땲??' : '???묒떇 ?쒗뵆由우씠 ?덉쟾?섍쾶 ?깅줉?섏뿀?듬땲??');
+-        try {
+-          localStorage.removeItem('egdesk_form_editor_draft'); // 理쒖쥌 ????깃났 ???꾩떆 ?쒕옒?꾪듃 ?뚭린
+-        } catch (e) {
+-          console.error(e);
+-        }
+         onSaved();
+       } else {
+         alert(`????ㅽ뙣: ${data.error}`);
+@@ -543,7 +611,7 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+       <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-white/90 backdrop-blur-md">
+         <div className="flex items-center gap-3">
+           <button 
+-            onClick={onBack}
++            onClick={handleBackWithWarning}
+             className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 transition text-slate-600 cursor-pointer"
+           >
+             <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
+@@ -556,45 +624,19 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+             <p className="text-xs font-semibold text-slate-400 mt-0.5">?묒떇 諛곌꼍 ?대?吏 ?꾨줈 ?곗씠???꾨뱶瑜?留덉슦???쒕옒洹명븯??醫뚰몴瑜?留ㅽ븨?섏떗?쒖삤.</p>
+           </div>
+         </div>
+-
+-        <button
+-          onClick={handleSaveTemplate}
+-          disabled={saving}
+-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs transition shadow-md shadow-indigo-600/10 cursor-pointer disabled:opacity-50"
+-        >
+-          <Save className="w-4 h-4" />
+-          {saving ? '???以?..' : '留ㅽ븨 ?ㅼ젙 ???}
+-        </button>
++        <div className="flex items-center gap-2">
++          <button
++            onClick={handleSaveTemplate}
++            disabled={saving}
++            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs transition shadow-md shadow-indigo-600/10 cursor-pointer disabled:opacity-50"
++          >
++            <Save className="w-4 h-4" />
++            {saving ? '???以?..' : '?묒떇 ???}
++          </button>
++        </div>
+       </div>
+ 
+-      {/* ?꾩떆 ?쒕옒?꾪듃 蹂듭썝 諛곕꼫 */}
+-      {showDraftBanner && draftData && (
+-        <div className="bg-indigo-50 border-b border-indigo-100 px-6 py-3.5 flex items-center justify-between gap-4 animate-fade-in no-print">
+-          <div className="flex items-center gap-2.5 text-left">
+-            <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 animate-pulse" />
+-            <div>
+-              <p className="text-xs font-black text-indigo-900">?댁쟾???묒꽦 以묒씠???꾩떆 ??λ맂 ?묒떇 留ㅽ븨 ?댁뿭???덉뒿?덈떎.</p>
+-              <p className="text-[10px] text-indigo-700/80 font-bold mt-0.5">
+-                (蹂닿? ?좏삎: {templateId ? '湲곗〈 ?쒗뵆由??섏젙 以? : '?좉퇋 ?묒떇 ?깅줉 以?} | 留ㅽ븨 ?꾨뱶 {draftData.mappings?.length || 0}媛?
+-              </p>
+-            </div>
+-          </div>
+-          <div className="flex items-center gap-2">
+-            <button
+-              onClick={handleRestoreDraft}
+-              className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black shadow-sm transition cursor-pointer"
+-            >
+-              ?꾩떆蹂?蹂듭썝?섍린
+-            </button>
+-            <button
+-              onClick={handleDiscardDraft}
+-              className="px-3.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-bold transition cursor-pointer"
+-            >
+-              ?덈줈 ?쒖옉 (??젣)
+-            </button>
+-          </div>
+-        </div>
+-      )}
++
+ 
+       {/* 2. 硫붿씤 ?뚰겕?ㅽ럹?댁뒪 (醫뚯슦 遺꾪븷) */}
+       <div className="flex flex-1 flex-col md:flex-row min-h-0 overflow-hidden">
+@@ -625,6 +667,7 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+                   onChange={e => setDocumentType(e.target.value)}
+                   className="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold focus:border-indigo-600 focus:outline-none"
+                 >
++                  <option value="">(?곗씠???뚯뒪 ?좏깮 ?덊븿)</option>
+                   {availableTables.length === 0 ? (
+                     <option value="crm_estimates">寃ъ쟻??(crm_estimates)</option>
+                   ) : (
+@@ -716,75 +759,97 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+                 <h3 className="text-xs font-black text-indigo-955">AI ?먯쑉 留ㅽ븨 ?뚯씪??/h3>
+               </div>
+               
+-              <div className="flex flex-col gap-2">
+-                <label className="text-[10px] font-black text-indigo-900/85">遺꾩꽍 ???DB ?뚯씠釉?(硫???좏깮)</label>
+-                <div className="max-h-[160px] overflow-y-auto pr-1 bg-white/60 p-2 rounded-xl border border-indigo-100/30 flex flex-col gap-1.5 scrollbar-thin">
+-                  {tablesLoading ? (
+-                    <div className="flex flex-col items-center justify-center py-6 text-slate-400">
+-                      <RefreshCw className="w-5 h-5 animate-spin text-indigo-650 mb-1" />
+-                      <span className="text-[9px] font-semibold">?뚯씠釉?紐⑸줉 濡쒕뵫 以?..</span>
+-                    </div>
+-                  ) : availableTables.length === 0 ? (
+-                    <span className="text-[10px] text-slate-400 text-center py-4 font-bold">議고쉶???뚯씠釉붿씠 ?놁뒿?덈떎.</span>
+-                  ) : (
+-                    <div className="grid grid-cols-2 gap-1.5">
+-                      {availableTables.map(table => {
+-                        const isChecked = selectedTables.includes(table.name);
+-                        return (
+-                          <label 
+-                            key={table.name} 
+-                            title={`${table.displayName} (${table.name})`}
+-                            className={`flex items-center justify-between gap-1.5 p-1.5 rounded-xl border text-[10px] font-bold cursor-pointer transition-all min-w-0 ${
+-                              isChecked 
+-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+-                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+-                            }`}
+-                          >
+-                            <input 
+-                              type="checkbox"
+-                              checked={isChecked}
+-                              onChange={() => handleToggleTable(table.name)}
+-                              className="hidden"
+-                            />
+-                            <div className="flex flex-col min-w-0 text-left">
+-                              <span className="truncate block leading-tight">{table.displayName}</span>
+-                              <span className={`text-[8px] font-mono truncate block leading-none mt-0.5 ${isChecked ? 'text-indigo-200' : 'text-slate-400'}`}>
+-                                {table.name}
+-                              </span>
+-                            </div>
+-                            {table.count !== undefined && table.count !== 'Error' && table.count > 0 && (
+-                              <span className={`text-[8px] px-1.5 py-0.5 rounded-full shrink-0 font-bold leading-none ${
+-                                isChecked ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-500'
+-                              }`}>
+-                                {table.count}
+-                              </span>
+-                            )}
+-                          </label>
+-                        );
+-                      })}
+-                    </div>
+-                  )}
++              {isRecommending ? (
++                /* 1. AI 遺꾩꽍 濡쒕뵫 ?곹깭 */
++                <div className="flex flex-col items-center justify-center py-6 text-slate-500 bg-white/60 rounded-2xl p-4 border border-indigo-100/30">
++                  <RefreshCw className="w-6 h-6 animate-spin text-indigo-600 mb-2" />
++                  <span className="text-[10px] font-black text-indigo-900">AI媛 ?묒떇 ?쒖떇 ?먮룆 諛?理쒖쟻 ?뚯씠釉?遺꾩꽍 以?..</span>
++                  <span className="text-[8px] text-slate-400 mt-1">?묒떇???덉씠?꾩썐怨??띿뒪?몃? ?뺣? ?議고븯怨??덉뒿?덈떎.</span>
+                 </div>
+-              </div>
++              ) : aiRecommendedTable ? (
++                /* 2. AI 異붿쿇 ?꾨즺 ?곹깭 */
++                <div className="flex flex-col gap-3">
++                  <span className="text-[10px] font-black text-indigo-900/85">AI 異붿쿇 ?곕룞 ?뚯씠釉?/span>
++                  
++                  {/* 異붿쿇 ?뚯씠釉?移대뱶 */}
++                  <div className="bg-gradient-to-br from-white to-slate-50/50 p-4 rounded-2xl border border-indigo-100/80 shadow-sm relative overflow-hidden flex flex-col gap-1.5">
++                    <div className="flex items-center justify-between gap-2">
++                      <span className="text-xs font-black text-indigo-955 truncate max-w-[70%]">
++                        {aiRecommendedTable.displayName}
++                      </span>
++                      <span className="text-[9px] font-black bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-lg border border-emerald-100 shrink-0">
++                        ?좊ː??{(aiRecommendedTable.confidence * 100).toFixed(0)}%
++                      </span>
++                    </div>
++                    <span className="text-[9px] font-mono text-slate-400 block -mt-0.5">
++                      臾쇰━ ?뚯씠釉? {aiRecommendedTable.name}
++                    </span>
++                    <p className="text-[9.5px] text-slate-500 font-semibold mt-1 leading-normal">
++                      ?묒떇 ?댁쓽 '{templateName || '?낅줈???묒떇'}' ?쒖떇 ?ㅼ썙?쒕? ?먮룆??寃곌낵, 
++                      ?щ궡 <strong>{aiRecommendedTable.displayName}</strong> ?곗씠?곗? ?곌껐?섎뒗 寃껋씠 媛???곹빀?⑸땲??
++                    </p>
++                  </div>
+ 
+-              <button
+-                type="button"
+-                onClick={handleAutoMappingByAI}
+-                disabled={isAnalyzing || selectedTables.length === 0}
+-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-600/10 flex items-center justify-center space-x-2 disabled:opacity-50 hover:scale-102 active:scale-98 cursor-pointer"
+-              >
+-                {isAnalyzing ? (
+-                  <>
+-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+-                    <span>AI媛 ?쒖떇 ?뚯떛 諛?留ㅽ븨 以?..</span>
+-                  </>
+-                ) : (
+-                  <>
++                  {/* ?먮룞 留ㅽ븨 ?곸슜 踰꾪듉 */}
++                  <button
++                    type="button"
++                    onClick={handleApplyAiMapping}
++                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-600/10 flex items-center justify-center space-x-2 hover:scale-102 active:scale-98 cursor-pointer"
++                  >
+                     <Sparkles className="w-3.5 h-3.5" />
+                     <span>AI 1珥??먮룞 留ㅽ븨 ?ㅽ뻾</span>
+-                  </>
+-                )}
+-              </button>
++                  </button>
++                </div>
++              ) : (
++                /* 3. 異붿쿇 寃곌낵媛 ?녿뒗 寃쎌슦 ?먮뒗 ?섎룞 ?대갚 */
++                <div className="flex flex-col items-center justify-center py-6 text-slate-400 bg-white/60 rounded-2xl p-4 border border-indigo-100/30">
++                  <span className="text-[10px] font-bold text-slate-500">異붿쿇??AI 遺꾩꽍 ?곗씠?곌? ?놁뒿?덈떎.</span>
++                  <span className="text-[8px] text-slate-400 mt-1">?묒떇 ?대?吏 ?뚯씪???낅줈?쒗븯硫??먮룞 遺꾩꽍??媛?숇맗?덈떎.</span>
++                </div>
++              )}
++            </div>
++          )}
++
++          {/* ?숈쟻 SQL 荑쇰━ ?ㅼ젙 肄섏넄 */}
++          {filePath && (
++            <div className="p-5 rounded-2xl bg-slate-900 text-slate-100 border border-slate-800 flex flex-col gap-4 shadow-lg text-left relative overflow-hidden">
++              <div className="absolute top-[-50px] right-[-50px] w-24 h-24 rounded-full bg-indigo-500/10 blur-xl pointer-events-none"></div>
++              
++              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
++                <div className="flex items-center gap-2">
++                  <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
++                  <h3 className="text-xs font-black text-slate-200">?숈쟻 SQL 荑쇰━ 肄섏넄</h3>
++                </div>
++                <span className="text-[9px] bg-indigo-900/50 text-indigo-300 font-bold px-2 py-0.5 rounded-full border border-indigo-500/20">SELECT ?꾩슜</span>
++              </div>
++              
++              <div className="flex flex-col gap-1.5">
++                <label className="text-[10px] font-bold text-slate-400">?곗씠??議고쉶 SELECT 荑쇰━</label>
++                <textarea
++                  value={querySql}
++                  onChange={e => setQuerySql(e.target.value)}
++                  placeholder="?? SELECT * FROM rnd_staffs WHERE name = :name"
++                  rows={3}
++                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-[11px] font-mono leading-relaxed text-indigo-200 transition scrollbar-thin"
++                />
++                <span className="text-[9px] text-slate-500 leading-tight">
++                  * 荑쇰━ ?뚮씪誘명꽣??<code className="text-indigo-400">:name</code>, <code className="text-indigo-400">:id</code> ?뺥깭濡?諛붿씤?⑺븷 ???덉뒿?덈떎.
++                </span>
++              </div>
++
++              <div className="flex flex-col gap-1.5">
++                <label className="text-[10px] font-bold text-slate-400">議곌굔 ?뚮씪誘명꽣 ?뺤쓽 (JSON)</label>
++                <textarea
++                  value={queryParams}
++                  onChange={e => setQueryParams(e.target.value)}
++                  placeholder={`[\n  { "name": "name", "label": "?깅챸", "type": "text" }\n]`}
++                  rows={3}
++                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-[11px] font-mono leading-relaxed text-slate-300 transition scrollbar-thin"
++                />
++                <span className="text-[9px] text-slate-500 leading-tight">
++                  * 議곌굔 ???꾨뱶 ?앹꽦???꾪븳 硫뷀??곗씠??諛곗뿴?낅땲??
++                </span>
++              </div>
+             </div>
+           )}
+ 
+@@ -794,8 +859,8 @@ export default function FormTemplateEditor({ templateId, onBack, onSaved }: Form
+               <h3 className="text-xs font-black text-slate-800 border-l-4 border-indigo-600 pl-2">?ㅻ쾭?덉씠 ?꾨뱶 ?쎌엯</h3>
+               
+               <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
+-                {['怨듯넻 ?묒떇 ?붿냼', '寃ъ쟻 留덉뒪??, '?먯궗 ?뺣낫', '?덈ぉ ?곸꽭(?뱀닔)'].map(cat => {
+-                  const items = FIELD_DEFINITIONS.filter(f => f.category === cat);
++                {Array.from(new Set(bindingFields.map(f => f.category))).map(cat => {
++                  const items = bindingFields.filter(f => f.category === cat);
+                   return (
+                     <div key={cat} className="flex flex-col gap-1 mt-1">
+                       <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">{cat}</span>

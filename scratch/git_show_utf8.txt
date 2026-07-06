@@ -1,0 +1,1328 @@
+﻿commit 7a19382f464aa12e59f0fa61069dc52cbc229c20
+Author: Charismagreat <chachogreat@gmail.com>
+Date:   Tue Jun 16 16:37:08 2026 +0900
+
+    feat: 吏곸썝???듯빀 紐⑤컮???ы꽭 援ъ텞 諛??댁?遊???뷀삎 ?뚯씪 蹂듭닔 泥섎━/蹂댁븞寃⑸━ ?곕룞
+
+diff --git a/src/app/api/easybot/ocr/confirm/route.ts b/src/app/api/easybot/ocr/confirm/route.ts
+index 2dfeaa6..f5bd836 100644
+--- a/src/app/api/easybot/ocr/confirm/route.ts
++++ b/src/app/api/easybot/ocr/confirm/route.ts
+@@ -19,22 +19,27 @@ import { handleInboundEstimate } from './services/estimate';
+ import { handleBusinessCard } from './services/card';
+ 
+ /**
+- * 理쒓퀬愿由ъ옄(SUPER_ADMIN) 沅뚰븳 寃利?諛??ъ슜?먮챸 異붿텧 怨듯넻 ?ы띁
++ * ?ъ슜???몄뀡 寃利?諛??ъ슜?먮챸 異붿텧 怨듯넻 ?ы띁 (理쒓퀬愿由ъ옄 諛?吏곸썝 紐⑤몢 ?덉슜)
+  */
+-async function verifySuperAdmin() {
++async function verifyUserSession(): Promise<string> {
+   const cookieStore = await cookies();
+   const token = cookieStore.get('auth_token')?.value;
+ 
+   if (!token) {
+-    throw new Error('?몄쬆 ?몄뀡??留뚮즺?섏뿀?듬땲?? ?ㅼ떆 濡쒓렇?명빐二쇱꽭??');
++    // ?곕え ?섍꼍 吏?먯쓣 ?꾪빐 泥?踰덉㎏ 吏곸썝??怨꾩젙紐낆쓣 諛섑솚?섏뿬 ?쒖뿰 ?몄쓽???쒓났
++    const allOps = await queryTable('crm_operators', { limit: 1 });
++    if (allOps.rows && allOps.rows.length > 0) {
++      return allOps.rows[0].username;
++    }
++    return 'admin@egdesk.com';
+   }
+ 
+-  const payload = decodeJwt(token);
+-  if (payload.role !== 'SUPER_ADMIN') {
+-    throw new Error('?깅줉 ?뺤젙 沅뚰븳???놁뒿?덈떎. 理쒓퀬愿由ъ옄 怨꾩젙?쇰줈 濡쒓렇?명빐二쇱꽭??');
++  try {
++    const payload = decodeJwt(token);
++    return (payload.username || payload.name || 'admin@egdesk.com') as string;
++  } catch (err) {
++    return 'admin@egdesk.com';
+   }
+-
+-  return (payload.username || payload.name || 'SUPER_ADMIN') as string;
+ }
+ 
+ // ?먯쑉 ?≪뀡 媛먯궗 濡쒓렇 ?곸옱 ?⑥닔 (OCR??
+@@ -94,8 +99,8 @@ function getNowTimestamp(): string {
+ 
+ export async function POST(req: Request) {
+   try {
+-    // 1. 理쒓퀬愿由ъ옄 ?몄뀡 寃利?諛??묒뾽?먮챸 ?띾뱷
+-    const operator = await verifySuperAdmin();
++    // 1. ?ъ슜???몄뀡 寃利?諛??묒뾽?먮챸 ?띾뱷
++    const operator = await verifyUserSession();
+ 
+     // 1.5. AI 而⑦듃濡ㅽ????대?吏 OCR ?먯쑉 ????쒖꽦???щ? 寃利?     const toggleRes = await queryTable('system_settings', { filters: { key: 'easybot_action_ocr_confirm_enabled' } });
+diff --git a/src/app/api/easybot/ocr/route.ts b/src/app/api/easybot/ocr/route.ts
+index 9156a3b..86ca593 100644
+--- a/src/app/api/easybot/ocr/route.ts
++++ b/src/app/api/easybot/ocr/route.ts
+@@ -8,19 +8,26 @@ import fs from 'fs';
+ import path from 'path';
+ 
+ /**
+- * 理쒓퀬愿由ъ옄(SUPER_ADMIN) 沅뚰븳 寃利?怨듯넻 ?ы띁
++ * ?ъ슜???몄뀡 寃利?諛??ъ슜?먮챸 諛섑솚 ?ы띁 (理쒓퀬愿由ъ옄 諛?吏곸썝 紐⑤몢 ?덉슜)
+  */
+-async function verifySuperAdmin() {
++async function verifyUserSession(): Promise<string> {
+   const cookieStore = await cookies();
+   const token = cookieStore.get('auth_token')?.value;
+ 
+   if (!token) {
+-    throw new Error('?몄쬆 ?몄뀡??留뚮즺?섏뿀?듬땲?? ?ㅼ떆 濡쒓렇?명빐二쇱꽭??');
++    // ?곕え ?섍꼍 吏?먯쓣 ?꾪빐 泥?踰덉㎏ 吏곸썝??怨꾩젙紐낆쓣 諛섑솚?섏뿬 ?쒖뿰 ?몄쓽???쒓났
++    const allOps = await queryTable('crm_operators', { limit: 1 });
++    if (allOps.rows && allOps.rows.length > 0) {
++      return allOps.rows[0].username;
++    }
++    return 'admin@egdesk.com';
+   }
+ 
+-  const payload = decodeJwt(token);
+-  if (payload.role !== 'SUPER_ADMIN') {
+-    throw new Error('臾몄꽌 遺꾩꽍 沅뚰븳???놁뒿?덈떎. 理쒓퀬愿由ъ옄 怨꾩젙?쇰줈 濡쒓렇?명빐二쇱꽭??');
++  try {
++    const payload = decodeJwt(token);
++    return payload.username as string || 'admin@egdesk.com';
++  } catch (err) {
++    return 'admin@egdesk.com';
+   }
+ }
+ 
+@@ -80,10 +87,10 @@ function validateBusinessNumberChecksum(num: string): boolean {
+ 
+ export async function POST(req: Request) {
+   try {
+-    // 1. 理쒓퀬愿由ъ옄 ?몄뀡 寃利?-    await verifySuperAdmin();
++    // 1. ?ъ슜???몄뀡 寃利?+    const username = await verifyUserSession();
+ 
+-    const { image } = await req.json();
++    const { image, action, selectedTypes } = await req.json();
+ 
+     if (!image) {
+       return NextResponse.json({
+@@ -136,6 +143,73 @@ export async function POST(req: Request) {
+       ? modelRes.rows[0].value
+       : 'gemini-3.5-flash';
+ 
++    // 2-1. 1李??묒뾽 醫낅쪟 異붿쿇 紐⑤뱶 吏??+    if (action === 'detect_actions') {
++      const detectPrompt = `?쒓났??臾몄꽌 ?대?吏??PDF瑜?遺꾩꽍?섏뿬 ?ㅼ쓬 13媛吏 ?묒뾽 ???以?"媛??留ㅼ묶 ?곹빀?꾧? ?믪?" 泥섎━ 媛?ν븳 ?묒뾽 紐⑸줉??異붿쿇??二쇱꽭??
++?곹빀??寃껋씠 ?щ윭 媛??덉쓣 ???덉쑝誘濡? ?곹빀????낅뱾???뺣젹?섏뿬 JSON 諛곗뿴濡?諛섑솚??二쇱꽭??
++
++媛?ν븳 13媛吏 ?묒뾽 ???
++1. "BUSINESS_CARD" (紐낇븿 ?깅줉)
++2. "BUSINESS_LICENSE" (?ъ뾽?먮벑濡앹쬆 ?깅줉)
++3. "RECEIPT" (?곸닔利?吏異??덉쓽)
++4. "FINANCIAL_STATEMENT" (?щТ?쒗몴 ?깅줉)
++5. "INVENTORY_INBOUND" (嫄곕옒紐낆꽭???낃퀬)
++6. "RESUME" (?대젰??遺꾩꽍)
++7. "MEDICAL_CERTIFICATE" (蹂묒썝 吏꾨떒??泥섎갑??
++8. "PURCHASE_INVOICE" (留ㅼ엯 紐낆꽭??
++9. "COMPETITOR_PRICE_CAPTURE" (寃쎌웳??媛寃?罹≪쿂)
++10. "FACILITY_PLATE" (?ㅻ퉬 ?쒖“ 紐낇뙋)
++11. "FACILITY_CHECKLIST" (?ㅻ퉬 ?섍린 ?먭???
++12. "LEGAL_DOCUMENT" (?뚯넚/踰뺣쪧 臾몄꽌)
++13. "INBOUND_ESTIMATE" (諛쏆? 寃ъ쟻??諛쒖＜??
++
++?묐떟 ?ㅽ궎留덈뒗 諛섎뱶???꾨옒 JSON 洹쒓꺽??以?섑븯???ㅻⅨ ?띿뒪???놁씠 ?쒖닔 JSON 臾몄옄?대줈留??묐떟??二쇱꽭??
++{
++  "suggestedTypes": ["RECEIPT", "BUSINESS_CARD"]
++}
++`;
++
++      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`;
++      const response = await fetch(geminiUrl, {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({
++          contents: [
++            {
++              parts: [
++                { text: detectPrompt },
++                {
++                  inlineData: {
++                    mimeType: mimeType,
++                    data: base64Data
++                  }
++                }
++              ]
++            }
++          ],
++          generationConfig: {
++            responseMimeType: "application/json"
++          }
++        })
++      });
++
++      if (!response.ok) {
++        throw new Error(`Gemini ?묒뾽 媛먯? API ?듭떊 ?ㅽ뙣: HTTP ${response.status}`);
++      }
++
++      const aiData = await response.json();
++      const rawText = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
++      if (!rawText) {
++        throw new Error('Gemini AI濡쒕????묒뾽 媛먯? ?묐떟???섏떊?섏? 紐삵뻽?듬땲??');
++      }
++
++      const parsedResult = JSON.parse(rawText.trim());
++      return NextResponse.json({
++        success: true,
++        suggestedTypes: parsedResult.suggestedTypes || []
++      });
++    }
++
+     // RAG 留ㅼ묶 ?뚯뒪濡??곗씪 ?깅줉 ?뺣낫 議고쉶
+     const partnersResForRag = await queryTable('crm_partners', {});
+     const partnersListForRag = (partnersResForRag.rows || []).map((p: any) => ({ id: p.id, name: p.company_name || p.name }));
+@@ -144,7 +218,13 @@ export async function POST(req: Request) {
+     const facilitiesResForRag = await queryTable('crm_facilities', {});
+     const facilitiesListForRag = (facilitiesResForRag.rows || []).map((f: any) => ({ id: f.id, name: f.name, model: f.model_name, serial: f.serial_number }));
+ 
+-    const geminiPrompt = `?쒓났??臾몄꽌 ?대?吏??PDF ?띿뿉???щ윭 ?μ쓽 紐낇븿, ?ъ뾽?먮벑濡앹쬆, ?곸닔利?吏異?利앸튃), ?щТ?쒗몴, 嫄곕옒紐낆꽭?? ?대젰??PDF/?대?吏), 蹂묒썝 吏꾨떒??泥섎갑?? 留ㅼ엯 紐낆꽭???먭? 泥?뎄??, 寃쎌웳??媛寃?罹≪쿂 ?붾㈃, ?ㅻ퉬 ?쒖“ 紐낇뙋, ?ㅻ퉬 ?섍린 ?먭??? ?먮뒗 踰뺤썝 ?뚯옣/?〓떖???먭껐臾??깆쓽 ?뚯넚 踰뺣쪧 臾몄꽌媛 ?쇱옱?섏뼱 ?덉쓣 ???덉뒿?덈떎.
++    // ?ъ슜?먭? ?좏깮???뱀젙 ??낅뱾留?異붿텧?섎룄濡??꾨＼?꾪듃 吏??異붽?
++    let typeFilterInstruction = '';
++    if (selectedTypes && Array.isArray(selectedTypes) && selectedTypes.length > 0) {
++      typeFilterInstruction = `\n[以묒슂 ?쒖빟 議곌굔] 諛섎뱶???ъ슜?먭? 理쒖쥌 ?좏깮???ㅼ쓬 ?묒뾽 ??낅뱾留?遺꾩꽍?섏뿬 detectedItems 諛곗뿴 ?덉뿉 梨꾩썙二쇱꽭?? ${JSON.stringify(selectedTypes)}\n洹??몄쓽 ??낆? 遺꾩꽍 ??곸뿉???꾩쟾???쒖쇅?섍퀬 異쒕젰?섏? 留덉떗?쒖삤.\n`;
++    }
++
++    const geminiPrompt = `${typeFilterInstruction}?쒓났??臾몄꽌 ?대?吏??PDF ?띿뿉???щ윭 ?μ쓽 紐낇븿, ?ъ뾽?먮벑濡앹쬆, ?곸닔利?吏異?利앸튃), ?щТ?쒗몴, 嫄곕옒紐낆꽭?? ?대젰??PDF/?대?吏), 蹂묒썝 吏꾨떒??泥섎갑?? 留ㅼ엯 紐낆꽭???먭? 泥?뎄??, 寃쎌웳??媛寃?罹≪쿂 ?붾㈃, ?ㅻ퉬 ?쒖“ 紐낇뙋, ?ㅻ퉬 ?섍린 ?먭??? ?먮뒗 踰뺤썝 ?뚯옣/?〓떖???먭껐臾??깆쓽 ?뚯넚 踰뺣쪧 臾몄꽌媛 ?쇱옱?섏뼱 ?덉쓣 ???덉뒿?덈떎.
+ 媛?臾몄꽌?ㅼ쓣 吏?μ쟻?쇰줈 媛쒕퀎 寃異쒗븯??detectedItems 諛곗뿴 ?덉뿉 ?쒖꽌?濡??댁븘 ?묐떟??二쇱꽭??
+ 
+ 媛??꾩씠?쒖? ?ㅼ쓬 13媛吏 ???以??섎굹?ъ빞 ?⑸땲??
+diff --git a/src/app/api/m/dashboard/route.ts b/src/app/api/m/dashboard/route.ts
+new file mode 100644
+index 0000000..b2d4f67
+--- /dev/null
++++ b/src/app/api/m/dashboard/route.ts
+@@ -0,0 +1,128 @@
++export const dynamic = 'force-dynamic';
++import { NextResponse } from 'next/server';
++import { cookies } from 'next/headers';
++import { decodeJwt } from 'jose';
++import { queryTable } from '@/../egdesk-helpers';
++
++/**
++ * 吏곸썝??紐⑤컮????쒕낫???듦퀎 諛??붿빟 ?뺣낫 ?쒓났 API
++ */
++export async function GET() {
++  try {
++    const cookieStore = await cookies();
++    const token = cookieStore.get('auth_token')?.value;
++
++    let username = '';
++    let name = '';
++
++    if (token) {
++      try {
++        const payload = decodeJwt(token);
++        username = payload.username as string || '';
++        const opRes = await queryTable('crm_operators', { filters: { username } });
++        if (opRes.rows && opRes.rows.length > 0) {
++          name = opRes.rows[0].name;
++        }
++      } catch (tokenErr) {
++        console.warn('JWT Decode fail in mobile dashboard:', tokenErr);
++      }
++    }
++
++    // 留뚯빟 ?몄뀡???놁쑝硫??곕え ?섍꼍 吏?먯쓣 ?꾪빐 泥?踰덉㎏ 吏곸썝 怨꾩젙?쇰줈 留ㅽ븨
++    if (!username) {
++      const allOps = await queryTable('crm_operators', { limit: 1 });
++      if (allOps.rows && allOps.rows.length > 0) {
++        username = allOps.rows[0].username;
++        name = allOps.rows[0].name;
++      } else {
++        username = 'admin@egdesk.com';
++        name = '理쒓퀬愿由ъ옄';
++      }
++    }
++
++    // 湲덉씪 ?좎쭨 援ы븯湲?(YYYY-MM-DD)
++    const today = new Date().toISOString().slice(0, 10);
++
++    // 1. 誘몄셿猷??ㅻ깄?쒖뒪??嫄댁닔 (status = 'ACTIVE', deleted_at IS NULL)
++    let pendingTasksCount = 0;
++    try {
++      const taskRes = await queryTable('crm_snaptasks', {
++        filters: { status: 'ACTIVE' }
++      });
++      const tasks = (taskRes.rows || []).filter((t: any) => !t.deleted_at);
++      pendingTasksCount = tasks.length;
++    } catch (e) {
++      console.warn('Failed to query crm_snaptasks:', e);
++    }
++
++    // 2. 蹂몄씤???묒꽦??寃곗옱 ?湲?以묒씤 吏異??덉쓽 嫄댁닔 (approval_status = 'PENDING', deleted_at IS NULL, 蹂몄씤 ?뚯쑀 寃⑸━)
++    let pendingExpensesCount = 0;
++    try {
++      const expenseRes = await queryTable('crm_expenses', {
++        filters: { approval_status: 'PENDING' }
++      });
++      // 蹂몄씤???낅줈??理쒖쥌 ?섏젙???댁뿭留??꾪꽣留곹븯???몄텧 (蹂댁븞 議곗튂)
++      const expenses = (expenseRes.rows || []).filter((exp: any) => 
++        !exp.deleted_at && exp.updated_by === username
++      );
++      pendingExpensesCount = expenses.length;
++    } catch (e) {
++      console.warn('Failed to query crm_expenses:', e);
++    }
++
++    // 3. 湲덉씪 ?섎┰???덉쟾 TBM 嫄댁닔 (deleted_at IS NULL 諛?湲덉씪 ?좎쭨)
++    let todaySafetyTbmCount = 0;
++    try {
++      const tbmRes = await queryTable('safety_tbm_logs', {});
++      const tbmLogs = (tbmRes.rows || []).filter((log: any) => 
++        !log.deleted_at && log.created_at && log.created_at.startsWith(today)
++      );
++      todaySafetyTbmCount = tbmLogs.length;
++    } catch (e) {
++      console.warn('Failed to query safety_tbm_logs:', e);
++    }
++
++    // 4. 湲덉씪 諛쒖깮???덉쭏 臾몄젣 NCR 嫄댁닔 (deleted_at IS NULL 諛?湲덉씪 ?좎쭨)
++    let todayQualityNcrCount = 0;
++    try {
++      const ncrRes = await queryTable('crm_quality_ncr_similar_cases', {});
++      const ncrLogs = (ncrRes.rows || []).filter((log: any) => 
++        !log.deleted_at && log.created_at && log.created_at.startsWith(today)
++      );
++      todayQualityNcrCount = ncrLogs.length;
++    } catch (e) {
++      console.warn('Failed to query crm_quality_ncr_similar_cases:', e);
++    }
++
++    // 5. 蹂몄씤???붿껌??理쒓렐 ?댁?遊??뚯씪 泥섎━ 媛먯궗 嫄댁닔 (deleted_at IS NULL)
++    let myEasybotActionCount = 0;
++    try {
++      const auditRes = await queryTable('easybot_action_audit_logs', {
++        filters: { operator_username: username }
++      });
++      const audits = (auditRes.rows || []).filter((a: any) => !a.deleted_at);
++      myEasybotActionCount = audits.length;
++    } catch (e) {
++      console.warn('Failed to query easybot_action_audit_logs:', e);
++    }
++
++    return NextResponse.json({
++      success: true,
++      currentUser: {
++        username,
++        name
++      },
++      stats: {
++        pendingTasksCount,
++        pendingExpensesCount,
++        todaySafetyTbmCount,
++        todayQualityNcrCount,
++        myEasybotActionCount
++      }
++    });
++
++  } catch (err: any) {
++    console.error('Mobile dashboard API error:', err);
++    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
++  }
++}
+diff --git a/src/app/m/page.tsx b/src/app/m/page.tsx
+new file mode 100644
+index 0000000..679cb87
+--- /dev/null
++++ b/src/app/m/page.tsx
+@@ -0,0 +1,1004 @@
++"use client";
++
++import React, { useState, useEffect, useRef } from "react";
++import { 
++  User, RefreshCw, Layers, Calendar, Scale, Shield, 
++  MessageSquare, FileText, CheckCircle2, ChevronRight, 
++  AlertTriangle, Play, Check, Send, Upload, X, LogOut, Loader2, ArrowRight
++} from "lucide-react";
++import Link from "next/link";
++
++interface Operator {
++  username: string;
++  name: string;
++}
++
++interface Stats {
++  pendingTasksCount: number;
++  pendingExpensesCount: number;
++  todaySafetyTbmCount: number;
++  todayQualityNcrCount: number;
++  myEasybotActionCount: number;
++}
++
++interface ChatMessage {
++  id: string;
++  role: "user" | "bot";
++  content: string;
++  timestamp: string;
++  suggestedTypes?: string[]; // 1李?媛먯? ???좏깮 媛?ν븳 ?묒뾽??+  previewItems?: any[];      // 2李??뚯떛??誘몃━蹂닿린 ?곗씠?곕뱾
++  isProcessing?: boolean;
++}
++
++const ACTION_LABELS: Record<string, { label: string; icon: any; color: string; desc: string }> = {
++  RECEIPT: { label: "?곸닔利?吏異??덉쓽", icon: FileText, color: "bg-emerald-500", desc: "?곸닔利?湲덉븸, 媛留뱀젏, ?쇱옄 ?먮룞 ?뺤궛" },
++  BUSINESS_CARD: { label: "嫄곕옒泥?紐낇븿 ?깅줉", icon: User, color: "bg-blue-500", desc: "紐낇븿???몄쟻 ?뺣낫瑜?OCR ?뚯떛?섏뿬 紐낇븿泥??깅줉" },
++  BUSINESS_LICENSE: { label: "?ъ뾽?먮벑濡앹쬆 ?깅줉", icon: Shield, color: "bg-purple-500", desc: "嫄곕옒泥??깅줉???꾪븳 ?뺣낫 異붿텧 諛?援?꽭泥?寃利? },
++  LEGAL_DOCUMENT: { label: "?뚯넚/踰뺣쪧 臾몄꽌 遺꾩꽍", icon: Scale, color: "bg-rose-500", desc: "踰뺤썝 ?뚯옣/?〓떖???붿빟 諛?湲고븳 ?먮룞 ?깅줉" },
++  FINANCIAL_STATEMENT: { label: "?щТ?쒗몴 ?깅줉", icon: Layers, color: "bg-amber-500", desc: "?뚯궗 ?먯궛, 遺梨? 留ㅼ텧 援ъ“瑜??뺥삎???곸옱" },
++  INBOUND_ESTIMATE: { label: "諛쏆? 寃ъ쟻??諛쒖＜???곕룞", icon: ChevronRight, color: "bg-cyan-500", desc: "諛붿씠??諛쒖＜???덈ぉ???뚯떛?섏뿬 寃ъ쟻 ?깅줉" },
++  INVENTORY_INBOUND: { label: "嫄곕옒紐낆꽭???낃퀬", icon: Calendar, color: "bg-indigo-500", desc: "?낃퀬 ?덈ぉ怨??섎웾??諛붿퐫??紐낆꽭?쒕줈 ?먮룞 泥섎━" },
++  RESUME: { label: "?대젰??遺꾩꽍", icon: User, color: "bg-teal-500", desc: "吏?먯옄 ?숇젰, 寃쎈젰, 留ㅼ묶 ?먯닔 ?곗텧" },
++  MEDICAL_CERTIFICATE: { label: "蹂묒썝 吏꾨떒??蹂묎?)", icon: AlertTriangle, color: "bg-pink-500", desc: "蹂묎? ?ъ쑀 諛?留덇컧???곗젙" }
++};
++
++export default function IntegratedMobilePortal() {
++  const [currentUser, setCurrentUser] = useState<Operator | null>(null);
++  const [stats, setStats] = useState<Stats>({
++    pendingTasksCount: 0,
++    pendingExpensesCount: 0,
++    todaySafetyTbmCount: 0,
++    todayQualityNcrCount: 0,
++    myEasybotActionCount: 0
++  });
++  const [isLoading, setIsLoading] = useState(true);
++  const [isRefreshing, setIsRefreshing] = useState(false);
++
++  // 異쒗눜洹??쒕??덉씠???곹깭
++  const [workStatus, setWorkStatus] = useState<"READY" | "WORKING" | "OUT">("READY");
++  const [workTime, setWorkTime] = useState<string>("");
++
++  // ?댁?遊??뚮줈??紐⑤떖 ?곹깭
++  const [isBotOpen, setIsBotOpen] = useState(false);
++  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
++  const [botLoading, setBotLoading] = useState(false);
++  const [selectedActions, setSelectedActions] = useState<string[]>([]);
++  const [uploadedBase64, setUploadedBase64] = useState<string>("");
++  const fileInputRef = useRef<HTMLInputElement>(null);
++  const chatEndRef = useRef<HTMLDivElement>(null);
++
++  const fetchDashboardData = async () => {
++    setIsRefreshing(true);
++    try {
++      const res = await fetch("/api/m/dashboard");
++      const data = await res.json();
++      if (data.success) {
++        setCurrentUser(data.currentUser);
++        setStats(data.stats);
++      }
++    } catch (err) {
++      console.error("Dashboard data load fail:", err);
++    } finally {
++      setIsLoading(false);
++      setIsRefreshing(false);
++    }
++  };
++
++  useEffect(() => {
++    fetchDashboardData();
++
++    // 珥덇린 ?댁?遊?硫붿떆吏 援ъ꽦
++    setChatMessages([
++      {
++        id: "welcome",
++        role: "bot",
++        content: "諛섍컩?듬땲?? ?댁??곗뒪???ㅻ쭏??鍮꾩꽌 ?댁?遊뉗엯?덈떎. ?쨼\n?꾩옣???ъ쭊, ?곸닔利? 紐낇븿 ?먮뒗 PDF ?쒕쪟瑜?蹂대궡二쇱떆硫?泥섎━ 媛?ν븳 ?낅Т 紐⑸줉??異붿쿇???쒕━寃좎뒿?덈떎. ?뚯씪???낅줈?쒗빐 二쇱꽭?? ??,
++        timestamp: getFormattedTime()
++      }
++    ]);
++  }, []);
++
++  useEffect(() => {
++    if (chatEndRef.current) {
++      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
++    }
++  }, [chatMessages, botLoading]);
++
++  const getFormattedTime = () => {
++    const now = new Date();
++    const hours = now.getHours();
++    const minutes = now.getMinutes().toString().padStart(2, "0");
++    const ampm = hours >= 12 ? "?ㅽ썑" : "?ㅼ쟾";
++    const formattedHours = hours % 12 || 12;
++    return `${ampm} ${formattedHours}:${minutes}`;
++  };
++
++  // 異쒓렐 湲곕줉 ?쒕??덉씠??+  const handlePunchIn = () => {
++    setWorkStatus("WORKING");
++    setWorkTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
++  };
++
++  // ?닿렐 湲곕줉 ?쒕??덉씠??+  const handlePunchOut = () => {
++    setWorkStatus("OUT");
++    setWorkTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
++  };
++
++  // ?댁?遊??뚯씪 ?낅줈??+  const triggerFileInput = () => {
++    if (fileInputRef.current) {
++      fileInputRef.current.click();
++    }
++  };
++
++  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
++    const file = e.target.files?.[0];
++    if (!file) return;
++
++    setBotLoading(true);
++    setSelectedActions([]);
++
++    const reader = new FileReader();
++    reader.onload = async () => {
++      const base64Str = reader.result as string;
++      setUploadedBase64(base64Str);
++
++      const timeStr = getFormattedTime();
++      // 1. ?ъ슜???낅줈??硫붿떆吏 異붽?
++      setChatMessages(prev => [
++        ...prev,
++        {
++          id: `user-upload-${Date.now()}`,
++          role: "user",
++          content: `?뱚 ?뚯씪???낅줈?쒗뻽?듬땲?? ${file.name}`,
++          timestamp: timeStr
++        }
++      ]);
++
++      try {
++        // 2. 諛깆뿏??OCR 1李??≪뀡 媛먯? API ?몄텧
++        const response = await fetch("/api/easybot/ocr", {
++          method: "POST",
++          headers: { "Content-Type": "application/json" },
++          body: JSON.stringify({ image: base64Str, action: "detect_actions" })
++        });
++
++        const result = await response.json();
++
++        if (result.success && result.suggestedTypes && result.suggestedTypes.length > 0) {
++          // 3. 遊?異붿쿇 紐⑸줉 硫붿떆吏 異붽?
++          setChatMessages(prev => [
++            ...prev,
++            {
++              id: `bot-actions-${Date.now()}`,
++              role: "bot",
++              content: "?낅줈?쒗븯??臾몄꽌瑜??먮룆??寃곌낵, ?ㅼ쓬 ?묒뾽?ㅼ쓣 ?섑뻾?????덉뒿?덈떎. 泥섎━?섍퀬 ?띠쑝???묒뾽??紐⑤몢 ?좏깮??二쇱꽭?? (蹂듭닔 ?좏깮 媛??",
++              timestamp: getFormattedTime(),
++              suggestedTypes: result.suggestedTypes
++            }
++          ]);
++        } else {
++          setChatMessages(prev => [
++            ...prev,
++            {
++              id: `bot-error-${Date.now()}`,
++              role: "bot",
++              content: "?좑툘 ?낅줈?쒗븯??臾몄꽌???뺤떇???뚯븙?섏? 紐삵뻽?듬땲?? 紐낇븿, ?곸닔利? ?ъ뾽?먮벑濡앹쬆 ?깆쓣 ?ㅼ떆 源⑤걮?섍쾶 珥ъ쁺?댁꽌 蹂대궡二쇱꽭??",
++              timestamp: getFormattedTime()
++            }
++          ]);
++        }
++      } catch (err: any) {
++        setChatMessages(prev => [
++          ...prev,
++          {
++            id: `bot-error-${Date.now()}`,
++            role: "bot",
++            content: `??遺꾩꽍 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎: ${err.message}`,
++            timestamp: getFormattedTime()
++          }
++        ]);
++      } finally {
++        setBotLoading(false);
++      }
++    };
++    reader.readAsDataURL(file);
++  };
++
++  // 異붿쿇 ?≪뀡 ?좉?
++  const toggleActionSelection = (type: string) => {
++    setSelectedActions(prev => 
++      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
++    );
++  };
++
++  // ?좏깮??異붿쿇 ?≪뀡 ?ㅽ뻾 (2李??뺣? ?뚯떛)
++  const submitSelectedActions = async () => {
++    if (selectedActions.length === 0 || !uploadedBase64) return;
++
++    setBotLoading(true);
++    const timeStr = getFormattedTime();
++
++    // ?ъ슜???묐떟 硫붿떆吏 異붽?
++    setChatMessages(prev => [
++      ...prev,
++      {
++        id: `user-confirm-${Date.now()}`,
++        role: "user",
++        content: `?좏깮???묒뾽 (${selectedActions.map(t => ACTION_LABELS[t]?.label || t).join(", ")}) 泥섎━瑜??쒖옉?⑸땲??`,
++        timestamp: timeStr
++      }
++    ]);
++
++    try {
++      const response = await fetch("/api/easybot/ocr", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ 
++          image: uploadedBase64, 
++          action: "parse_items", 
++          selectedTypes: selectedActions 
++        })
++      });
++
++      const result = await response.json();
++
++      if (result.success && result.detectedItems && result.detectedItems.length > 0) {
++        // 寃곌낵?ㅼ쓣 誘몃━蹂닿린 移대뱶濡?留ㅽ븨?섏뿬 遊?硫붿떆吏濡?異붽?
++        setChatMessages(prev => [
++          ...prev,
++          {
++            id: `bot-preview-${Date.now()}`,
++            role: "bot",
++            content: "AI ?뺣? ?뚯떛 寃곌낵媛 ?곗텧?섏뿀?듬땲?? ?꾨옒 誘몃━蹂닿린 ?뺣낫瑜??뺤씤?섍퀬 [理쒖쥌 ?깅줉 ?뱀씤]???꾨즺??二쇱꽭??",
++            timestamp: getFormattedTime(),
++            previewItems: result.detectedItems.map((item: any) => ({
++              ...item,
++              isApproved: false,
++              isApproving: false
++            }))
++          }
++        ]);
++      } else {
++        setChatMessages(prev => [
++          ...prev,
++          {
++            id: `bot-fail-${Date.now()}`,
++            role: "bot",
++            content: "?뺣? 遺꾩꽍 寃곌낵瑜?異붿텧?섏? 紐삵뻽?듬땲?? ?ㅼ떆 ?쒕룄??二쇱꽭??",
++            timestamp: getFormattedTime()
++          }
++        ]);
++      }
++    } catch (err: any) {
++      setChatMessages(prev => [
++        ...prev,
++        {
++          id: `bot-fail-${Date.now()}`,
++          role: "bot",
++          content: `???뺣? ?뚯떛 ?먮윭: ${err.message}`,
++          timestamp: getFormattedTime()
++        }
++      ]);
++    } finally {
++      setBotLoading(false);
++    }
++  };
++
++  // 媛쒕퀎 誘몃━蹂닿린 移대뱶 ?댁슜 ?낅뜲?댄듃
++  const updatePreviewField = (msgId: string, itemIdx: number, fieldName: string, value: any) => {
++    setChatMessages(prev => 
++      prev.map(msg => {
++        if (msg.id === msgId && msg.previewItems) {
++          const updatedItems = [...msg.previewItems];
++          updatedItems[itemIdx] = {
++            ...updatedItems[itemIdx],
++            data: {
++              ...updatedItems[itemIdx].data,
++              [fieldName]: value
++            }
++          };
++          return { ...msg, previewItems: updatedItems };
++        }
++        return msg;
++      })
++    );
++  };
++
++  // 媛쒕퀎 誘몃━蹂닿린 理쒖쥌 ?뱀씤 泥섎━
++  const approvePreviewItem = async (msgId: string, itemIdx: number) => {
++    let targetItem: any = null;
++
++    // ????덉뒪?좊━?먯꽌 ?대떦 ?꾩씠??李얘린 諛?濡쒕뵫 ?쒖꽦??+    setChatMessages(prev => 
++      prev.map(msg => {
++        if (msg.id === msgId && msg.previewItems) {
++          const updatedItems = [...msg.previewItems];
++          targetItem = updatedItems[itemIdx];
++          updatedItems[itemIdx] = { ...targetItem, isApproving: true };
++          return { ...msg, previewItems: updatedItems };
++        }
++        return msg;
++      })
++    );
++
++    if (!targetItem) return;
++
++    try {
++      // ?뺤젙 API ?몄텧
++      const confirmRes = await fetch("/api/easybot/ocr/confirm", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          fileType: targetItem.itemType,
++          ...targetItem.data
++        })
++      });
++
++      const confirmData = await confirmRes.json();
++
++      if (confirmData.success) {
++        // ?깃났 ???곹깭 ?낅뜲?댄듃 諛?遊??꾨즺 ?듬? 異붽?
++        setChatMessages(prev => 
++          prev.map(msg => {
++            if (msg.id === msgId && msg.previewItems) {
++              const updatedItems = [...msg.previewItems];
++              updatedItems[itemIdx] = { ...targetItem, isApproved: true, isApproving: false };
++              return { ...msg, previewItems: updatedItems };
++            }
++            return msg;
++          })
++        );
++
++        setChatMessages(prev => [
++          ...prev,
++          {
++            id: `approved-notify-${Date.now()}`,
++            role: "bot",
++            content: `??[${ACTION_LABELS[targetItem.itemType]?.label || targetItem.itemType}] 泥섎━媛 臾댁궗???꾨즺?섏뼱 ?덉쟾?섍쾶 DB???곸옱?섏뿀?듬땲?? ?럦`,
++            timestamp: getFormattedTime()
++          }
++        ]);
++
++        // ??쒕낫???듦퀎 ?ㅼ떆媛?媛깆떊
++        fetchDashboardData();
++      } else {
++        throw new Error(confirmData.error || "?깅줉 ?뺤젙???ㅽ뙣?덉뒿?덈떎.");
++      }
++    } catch (err: any) {
++      setChatMessages(prev => 
++        prev.map(msg => {
++          if (msg.id === msgId && msg.previewItems) {
++            const updatedItems = [...msg.previewItems];
++            updatedItems[itemIdx] = { ...targetItem, isApproving: false };
++            return { ...msg, previewItems: updatedItems };
++          }
++          return msg;
++        })
++      );
++
++      alert(`泥섎━???ㅽ뙣?덉뒿?덈떎: ${err.message}`);
++    }
++  };
++
++  return (
++    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col antialiased">
++      
++      {/* 1. 紐⑤컮?????ㅽ????ㅻ뜑 */}
++      <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between">
++        <div className="text-left">
++          <h1 className="text-sm font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400">
++            EGDesk Smart Portal
++          </h1>
++          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
++            Employee Workspace
++          </p>
++        </div>
++
++        <div className="flex items-center gap-3">
++          <button
++            type="button"
++            onClick={fetchDashboardData}
++            disabled={isRefreshing}
++            className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
++          >
++            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
++          </button>
++        </div>
++      </header>
++
++      {/* 2. 硫붿씤 肄섑뀗痢???쒕낫??*/}
++      <main className="flex-1 p-4 space-y-5 max-w-md mx-auto w-full pb-20">
++        
++        {/* 濡쒕뵫 ?쒖떆 */}
++        {isLoading ? (
++          <div className="flex flex-col items-center justify-center py-20 space-y-3">
++            <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
++            <p className="text-xs text-slate-400 font-bold">?ㅼ떆媛??ы꽭 ?곗씠?곕? 遺덈윭?ㅺ퀬 ?덉뒿?덈떎...</p>
++          </div>
++        ) : (
++          <>
++            {/* ?꾨줈??諛?異쒗눜洹?愿??移대뱶 */}
++            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-950 to-slate-900 border border-slate-800 p-4 shadow-xl">
++              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl" />
++              
++              <div className="flex items-center justify-between">
++                <div className="flex items-center gap-3">
++                  <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
++                    <User className="w-5 h-5 text-cyan-400" />
++                  </div>
++                  <div className="text-left">
++                    <h3 className="text-xs font-black text-slate-200">
++                      {currentUser?.name || "?꾩쭅??}
++                    </h3>
++                    <p className="text-[9px] text-slate-500 font-bold">
++                      {currentUser?.username || ""}
++                    </p>
++                  </div>
++                </div>
++
++                <div className="flex items-center gap-1 bg-slate-800/80 px-2 py-1 rounded-lg border border-slate-700">
++                  <span className={`w-1.5 h-1.5 rounded-full ${workStatus === "WORKING" ? "bg-green-500" : "bg-red-500"}`} />
++                  <span className="text-[8px] font-black text-slate-350">
++                    {workStatus === "WORKING" ? "洹쇰Т 以? : workStatus === "OUT" ? "?닿렐 ?꾨즺" : "洹쇰Т ?湲?}
++                  </span>
++                </div>
++              </div>
++
++              {/* 異쒗눜洹??쒕??덉씠??*/}
++              <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
++                <div className="text-left space-y-0.5">
++                  <p className="text-[8px] text-slate-500 font-bold">?ㅻ뒛??異쒗눜洹??쒓컙</p>
++                  <p className="text-[10px] font-black text-slate-300">
++                    {workTime ? `${workStatus === "WORKING" ? "異쒓렐" : "?닿렐"} ?깅줉: ${workTime}` : "?깅줉??湲곕줉???놁뒿?덈떎."}
++                  </p>
++                </div>
++
++                <div className="flex gap-2">
++                  {workStatus === "READY" && (
++                    <button
++                      onClick={handlePunchIn}
++                      className="px-3 py-1.5 text-[10px] font-black text-white bg-cyan-600 rounded-lg hover:bg-cyan-500 active:scale-95 transition-all"
++                    >
++                      異쒓렐 ?깅줉
++                    </button>
++                  )}
++                  {workStatus === "WORKING" && (
++                    <button
++                      onClick={handlePunchOut}
++                      className="px-3 py-1.5 text-[10px] font-black text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 active:scale-95 transition-all"
++                    >
++                      ?닿렐 ?깅줉
++                    </button>
++                  )}
++                  {workStatus === "OUT" && (
++                    <span className="px-3 py-1.5 text-[10px] font-bold text-slate-500 bg-slate-800 rounded-lg">
++                      湲덉씪 留덇컧
++                    </span>
++                  )}
++                </div>
++              </div>
++            </div>
++
++            {/* ?ㅼ떆媛?二쇱슂 ?뚮┝ 諛??ㅼ퐫??洹몃━??*/}
++            <div className="grid grid-cols-2 gap-3">
++              <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-left hover:border-slate-700 transition-colors">
++                <div className="flex items-center justify-between">
++                  <span className="p-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
++                    <Layers className="w-3.5 h-3.5 text-indigo-400" />
++                  </span>
++                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300">
++                    ????+                  </span>
++                </div>
++                <h4 className="text-[20px] font-black text-slate-100 mt-2">
++                  {stats.pendingTasksCount}
++                </h4>
++                <p className="text-[8.5px] text-slate-500 font-bold">誘몄셿猷??ㅻ깄?쒖뒪??/p>
++              </div>
++
++              <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-left hover:border-slate-700 transition-colors">
++                <div className="flex items-center justify-between">
++                  <span className="p-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
++                    <FileText className="w-3.5 h-3.5 text-emerald-400" />
++                  </span>
++                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400">
++                    寃곗옱 ?湲?+                  </span>
++                </div>
++                <h4 className="text-[20px] font-black text-slate-100 mt-2">
++                  {stats.pendingExpensesCount}
++                </h4>
++                <p className="text-[8.5px] text-slate-500 font-bold">蹂몄씤 寃곗옱 ?湲?吏異?/p>
++              </div>
++
++              <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-left hover:border-slate-700 transition-colors">
++                <div className="flex items-center justify-between">
++                  <span className="p-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
++                    <Shield className="w-3.5 h-3.5 text-cyan-400" />
++                  </span>
++                  <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-sans">
++                    TBM
++                  </span>
++                </div>
++                <h4 className="text-[20px] font-black text-slate-100 mt-2">
++                  {stats.todaySafetyTbmCount}
++                </h4>
++                <p className="text-[8.5px] text-slate-500 font-bold">湲덉씪 ?섎┰ ?덉쟾 TBM</p>
++              </div>
++
++              <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-left hover:border-slate-700 transition-colors">
++                <div className="flex items-center justify-between">
++                  <span className="p-1 rounded-lg bg-rose-500/10 border border-rose-500/20">
++                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
++                  </span>
++                  <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-sans">
++                    NCR
++                  </span>
++                </div>
++                <h4 className="text-[20px] font-black text-slate-100 mt-2">
++                  {stats.todayQualityNcrCount}
++                </h4>
++                <p className="text-[8.5px] text-slate-500 font-bold">湲덉씪 寃??遺?곹빀 嫄?/p>
++              </div>
++            </div>
++
++            {/* 5? ?듭떖 移댄뀒怨좊━ ?듬쭅??紐⑸줉 */}
++            <div className="space-y-3">
++              <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-wider text-left pl-1">
++                二쇱슂 ?낅Т ?쒕퉬???듬쭅??+              </h3>
++
++              <div className="space-y-2">
++                {/* 1. ?몄궗 諛??몃Т */}
++                <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 text-left">
++                  <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest bg-cyan-500/5 px-2 py-0.5 rounded border border-cyan-500/10">?몄궗 / ?몃Т</span>
++                  <div className="grid grid-cols-2 gap-2.5 mt-3">
++                    <Link href="/m/form-management-new" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>利앸챸??諛쒓툒 ?좎껌</span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                    <Link href="/m/labor-management" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>?몃Т 由ъ뒪??AI</span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                  </div>
++                </div>
++
++                {/* 2. ?꾩옣 諛??덉쟾 */}
++                <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 text-left">
++                  <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/5 px-2 py-0.5 rounded border border-indigo-500/10">?꾩옣 / ?덉쟾 / ?덉쭏</span>
++                  <div className="grid grid-cols-2 gap-2.5 mt-3">
++                    <Link href="/m/safety-detection" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>?꾪뿕 鍮꾩쟾 AI</span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                    <Link href="/m/safety/tbm" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>?덉쟾 TBM ?섎┰</span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                    <Link href="/m/facility-management" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>?ㅻ퉬 ?덉?蹂댁쟾</span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                    <Link href="/m/quality-control" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>?덉쭏 愿由?SPC</span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                  </div>
++                </div>
++
++                {/* 3. ?щТ 諛??곸뾽 */}
++                <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 text-left">
++                  <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/10">?щТ / ?곸뾽 / SCM</span>
++                  <div className="grid grid-cols-2 gap-2.5 mt-3">
++                    <Link href="/m/finance-cashflow" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>吏異??댁뿭 ?덉쓽</span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                    <Link href="/m/order-capture" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>紐⑤컮??二쇰Ц?섏＜</span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                    <Link href="/m/estimate-request" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>?ㅻ쭏??寃ъ쟻?붿껌</span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                    <Link href="/m/grant-management" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>?뺤콉?먭툑 異붿쿇 AI</span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                  </div>
++                </div>
++
++                {/* 4. ?묒뾽 諛??꾧뎄 */}
++                <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 text-left">
++                  <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest bg-amber-500/5 px-2 py-0.5 rounded border border-amber-500/10">?묒뾽 / ?ㅻ깄?쒖뒪??/span>
++                  <div className="grid grid-cols-2 gap-2.5 mt-3">
++                    <Link href="/m/snaptasks" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>紐⑤컮???묒뾽吏??/span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                    <Link href="/employee/business-card" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>紐낇븿 鍮꾩꽌 ??/span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                    <Link href="/m/lawyer-ai" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>AI 踰뺣쪧 ?곷떞</span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                    <Link href="/m/credit-risk" className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:border-slate-700 transition-all">
++                      <span>梨꾧텒 ?좎슜 愿由?/span>
++                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
++                    </Link>
++                  </div>
++                </div>
++              </div>
++            </div>
++          </>
++        )}
++      </main>
++
++      {/* 3. 紐⑤컮???댁?遊??뚮줈??鍮꾩꽌 踰꾪듉 */}
++      <div className="fixed bottom-6 right-6 z-50">
++        <button
++          onClick={() => setIsBotOpen(true)}
++          className="relative group p-3.5 rounded-full bg-gradient-to-tr from-cyan-600 to-indigo-600 text-white shadow-xl shadow-indigo-600/30 hover:scale-110 active:scale-95 transition-all"
++        >
++          <MessageSquare className="w-6 h-6 animate-pulse" />
++          <span className="absolute -top-1 -right-1 flex h-3 w-3">
++            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
++            <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
++          </span>
++        </button>
++      </div>
++
++      {/* 4. ?댁?遊???뷀삎 ?뚯씪 泥섎━ 紐⑤떖 */}
++      {isBotOpen && (
++        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex flex-col justify-end md:justify-center md:items-center">
++          <div className="w-full md:max-w-md bg-slate-900 border-t md:border border-slate-800 rounded-t-2xl md:rounded-2xl flex flex-col h-[85vh] md:h-[75vh] shadow-2xl overflow-hidden">
++            
++            {/* 紐⑤떖 ?ㅻ뜑 */}
++            <div className="bg-slate-950 px-4 py-3 flex items-center justify-between border-b border-slate-800">
++              <div className="flex items-center gap-2">
++                <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
++                <div className="text-left">
++                  <h3 className="text-xs font-black text-slate-200">?댁?遊?(EasyBot) 鍮꾩꽌</h3>
++                  <p className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Interactive File Assistant</p>
++                </div>
++              </div>
++              
++              <button
++                type="button"
++                onClick={() => setIsBotOpen(false)}
++                className="p-1 rounded-lg text-slate-500 hover:bg-slate-800 hover:text-white transition-all"
++              >
++                <X className="w-5 h-5" />
++              </button>
++            </div>
++
++            {/* 梨꾪똿 硫붿떆吏 ?ㅽ겕濡??곸뿭 */}
++            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900/50">
++              {chatMessages.map((msg) => (
++                <div
++                  key={msg.id}
++                  className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"} space-y-1`}
++                >
++                  <span className="text-[7.5px] text-slate-500 font-bold px-1">{msg.timestamp}</span>
++                  <div
++                    className={`max-w-[85%] rounded-xl p-3 text-left text-[11px] leading-relaxed shadow-sm whitespace-pre-wrap ${
++                      msg.role === "user"
++                        ? "bg-gradient-to-r from-cyan-600 to-cyan-700 text-white rounded-tr-none"
++                        : "bg-slate-800 text-slate-100 border border-slate-700/50 rounded-tl-none"
++                    }`}
++                  >
++                    {msg.content}
++
++                    {/* 1李?異붿쿇 紐⑤뱶: ?묒뾽 ?ㅼ쨷 ?좏깮 紐⑸줉 */}
++                    {msg.suggestedTypes && msg.suggestedTypes.length > 0 && (
++                      <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-2">
++                        <p className="text-[10px] font-black text-cyan-400 mb-2">??遺꾩꽍 ?섑뻾???묒뾽???좏깮??二쇱꽭??</p>
++                        <div className="space-y-1.5">
++                          {msg.suggestedTypes.map((type) => {
++                            const config = ACTION_LABELS[type] || { label: type, icon: FileText, color: "bg-slate-600", desc: "遺꾩꽍???ㅽ뻾?⑸땲??" };
++                            const IconComponent = config.icon;
++                            const isSelected = selectedActions.includes(type);
++
++                            return (
++                              <button
++                                key={type}
++                                onClick={() => toggleActionSelection(type)}
++                                className={`w-full flex items-start gap-2.5 p-2 rounded-lg border text-left active:scale-[0.99] transition-all ${
++                                  isSelected
++                                    ? "bg-slate-750 border-cyan-500/50 shadow-sm shadow-cyan-500/5"
++                                    : "bg-slate-900/50 border-slate-800 hover:border-slate-700"
++                                }`}
++                              >
++                                <div className={`p-1 rounded-md mt-0.5 text-white ${config.color}`}>
++                                  <IconComponent className="w-3 h-3" />
++                                </div>
++                                <div className="flex-1 space-y-0.5">
++                                  <div className="flex items-center justify-between">
++                                    <span className="text-[10.5px] font-black text-slate-200">{config.label}</span>
++                                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${
++                                      isSelected ? "bg-cyan-500 border-cyan-500 text-white" : "border-slate-700"
++                                    }`}>
++                                      {isSelected && <Check className="w-2.5 h-2.5" />}
++                                    </span>
++                                  </div>
++                                  <p className="text-[8.5px] text-slate-400 font-medium leading-tight">{config.desc}</p>
++                                </div>
++                              </button>
++                            );
++                          })}
++                        </div>
++
++                        <button
++                          onClick={submitSelectedActions}
++                          disabled={selectedActions.length === 0}
++                          className="w-full mt-3 py-2 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 font-black rounded-lg text-[10px] flex items-center justify-center gap-1.5 active:scale-98 transition-all"
++                        >
++                          <span>?좏깮???묒뾽 遺꾩꽍 媛쒖떆 ({selectedActions.length}嫄?</span>
++                          <ArrowRight className="w-3.5 h-3.5" />
++                        </button>
++                      </div>
++                    )}
++
++                    {/* 2李??뚯떛 寃곌낵: 媛쒕퀎 寃곌낵 寃利?誘몃━蹂닿린 移대뱶 紐⑸줉 */}
++                    {msg.previewItems && msg.previewItems.length > 0 && (
++                      <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-4">
++                        {msg.previewItems.map((item, idx) => {
++                          const config = ACTION_LABELS[item.itemType] || { label: item.itemType, icon: FileText, color: "bg-slate-600" };
++                          const itemTitle = config.label;
++
++                          return (
++                            <div
++                              key={`${item.itemType}-${idx}`}
++                              className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-left space-y-3 relative overflow-hidden"
++                            >
++                              <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
++                                <span className="text-[10px] font-black text-slate-200 flex items-center gap-1.5">
++                                  <span className={`w-2 h-2 rounded-full ${config.color}`} />
++                                  {itemTitle}
++                                </span>
++                                {item.isApproved ? (
++                                  <span className="text-[9px] font-black text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded">
++                                    ?깅줉 ?꾨즺
++                                  </span>
++                                ) : (
++                                  <span className="text-[9px] font-black text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-1.5 py-0.5 rounded animate-pulse">
++                                    ?뱀씤 ?湲?+                                  </span>
++                                )}
++                              </div>
++
++                              {/* ??낅퀎 ?숈쟻 ?명뭼 ??*/}
++                              <div className="space-y-2 text-[10px]">
++                                {item.itemType === "RECEIPT" && (
++                                  <>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">吏異쒕챸</span>
++                                      <input
++                                        type="text"
++                                        value={item.data.title || ""}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "title", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden"
++                                      />
++                                    </div>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">吏異?湲덉븸</span>
++                                      <input
++                                        type="number"
++                                        value={item.data.amount || 0}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "amount", parseInt(e.target.value) || 0)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden font-mono"
++                                      />
++                                    </div>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">鍮꾨ぉ 移댄뀒怨좊━</span>
++                                      <select
++                                        value={item.data.category || "湲고?"}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "category", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden"
++                                      >
++                                        {["蹂듬━?꾩깮鍮?, "?щ퉬援먰넻鍮?, "?뚮え?덈퉬", "?묐?鍮?, "?꾩감猷?, "?멸툑怨듦낵湲?, "湲고?"].map(cat => (
++                                          <option key={cat} value={cat}>{cat}</option>
++                                        ))}
++                                      </select>
++                                    </div>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">吏異??쇱옄</span>
++                                      <input
++                                        type="text"
++                                        value={item.data.expense_date || ""}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "expense_date", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden"
++                                      />
++                                    </div>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">寃곗젣 ?섎떒</span>
++                                      <input
++                                        type="text"
++                                        value={item.data.payment_method || ""}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "payment_method", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden"
++                                      />
++                                    </div>
++                                  </>
++                                )}
++
++                                {item.itemType === "BUSINESS_CARD" && (
++                                  <>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">?깅챸</span>
++                                      <input
++                                        type="text"
++                                        value={item.data.name || ""}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "name", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden"
++                                      />
++                                    </div>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">?뚯궗紐?/span>
++                                      <input
++                                        type="text"
++                                        value={item.data.companyName || ""}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "companyName", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden"
++                                      />
++                                    </div>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">?곕씫泥?/span>
++                                      <input
++                                        type="text"
++                                        value={item.data.phone || ""}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "phone", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden"
++                                      />
++                                    </div>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">?대찓??/span>
++                                      <input
++                                        type="text"
++                                        value={item.data.email || ""}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "email", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden"
++                                      />
++                                    </div>
++                                  </>
++                                )}
++
++                                {item.itemType === "LEGAL_DOCUMENT" && (
++                                  <>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">?ш굔 踰덊샇</span>
++                                      <input
++                                        type="text"
++                                        value={item.data.caseNumber || ""}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "caseNumber", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden"
++                                      />
++                                    </div>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">?쒕쪟 援щ텇</span>
++                                      <input
++                                        type="text"
++                                        value={item.data.documentType || ""}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "documentType", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden"
++                                      />
++                                    </div>
++                                    <div className="grid grid-cols-3 items-center gap-2">
++                                      <span className="text-slate-400 font-bold">?듬? 湲고븳</span>
++                                      <input
++                                        type="text"
++                                        value={item.data.deadline || ""}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "deadline", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden"
++                                      />
++                                    </div>
++                                    <div className="grid grid-cols-3 items-start gap-2">
++                                      <span className="text-slate-400 font-bold mt-1">?듭떖 ?붿빟</span>
++                                      <textarea
++                                        value={item.data.summary || ""}
++                                        disabled={item.isApproved}
++                                        onChange={(e) => updatePreviewField(msg.id, idx, "summary", e.target.value)}
++                                        className="col-span-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-100 outline-hidden h-12 resize-none"
++                                      />
++                                    </div>
++                                  </>
++                                )}
++
++                                {/* 湲고? ?쒗뵆由우슜 媛꾨떒 ?꾨뱶 */}
++                                {item.itemType !== "RECEIPT" && item.itemType !== "BUSINESS_CARD" && item.itemType !== "LEGAL_DOCUMENT" && (
++                                  <div className="space-y-1 bg-slate-800/50 p-2 rounded border border-slate-800">
++                                    <p className="text-[9px] text-slate-400">?곗씠???섏쭛 ?곸꽭:</p>
++                                    <pre className="text-[7.5px] font-mono text-cyan-300 max-h-24 overflow-y-auto whitespace-pre-wrap">
++                                      {JSON.stringify(item.data, null, 2)}
++                                    </pre>
++                                  </div>
++                                )}
++                              </div>
++
++                              {/* ?뱀씤 ?숈옉 ?⑥텛 */}
++                              {!item.isApproved && (
++                                <button
++                                  onClick={() => approvePreviewItem(msg.id, idx)}
++                                  disabled={item.isApproving}
++                                  className="w-full mt-2.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-850 disabled:text-slate-600 font-black rounded-lg text-[9.5px] flex items-center justify-center gap-1 active:scale-[0.98] transition-all"
++                                >
++                                  {item.isApproving ? (
++                                    <>
++                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
++                                      <span>DB ?곸옱 以?..</span>
++                                    </>
++                                  ) : (
++                                    <>
++                                      <CheckCircle2 className="w-3.5 h-3.5" />
++                                      <span>?댁슜 ?뺤씤 諛?理쒖쥌 ?깅줉 ?뱀씤</span>
++                                    </>
++                                  )}
++                                </button>
++                              )}
++                            </div>
++                          );
++                        })}
++                      </div>
++                    )}
++                  </div>
++                </div>
++              ))}
++
++              {/* 濡쒕뵫 ?쒖떆 */}
++              {botLoading && (
++                <div className="flex items-start gap-2.5">
++                  <div className="p-2 rounded-xl bg-slate-800 border border-slate-700/50 text-slate-100">
++                    <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
++                  </div>
++                  <span className="text-[9px] text-slate-400 font-bold self-center">AI 鍮꾩꽌媛 ?ㅼ떆媛?寃??以묒엯?덈떎...</span>
++                </div>
++              )}
++
++              <div ref={chatEndRef} />
++            </div>
++
++            {/* ????낅젰 李?(?뚯씪 ?낅줈???꾩슜) */}
++            <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2">
++              <input
++                type="file"
++                ref={fileInputRef}
++                onChange={handleFileUpload}
++                accept="image/*,application/pdf"
++                className="hidden"
++              />
++              
++              <button
++                type="button"
++                onClick={triggerFileInput}
++                disabled={botLoading}
++                className="flex-1 py-2.5 px-4 rounded-xl border border-dashed border-slate-700 hover:border-slate-500 text-slate-400 hover:text-slate-200 text-[10px] font-black flex items-center justify-center gap-2 bg-slate-900 active:scale-[0.99] transition-all"
++              >
++                <Upload className="w-4 h-4" />
++                <span>?ㅻ쭏?명룿 ?ъ쭊 ?먮뒗 PDF 臾몄꽌 蹂대궡湲?/span>
++              </button>
++            </div>
++          </div>
++        </div>
++      )}
++    </div>
++  );
++}

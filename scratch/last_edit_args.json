@@ -1,0 +1,15 @@
+{
+  "step_index": 940,
+  "created_at": "2026-06-02T08:12:49Z",
+  "tool": "replace_file_content",
+  "args": {
+    "AllowMultiple": "false",
+    "Description": "\"카드 영수증 뷰어 슬라이드 번호 제어를 위한 receiptActiveIdx 상태 추가\"",
+    "EndLine": "185",
+    "Instruction": "\"Add receiptActiveIdx state definition under viewingReceiptUrl state.\"",
+    "ReplacementContent": "\"  const [viewingReceiptUrl, setViewingReceiptUrl] = useState<string | null>(null);\\n  const [receiptActiveIdx, setReceiptActiveIdx] = useState<number>(0);\"",
+    "StartLine": "180",
+    "TargetContent": "\"  const [viewingReceiptUrl, setViewingReceiptUrl] = useState<string | null>(null);\"",
+    "TargetFile": "\"C:\\\\dev\\\\egdesk-FreeSMS\\\\src\\\\app\\\\finance\\\\page.tsx\""
+  }
+}
