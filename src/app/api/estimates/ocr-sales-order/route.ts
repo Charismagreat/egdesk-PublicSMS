@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
+import { fetchGeminiWithFallback, repairJson } from '../../../../lib/gemini-fallback';
 import { executeSQL, insertRows, queryTable, listBusinessIdentitySnapshots, listKnowledgeDocuments, getKnowledgeDocument, getGeminiApiKey } from '../../../../../egdesk-helpers';
 import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
@@ -295,7 +295,13 @@ const geminiUrlPass1 = `https://generativelanguage.googleapis.com/v1beta/models/
         ],
         generationConfig: {
           responseMimeType: "text/plain"
-        }
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
       })
     });
 
@@ -402,7 +408,7 @@ ${rlsRulesText}
     }
   ]
 }
-Do NOT output anything other than this JSON string. No markdown block wrapper.
+Do NOT format or pretty-print the JSON. Return a single-line, compact JSON string without any line breaks or unnecessary spaces. Make it as short as possible to prevent truncation. Do NOT wrap it in markdown code blocks.
 `;
 
     const geminiUrlPass2 = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`;
@@ -419,9 +425,15 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
           }
         ],
         generationConfig: {
-          
-          responseMimeType: "application/json"
-        }
+          responseMimeType: "application/json",
+          temperature: 0.1
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
       })
     });
 
@@ -456,19 +468,42 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
     let innerErrMsg = '';
     try {
       const cleanJson = responseTextPass2.replace(/```json/g, '').replace(/```/g, '').trim();
-      parsedData = JSON.parse(cleanJson);
+      
+      // 1. 바깥쪽 JSON 파싱 및 복구 가드레일 작동
+      try {
+        parsedData = JSON.parse(cleanJson);
+      } catch (outerErr) {
+        console.warn('Outer JSON parse failed, trying repairJson...');
+        try {
+          const repaired = repairJson(cleanJson);
+          parsedData = JSON.parse(repaired);
+        } catch (repairErr: any) {
+          console.error('Failed to repair outer JSON:', repairErr.message);
+          throw outerErr;
+        }
+      }
+
+      // 2. 내부 content 데이터 2차 파싱 및 복구 가드레일 작동
       if (parsedData && parsedData.content && typeof parsedData.content === 'string') {
         try {
           parsedData = JSON.parse(parsedData.content);
         } catch (innerErr: any) {
           innerErrMsg = innerErr.message;
-          console.error('Inner JSON parse failed:', innerErr.message, parsedData.content);
+          console.error('Inner JSON parse failed, trying repairJson...', innerErr.message);
+          try {
+            const repairedInner = repairJson(parsedData.content);
+            parsedData = JSON.parse(repairedInner);
+            innerErrMsg = ''; // 수리 성공 시 에러 문구 소멸
+          } catch (repairInnerErr: any) {
+            innerErrMsg = repairInnerErr.message;
+            console.error('Failed to repair inner JSON:', repairInnerErr.message);
+          }
         }
       }
       
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to parse Gemini Pass 2 response:', responseTextPass2);
-      throw new Error('최종 AI 정제 결과를 JSON으로 변환하는 데 실패했습니다.');
+      throw new Error(`최종 AI 정제 결과를 JSON으로 변환하는 데 실패했습니다. (원인: ${e.message})`);
     }
     
     const { orderNo, orderDate, deliveryDate, items, picName, picPhone } = parsedData;

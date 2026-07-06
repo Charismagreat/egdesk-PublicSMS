@@ -100,12 +100,7 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
               continue;
             }
           }
-          let errorDetail = '';
-          try {
-            errorDetail = await res.text();
-          } catch (_) {}
-          console.error(`🔴 [Gemini Call Failed] Status: ${res.status}, Detail: ${errorDetail}`);
-          throw new Error(`HTTP ${res.status}: ${res.statusText || 'Unknown Error'} - ${errorDetail}`);
+          throw new Error(`HTTP ${res.status}: ${res.statusText || 'Unknown Error'}`);
         } catch (err: any) {
           if (err.message && err.message.startsWith('HTTP ')) throw err;
           attempt++;
@@ -191,5 +186,96 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
     status: 200,
     headers: { 'Content-Type': 'application/json' }
   });
+}
+
+/**
+ * 불완전하거나 도중에 끊긴 JSON 문자열을 분석하여 강제로 유효한 JSON 포맷으로 수리합니다.
+ */
+export function repairJson(jsonStr: string): string {
+  let trimmed = jsonStr.trim();
+  if (!trimmed) return '{}';
+
+  // 1. 만약 문자열이 마크다운 래퍼(```json)로 감싸져 있으면 제거
+  trimmed = trimmed.replace(/^```json/i, '').replace(/```$/, '').trim();
+
+  let inString = false;
+  let escapeActive = false;
+  const stack: ('{' | '[')[] = [];
+  let cleanChars: string[] = [];
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const char = trimmed[i];
+
+    if (inString) {
+      if (escapeActive) {
+        escapeActive = false;
+        cleanChars.push(char);
+      } else if (char === '\\') {
+        escapeActive = true;
+        cleanChars.push(char);
+      } else if (char === '"') {
+        inString = false;
+        cleanChars.push(char);
+      } else {
+        cleanChars.push(char);
+      }
+    } else {
+      if (char === '"') {
+        inString = true;
+        cleanChars.push(char);
+      } else if (char === '{') {
+        stack.push('{');
+        cleanChars.push(char);
+      } else if (char === '[') {
+        stack.push('[');
+        cleanChars.push(char);
+      } else if (char === '}') {
+        if (stack[stack.length - 1] === '{') {
+          stack.pop();
+        }
+        cleanChars.push(char);
+      } else if (char === ']') {
+        if (stack[stack.length - 1] === '[') {
+          stack.pop();
+        }
+        cleanChars.push(char);
+      } else {
+        cleanChars.push(char);
+      }
+    }
+  }
+
+  let repaired = cleanChars.join('').trim();
+
+  // 2. 만약 따옴표 문자열 한가운데서 끊긴 채 루프가 끝났다면, 강제로 닫는 따옴표와 값을 임시 마감 처리합니다.
+  if (inString) {
+    repaired += '"';
+    inString = false;
+  }
+
+  // 3. 콜론(:) 뒤에 값이 없이 툭 끊겨 끝난 경우 처리 (예: "key": )
+  if (repaired.endsWith(':')) {
+    repaired += 'null';
+  } else if (repaired.endsWith(',')) {
+    // 쉼표로 끝난 경우 쉼표 제거
+    repaired = repaired.slice(0, -1);
+  }
+
+  // 4. 스택에 남아있는 열린 중괄호/대괄호를 역순으로 닫아줍니다.
+  while (stack.length > 0) {
+    const last = stack.pop();
+    if (last === '{') {
+      repaired += '}';
+    } else if (last === '[') {
+      repaired += ']';
+    }
+  }
+
+  // 최후 검사: 완전 깨져서 JSON 시작( { 또는 [ ) 조차 없으면 빈 객체화
+  if (!repaired.startsWith('{') && !repaired.startsWith('[')) {
+    repaired = '{' + repaired + '}';
+  }
+
+  return repaired;
 }
 
