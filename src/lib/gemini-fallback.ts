@@ -2,62 +2,7 @@
  * 구글 Gemini AI API 호출 장애(503, 429) 극복용 자동 폴백 fetch 래퍼 함수
  * 주석 및 설명: 한국어 작성 원칙 준수
  */
-import { getGeminiApiKey } from '@/../egdesk-helpers';
-import { EGDESK_CONFIG } from '@/../egdesk.config';
-
-export type AiCallerCallOptions = {
-  systemPrompt?: string;
-  model?: string;
-  temperature?: number;
-  maxOutputTokens?: number;
-  caller?: string;
-  responseSchema?: Record<string, any>;
-  keyName?: 'wonconduct' | (string & {});
-  imageInput?: string; // 이미지 전송 지원
-};
-
-// 로컬 fetch용 서버 헤더 빌드
-function buildServerEgdeskHeaders() {
-  const apiKey = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_KEY) || EGDESK_CONFIG.apiKey || '';
-  return {
-    'Content-Type': 'application/json',
-    'x-egdesk-api-key': apiKey
-  };
-}
-
-async function parseEgdeskMcpToolResponse(response: Response): Promise<any> {
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`MCP tool call failed (HTTP ${response.status}): ${text}`);
-  }
-  const data = await response.json();
-  if (data.error) {
-    throw new Error(`MCP tool returned error: ${data.error}`);
-  }
-  return data.result;
-}
-
-export async function callAiCallerTool(
-  toolName: string,
-  args: Record<string, any> = {}
-): Promise<any> {
-  const apiUrl = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) || EGDESK_CONFIG.apiUrl;
-  
-  try {
-    const listRes = await fetch(`${apiUrl}/conversations/tools`, {
-      method: 'GET',
-      headers: buildServerEgdeskHeaders()
-    });
-    const listData = await listRes.text();
-    throw new Error(`[DEBUG CONVERSATIONS TOOLS]: ${listData}`);
-  } catch (err: any) {
-    throw new Error(err.message);
-  }
-}
-
-export async function callAiCaller(prompt: string, options: AiCallerCallOptions = {}) {
-  return callAiCallerTool('ai_caller_call', { prompt, ...options });
-}
+import { callAiCaller, getGeminiApiKey } from '@/../egdesk-helpers';
 
 /**
  * 텍스트 글자 수를 기반으로 토큰 수를 예측합니다. (폴백용 계산기)
@@ -139,10 +84,10 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
         systemPrompt,
         model: targetModel,
         temperature: temperature ?? 0.7,
-        imageInput, // 이미지 존재 시 이지데스크 caller가 받아 처리하도록 넘김
+        images: imageInput ? [imageInput] : undefined, // 최신 images 배열 규격 연동 지원
         caller: 'egdesk-fallback-wrapper',
         keyName: 'wonconduct'
-      } as any);
+      });
 
       // 503 에러 징후 정밀 추적 및 예외 처리
       const checkText = callerRes && typeof callerRes === 'object' 
