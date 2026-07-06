@@ -1,6 +1,5 @@
 import { queryTable, insertRows, callAiCaller, getGeminiApiKey } from '../../egdesk-helpers';
 import { getAppSetting } from './app-settings';
-import { fetchGeminiWithFallback } from './gemini-fallback';
 
 export interface CallAIOptions {
   prompt: string;
@@ -81,10 +80,8 @@ async function callGemini(
   temperature: number | undefined,
   imageInput: string | undefined
 ): Promise<{ text: string; promptTokens: number; completionTokens: number; totalTokens: number }> {
-  // A. 이미지/PDF 분석(OCR) 멀티모달인 경우 -> fetchGeminiWithFallback 래퍼 호출
+  // A. 이미지/PDF 분석(OCR) 멀티모달인 경우 -> 자체 백오프 재시도 및 폴백 탑재 직접 호출
   if (imageInput) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-    
     const parts: any[] = [{ text: prompt }];
     const match = imageInput.match(/^data:([^;]+);base64,(.+)$/);
     const mimeType = match ? match[1] : 'image/png';
@@ -96,22 +93,73 @@ async function callGemini(
       }
     });
 
-    const response = await fetchGeminiWithFallback(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
-        contents: [{ parts }],
-        generationConfig: {
-          responseMimeType: responseMimeType || 'text/plain',
-          temperature: temperature ?? 0.7
-        }
-      })
-    });
+    const maxRetries = 3;
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error?.message || `Gemini API 호출 실패 (HTTP ${response.status})`);
+    async function fetchWithRetry(modelLabel: string, currentModel: string): Promise<Response> {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+      let attempt = 0;
+      while (attempt < maxRetries) {
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
+              contents: [{ parts }],
+              generationConfig: {
+                responseMimeType: responseMimeType || 'text/plain',
+                temperature: temperature ?? 0.7
+              }
+            })
+          });
+
+          if (res.ok) return res;
+
+          if (res.status === 503 || res.status === 429 || res.status === 500) {
+            attempt++;
+            if (attempt < maxRetries) {
+              const delay = attempt * 1000;
+              console.warn(`[AI Warning] ${modelLabel} (${currentModel}) 실패 (Status: ${res.status}). ${delay}ms 후 재시도...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+          }
+          let errorDetail = '';
+          try {
+            errorDetail = await res.text();
+          } catch (_) {}
+          throw new Error(`HTTP ${res.status}: ${res.statusText || 'Unknown Error'} - ${errorDetail}`);
+        } catch (err: any) {
+          if (err.message && err.message.startsWith('HTTP ')) throw err;
+          attempt++;
+          if (attempt < maxRetries) {
+            const delay = attempt * 1000;
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          throw err;
+        }
+      }
+      throw new Error(`${modelLabel} API call failed`);
+    }
+
+    let response: Response;
+    try {
+      response = await fetchWithRetry('기본 모델', modelName);
+    } catch (err: any) {
+      console.error(`[AI Emergency] 기본 모델 (${modelName}) 에러: ${err.message}. 1차 폴백 진입.`);
+      const fallbackModel1 = 'gemini-2.5-flash';
+      try {
+        response = await fetchWithRetry('1차 폴백 모델', fallbackModel1);
+      } catch (err2: any) {
+        console.error(`[AI Emergency] 1차 폴백 (${fallbackModel1}) 실패: ${err2.message}. 2차 폴백 진입.`);
+        const fallbackModel2 = 'gemini-flash-latest';
+        try {
+          response = await fetchWithRetry('2차 폴백 모델', fallbackModel2);
+        } catch (err3: any) {
+          throw new Error(`모든 Gemini 모델 OCR 호출 실패: ${err3.message}`);
+        }
+      }
     }
 
     const resData = await response.json();
