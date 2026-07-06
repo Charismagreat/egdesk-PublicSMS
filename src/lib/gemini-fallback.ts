@@ -82,7 +82,7 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
       callerRes = await callAiCaller(prompt, {
         systemPrompt,
         model: targetModel,
-        temperature: temperature ?? 0.1,
+        temperature: temperature ?? 0.7,
         imageInput, // 이미지 존재 시 이지데스크 caller가 받아 처리하도록 넘김
         caller: 'egdesk-fallback-wrapper',
         keyName: 'wonconduct'

@@ -426,7 +426,7 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
         ],
         generationConfig: {
           responseMimeType: "text/plain",
-          temperature: 0.1
+          temperature: 0.7
         },
         safetySettings: [
           { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
