@@ -188,8 +188,9 @@ export async function POST(req: Request) {
       ? modelRes.rows[0].value
       : 'gemini-3.5-flash';
 
-    // RAG 지식 규정 마이닝
+    // RAG 지식 규정 마이닝 (사용자 요청에 따라 테스트 중 일시적 비활성화 처리)
     let rlsRulesText = '';
+    /*
     try {
       let snapshotId = 'default_snapshot';
       const snapshotListRes = await listBusinessIdentitySnapshots();
@@ -235,6 +236,7 @@ export async function POST(req: Request) {
     } catch (e) {
       console.error('RAG 지식 마이닝 실패:', e);
     }
+    */
 
     // 본사 프로필 로드 (기본값 주식회사 원컨덕터트레이딩/2428700357)
     let myCompanyProfile = { companyName: '주식회사 원컨덕터트레이딩', businessNumber: '2428700357' };
