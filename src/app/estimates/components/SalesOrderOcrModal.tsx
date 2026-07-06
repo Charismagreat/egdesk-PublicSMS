@@ -115,16 +115,18 @@ export default function SalesOrderOcrModal({
     setOcrSuccess(false);
     setOcrFilename(file.name);
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     const reader = new FileReader();
     reader.onload = async () => {
       const base64Data = reader.result as string;
       try {
         const res = await apiFetch("/api/estimates/ocr-sales-order?action=analyze", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            imageBase64: base64Data,
+            filename: file.name,
+            mimeType: file.type
+          }),
         });
         
         const data = await res.json();

@@ -148,18 +148,16 @@ export async function POST(req: Request) {
       });
     }
 
-    const data = await req.formData();
-    const file = data.get('file') as File;
-    if (!file) {
-      return NextResponse.json({ success: false, error: '파일이 없습니다.' }, { status: 400 });
+    const bodyObj = await req.json();
+    const { imageBase64, filename, mimeType = 'image/jpeg' } = bodyObj;
+    if (!imageBase64) {
+      return NextResponse.json({ success: false, error: '분석할 파일 데이터(Base64)가 누락되었습니다.' }, { status: 400 });
     }
 
-    const buffer = await file.arrayBuffer();
-    const base64Image = Buffer.from(buffer).toString('base64');
-    const mimeType = file.type || 'image/jpeg';
-    const fileDataUri = `data:${mimeType};base64,${base64Image}`;
+    const base64Image = imageBase64.replace(/^data:(image\/(png|jpeg|jpg|webp|heic|heif)|application\/pdf);base64,/, "");
+    const fileDataUri = imageBase64;
 
-    console.log(`📌 [AI OCR SCAN (SalesOrder)]: 수신 파일명='${file.name}', 바이너리 크기=${buffer.byteLength} bytes, Base64 길이=${base64Image.length}`);
+    console.log(`📌 [AI OCR SCAN (SalesOrder)]: 수신 파일명='${filename}', Base64 길이=${base64Image.length}`);
 
     const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
 
