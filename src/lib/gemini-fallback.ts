@@ -25,22 +25,6 @@ function estimateTokens(text: string): number {
 }
 
 export async function fetchGeminiWithFallback(url: string, init?: RequestInit): Promise<Response> {
-  // API 키가 'AIzaSy'로 시작하지 않으면 이지데스크 헬퍼를 통해 진짜 키로 복호화/교체
-  let finalUrl = url;
-  try {
-    const urlObj = new URL(url);
-    const apiKey = urlObj.searchParams.get('key');
-    if (apiKey && !apiKey.startsWith('AIzaSy')) {
-      const decryptedKeyRes = await getGeminiApiKey({ name: apiKey });
-      if (decryptedKeyRes && decryptedKeyRes.success && decryptedKeyRes.apiKey) {
-        urlObj.searchParams.set('key', decryptedKeyRes.apiKey);
-        finalUrl = urlObj.toString();
-      }
-    }
-  } catch (err) {
-    console.error('⚠️ [fallback] EGDesk에서 API 키 복호화에 실패했습니다:', err);
-  }
-
   let prompt = '';
   let systemPrompt: string | undefined = undefined;
   let responseMimeType: 'application/json' | 'text/plain' | undefined = undefined;
@@ -60,7 +44,8 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
       // 멀티모달 base64 이미지 추출
       const imagePart = parts.find((p: any) => 'inlineData' in p);
       if (imagePart && imagePart.inlineData?.data) {
-        imageInput = imagePart.inlineData.data; // Raw Base64 data
+        const mime = imagePart.inlineData.mimeType || 'image/png';
+        imageInput = `data:${mime};base64,${imagePart.inlineData.data}`; // Base64 표준 포맷 변환
       }
 
       // 시스템 지침(systemInstruction) 추출
@@ -80,77 +65,56 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
     }
   }
 
-  // A. 이미지/PDF OCR 분석(멀티모달)인 경우 -> 기존 구형 백오프 재시도 및 하위 폴백 모델 로직 구동 (100% 동작 복원)
-  if (imageInput) {
-    const maxRetries = 3;
+  // 2. 모델명 파싱
+  const modelMatch = url.match(/\/models\/([^?:]+)/);
+  const initialModel = modelMatch ? modelMatch[1] : 'gemini-3.5-flash';
 
-    async function fetchWithRetry(targetUrl: string, modelLabel: string): Promise<Response> {
-      let attempt = 0;
-      while (attempt < maxRetries) {
-        try {
-          const res = await fetch(targetUrl, init);
-          if (res.ok) return res;
+  // 3. 전사 AI Caller 단일 채널 호출 및 3단계 장애 극복 폴백 루프 가동
+  const modelsLineup = [initialModel, 'gemini-1.5-flash', 'gemini-2.5-flash'];
+  let callerRes: any = null;
+  let callerErr: any = null;
+  let finalModelUsed = initialModel;
 
-          if (res.status === 503 || res.status === 429 || res.status === 500) {
-            attempt++;
-            if (attempt < maxRetries) {
-              const delay = attempt * 500;
-              console.warn(`[AI Warning] ${modelLabel} 실패 (Status: ${res.status}). ${delay}ms 후 재시도...`);
-              await new Promise(resolve => setTimeout(resolve, delay));
-              continue;
-            }
-          }
-          throw new Error(`HTTP ${res.status}: ${res.statusText || 'Unknown Error'}`);
-        } catch (err: any) {
-          if (err.message && err.message.startsWith('HTTP ')) throw err;
-          attempt++;
-          if (attempt < maxRetries) {
-            const delay = attempt * 500;
-            await new Promise(resolve => setTimeout(resolve, delay));
-            continue;
-          }
-          throw err;
-        }
+  for (const targetModel of modelsLineup) {
+    try {
+      console.log(`[AI Fallback Wrapper] callAiCaller 호출 기동 (모델: ${targetModel}, 이미지존재: ${!!imageInput})`);
+      
+      callerRes = await callAiCaller(prompt, {
+        systemPrompt,
+        model: targetModel,
+        temperature: temperature ?? 0.1,
+        imageInput, // 이미지 존재 시 이지데스크 caller가 받아 처리하도록 넘김
+        caller: 'egdesk-fallback-wrapper',
+        keyName: 'wonconduct'
+      } as any);
+
+      // 503 에러 징후 정밀 추적 및 예외 처리
+      const checkText = callerRes && typeof callerRes === 'object' 
+        ? JSON.stringify(callerRes) 
+        : String(callerRes || '');
+      
+      if (checkText.includes('503 Service Unavailable') || checkText.includes('high demand') || checkText.includes('503')) {
+        throw new Error('Google Gemini 503 Service Unavailable detected in response body');
       }
-      throw new Error(`${modelLabel} API call failed`);
-    }
 
-    try {
-      return await fetchWithRetry(finalUrl, '기본 모델');
+      // 성공 시 설정 및 루프 탈출
+      finalModelUsed = targetModel;
+      callerErr = null;
+      break;
     } catch (err: any) {
-      console.error(`[AI Emergency] 기본 모델 에러: ${err.message}. 1차 폴백 진입.`);
-    }
-
-    // 가장 트래픽 수용력이 넓고 안정적인 상용 gemini-1.5-flash 모델을 최우선 폴백으로 매핑
-    const fallbackModel1 = 'gemini-1.5-flash';
-    const fallbackUrl1 = finalUrl.replace(/\/models\/[^:]+:/, `/models/${fallbackModel1}:`);
-    try {
-      return await fetchWithRetry(fallbackUrl1, '1차 폴백 모델 (gemini-1.5-flash)');
-    } catch (err: any) {
-      console.error(`[AI Emergency] 1차 폴백 실패: ${err.message}. 2차 폴백 진입.`);
-    }
-
-    const fallbackModel2 = 'gemini-2.5-flash';
-    const fallbackUrl2 = finalUrl.replace(/\/models\/[^:]+:/, `/models/${fallbackModel2}:`);
-    try {
-      return await fetchWithRetry(fallbackUrl2, '2차 폴백 모델 (gemini-2.5-flash)');
-    } catch (err: any) {
-      throw err;
+      callerErr = err;
+      console.warn(`[AI Warning] callAiCaller 실패 (모델: ${targetModel}, 원인: ${err.message || err}). 다음 폴백 모델로 우회 시도...`);
+      // 다음 모델 호출 전 짧은 딜레이
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
   }
 
-  // B. 텍스트 분석인 경우 -> 공통 callAiCaller 호출 기동
-  const modelMatch = finalUrl.match(/\/models\/([^?:]+)/);
-  const modelName = modelMatch ? modelMatch[1] : 'gemini-1.5-flash';
+  // 모든 폴백 라인업이 실패한 경우 최종 에러
+  if (callerErr) {
+    throw new Error(`[GoogleGenerativeAI Error]: callAiCaller 전사 폴백 실패. (최종 에러: ${callerErr.message || callerErr})`);
+  }
 
-  const callerRes = await callAiCaller(prompt, {
-    systemPrompt,
-    model: modelName,
-    temperature: temperature ?? 0.7,
-    caller: 'egdesk-fallback-wrapper',
-    keyName: 'wonconduct'
-  } as any);
-
+  // 4. 원래 구글 API가 반환하던 JSON 구조와 호환되는 가짜 Gemini Response 객체 리턴
   let text = '';
   if (callerRes && typeof callerRes === 'object') {
     if ('text' in callerRes) {
@@ -161,6 +125,7 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
   } else if (typeof callerRes === 'string') {
     text = callerRes;
   }
+
   const usage = callerRes?.usage || {};
   const promptTokens = usage.promptTokens || callerRes?.promptTokens || estimateTokens(prompt + (systemPrompt || ''));
   const completionTokens = usage.completionTokens || callerRes?.completionTokens || estimateTokens(text);
