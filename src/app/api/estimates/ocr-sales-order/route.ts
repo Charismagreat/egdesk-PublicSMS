@@ -425,7 +425,7 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
           }
         ],
         generationConfig: {
-          responseMimeType: "application/json",
+          responseMimeType: "text/plain",
           temperature: 0.1
         },
         safetySettings: [
@@ -469,35 +469,18 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
     try {
       const cleanJson = responseTextPass2.replace(/```json/g, '').replace(/```/g, '').trim();
       
-      // 1. 바깥쪽 JSON 파싱 및 복구 가드레일 작동
+      // text/plain 수신에 맞춰 단일 JSON 구문 수리 및 파싱 실행
       try {
         parsedData = JSON.parse(cleanJson);
-      } catch (outerErr) {
-        console.warn('Outer JSON parse failed, trying repairJson...');
+      } catch (err) {
+        console.warn('JSON 파싱 실패, repairJson 작동 시도...');
         try {
           const repaired = repairJson(cleanJson);
           parsedData = JSON.parse(repaired);
         } catch (repairErr: any) {
-          console.error('Failed to repair outer JSON:', repairErr.message);
-          throw outerErr;
-        }
-      }
-
-      // 2. 내부 content 데이터 2차 파싱 및 복구 가드레일 작동
-      if (parsedData && parsedData.content && typeof parsedData.content === 'string') {
-        try {
-          parsedData = JSON.parse(parsedData.content);
-        } catch (innerErr: any) {
-          innerErrMsg = innerErr.message;
-          console.error('Inner JSON parse failed, trying repairJson...', innerErr.message);
-          try {
-            const repairedInner = repairJson(parsedData.content);
-            parsedData = JSON.parse(repairedInner);
-            innerErrMsg = ''; // 수리 성공 시 에러 문구 소멸
-          } catch (repairInnerErr: any) {
-            innerErrMsg = repairInnerErr.message;
-            console.error('Failed to repair inner JSON:', repairInnerErr.message);
-          }
+          innerErrMsg = repairErr.message;
+          console.error('JSON Repair 복구 실패:', repairErr.message);
+          throw err;
         }
       }
       

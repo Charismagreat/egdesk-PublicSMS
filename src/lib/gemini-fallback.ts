@@ -94,7 +94,7 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
           if (res.status === 503 || res.status === 429 || res.status === 500) {
             attempt++;
             if (attempt < maxRetries) {
-              const delay = attempt * 1000;
+              const delay = attempt * 500;
               console.warn(`[AI Warning] ${modelLabel} 실패 (Status: ${res.status}). ${delay}ms 후 재시도...`);
               await new Promise(resolve => setTimeout(resolve, delay));
               continue;
@@ -105,7 +105,7 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
           if (err.message && err.message.startsWith('HTTP ')) throw err;
           attempt++;
           if (attempt < maxRetries) {
-            const delay = attempt * 1000;
+            const delay = attempt * 500;
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
@@ -121,18 +121,19 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
       console.error(`[AI Emergency] 기본 모델 에러: ${err.message}. 1차 폴백 진입.`);
     }
 
-    const fallbackModel1 = 'gemini-2.5-flash';
+    // 가장 트래픽 수용력이 넓고 안정적인 상용 gemini-1.5-flash 모델을 최우선 폴백으로 매핑
+    const fallbackModel1 = 'gemini-1.5-flash';
     const fallbackUrl1 = finalUrl.replace(/\/models\/[^:]+:/, `/models/${fallbackModel1}:`);
     try {
-      return await fetchWithRetry(fallbackUrl1, '1차 폴백 모델');
+      return await fetchWithRetry(fallbackUrl1, '1차 폴백 모델 (gemini-1.5-flash)');
     } catch (err: any) {
       console.error(`[AI Emergency] 1차 폴백 실패: ${err.message}. 2차 폴백 진입.`);
     }
 
-    const fallbackModel2 = 'gemini-flash-latest';
+    const fallbackModel2 = 'gemini-2.5-flash';
     const fallbackUrl2 = finalUrl.replace(/\/models\/[^:]+:/, `/models/${fallbackModel2}:`);
     try {
-      return await fetchWithRetry(fallbackUrl2, '2차 폴백 모델');
+      return await fetchWithRetry(fallbackUrl2, '2차 폴백 모델 (gemini-2.5-flash)');
     } catch (err: any) {
       throw err;
     }
