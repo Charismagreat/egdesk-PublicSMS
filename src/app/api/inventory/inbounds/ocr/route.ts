@@ -4,6 +4,26 @@ import crypto from 'crypto';
 import { getTenantId } from '@/lib/tenant';
 import { callAI } from '@/lib/ai-router';
 
+// JSON 문자열 내부에 포함된 실제 개행 문자(ASCII 10, 13)를 안전하게 이스케이프 처리하여 JSON 파싱 오류를 방지하는 헬퍼 함수
+function sanitizeJsonString(raw: string): string {
+  let inString = false;
+  let escaped = false;
+  let result = '';
+  for (let i = 0; i < raw.length; i++) {
+    const char = raw[i];
+    if (char === '"' && !escaped) {
+      inString = !inString;
+    }
+    if (inString && (char === '\n' || char === '\r')) {
+      result += '\\n';
+    } else {
+      result += char;
+    }
+    escaped = (char === '\\' && !escaped);
+  }
+  return result;
+}
+
 export const maxDuration = 60; // 60초 타임아웃
 export const dynamic = 'force-dynamic';
 
@@ -122,7 +142,8 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
     responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
 
     try {
-      const parsedOcr = JSON.parse(responseText);
+      const sanitized = sanitizeJsonString(responseText);
+      const parsedOcr = JSON.parse(sanitized);
 
       // 2차 거래 메타데이터 조합 중복 검사
       let isMetaDuplicate = false;

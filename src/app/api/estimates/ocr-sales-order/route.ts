@@ -22,6 +22,26 @@ async function verifyAdminRole() {
   }
 }
 
+// JSON 문자열 내부에 포함된 실제 개행 문자(ASCII 10, 13)를 안전하게 이스케이프 처리하여 JSON 파싱 오류를 방지하는 헬퍼 함수
+function sanitizeJsonString(raw: string): string {
+  let inString = false;
+  let escaped = false;
+  let result = '';
+  for (let i = 0; i < raw.length; i++) {
+    const char = raw[i];
+    if (char === '"' && !escaped) {
+      inString = !inString;
+    }
+    if (inString && (char === '\n' || char === '\r')) {
+      result += '\\n';
+    } else {
+      result += char;
+    }
+    escaped = (char === '\\' && !escaped);
+  }
+  return result;
+}
+
 export const maxDuration = 60; // 60초 타임아웃
 export const dynamic = 'force-dynamic';
 
@@ -383,10 +403,12 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
     let innerErrMsg = '';
     try {
       const cleanJson = responseTextPass2.replace(/```json/g, '').replace(/```/g, '').trim();
-      parsedData = JSON.parse(cleanJson);
+      const sanitized = sanitizeJsonString(cleanJson);
+      parsedData = JSON.parse(sanitized);
       if (parsedData && parsedData.content && typeof parsedData.content === 'string') {
         try {
-          parsedData = JSON.parse(parsedData.content);
+          const innerSanitized = sanitizeJsonString(parsedData.content);
+          parsedData = JSON.parse(innerSanitized);
         } catch (innerErr: any) {
           innerErrMsg = innerErr.message;
           console.error('Inner JSON parse failed:', innerErr.message, parsedData.content);

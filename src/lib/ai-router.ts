@@ -1,4 +1,6 @@
-import { queryTable, insertRows, updateRows, callAiCaller, getGeminiApiKey } from '../../egdesk-helpers';
+import { queryTable, insertRows, callAiCaller, getGeminiApiKey } from '../../egdesk-helpers';
+import { getAppSetting } from './app-settings';
+import { fetchGeminiWithFallback } from './gemini-fallback';
 
 export interface CallAIOptions {
   prompt: string;
@@ -7,6 +9,7 @@ export interface CallAIOptions {
   responseMimeType?: 'application/json' | 'text/plain';
   temperature?: number;
   imageInput?: string; // Base64 이미지 데이터 (선택 사항)
+  tenantId?: string | null; // 테넌트 격리용 식별자
 }
 
 export interface AIResponse {
@@ -22,13 +25,9 @@ export interface AIResponse {
  * 프롬프트 내에 민감 정보(개인정보 PII)가 포함되어 있는지 검사합니다.
  */
 function detectPII(text: string): boolean {
-  // 주민등록번호 패턴 (예: 900101-1234567)
   const juminRegex = /\d{6}-[1-4]\d{6}/;
-  // 이메일 패턴
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-  // 휴대폰 번호 패턴 (예: 010-1234-5678, 01012345678)
   const phoneRegex = /01[016789]-?\d{3,4}-?\d{4}/;
-  // 계좌번호 패턴 (단순 정밀식, 대시 포함 9~16자리 숫자 조합)
   const accountRegex = /\b\d{3,6}-\d{2,6}-\d{3,6}\b/;
 
   return (
@@ -49,22 +48,18 @@ function isHighComplexityPurpose(purpose: string): boolean {
     'FINANCIAL_STATEMENT_OCR', // 재무제표 OCR 정밀 분석
     'AI_MARKETING_STRATEGY',   // 마케팅 전략 수립
     'SAFETY_ACCIDENT_CHAT',     // 안전 관리 전문 사고 상담
-    'EASYBOT_SETUP'            // 이지봇 핵심 규칙 설정
+    'EASYBOT_SETUP'            // 이지봇 규칙 설정
   ];
   return highComplexityPurposes.includes(purpose);
 }
 
 /**
  * 텍스트 글자 수를 기반으로 토큰 수를 예측합니다. (폴백용 계산기)
- * - 한글: 자당 약 1.5 토큰
- * - 영문/숫자: 자당 약 0.35 토큰
- * - 공백/기호: 자당 약 0.2 토큰
  */
 function estimateTokens(text: string): number {
   if (!text) return 0;
   let tokens = 0;
   for (let i = 0; i < text.length; i++) {
-    const char = text.charAt(i);
     const code = text.charCodeAt(i);
     if (code >= 0xac00 && code <= 0xd7a3) {
       tokens += 1.5; // 한글 음절
@@ -86,7 +81,7 @@ async function callGemini(
   temperature: number | undefined,
   imageInput: string | undefined
 ): Promise<{ text: string; promptTokens: number; completionTokens: number; totalTokens: number }> {
-  // A. 이미지/PDF 분석(OCR) 멀티모달인 경우 -> 구글 API 직접 fetch를 쏘아 inlineData 전달 (OCR 데이터 복원)
+  // A. 이미지/PDF 분석(OCR) 멀티모달인 경우 -> fetchGeminiWithFallback 래퍼 호출
   if (imageInput) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
     
@@ -101,7 +96,7 @@ async function callGemini(
       }
     });
 
-    const response = await fetch(url, {
+    const response = await fetchGeminiWithFallback(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -169,12 +164,11 @@ async function callLocalLLM(
 ): Promise<{ text: string; promptTokens: number; completionTokens: number; totalTokens: number }> {
   const url = `${baseUrl.replace(/\/$/, '')}/api/chat`;
   
-  // Ollama chat message 파츠 구성 (images 배열 지원)
   const userMessage: any = { role: 'user', content: prompt };
   if (imageInput) {
     const match = imageInput.match(/^data:([^;]+);base64,(.+)$/);
     const data = match ? match[2] : imageInput;
-    userMessage.images = [data]; // Base64 raw 데이터 배열 주입
+    userMessage.images = [data];
   }
 
   const messages = [];
@@ -204,7 +198,6 @@ async function callLocalLLM(
   const data = await response.json();
   const text = data.message?.content || '';
   
-  // Ollama 응답 정보 파싱 (prompt_eval_count = prompt_tokens, eval_count = completion_tokens)
   const promptTokens = data.prompt_eval_count || (estimateTokens(prompt + (systemPrompt || '')) + (imageInput ? 200 : 0));
   const completionTokens = data.eval_count || estimateTokens(text);
   const totalTokens = promptTokens + completionTokens;
@@ -217,9 +210,9 @@ async function callLocalLLM(
  * 작업 정보와 DB 설정을 토대로 로컬 LLM 또는 Gemini API로 스마트 라우팅합니다.
  */
 export async function callAI(options: CallAIOptions): Promise<AIResponse> {
-  const { prompt, systemPrompt, purpose, responseMimeType, temperature, imageInput } = options;
+  const { prompt, systemPrompt, purpose, responseMimeType, temperature, imageInput, tenantId } = options;
 
-  // 1. DB 설정 불러오기
+  // 1. DB 설정 불러오기 (테넌트 격리 적용)
   let aiProvider = 'gemini';
   let localLlmUrl = 'http://localhost:11434';
   let localLlmModel = 'gemma2';
@@ -227,59 +220,19 @@ export async function callAI(options: CallAIOptions): Promise<AIResponse> {
   let googleModel = 'gemini-3.5-flash';
 
   try {
-    const [providerRes, urlRes, modelRes, keyRes, gModelRes] = await Promise.all([
-      queryTable('system_settings', { filters: { key: 'ai_provider' } }),
-      queryTable('system_settings', { filters: { key: 'local_llm_url' } }),
-      queryTable('system_settings', { filters: { key: 'local_llm_model' } }),
-      queryTable('system_settings', { filters: { key: 'google_ai_api_key' } }),
-      queryTable('system_settings', { filters: { key: 'google_ai_model' } })
+    const [providerVal, urlVal, modelVal, keyVal, gModelVal] = await Promise.all([
+      getAppSetting('ai_provider', tenantId),
+      getAppSetting('local_llm_url', tenantId),
+      getAppSetting('local_llm_model', tenantId),
+      getAppSetting('google_ai_api_key', tenantId),
+      getAppSetting('google_ai_model', tenantId)
     ]);
 
-    if (providerRes.rows?.length > 0) aiProvider = providerRes.rows[0].value;
-    if (urlRes.rows?.length > 0) localLlmUrl = urlRes.rows[0].value;
-    if (modelRes.rows?.length > 0) localLlmModel = modelRes.rows[0].value;
-    if (keyRes.rows?.length > 0) googleApiKey = keyRes.rows[0].value;
-    if (gModelRes.rows?.length > 0) googleModel = gModelRes.rows[0].value;
-
-    // 로컬 LLM URL이 정의되어 있으나 모델명이 비어있는 경우(또는 'auto' 설정일 때)
-    // 이지데스크 로컬 Ollama API를 쿼리하여 적절한 모델명을 자동 지정 및 DB 영구 저장합니다.
-    if (localLlmUrl && (!localLlmModel || localLlmModel === 'auto' || localLlmModel === '')) {
-      try {
-        const cleanUrl = localLlmUrl.replace(/\/$/, '');
-        const response = await fetch(`${cleanUrl}/api/tags`, { signal: AbortSignal.timeout(3000) });
-        if (response.ok) {
-          const data = await response.json();
-          const models = data.models || [];
-          if (models.length > 0) {
-            const modelNames = models.map((m: any) => m.name);
-            let selected = modelNames[0]; // 기본 첫번째 모델 지정
-            
-            // 한국어 친화적이거나 성능 지표가 뛰어난 모델 우선 매칭
-            const priorities = ['eeve', 'exaone', 'gemma2', 'gemma', 'llama3', 'llama', 'mistral', 'phi3'];
-            for (const p of priorities) {
-              const found = modelNames.find((name: string) => name.toLowerCase().includes(p));
-              if (found) {
-                selected = found;
-                break;
-              }
-            }
-            
-            localLlmModel = selected;
-            
-            // egdesk-helpers API를 경유하여 DB 동기화
-            const exist = await queryTable('system_settings', { filters: { key: 'local_llm_model' } });
-            if (exist.rows && exist.rows.length > 0) {
-              await updateRows('system_settings', { value: selected }, { filters: { key: 'local_llm_model' } });
-            } else {
-              await insertRows('system_settings', [{ key: 'local_llm_model', value: selected }]);
-            }
-            console.log(`🤖 [로컬 LLM 자동 매핑] Ollama에서 최적 모델 '${selected}'을 감지하여 DB 설정에 저장했습니다.`);
-          }
-        }
-      } catch (ollamaErr: any) {
-        console.error('⚠️ 로컬 LLM 모델 자동 감지 시도 실패:', ollamaErr.message);
-      }
-    }
+    if (providerVal) aiProvider = providerVal;
+    if (urlVal) localLlmUrl = urlVal;
+    if (modelVal) localLlmModel = modelVal;
+    if (keyVal) googleApiKey = keyVal;
+    if (gModelVal) googleModel = gModelVal;
 
     if (!googleApiKey || !googleApiKey.startsWith('AIzaSy')) {
       try {
@@ -306,22 +259,18 @@ export async function callAI(options: CallAIOptions): Promise<AIResponse> {
 
   if (aiProvider === 'smart_hybrid') {
     if (imageInput) {
-      // 멀티모달 이미지 분석(OCR)은 고사양 멀티모달 능력을 요구하므로 Gemini 클라우드로 분기
       activeProvider = 'gemini';
       decisionReason = '멀티모달 이미지 분석 (OCR)';
     } else {
-      // 2-1. 개인정보(PII) 포함 여부 검사 -> 발견 시 보안을 위해 강제로 로컬 LLM 사용
       const hasPII = detectPII(prompt) || (systemPrompt ? detectPII(systemPrompt) : false);
       if (hasPII) {
         activeProvider = 'local_llm';
         decisionReason = '보안 조치 (개인정보 패턴 감지)';
       } 
-      // 2-2. 난이도 분석 -> 고도 추론 필요 여부 검사 -> 필요 시 Gemini 사용
       else if (isHighComplexityPurpose(purpose)) {
         activeProvider = 'gemini';
         decisionReason = '고성능 추론 요구 작업';
       } 
-      // 2-3. 단순 업무 -> 로컬 LLM 사용
       else {
         activeProvider = 'local_llm';
         decisionReason = '단순 가공/비용 절감 대상';
@@ -347,7 +296,6 @@ export async function callAI(options: CallAIOptions): Promise<AIResponse> {
       totalTokens = res.totalTokens;
     } catch (localErr: any) {
       console.error(`⚠️ 로컬 LLM 호출 실패, Gemini로 긴급 우회(Failover)합니다. 사유: ${localErr.message}`);
-      // Failover: 로컬 실패 시 Gemini로 우회 구동 (단 API Key가 있어야 함)
       if (googleApiKey) {
         modelUsed = `${googleModel} (로컬 LLM 우회)`;
         const res = await callGemini(prompt, systemPrompt, googleApiKey, googleModel, responseMimeType, temperature, imageInput);
@@ -360,7 +308,6 @@ export async function callAI(options: CallAIOptions): Promise<AIResponse> {
       }
     }
   } else {
-    // Gemini 호출 (API Key 필수)
     if (!googleApiKey) {
       throw new Error('Google Gemini API Key가 시스템 설정에 등록되어 있지 않습니다. 설정 화면에서 등록해 주세요.');
     }
