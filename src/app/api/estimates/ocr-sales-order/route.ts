@@ -317,50 +317,66 @@ const geminiUrlPass1 = `https://generativelanguage.googleapis.com/v1beta/models/
 
     // 2차 호출: Pass 2 (NLP Structuring + RAG 규칙 연동 - 최종 JSON 빌드)
     const promptPass2 = `
-발주서 이미지에서 1차 판독된 명세 리포트 텍스트입니다:
+당신은 B2B 전문 AI 수발주 오퍼레이터입니다. 제공된 수주서(받은 발주서) 파일에서 정보를 정밀하게 추출하여 지침에 따라 정제된 최종 JSON 데이터만 반환하세요. 문서에 없는 항목은 '문서 내에 기재되어 있지 않음' 또는 빈 값("")으로 처리합니다.
+
+다음은 발주서 이미지에서 1차 판독된 명세 리포트 텍스트입니다:
 ---
 ${responseTextPass1}
 ---
+
+[정제 및 비즈니스 룰]
+1. 거래처 식별: 공급 주체(수주처) 정보는 'supplier'에, 구매/발주 주체(발주처) 정보는 'buyer' 객체에 정확히 분리 매핑하세요. 담당자 정보나 전화번호가 교차 오인되지 않게 주의하세요. 
+2. 날짜 정규화: 문서 작성일(orderDate)과 납기일(deliveryDate)은 표준 ISO 형식(YYYY-MM-DD)으로 출력하세요. 연도가 생략된 경우 작성일 기준으로 연도를 추론하되, 납기 월이 작성일보다 이전 달인 경우에만 해를 넘긴 것으로 판단하여 +1년을 적용하세요.
+3. 품목 및 금액 정밀 정합성 검증:
+   - 품명에 표 헤더(품명, 품목코드 등)가 섞이지 않게 하세요.
+   - 품명 옆 규격 정보를 분리하지 말고 하나의 품목 및 규격('spec')으로 통합하세요. 수량/단가가 0인 유령 품목은 제외합니다.
+   - 수량(quantity), 단가(unitPrice), 금액(amount)은 원화 기호나 쉼표를 제외한 정수형태로 추출하세요. 단가와 수량을 최우선 기준으로 삼고, 총액에 오독이나 공백이 발견되면 반드시 [금액 = 수량 * 단가] 수식으로 직접 계산하여 보정하세요.
+   - 품목 정보 내에서 'X로 시작하고 뒤에 6자리 숫자가 구성된 패턴(예: X123456)'이 발견되면 'validItemCode'에 기재하고, 없으면 빈 문자열("")을 반환하세요.
+4. 비고 및 결재선: 모든 특기사항, 지불조건 등은 줄바꿈(\n)을 포함하여 원본 그대로 'memo'에 전사하고, 결재선 성명은 'approvers' 배열에 담으세요.
 
 최종 JSON 응답 포맷: (Markdown 코드 블록 없이 순수 JSON만 반환)
 {
   "supplier": {
     "company_name": "공급 주체 상호명",
-    "business_number": "공급 주체 사업자번호 (XXX-XX-XXXXX 형식, 없으면 \"\")",
+    "business_number": "공급 주체 사업자번호 (XXX-XX-XXXXX 형식)",
     "representative": "공급 주체 대표자 성명",
     "address": "공급 주체 주소",
-    "phone": "공급 주체 회사 대표 전화번호 (팩스 제외)",
+    "phone": "공급 주체 회사 대표 전화번호",
+    "fax": "공급 주체 회사 팩스번호",
     "manager_name": "공급 주체 담당자명",
-    "manager_phone": "공급 주체 담당자 연락처 (팩스 제외)"
+    "manager_phone": "공급 주체 담당자 연락처"
   },
   "buyer": {
-    "company_name": "구매/발주 주체 상호명 (상대방 바이어)",
-    "business_number": "구매/발주 주체 사업자번호 (XXX-XX-XXXXX 형식, 없으면 \"\")",
+    "company_name": "구매/발주 주체 상호명",
+    "business_number": "구매/발주 주체 사업자번호 (XXX-XX-XXXXX 형식)",
     "representative": "구매/발주 주체 대표자 성명",
     "address": "구매/발주 주체 주소",
-    "phone": "구매/발주 주체 회사 대표 전화번호 (팩스 제외)",
+    "phone": "구매/발주 주체 회사 대표 전화번호",
+    "fax": "구매/발주 주체 회사 팩스번호",
     "manager_name": "구매/발주 주체 담당자명",
-    "manager_phone": "구매/발주 주체 담당자 연락처 (팩스 제외)"
+    "manager_phone": "구매/발주 주체 담당자 연락처"
   },
   "picName": "문서 전체 대표 담당자명",
-  "picPhone": "문서 전체 대표 담당자 연락처 (팩스 제외)",
-  "orderNo": "수주번호 또는 발주번호",
-  "orderDate": "수주일 (YYYY-MM-DD 형식)",
-  "deliveryDate": "납기일 (YYYY-MM-DD 형식)",
-  "memo": "발주서 비고 및 특이사항 (주의사항, 지불조건 등 포함 줄바꿈 전사)",
-  "approvers": ["결재선 성명 목록"],
-  "originalTotalAmount": 문서상에 적힌 총 금액 (숫자만, 없으면 0),
-  "originalTotalQuantity": 문서상에 적힌 총 수량 (숫자만, 없으면 0),
+  "picPhone": "문서 전체 대표 담당자 연락처",
+  "orderNo": "발주번호",
+  "orderDate": "발주일 (YYYY-MM-DD)",
+  "deliveryDate": "전체 납기일 (YYYY-MM-DD)",
+  "memo": "발주서 비고 및 특이사항 (줄바꿈 포함 전사)",
+  "approvers": [
+    "결재선 성명 목록"
+  ],
+  "originalTotalAmount": 0,
+  "originalTotalQuantity": 0,
   "items": [
     {
       "itemCode": "품목코드",
       "itemName": "품명",
       "spec": "규격",
-      "quantity": 100,
-      "unitPrice": 15000,
-      "amount": 1500000,
-      "deliveryDate": "품목별 납기일 (YYYY-MM-DD 형식)",
-      "validItemCode": "사내 지식 규칙(RAG) 또는 패턴에 부합하여 매핑된 품목코드"
+      "quantity": 0,
+      "unitPrice": 0,
+      "amount": 0,
+      "deliveryDate": "품목별 납기일 (YYYY-MM-DD)",
+      "validItemCode": "X123456 패턴 매핑 코드"
     }
   ]
 }
@@ -488,6 +504,7 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
     let partnerAddress = '';
     let partnerManager = '';
     let partnerPhone = '';
+    let partnerFax = '';
     
     // 2단계: 자사 역할 비교를 통한 상대방 바이어 정보 추출
     if (isSupplierMyCompany) {
@@ -495,6 +512,7 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
       partnerBizNo = parsedData.buyer?.business_number || '';
       partnerRepresentative = parsedData.buyer?.representative || '';
       partnerAddress = parsedData.buyer?.address || '';
+      partnerFax = parsedData.buyer?.fax || '';
       
       // 공급사(자사) 담당자 정보가 picName/picPhone과 겹치면 상대방 정보로 차용하지 않음 (교차 오염 방지)
       const isPicBelongsToSupplier = 
@@ -508,6 +526,7 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
       partnerBizNo = parsedData.supplier?.business_number || '';
       partnerRepresentative = parsedData.supplier?.representative || '';
       partnerAddress = parsedData.supplier?.address || '';
+      partnerFax = parsedData.supplier?.fax || '';
 
       // 바이어(자사) 담당자 정보가 picName/picPhone과 겹치면 상대방 정보로 차용하지 않음
       const isPicBelongsToBuyer = 
@@ -527,6 +546,7 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
         partnerBizNo = parsedData.supplier?.business_number || '';
         partnerRepresentative = parsedData.supplier?.representative || '';
         partnerAddress = parsedData.supplier?.address || '';
+        partnerFax = parsedData.supplier?.fax || '';
 
         // 상대방이 공급사이므로, 발주사(buyer) 담당자 정보가 picName/picPhone과 겹치면 차용하지 않음
         const isPicBelongsToBuyer = 
@@ -540,6 +560,7 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
         partnerBizNo = parsedData.buyer?.business_number || '';
         partnerRepresentative = parsedData.buyer?.representative || '';
         partnerAddress = parsedData.buyer?.address || '';
+        partnerFax = parsedData.buyer?.fax || '';
 
         // 상대방이 발주사(buyer)이므로, 공급사(supplier) 담당자 정보가 picName/picPhone과 겹치면 차용하지 않음
         const isPicBelongsToSupplier = 
@@ -608,6 +629,7 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
       partner_name: partnerName,
       partner_phone: partnerPhone || '',
       partner_manager: partnerManager || '',
+      partner_fax: partnerFax || '',
       business_number: partnerBizNo,
       representative: partnerRepresentative,
       address: partnerAddress,
