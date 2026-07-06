@@ -70,11 +70,11 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
   const initialModel = modelMatch ? modelMatch[1] : 'gemini-3.5-flash';
 
   // 3. 전사 AI Caller 단일 채널 호출 및 3단계 장애 극복 폴백 루프 가동
-  // 사용자 요청에 따라 gemini-2.5-flash 우선 시도 후 gemini-1.5-flash로 폴백하도록 명시적 조정
-  const modelsLineup = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+  // 최신 gemini-3.5-flash 우선 시도 후 gemini-2.5-flash, gemini-1.5-flash 순으로 순차 폴백
+  const modelsLineup = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
   let callerRes: any = null;
   let callerErr: any = null;
-  let finalModelUsed = 'gemini-2.5-flash';
+  let finalModelUsed = 'gemini-3.5-flash';
 
   for (const targetModel of modelsLineup) {
     try {
