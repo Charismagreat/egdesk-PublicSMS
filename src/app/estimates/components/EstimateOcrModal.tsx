@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Upload, X, FileText, CheckCircle2, RefreshCw, AlertCircle } from "lucide-react";
 
 interface EstimateOcrModalProps {
@@ -14,6 +14,7 @@ export default function EstimateOcrModal({
   onClose,
   onSuccess
 }: EstimateOcrModalProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [ocrScanning, setOcrScanning] = useState(false);
   const [ocrSuccess, setOcrSuccess] = useState(false);
   const [ocrFilename, setOcrFilename] = useState("");
@@ -82,6 +83,9 @@ export default function EstimateOcrModal({
       originalTotalAmount: 0,
       originalTotalQuantity: 0
     });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleClose = () => {
@@ -93,6 +97,9 @@ export default function EstimateOcrModal({
   const handleOcrFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // 업로드 직후 즉시 엘리먼트 가상 폼 캐시를 제거하여 중복 전송 꼬임을 차단합니다.
+    e.target.value = "";
 
     setOcrScanning(true);
     setOcrSuccess(false);
@@ -257,6 +264,7 @@ export default function EstimateOcrModal({
                 >
                   견적서 파일 선택 (이미지 / PDF)
                   <input 
+                    ref={fileInputRef}
                     type="file" 
                     accept="image/*,application/pdf"
                     onChange={handleOcrFileChange}

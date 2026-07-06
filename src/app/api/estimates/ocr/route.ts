@@ -16,6 +16,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: '분석할 파일 데이터(Base64)가 누락되었습니다.' }, { status: 400 });
     }
 
+    console.log(`📌 [AI OCR SCAN (Estimate)]: 수신 파일명='${filename}', Base64 길이=${imageBase64.length}`);
+
     // 본사 프로필 로드 (기본값 주식회사 원컨덕터트레이딩/2428700357)
     let myCompanyProfile = { companyName: '주식회사 원컨덕터트레이딩', businessNumber: '2428700357' };
     try {

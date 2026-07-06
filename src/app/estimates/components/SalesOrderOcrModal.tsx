@@ -1,7 +1,7 @@
 "use client";
 
 import { apiFetch } from '@/lib/api';
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Upload, X, FileText, CheckCircle2, RefreshCw, AlertCircle } from "lucide-react";
 import { createPortal } from "react-dom";
 import ProcessingOverlay from "../../../components/ProcessingOverlay";
@@ -17,6 +17,7 @@ export default function SalesOrderOcrModal({
   onClose,
   onSuccess
 }: SalesOrderOcrModalProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [ocrScanning, setOcrScanning] = useState(false);
   const [ocrSuccess, setOcrSuccess] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -92,6 +93,9 @@ export default function SalesOrderOcrModal({
       originalTotalAmount: 0,
       originalTotalQuantity: 0
     });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleClose = () => {
@@ -103,6 +107,9 @@ export default function SalesOrderOcrModal({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // 즉시 가상 타겟 값을 리셋하여 다음 스캔 시 업로드 동작과 브라우저 캐시 전송 꼬임을 차단합니다.
+    e.target.value = "";
 
     setOcrScanning(true);
     setOcrSuccess(false);
@@ -270,6 +277,7 @@ export default function SalesOrderOcrModal({
                 >
                   발주서 파일 선택 (이미지 / PDF)
                   <input 
+                    ref={fileInputRef}
                     type="file" 
                     accept="image/*,application/pdf"
                     onChange={handleFileChange}
