@@ -511,7 +511,8 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
               my_company_name: myCompanyProfile.companyName,
               debug_rep_raw: debugRepRaw,
               debug_rep_error: debugRepError,
-              method: 'REAL_GEMINI_OCR'
+              method: 'REAL_GEMINI_OCR',
+              debug_raw_text: responseRawText
             });
           } else {
             return NextResponse.json({

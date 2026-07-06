@@ -130,6 +130,10 @@ export default function SalesOrderOcrModal({
         const data = await res.json();
         
         if (data.success) {
+          console.log("📌 [DEBUG SALES ORDER OCR SUCCESS] Full Response Data:", data);
+          console.log("📌 [DEBUG SALES ORDER OCR SUCCESS] AI Pass 1 Raw OCR Text:\n", data.debug_raw_pass1);
+          console.log("📌 [DEBUG SALES ORDER OCR SUCCESS] AI Pass 2 Structured JSON:\n", data.debug_raw_pass2);
+          
           setOcrScanning(false);
           setOcrSuccess(true);
           setSuccessMessage(`바이어, 연락처 및 ${data.items?.length || 0}개 품목의 단가/수량 파싱 완료`);

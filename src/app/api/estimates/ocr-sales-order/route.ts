@@ -650,7 +650,9 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
       originalTotalAmount: Number(parsedData.originalTotalAmount) || total_amount || 0,
       originalTotalQuantity: Number(parsedData.originalTotalQuantity) || itemRows.reduce((sum, it) => sum + it.quantity, 0),
       items: itemRows,
-      file_url: fileDataUri
+      file_url: fileDataUri,
+      debug_raw_pass1: responseTextPass1,
+      debug_raw_pass2: responseTextPass2
     });
 
   } catch (error: any) {

@@ -121,6 +121,9 @@ export default function EstimateOcrModal({
         });
         const data = await res.json();
         if (data.success) {
+          console.log("📌 [DEBUG ESTIMATE OCR SUCCESS] Full Response Data:", data);
+          console.log("📌 [DEBUG ESTIMATE OCR SUCCESS] AI Raw OCR Response Text:\n", data.debug_raw_text);
+          
           setOcrScanning(false);
           setOcrSuccess(true);
           setOcrForm({
