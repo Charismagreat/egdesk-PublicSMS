@@ -136,44 +136,50 @@ export default function CompanySettingsCard() {
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const base64Data = e.target?.result as string;
-        
-        // 백엔드 AI OCR API 호출 (crm_partners OCR과 동일 엔드포인트 공용 활용)
-        const res = await apiFetch('/api/partners/ocr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file: base64Data, mimeType: fileObj.type })
-        });
+        try {
+          const base64Data = e.target?.result as string;
+          
+          // 백엔드 AI OCR API 호출 (crm_partners OCR과 동일 엔드포인트 공용 활용)
+          const res = await apiFetch('/api/partners/ocr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: base64Data, mimeType: fileObj.type })
+          });
 
-        const resData = await res.json();
-        
-        if (!resData.success) {
-          throw new Error(resData.error || '사업자등록증 분석에 실패했습니다.');
+          const resData = await res.json();
+          
+          if (!resData.success) {
+            throw new Error(resData.error || '사업자등록증 분석에 실패했습니다.');
+          }
+
+          const ocrData = resData.data;
+
+          // 폼 필드 자동 입력 (기존 입력 유지하며 덮어쓰기 보완)
+          setProfile(prev => ({
+            ...prev,
+            companyName: ocrData.companyName || prev.companyName,
+            representative: ocrData.representative || prev.representative,
+            businessNumber: (ocrData.businessNumber || '').replace(/\D/g, '') || prev.businessNumber,
+            address: ocrData.address || prev.address,
+            phone: ocrData.phone || prev.phone,
+            email: ocrData.email || prev.email,
+          }));
+
+          setMessage({ type: 'success', text: 'AI가 사업자등록증을 분석하여 본사 정보를 양식에 자동 입력했습니다! ⚡' });
+          setTimeout(() => setMessage(null), 5000);
+        } catch (innerErr: any) {
+          console.error('본사 OCR 분석 콜백 에러:', innerErr);
+          setMessage({ type: 'error', text: innerErr.message || '사업자등록증 분석에 실패했습니다.' });
+        } finally {
+          setIsOcrAnalyzing(false);
         }
-
-        const ocrData = resData.data;
-
-        // 폼 필드 자동 입력 (기존 입력 유지하며 덮어쓰기 보완)
-        setProfile(prev => ({
-          ...prev,
-          companyName: ocrData.companyName || prev.companyName,
-          representative: ocrData.representative || prev.representative,
-          businessNumber: (ocrData.businessNumber || '').replace(/\D/g, '') || prev.businessNumber,
-          address: ocrData.address || prev.address,
-          phone: ocrData.phone || prev.phone,
-          email: ocrData.email || prev.email,
-        }));
-
-        setMessage({ type: 'success', text: 'AI가 사업자등록증을 분석하여 본사 정보를 양식에 자동 입력했습니다! ⚡' });
-        setTimeout(() => setMessage(null), 5000);
       };
 
       reader.readAsDataURL(fileObj);
 
     } catch (err: any) {
-      console.error('본사 OCR 에러:', err);
+      console.error('본사 OCR 파일 읽기 에러:', err);
       setMessage({ type: 'error', text: err.message || '파일 처리 중 오류가 발생했습니다.' });
-    } finally {
       setIsOcrAnalyzing(false);
     }
   };
