@@ -115,16 +115,20 @@ export default function DebugDirectOcrPage() {
             </h3>
             
             <div className="flex items-center gap-3">
-              <label className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-black text-xs rounded-xl border border-indigo-100 cursor-pointer shadow-sm transition-colors shrink-0">
+              <label 
+                htmlFor="direct-file-input"
+                className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-black text-xs rounded-xl border border-indigo-100 cursor-pointer shadow-sm transition-colors shrink-0"
+              >
                 파일 선택
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
               </label>
+              <input
+                id="direct-file-input"
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={handleFileChange}
+                className="hidden"
+              />
               <div className="text-xs text-slate-600 truncate font-semibold">
                 {filename ? `선택된 파일: ${filename}` : '선택된 파일 없음 (원컨덕터.jpg 선택)'}
               </div>
@@ -136,7 +140,7 @@ export default function DebugDirectOcrPage() {
         <div className="flex justify-center">
           <button
             onClick={handleStartOcr}
-            disabled={scanning || !apiKey || !fileBase64}
+            disabled={scanning || !apiKey}
             className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm rounded-2xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {scanning ? (
