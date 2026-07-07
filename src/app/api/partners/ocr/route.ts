@@ -4,9 +4,7 @@ import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
-import { queryTable, insertRows, executeSQL, getGeminiApiKey } from '../../../../../egdesk-helpers';
-import { getTenantId } from '@/lib/tenant';
-import { getAppSetting } from '@/lib/app-settings';
+import { queryTable, insertRows, executeSQL } from '../../../../../egdesk-helpers';
 
 /**
  * 최고관리자(SUPER_ADMIN) 권한 검증 공통 헬퍼
@@ -100,34 +98,19 @@ export async function POST(req: Request) {
       base64Data = parts[1];
     }
 
-    // 2. DB에서 구글 AI 설정 정보 로드 (테넌트 격리 반영)
-    const tenantId = await getTenantId();
-    let apiKey = await getAppSetting('google_ai_api_key', tenantId);
+    // 2. DB에서 구글 AI 설정 정보 로드
+    const settingsRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } });
+    let apiKey = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
 
-    // 환경 변수 및 이지데스크 복호화 폴백
-    if (!apiKey) {
-      apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || '';
-    }
-
+    // 만약 DB에 실물 구글 API 키가 등록되어 있지 않은 경우, 전사 AI 중계기 채널(callAiCaller)로 처리하도록 가드 우회
     if (!apiKey || !apiKey.startsWith('AIzaSy')) {
-      try {
-        const decryptedKeyRes = await getGeminiApiKey({ name: apiKey || 'google_ai_api_key' });
-        if (decryptedKeyRes && decryptedKeyRes.success && decryptedKeyRes.apiKey) {
-          apiKey = decryptedKeyRes.apiKey;
-        }
-      } catch (keyErr) {
-        console.error('⚠️ [partners ocr] EGDesk에서 API 키 해독에 실패했습니다:', keyErr);
-      }
+      apiKey = 'DUMMY_AI_CALLER_API_KEY';
     }
 
-    if (!apiKey) {
-      return NextResponse.json({
-        success: false,
-        error: '구글 AI API 키가 시스템에 등록되지 않았습니다. [시스템 설정 > AI 설정]에서 API 키를 먼저 등록해 주세요.'
-      }, { status: 400 });
-    }
-
-    const selectedModel = await getAppSetting('google_ai_model', tenantId) || 'gemini-3.5-flash';
+    const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
+    const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
+      ? modelRes.rows[0].value
+      : 'gemini-3.5-flash';
 
     // ─── [명함 이미지 분석 분기] ───
     if (action === 'card') {
