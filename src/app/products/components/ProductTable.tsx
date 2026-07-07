@@ -69,7 +69,7 @@ export function ProductTable({
                 const numericPrice = isPriceTbd ? 0 : Number(String(t.price).replace(/[^0-9]/g, ''));
                 return (
                   <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-4 text-xs font-mono text-slate-400">{(t.id).slice(-6)}</td>
+                    <td className="p-4 text-xs font-mono text-slate-400">{String(t.id || '').slice(-6)}</td>
                     <td className="p-4">
                       <span className="px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-lg">{t.category || '스토어용'}</span>
                     </td>

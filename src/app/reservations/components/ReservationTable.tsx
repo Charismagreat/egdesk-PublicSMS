@@ -64,7 +64,7 @@ export function ReservationTable({
                     onClick={() => setActiveOrderId(t.id)}
                     className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-mono font-black tracking-tight transition-all active:scale-95 cursor-pointer"
                   >
-                    RES-{t.id.slice(-6).toUpperCase()}
+                    RES-{String(t.id || '').slice(-6).toUpperCase()}
                   </button>
                 </td>
                 <td className="p-4 text-slate-800 font-bold">{t.customer_name}</td>
