@@ -2026,9 +2026,18 @@ export type AiCallerCallOptions = {
   systemPrompt?: string;
   model?: string;
   temperature?: number;
+  /** Max output tokens. Omit to auto-use the selected model's Gemini API maximum. */
   maxOutputTokens?: number;
   caller?: string;
   responseSchema?: Record<string, any>;
+  responseMimeType?: string;
+  /** Gemini function declarations for tool use */
+  tools?: Array<Record<string, any>>;
+  /** Function-calling mode and restrictions */
+  toolConfig?: {
+    mode?: 'AUTO' | 'ANY' | 'NONE' | 'MODE_UNSPECIFIED';
+    allowedFunctionNames?: string[];
+  };
   /** Base64 strings (raw or data URLs) */
   images?: string[];
   /** Absolute paths — images, text files, .pdf, .docx, video (same rules as filesystem MCP) */
@@ -2044,11 +2053,58 @@ export type AiCallerCallOptions = {
   keyName?: 'wonconduct' | (string & {});
 };
 
+export type AiCallerModelDetails = {
+  name: string;
+  displayName: string;
+  inputTokenLimit: number | null;
+  outputTokenLimit: number | null;
+};
+
+export type AiCallerOutputTokens = {
+  configured: number;
+  modelMax: number | null;
+  autoMaxed: boolean;
+};
+
+export type AiCallerUsageSummary = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  durationMs: number;
+};
+
+export type AiCallerAttachmentsSummary = {
+  imageCount?: number;
+  textFileCount?: number;
+  documentFileCount?: number;
+  videoFileCount?: number;
+};
+
+export type AiCallerFunctionCall = {
+  name: string;
+  args: Record<string, unknown>;
+};
+
+export type AiCallerCallResult = {
+  content: string;
+  json: unknown | null;
+  functionCalls: AiCallerFunctionCall[];
+  groundingMetadata: unknown | null;
+  codeExecutionResult: string | null;
+  finishReason: string | null;
+  outputTokens: AiCallerOutputTokens;
+  usage: AiCallerUsageSummary;
+  apiKey: { name: string; id: string | null } | null;
+  attachments: AiCallerAttachmentsSummary;
+  logId: string;
+};
+
 /**
  * Call Gemini and log token usage. Returns the AI response plus a usage summary.
  * Supports images, filePaths, and inline files (documents, text, video frames).
+ * Omit `maxOutputTokens` to auto-use the selected model's maximum from the Gemini API.
  */
-export async function callAiCaller(prompt: string, options: AiCallerCallOptions = {}) {
+export async function callAiCaller(prompt: string, options: AiCallerCallOptions = {}): Promise<AiCallerCallResult> {
   return callAiCallerTool('ai_caller_call', { prompt, ...options });
 }
 
@@ -2084,10 +2140,12 @@ export async function getAiCallerLogs(options: AiCallerLogsOptions = {}) {
 export type AiCallerModelsResult = {
   models: string[];
   defaultModel: string;
+  modelDetails?: AiCallerModelDetails[];
 };
 
 /**
  * List Gemini models available for text generation, fetched live from the Google API via EGDesk.
+ * Includes per-model input/output token limits when available.
  */
 export async function listAiCallerModels(): Promise<AiCallerModelsResult> {
   return callAiCallerTool('ai_caller_list_models', {});

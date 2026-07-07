@@ -16,6 +16,7 @@ export default function InboundStatementOcrModal({
   onSuccess
 }: InboundStatementOcrModalProps) {
   const [ocrScanning, setOcrScanning] = useState(false);
+  const [ocrScanStep, setOcrScanStep] = useState("");
   const [ocrSuccess, setOcrSuccess] = useState(false);
   const [ocrFilename, setOcrFilename] = useState("");
   const [receiverMatched, setReceiverMatched] = useState<boolean>(true);
@@ -60,8 +61,40 @@ export default function InboundStatementOcrModal({
 
   if (!isOpen) return null;
 
+  // HTML5 Canvas 기반 클라이언트 브라우저 단 base64 이미지 무손실 회전 헬퍼
+  const rotateImageBase64 = (base64: string, degrees: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas context 2D를 로드할 수 없습니다."));
+          return;
+        }
+
+        if (degrees === 90 || degrees === 270) {
+          canvas.width = img.height;
+          canvas.height = img.width;
+        } else {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        }
+
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((degrees * Math.PI) / 180);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+
+        resolve(canvas.toDataURL("image/jpeg", 0.95));
+      };
+      img.onerror = (err) => reject(err);
+      img.src = base64;
+    });
+  };
+
   const resetOcrState = () => {
     setOcrScanning(false);
+    setOcrScanStep("");
     setOcrSuccess(false);
     setOcrFilename("");
     setReceiverMatched(true);
@@ -98,11 +131,43 @@ export default function InboundStatementOcrModal({
     setOcrScanning(true);
     setOcrSuccess(false);
     setOcrFilename(file.name);
+    setOcrScanStep("1단계: 거래명세서 방향 판별 중...");
 
     const reader = new FileReader();
     reader.onload = async () => {
-      const base64Data = reader.result as string;
+      let base64Data = reader.result as string;
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
       try {
+        // [하이브리드 캔버스 보정 1단계]: PDF가 아닐 경우 이미지 각도 검출
+        if (!isPdf) {
+          try {
+            const detectRes = await apiFetch("/api/estimates/ocr", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                imageBase64: base64Data,
+                filename: file.name,
+                mimeType: file.type,
+                document_type: "statement",
+                action: "detect-orientation"
+              })
+            });
+            const detectData = await detectRes.json();
+            if (detectData.success && detectData.rotation > 0) {
+              setOcrScanStep(`2단계: 이미지 회전 보정 중 (${detectData.rotation}도)...`);
+              // 800ms 눈으로 볼 수 있게 인위적 지연 적용
+              await new Promise(resolve => setTimeout(resolve, 800));
+              const rotated = await rotateImageBase64(base64Data, detectData.rotation);
+              base64Data = rotated;
+            }
+          } catch (rotErr) {
+            console.error("[Orientation Error] 이미지 회전 처리 실패, 원본 전송 진행:", rotErr);
+          }
+        }
+
+        setOcrScanStep("3단계: 정방향 거래명세서 상세 분석 중...");
+
         const res = await apiFetch("/api/estimates/ocr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -110,13 +175,14 @@ export default function InboundStatementOcrModal({
             imageBase64: base64Data,
             filename: file.name,
             mimeType: file.type,
-            document_type: "estimate"
+            document_type: "statement"
           })
         });
         const data = await res.json();
         if (data.success) {
           setOcrScanning(false);
           setOcrSuccess(true);
+          setOcrScanStep("");
           setOcrForm({
             partner_name: data.partner_name,
             partner_phone: data.partner_phone || "",
@@ -136,15 +202,18 @@ export default function InboundStatementOcrModal({
           setMyCompanyName(data.my_company_name || "주식회사 쿠스");
         } else {
           setOcrScanning(false);
+          setOcrScanStep("");
           alert(data.error || "OCR 파싱 실패");
         }
       } catch (err) {
         setOcrScanning(false);
+        setOcrScanStep("");
         alert("OCR 파싱 실패");
       }
     };
     reader.onerror = () => {
       setOcrScanning(false);
+      setOcrScanStep("");
       alert("파일을 읽는 도중 오류가 발생했습니다.");
     };
     reader.readAsDataURL(file);
@@ -241,7 +310,9 @@ export default function InboundStatementOcrModal({
             {ocrScanning ? (
               <div className="flex flex-col items-center space-y-2 text-center">
                 <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
-                <span className="text-xs text-indigo-600 font-extrabold animate-pulse">Gemini Vision AI로 거래명세서 이미지 고해상도 OCR 스캔 중...</span>
+                <span className="text-xs text-indigo-600 font-extrabold animate-pulse">
+                  {ocrScanStep || "Gemini Vision AI로 거래명세서 이미지 고해상도 OCR 스캔 중..."}
+                </span>
               </div>
             ) : ocrSuccess ? (
               <div className="text-center space-y-2">

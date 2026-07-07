@@ -1,6 +1,6 @@
 /**
  * EGDesk User Data Configuration
- * Generated at: 2026-07-06T04:22:38.376Z
+ * Generated at: 2026-07-07T09:53:22.466Z
  *
  * This file contains type-safe definitions for your EGDesk tables.
  */
@@ -304,7 +304,7 @@ export const TABLES = {
   table41: {
     name: 'crm_grant_announcements',
     displayName: '정부 지원금 추천 공고',
-    rowCount: 75,
+    rowCount: 131,
     columnCount: 15,
     columns: ['id', 'title', 'agency', 'match_score', 'match_guide', 'budget', 'end_date', 'tenant_id', 'uuid', 'updated_at', 'updated_by', 'deleted_at', 'deleted_by', 'restored_at', 'restored_by']
   } as TableDefinition,
@@ -577,7 +577,7 @@ export const TABLES = {
   table80: {
     name: 'ai_token_usage_logs',
     displayName: 'AI 토큰 사용량 로그',
-    rowCount: 0,
+    rowCount: 8,
     columnCount: 17,
     columns: ['id', 'model', 'purpose', 'prompt_tokens', 'completion_tokens', 'total_tokens', 'user_name', 'menu_path', 'created_at', 'uuid', 'updated_at', 'updated_by', 'deleted_at', 'deleted_by', 'restored_at', 'restored_by', 'tenant_id']
   } as TableDefinition,
@@ -640,7 +640,7 @@ export const TABLES = {
   table89: {
     name: 'crm_sales_orders',
     displayName: '수주서 관리',
-    rowCount: 0,
+    rowCount: 2,
     columnCount: 19,
     columns: ['id', 'estimate_id', 'client_order_no', 'customer_name', 'customer_phone', 'customer_manager', 'status', 'total_amount', 'delivery_date', 'order_date', 'created_at', 'tenant_id', 'uuid', 'updated_at', 'updated_by', 'deleted_at', 'deleted_by', 'restored_at', 'restored_by']
   } as TableDefinition,
@@ -654,14 +654,14 @@ export const TABLES = {
   table91: {
     name: 'crm_estimate_items',
     displayName: '견적서 품목 상세',
-    rowCount: 0,
+    rowCount: 2,
     columnCount: 19,
     columns: ['id', 'estimate_id', 'product_id', 'item_code', 'product_name', 'spec', 'quantity', 'unit_price', 'amount', 'delivery_date', 'valid_item_code', 'tenant_id', 'uuid', 'updated_at', 'updated_by', 'deleted_at', 'deleted_by', 'restored_at', 'restored_by']
   } as TableDefinition,
   table92: {
     name: 'crm_estimates',
     displayName: '견적서 관리',
-    rowCount: 0,
+    rowCount: 2,
     columnCount: 22,
     columns: ['id', 'type', 'direction_status', 'partner_name', 'partner_phone', 'partner_manager', 'total_amount', 'file_url', 'business_license_url', 'ai_parsed', 'tags', 'created_at', 'uuid', 'sales_order_number', 'purchase_order_number', 'updated_at', 'updated_by', 'deleted_at', 'deleted_by', 'restored_at', 'restored_by', 'tenant_id']
   } as TableDefinition,
@@ -724,7 +724,7 @@ export const TABLES = {
   table101: {
     name: 'system_settings',
     displayName: '시스템 설정',
-    rowCount: 16,
+    rowCount: 19,
     columnCount: 11,
     columns: ['id', 'key', 'value', 'tenant_id', 'uuid', 'updated_at', 'updated_by', 'deleted_at', 'deleted_by', 'restored_at', 'restored_by']
   } as TableDefinition,

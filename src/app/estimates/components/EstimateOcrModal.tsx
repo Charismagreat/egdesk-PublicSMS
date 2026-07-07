@@ -18,6 +18,7 @@ export default function EstimateOcrModal({
   const [ocrScanning, setOcrScanning] = useState(false);
   const [ocrSuccess, setOcrSuccess] = useState(false);
   const [ocrFilename, setOcrFilename] = useState("");
+  const [ocrScanStep, setOcrScanStep] = useState("");
   const [receiverMatched, setReceiverMatched] = useState<boolean>(true);
   const [myCompanyName, setMyCompanyName] = useState<string>("주식회사 쿠스");
   const [userRole, setUserRole] = useState<string>("SUB_OPERATOR");
@@ -64,6 +65,7 @@ export default function EstimateOcrModal({
     setOcrScanning(false);
     setOcrSuccess(false);
     setOcrFilename("");
+    setOcrScanStep("");
     setReceiverMatched(true);
     setMyCompanyName("주식회사 쿠스");
     setForceBypass(false);
@@ -93,6 +95,44 @@ export default function EstimateOcrModal({
     onClose();
   };
 
+  // HTML5 Canvas를 이용해 이미지를 회전시키는 헬퍼 함수
+  const rotateImageBase64 = (base64: string, degrees: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (degrees === 0) {
+        resolve(base64);
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas context를 생성할 수 없습니다."));
+          return;
+        }
+
+        // 90도 또는 270도 회전 시 가로세로 크기가 뒤바뀜
+        if (degrees === 90 || degrees === 270) {
+          canvas.width = img.height;
+          canvas.height = img.width;
+        } else {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        }
+
+        // 회전 변환 적용
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((degrees * Math.PI) / 180);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+
+        // 새 Base64 데이터 추출
+        resolve(canvas.toDataURL("image/jpeg", 0.95));
+      };
+      img.onerror = () => reject(new Error("이미지 로드에 실패했습니다."));
+      img.src = base64;
+    });
+  };
+
   // 실제 이미지/PDF 파일 업로드 후 AI OCR 가동
   const handleOcrFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -107,8 +147,50 @@ export default function EstimateOcrModal({
 
     const reader = new FileReader();
     reader.onload = async () => {
-      const base64Data = reader.result as string;
+      let base64Data = reader.result as string;
       try {
+        // PDF가 아닐 경우에만 이미지 회전 로직 가동 (PDF는 브라우저 Image 로드가 불가능하므로 예외 처리)
+        const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+        if (!isPdf) {
+          try {
+            // 1단계: 방향 판별 요청
+            setOcrScanStep("1단계: 이미지의 텍스트 레이아웃 방향을 자동 판별 중...");
+            const detectRes = await fetch("/api/estimates/ocr", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                imageBase64: base64Data,
+                filename: file.name,
+                mimeType: file.type,
+                action: "detect-orientation"
+              })
+            });
+            const detectData = await detectRes.json();
+            
+            // 2단계: 회전각이 0도 초과일 경우 브라우저 캔버스로 회전 보정 실행
+            if (detectData.success && detectData.rotation > 0) {
+              setOcrScanStep(`2단계: 누워 있는 이미지를 정방향으로 자동 보정 회전 중 (${detectData.rotation}도)...`);
+              console.log(`🔄 [AI 이미지 보정] 회전 감지: 시계방향 ${detectData.rotation}도 회전 보정 실행`);
+              base64Data = await rotateImageBase64(base64Data, detectData.rotation);
+              // 사용자가 보정 단계를 인식할 수 있도록 약 800ms의 시각적 딜레이를 줌
+              await new Promise(resolve => setTimeout(resolve, 800));
+            } else {
+              setOcrScanStep("이미지가 이미 정방향입니다. 보정 없이 즉시 판독을 시작합니다.");
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          } catch (rotateErr: any) {
+            console.error("이미지 자동 회전 보정 중 에러(무시하고 진행):", rotateErr);
+            setOcrScanStep(`자동 보정 중 오류가 발생하여 우회 진행합니다: ${rotateErr.message || rotateErr}`);
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          }
+        } else {
+          setOcrScanStep("PDF 문서는 정방향 분석으로 즉시 분석을 진행합니다.");
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // 3단계: 보정된 이미지 데이터로 상세 OCR 요청 진행
+        setOcrScanStep("3단계: 정방향 문서를 기반으로 견적서 상세 내역을 추출하는 중...");
         const res = await fetch("/api/estimates/ocr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -248,7 +330,7 @@ export default function EstimateOcrModal({
             {ocrScanning ? (
               <div className="flex flex-col items-center space-y-2 text-center">
                 <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
-                <span className="text-xs text-indigo-600 font-extrabold animate-pulse">Gemini Vision AI로 견적 이미지 고해상도 OCR 스캔 중...</span>
+                <span className="text-xs text-indigo-600 font-extrabold animate-pulse">{ocrScanStep || "Gemini Vision AI로 견적 이미지 고해상도 OCR 스캔 중..."}</span>
               </div>
             ) : ocrSuccess ? (
               <div className="text-center space-y-2">

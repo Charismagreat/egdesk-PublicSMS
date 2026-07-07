@@ -1,16 +1,16 @@
-// cache-bust: 2026-07-04T19:38:10
+// cache-bust: 2026-07-07T18:48:10
 export const dynamic = 'force-dynamic';
 import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, listBusinessIdentitySnapshots, listKnowledgeDocuments, getKnowledgeDocument, getGeminiApiKey } from '../../../../../egdesk-helpers';
+import { queryTable, insertRows } from '../../../../../egdesk-helpers';
 
 /**
- * POST: 받은 견적서 이미지 또는 사업자등록증 AI OCR 파싱 및 정제
+ * POST: 받은 견적서/발주서/거래명세서 이미지 또는 사업자등록증 AI OCR 파싱 및 정제
  * Base64 파일 데이터와 mimeType을 받아 Gemini Vision API를 호출해 단 3초 만에 구조화 JSON으로 추출합니다.
  */
 export async function POST(req: Request) {
   try {
-    const { imageBase64, filename, document_type = 'estimate', mimeType = 'image/jpeg' } = await req.json();
+    const { imageBase64, filename, document_type = 'estimate', mimeType = 'image/jpeg', action } = await req.json();
 
     if (!imageBase64) {
       return NextResponse.json({ success: false, error: '분석할 파일 데이터(Base64)가 누락되었습니다.' }, { status: 400 });
@@ -48,6 +48,72 @@ export async function POST(req: Request) {
     // Base64 프리픽스 제거
     const cleanedBase64 = imageBase64.replace(/^data:(image\/(png|jpeg|jpg|webp|heic|heif)|application\/pdf);base64,/, "");
 
+    // 💡 1. 방향 감지(detect-orientation) 얼리 리턴 처리
+    if (action === 'detect-orientation') {
+      if (apiKey) {
+        try {
+          const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
+          const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
+            ? modelRes.rows[0].value
+            : 'gemini-3.5-flash';
+
+          console.log(`📌 [AI OCR Orientation Detect]: 수신 파일명='${filename}', 모델='${selectedModel}'`);
+
+          const response = await fetchGeminiWithFallback(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    { text: `이 문서는 한국어 발주서(Purchase Order) 또는 견적서(Quotation)입니다. 
+문서 안의 글자(한글, 영어, 숫자 등)들이 왼쪽에서 오른쪽으로 정상적으로 똑바로(정방향) 읽히기 위해, 이 이미지를 시계 방향으로 몇 도 회전해야 하는지 판별하세요.
+회전 각도는 오직 다음 중 하나로만 답변해야 합니다: 0, 90, 180, 270.
+만약 글자가 왼쪽으로 90도 기울어져 누워 있다면 (글자를 위로 향하게 바로 세우기 위해 시계방향 90도 회전이 필요하다면) "90"을 반환하세요.
+만약 이미 정방향이라면 "0"을 반환하세요.
+설명이나 다른 텍스트는 절대 작성하지 말고, 오직 숫자 0, 90, 180, 270 중 하나만 출력하세요.` },
+                    {
+                      inlineData: {
+                        mimeType: mimeType,
+                        data: cleanedBase64
+                      }
+                    }
+                  ]
+                }
+              ],
+              generationConfig: {
+                temperature: 0.0,
+                maxOutputTokens: 10
+              }
+            })
+          });
+
+          if (!response.ok) {
+            console.error('방향 감지 API 호출 실패:', response.status);
+            return NextResponse.json({ success: true, rotation: 0 }); // 실패 시 보정 없이 0도 리턴하여 OCR 진행하도록 함
+          }
+
+          const aiData = await response.json();
+          const text = (aiData.candidates?.[0]?.content?.parts?.[0]?.text || '0').trim();
+          
+          // 백틱 등 온갖 노이즈 제거 가드
+          const cleanText = text.replace(/[^0-9]/g, '');
+          let rotation = parseInt(cleanText, 10);
+          if (isNaN(rotation) || ![0, 90, 180, 270].includes(rotation)) {
+            rotation = 0;
+          }
+          console.log(`📌 [AI OCR Orientation Detect Result]: ${rotation}도 회전 필요`);
+          return NextResponse.json({ success: true, rotation });
+
+        } catch (err) {
+          console.error('방향 감지 중 오류 발생:', err);
+          return NextResponse.json({ success: true, rotation: 0 });
+        }
+      } else {
+        return NextResponse.json({ success: true, rotation: 0 });
+      }
+    }
+
     // API 키가 존재할 때 실제 Gemini Vision OCR 구동
     if (apiKey) {
       let responseRawText = '';
@@ -76,62 +142,8 @@ Format example of output:
 }
 Do NOT output anything other than this JSON string. No markdown block wrapper.
 `;
-        } else {
-          systemInstruction = `
-You are a highly advanced AI OCR scanner specializing in structured extraction of financial documents, receipts, and supply estimates.
-Your job is to look at the provided image (which is a supply estimate / quote / purchase order) and extract the following in valid JSON ONLY:
-1. "supplier": Object containing:
-   - "company_name": String (공급자/공급처 회사명. If not found, "")
-   - "business_number": String (공급자 사업자번호. Format: "XXX-XX-XXXXX", otherwise "")
-   - "representative": String (공급자 대표자 성명. **CRITICAL**: 반드시 "노인호", "홍길동" 등 2~4글자 내외의 정갈한 인물 이름(한글 성명)만 단독으로 기입하십시오. 주소지, 업태, 종목, 전화번호 등 공급처 정보 표의 다른 텍스트를 절대 이 필드에 섞어서 함께 넣지 마십시오. If not found, "")
-   - "address": String (공급자 주소. **IMPORTANT**: 이미지 상에 공급처 사업자 정보와 함께 적힌 주소지를 철저하게 검출하여 기입하십시오. If not found, "")
-   - "phone": String (공급자 연락처/전화번호. **IMPORTANT**: 이미지 상에 기재된 공급처 전화번호를 철저하게 검출하여 기입하십시오. 절대 임의로 다른 가짜 값을 기입하지 마십시오. otherwise "")
-   - "pic_name": String (공급자 담당자 성명, otherwise "")
-2. "buyer": Object containing:
-   - "company_name": String (공급받는자/수신처 회사명. If not found, "")
-   - "business_number": String (공급받는자 사업자번호. Format: "XXX-XX-XXXXX", otherwise "")
-   - "representative": String (공급받는자 대표자 성명. **CRITICAL**: 반드시 2~4글자 내외의 정갈한 인물 이름(한글 성명)만 단독으로 기입하십시오. 주소지, 업태, 종목, 전화번호 등 공급받는자 정보 표의 다른 텍스트를 절대 이 필드에 섞어서 함께 넣지 마십시오. If not found, "")
-   - "address": String (공급받는자 주소. If not found, "")
-   - "phone": String (공급받는자 연락처/전화번호, otherwise "")
-   - "pic_name": String (공급받는자 담당자 성명, otherwise "")
-3. "document_number": String (문서상에 적힌 견적서/발주서 고유 번호. If not found, "")
-4. "document_date": String (문서 작성/발행 일자. Format: "YYYY-MM-DD", otherwise "")
-5. "document_memo": String (유효기간, 결제조건, 인도조건 등 비고/기타 설명 텍스트. **CRITICAL WARNING**: 이 필드의 값 내에 실제 줄바꿈(개행문자)을 절대 포함하지 마십시오. 줄바꿈이 필요한 모든 위치는 반드시 백슬래시 2개와 n을 조합한 문자열인 "\\\\n" 으로 철저하게 이스케이프 처리하여 완벽한 한 줄의 문자열로만 만드십시오. 이를 위반하면 JSON 파싱이 파괴됩니다. If not found, "")
-6. "items": Array of objects, each containing:
-   - "item_code": String (품목코드 혹은 도번. If not found, "")
-   - "product_name": String (품명 혹은 제품명)
-   - "spec": String (규격 혹은 단위 정보. If not found, "")
-   - "quantity": Integer (Number of items requested/quoted)
-   - "unit_price": Integer (Price per unit)
-
-Format example of output:
-{
-  "supplier": {
-    "company_name": "태백유통(주)",
-    "business_number": "123-45-67890",
-    "representative": "홍길동",
-    "address": "강원도 태백시 태백로 100",
-    "phone": "02-1234-5678",
-    "pic_name": "홍길동"
-  },
-  "buyer": {
-    "company_name": "주식회사 원컨덕터트레이딩",
-    "business_number": "2428700357",
-    "representative": "차민수",
-    "address": "서울특별시 강남구 테헤란로 1",
-    "phone": "010-0000-0000",
-    "pic_name": "차민수"
-  },
-  "document_number": "EST-20260623-01",
-  "document_date": "2026-06-23",
-  "document_memo": "유효기간: 발행일로부터 30일\\\\n결제조건: 현금\\\\n납기조건: 7일 이내",
-  "items": [
-    { "item_code": "ITEM-9012", "product_name": "특A급 아메리카노 원두 10kg", "spec": "10kg/bag", "quantity": 5, "unit_price": 45000 }
-  ]
-}
-Do NOT output anything other than this JSON string. No markdown block wrapper.
-`;
         }
+
         // 1. DB에서 구글 AI 모델 설정 정보 로드
         const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
         const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
@@ -204,38 +216,147 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
 
         } else {
           // -------------------------------------------------------------
-          // 견적서/발주서 (대표자명 도장 노이즈가 제거된 1-Pass 고정밀 Vision OCR)
+          // 견적서/발주서/거래명세서 (대표자명 도장 노이즈가 제거된 1-Pass 고정밀 Vision OCR)
           // -------------------------------------------------------------
-          const cleanInstruction = `
-You are a highly advanced AI OCR scanner specializing in structured extraction of financial documents, receipts, and supply estimates.
-Your job is to look at the provided image (which is a supply estimate / quote / purchase order) and extract the following in valid JSON ONLY:
-1. "supplier": Object containing:
-   - "company_name": String (공급자/공급처 회사명. If not found, "")
-   - "business_number": String (공급자 사업자번호. Format: "XXX-XX-XXXXX", otherwise "")
-   - "representative": String (공급자 대표자 성명. **CRITICAL SAFETY GUARD**: 빨간색 인감 도장이나 사명 서명 무늬가 성명 글자를 덮어쓰고 있어서 판독하기 어렵거나 꼬여 있다면, 절대로 무리하게 획을 조합하거나 유추하지 말고 반드시 빈 문자열 "" 로만 처리하십시오. 무한 반복되는 숫자나 공백, 특수문자를 출력해서는 절대로 안 됩니다. If not found, "")
-   - "address": String (공급자 주소. 이미지 상에 기재된 주소지를 정확히 검출하여 기입하십시오. If not found, "")
-   - "phone": String (공급자 연락처/전화번호. 이미지 상에 기재된 대표전화번호를 정확히 검출하여 기입하십시오. otherwise "")
-   - "pic_name": String (공급자 담당자 성명, otherwise "")
-2. "buyer": Object containing:
-   - "company_name": String (공급받는자/수신처 회사명. If not found, "")
-   - "business_number": String (공급받는자 사업자번호. Format: "XXX-XX-XXXXX", otherwise "")
-   - "address": String (공급받는자 주소. If not found, "")
-   - "phone": String (공급받는자 연락처/전화번호, otherwise "")
-   - "pic_name": String (공급받는자 담당자 성명, otherwise "")
-3. "document_number": String (문서상에 적힌 견적서/발주서 고유 번호. If not found, "")
-4. "document_date": String (문서 작성/발행 일자. Format: "YYYY-MM-DD", otherwise "")
-5. "document_memo": String (유효기간, 결제조건 등 비고 사항. **CRITICAL WARNING**: 값 내에 실제 줄바꿈을 절대 포함하지 말고 "\\\\n" 문자열로 이스케이프하십시오. If not found, "")
-6. "originalTotalAmount": Integer (명세서상의 최종 합계금액, 없으면 0)
-7. "originalTotalQuantity": Integer (명세서상의 최종 합계수량, 없으면 0)
-8. "items": Array of objects, each containing:
-   - "item_code": String (품목코드 혹은 도번. If not found, "")
-   - "product_name": String (품명 혹은 제품명)
-   - "spec": String (규격 혹은 단위 정보. If not found, "")
-   - "quantity": Integer (수량)
-   - "unit_price": Integer (단가)
+          let instruction = '';
+          let schemaProperties: any = {};
 
-Do NOT output anything other than this JSON string. No markdown block wrapper.
-`;
+          if (document_type === 'purchase_order' || document_type === 'estimate' || document_type === 'statement') {
+            if (document_type === 'purchase_order') {
+              instruction = `공급사명
+공급사 사업자번호
+공급사 대표자명
+공급사 주소
+공급사 대표 전화번호
+공급사 팩스번호
+공급사 담당자명
+공급사 담당자 연락처
+
+구매/발주사명
+구매/발주사 사업자번호
+구매/발주사 대표자명
+구매/발주사 주소
+구매/발주사 대표 전화번호
+구매/발주사 팩스번호
+구매/발주사 담당자명
+구매/발주사 담당자 연락처
+
+발주 품목 리스트(품목코드, 품목명, 규격, 수량, 단가, 금액, 납기일, 그 외 모든 기타 정보)
+
+발주서에 기재된 총 금액
+발주서에 기재된 총 수량
+발주번호
+발주일
+전체 납기일
+그 외 추출된 모든 내용`;
+            } else if (document_type === 'statement') {
+              instruction = `공급자명
+공급자 사업자번호
+공급자 대표자명
+공급자 주소
+공급자 대표 전화번호
+공급사 팩스번호
+공급사 담당자명
+공급사 담당자 연락처
+
+공급받는 회사명
+공급받는 회사 사업자번호
+공급받는 회사 대표자명
+공급받는 회사 주소
+공급받는 회사 대표 전화번호
+공급받는 회사 팩스번호
+공급받는 회사 담당자명
+공급받는 회사 담당자 연락처
+
+명세 품목 리스트(품목코드, 품목명, 규격, 수량, 단가, 금액, 납기일, 그 외 모든 기타 정보)
+
+명세서에 기재된 총 금액
+명세서에 기재된 총 수량
+거래명세서번호
+발행일
+그 외 추출된 모든 내용`;
+            } else {
+              instruction = `공급사명
+공급사 사업자번호
+공급사 대표자명
+공급사 주소
+공급사 대표 전화번호
+공급사 팩스번호
+공급사 담당자명
+공급사 담당자 연락처
+
+공급받는 회사명
+공급받는 회사 사업자번호
+공급받는 회사 대표자명
+공급받는 회사 주소
+공급받는 회사 대표 전화번호
+공급받는 회사 팩스번호
+공급받는 회사 담당자명
+공급받는 회사 담당자 연락처
+
+견적 품목 리스트(품목코드, 품목명, 규격, 수량, 단가, 금액, 납기일, 그 외 모든 기타 정보)
+
+견적서에 기재된 총 금액
+견적서에 기재된 총 수량
+견적번호
+견적일
+견적 유효기간
+그 외 추출된 모든 내용`;
+            }
+
+            schemaProperties = {
+              supplier: {
+                type: "OBJECT",
+                properties: {
+                  company_name: { type: "STRING" },
+                  business_number: { type: "STRING" },
+                  representative: { type: "STRING" },
+                  address: { type: "STRING" },
+                  phone: { type: "STRING" },
+                  fax: { type: "STRING" },
+                  pic_name: { type: "STRING" },
+                  pic_phone: { type: "STRING" }
+                },
+                required: ["company_name"]
+              },
+              buyer: {
+                type: "OBJECT",
+                properties: {
+                  company_name: { type: "STRING" },
+                  business_number: { type: "STRING" },
+                  representative: { type: "STRING" },
+                  address: { type: "STRING" },
+                  phone: { type: "STRING" },
+                  fax: { type: "STRING" },
+                  pic_name: { type: "STRING" },
+                  pic_phone: { type: "STRING" }
+                }
+              },
+              items: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    item_code: { type: "STRING" },
+                    product_name: { type: "STRING" },
+                    spec: { type: "STRING" },
+                    quantity: { type: "INTEGER" },
+                    unit_price: { type: "INTEGER" },
+                    amount: { type: "INTEGER" },
+                    delivery_date: { type: "STRING" },
+                    extra_info: { type: "STRING" }
+                  },
+                  required: ["product_name", "quantity", "unit_price"]
+                }
+              },
+              originalTotalAmount: { type: "INTEGER" },
+              originalTotalQuantity: { type: "INTEGER" },
+              document_number: { type: "STRING" },
+              document_date: { type: "STRING" },
+              delivery_date: { type: "STRING" },
+              extra_content: { type: "STRING" }
+            };
+          }
 
           const response = await fetchGeminiWithFallback(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
             method: 'POST',
@@ -244,7 +365,7 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
               contents: [
                 {
                   parts: [
-                    { text: cleanInstruction },
+                    { text: instruction },
                     {
                       inlineData: {
                         mimeType: mimeType,
@@ -260,53 +381,7 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
                 temperature: 0.0,
                 responseSchema: {
                   type: "OBJECT",
-                  properties: {
-                    supplier: {
-                      type: "OBJECT",
-                      properties: {
-                        company_name: { type: "STRING" },
-                        business_number: { type: "STRING" },
-                        representative: {
-                          type: "STRING",
-                          description: "공급자 대표자 이름 (예: 노인호). 빨간색 도장이나 직인이 겹쳐 판독이 어렵다면 반드시 빈 문자열 ''로 채우십시오. 무한 루프 폭주 금지."
-                        },
-                        address: { type: "STRING" },
-                        phone: { type: "STRING" },
-                        pic_name: { type: "STRING" }
-                      },
-                      required: ["company_name"]
-                    },
-                    buyer: {
-                      type: "OBJECT",
-                      properties: {
-                        company_name: { type: "STRING" },
-                        business_number: { type: "STRING" },
-                        representative: { type: "STRING" },
-                        address: { type: "STRING" },
-                        phone: { type: "STRING" },
-                        pic_name: { type: "STRING" }
-                      }
-                    },
-                    document_number: { type: "STRING" },
-                    document_date: { type: "STRING" },
-                    document_memo: { type: "STRING" },
-                    originalTotalAmount: { type: "INTEGER" },
-                    originalTotalQuantity: { type: "INTEGER" },
-                    items: {
-                      type: "ARRAY",
-                      items: {
-                        type: "OBJECT",
-                        properties: {
-                          item_code: { type: "STRING" },
-                          product_name: { type: "STRING" },
-                          spec: { type: "STRING" },
-                          quantity: { type: "INTEGER" },
-                          unit_price: { type: "INTEGER" }
-                        },
-                        required: ["product_name", "quantity", "unit_price"]
-                      }
-                    }
-                  },
+                  properties: schemaProperties,
                   required: ["supplier", "items"]
                 }
               }
@@ -406,7 +481,7 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
 
             // 2단계: 판정 결과에 따른 문서 방향 및 상대 거래처 매핑
             if (isBuyerMyCompany) {
-              // 자사가 공급받는자이므로 받은 견적서(INBOUND)
+              // 자사가 공급받는자이므로 받은 문서(INBOUND)
               targetType = 'INBOUND';
               partnerName = ocrJson.supplier?.company_name || '';
               partnerPhone = ocrJson.supplier?.phone || '';
@@ -415,7 +490,7 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
               partnerRepresentative = ocrJson.supplier?.representative || '';
               partnerAddress = ocrJson.supplier?.address || '';
             } else if (isSupplierMyCompany) {
-              // 자사가 공급자이므로 보낸 견적서(OUTBOUND)
+              // 자사가 공급자이므로 보낸 문서(OUTBOUND)
               targetType = 'OUTBOUND';
               partnerName = ocrJson.buyer?.company_name || '';
               partnerPhone = ocrJson.buyer?.phone || '';
@@ -425,8 +500,6 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
               partnerAddress = ocrJson.buyer?.address || '';
             } else {
               // 자사 정보와 매치되지 않는 경우 (폴백 조치)
-              // 사용자 공식: "받은 견적서일 경우 사업자번호가 있는 업체가 상대방 거래처이다"
-              // 디폴트로 공급자(supplier)가 사업자번호를 지닐 확률이 높으므로 사업자번호 존재 여부를 확인해 세팅.
               const hasSupBiz = !!supBiz;
               const hasBuyBiz = !!buyBiz;
 
@@ -449,7 +522,6 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
             }
 
             // 🛡️ [하이브리드 대표자명 스마트 복원 알고리즘]
-            // Step 1: 사내 CRM DB에서 기존 등록 거래처가 있는지 대조하여 정확도 100%로 대표자명 우선 복구
             if (!partnerRepresentative && (partnerBizNo || partnerName)) {
               try {
                 const cleanBiz = partnerBizNo.replace(/\D/g, '');
@@ -477,9 +549,85 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
               receiverMatched = true;
             }
 
+            let documentMemoText = '';
+            if (document_type === 'purchase_order' || document_type === 'estimate' || document_type === 'statement') {
+              const supFax = ocrJson.supplier?.fax || '';
+              const supPic = ocrJson.supplier?.pic_name || '';
+              const supPicPhone = ocrJson.supplier?.pic_phone || '';
+
+              const buyName = ocrJson.buyer?.company_name || '';
+              const buyBiz = ocrJson.buyer?.business_number || '';
+              const buyRep = ocrJson.buyer?.representative || '';
+              const buyAddr = ocrJson.buyer?.address || '';
+              const buyPhone = ocrJson.buyer?.phone || '';
+              const buyFax = ocrJson.buyer?.fax || '';
+              const buyPic = ocrJson.buyer?.pic_name || '';
+              const buyPicPhone = ocrJson.buyer?.pic_phone || '';
+
+              const docNo = ocrJson.document_number || '';
+              const docDate = ocrJson.document_date || '';
+              const delivDate = ocrJson.delivery_date || '';
+              const extraContent = ocrJson.extra_content || '';
+
+              const memoLines = [];
+              memoLines.push(`[공급사 상세]`);
+              memoLines.push(`- 팩스: ${supFax}`);
+              memoLines.push(`- 담당자: ${[supPic, supPicPhone].filter(Boolean).join(' ')}`);
+              memoLines.push(``);
+              
+              if (document_type === 'purchase_order') {
+                memoLines.push(`[구매/발주사 상세]`);
+              } else {
+                memoLines.push(`[공급받는 회사 상세]`);
+              }
+              memoLines.push(`- 회사명: ${buyName}`);
+              memoLines.push(`- 사업자번호: ${buyBiz}`);
+              memoLines.push(`- 대표자: ${buyRep}`);
+              memoLines.push(`- 주소: ${buyAddr}`);
+              memoLines.push(`- 전화: ${buyPhone}`);
+              memoLines.push(`- 팩스: ${buyFax}`);
+              memoLines.push(`- 담당자: ${[buyPic, buyPicPhone].filter(Boolean).join(' ')}`);
+              memoLines.push(``);
+              
+              if (document_type === 'purchase_order') {
+                memoLines.push(`[발주 요약]`);
+                memoLines.push(`- 발주번호: ${docNo}`);
+                memoLines.push(`- 발주일: ${docDate}`);
+                memoLines.push(`- 전체 납기일: ${delivDate}`);
+              } else if (document_type === 'statement') {
+                memoLines.push(`[명세서 요약]`);
+                memoLines.push(`- 거래명세서번호: ${docNo}`);
+                memoLines.push(`- 발행일: ${docDate}`);
+              } else {
+                memoLines.push(`[견적 요약]`);
+                memoLines.push(`- 견적번호: ${docNo}`);
+                memoLines.push(`- 견적일: ${docDate}`);
+                memoLines.push(`- 견적 유효기간: ${delivDate}`);
+              }
+              if (extraContent) {
+                memoLines.push(``);
+                memoLines.push(`[기타 추출 내용]`);
+                memoLines.push(extraContent);
+              }
+              documentMemoText = memoLines.join('\n');
+            } else {
+              documentMemoText = ocrJson.document_memo || '';
+            }
+
+            const processedItems = (ocrJson.items || []).map((it: any) => {
+              let specStr = it.spec || '';
+              if ((document_type === 'purchase_order' || document_type === 'estimate' || document_type === 'statement') && it.extra_info) {
+                specStr = [specStr, it.extra_info].filter(Boolean).join(' | ');
+              }
+              return {
+                ...it,
+                spec: specStr
+              };
+            });
+
             return NextResponse.json({
               success: true,
-              document_type: 'estimate',
+              document_type: document_type === 'purchase_order' ? 'purchase_order' : (document_type === 'statement' ? 'statement' : 'estimate'),
               type: targetType,
               partner_name: partnerName || '미확인 거래처',
               partner_phone: partnerPhone || '',
@@ -489,10 +637,10 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
               partner_address: partnerAddress || '',
               document_number: ocrJson.document_number || '',
               document_date: ocrJson.document_date || '',
-              document_memo: ocrJson.document_memo || '',
+              document_memo: documentMemoText,
               originalTotalAmount: Number(ocrJson.originalTotalAmount) || 0,
               originalTotalQuantity: Number(ocrJson.originalTotalQuantity) || 0,
-              items: ocrJson.items || [],
+              items: processedItems,
               receiver_matched: receiverMatched,
               my_company_name: myCompanyProfile.companyName,
               debug_rep_raw: debugRepRaw,
@@ -503,7 +651,7 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
           } else {
             return NextResponse.json({
               success: false,
-              error: '견적서에서 필수 정보를 추출하는 데 실패했습니다.',
+              error: '문서에서 필수 정보를 추출하는 데 실패했습니다.',
               debug_raw_text: responseRawText,
               debug_parsed: ocrJson
             }, { status: 500 });
@@ -519,7 +667,6 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
     }
 
     // 2. 고품질 비즈니스 OCR 모의 폴백 (API 미지정 또는 분석 실패 시 제공될 매끄러운 경험)
-    // 업로드된 파일명이나 메타데이터에 맞춰 영리하게 그럴듯한 모의 OCR 스캔 내역 반환!
     if (document_type === 'license') {
       let mockBizNumber = "220-88-12345";
       let mockCompName = "우주글로벌(주)";
@@ -544,10 +691,8 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
         mockEmail = "tax@neocommerce.com";
       }
 
-      // 잠시 스캔하는 듯한 딜레이 연출을 위해 임시 렉 모사 (클라이언트 로딩 스spinner 확인용)
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // 모의(Mock) OCR 호출 시 감사록 연동용 개발/체험 가상 토큰 로그 적재
       try {
         const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
         await insertRows('ai_token_usage_logs', [{
@@ -587,7 +732,6 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
         { item_code: "PAP-DF100", product_name: "프리미엄 드립 필터 페이퍼 (100매입)", spec: "100매/팩", quantity: 50, unit_price: 4500 }
       ];
 
-      // 사용자가 타사 대상 문서를 업로드해 검증 실패 경고를 유도할 수 있도록 시뮬레이션
       if (filename && (
         filename.toLowerCase().includes('samsung') || 
         filename.toLowerCase().includes('삼성') || 
@@ -626,12 +770,10 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
 
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // 💡 수신인 검증 우회 설정이 켜져 있으면 무조건 일치 판정
       if (bypassOcrReceiverCheck) {
         receiverMatched = true;
       }
 
-      // 모의(Mock) OCR 호출 시 감사록 연동용 개발/체험 가상 토큰 로그 적재
       try {
         const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
         await insertRows('ai_token_usage_logs', [{
@@ -652,18 +794,66 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
         mockType = 'OUTBOUND';
       }
 
+      let mockMemo = '';
+      if (document_type === 'purchase_order' || document_type === 'estimate' || document_type === 'statement') {
+        let docNo = 'EST-2026-MOCK-99';
+        if (document_type === 'purchase_order') docNo = 'PO-2026-MOCK-99';
+        if (document_type === 'statement') docNo = 'ST-2026-MOCK-99';
+        
+        const docDate = '2026-06-23';
+        
+        const memoLines = [];
+        memoLines.push(`[공급사 상세]`);
+        memoLines.push(`- 팩스: 02-555-1122`);
+        memoLines.push(`- 담당자: 김공급 010-1234-5678`);
+        memoLines.push(``);
+        
+        if (document_type === 'purchase_order') {
+          memoLines.push(`[구매/발주사 상세]`);
+        } else {
+          memoLines.push(`[공급받는 회사 상세]`);
+        }
+        memoLines.push(`- 회사명: ${mockBuyerName}`);
+        memoLines.push(`- 사업자번호: ${mockBuyerBizNo}`);
+        memoLines.push(`- 대표자: 홍길동`);
+        memoLines.push(`- 주소: 경기도 성남시 분당구 판교역로 235`);
+        memoLines.push(`- 전화: ${mockPartnerPhone}`);
+        memoLines.push(`- 팩스: 02-555-8800`);
+        memoLines.push(`- 담당자: 박구매 010-8765-4321`);
+        memoLines.push(``);
+        
+        if (document_type === 'purchase_order') {
+          memoLines.push(`[발주 요약]`);
+          memoLines.push(`- 발주번호: ${docNo}`);
+          memoLines.push(`- 발주일: ${docDate}`);
+          memoLines.push(`- 전체 납기일: 2026-07-15`);
+        } else if (document_type === 'statement') {
+          memoLines.push(`[명세서 요약]`);
+          memoLines.push(`- 거래명세서번호: ${docNo}`);
+          memoLines.push(`- 발행일: ${docDate}`);
+        } else {
+          memoLines.push(`[견적 요약]`);
+          memoLines.push(`- 견적번호: ${docNo}`);
+          memoLines.push(`- 견적일: ${docDate}`);
+          memoLines.push(`- 견적 유효기간: 발행일로부터 30일`);
+        }
+        mockMemo = memoLines.join('\n');
+      } else {
+        mockMemo = '유효기간: 발행일로부터 15일\n납기: 수주 후 10일 이내';
+      }
+
       return NextResponse.json({
         success: true,
-        document_type: 'estimate',
+        document_type: document_type === 'purchase_order' ? 'purchase_order' : (document_type === 'statement' ? 'statement' : 'estimate'),
         type: mockType,
         partner_name: mockPartnerName,
         partner_phone: mockPartnerPhone,
         partner_business_number: mockBuyerBizNo !== myCompanyProfile.businessNumber ? mockBuyerBizNo : '123-45-67890',
         partner_representative: '홍길동',
         partner_address: '경기도 성남시 분당구 판교역로 235',
-        document_number: 'EST-2026-MOCK-99',
+        document_number: document_type === 'purchase_order' ? 'PO-2026-MOCK-99' : (document_type === 'statement' ? 'ST-2026-MOCK-99' : 'EST-2026-MOCK-99'),
         document_date: '2026-06-23',
-        document_memo: '유효기간: 발행일로부터 15일\n납기: 수주 후 10일 이내',
+        document_memo: mockMemo,
         originalTotalAmount: mockItems.reduce((sum, it) => sum + (it.quantity * it.unit_price), 0),
         originalTotalQuantity: mockItems.reduce((sum, it) => sum + it.quantity, 0),
         items: mockItems,

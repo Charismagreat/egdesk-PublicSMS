@@ -28,6 +28,7 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
   let prompt = '';
   let systemPrompt: string | undefined = undefined;
   let responseMimeType: 'application/json' | 'text/plain' | undefined = undefined;
+  let responseSchema: any = undefined;
   let temperature: number | undefined = undefined;
   let imageInput: string | undefined = undefined;
 
@@ -57,6 +58,9 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
       if (bodyObj.generationConfig?.responseMimeType) {
         responseMimeType = bodyObj.generationConfig.responseMimeType;
       }
+      if (bodyObj.generationConfig?.responseSchema) {
+        responseSchema = bodyObj.generationConfig.responseSchema;
+      }
       if (bodyObj.generationConfig?.temperature != null) {
         temperature = bodyObj.generationConfig.temperature;
       }
@@ -75,12 +79,11 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
     ? rawKey
     : undefined; // 기본 키를 타도록 빈값(undefined) 처리
 
-  // 3. 전사 AI Caller 단일 채널 호출 및 3단계 장애 극복 폴백 루프 가동
-  // 최신 gemini-3.5-flash 우선 시도 후 gemini-2.5-flash, gemini-1.5-flash 순으로 순차 폴백
-  const modelsLineup = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+  // 3. 전사 AI Caller 단일 채널 호출 기동 (장애 극복 폴백은 사용자 요청에 의해 미동작 처리)
+  const modelsLineup = [initialModel];
   let callerRes: any = null;
   let callerErr: any = null;
-  let finalModelUsed = 'gemini-3.5-flash';
+  let finalModelUsed = initialModel;
 
   for (const targetModel of modelsLineup) {
     try {
@@ -91,6 +94,8 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
         model: targetModel,
         temperature: temperature ?? 0.7,
         images: imageInput ? [imageInput] : undefined, // 최신 images 배열 규격 연동 지원
+        responseMimeType,
+        responseSchema,
         caller: 'egdesk-fallback-wrapper',
         keyName: targetKeyName
       });
