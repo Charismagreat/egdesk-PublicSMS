@@ -366,7 +366,14 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
             console.error('Real Gemini OCR token logging failed:', logErr.message);
           }
 
-          ocrJson = JSON.parse(responseText.trim());
+          let cleanText = responseText.trim();
+          if (cleanText.startsWith('```')) {
+            cleanText = cleanText.replace(/^```(json)?/, '').trim();
+          }
+          if (cleanText.endsWith('```')) {
+            cleanText = cleanText.replace(/```$/, '').trim();
+          }
+          ocrJson = JSON.parse(cleanText);
           console.log('📌 [OCR Final Parsed JSON]:', JSON.stringify(ocrJson, null, 2));
         }
 

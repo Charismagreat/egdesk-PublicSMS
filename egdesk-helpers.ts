@@ -2029,12 +2029,24 @@ export type AiCallerCallOptions = {
   maxOutputTokens?: number;
   caller?: string;
   responseSchema?: Record<string, any>;
+  /** Base64 strings (raw or data URLs) */
+  images?: string[];
+  /** Absolute paths — images, text files, .pdf, .docx, video (same rules as filesystem MCP) */
+  filePaths?: string[];
+  /** Inline file uploads when callers cannot use filePaths */
+  files?: Array<{
+    name: string;
+    content: string;
+    encoding?: 'utf8' | 'base64';
+    mimeType?: string;
+  }>;
   /** Select a specific Google API key by name (as saved in EGDesk AI Keys Manager). Leave empty to use the default key. */
   keyName?: 'wonconduct' | (string & {});
 };
 
 /**
  * Call Gemini and log token usage. Returns the AI response plus a usage summary.
+ * Supports images, filePaths, and inline files (documents, text, video frames).
  */
 export async function callAiCaller(prompt: string, options: AiCallerCallOptions = {}) {
   return callAiCallerTool('ai_caller_call', { prompt, ...options });
