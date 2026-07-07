@@ -65,9 +65,15 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
     }
   }
 
-  // 2. 모델명 파싱
+  // 2. 모델명 및 연동 API 키 파싱
   const modelMatch = url.match(/\/models\/([^?:]+)/);
   const initialModel = modelMatch ? modelMatch[1] : 'gemini-3.5-flash';
+
+  const keyMatch = url.match(/[?&]key=([^&]+)/);
+  const rawKey = keyMatch ? keyMatch[1] : '';
+  const targetKeyName = (rawKey && !rawKey.startsWith('AIzaSy') && rawKey !== 'DUMMY_AI_CALLER_API_KEY')
+    ? rawKey
+    : undefined; // 기본 키를 타도록 빈값(undefined) 처리
 
   // 3. 전사 AI Caller 단일 채널 호출 및 3단계 장애 극복 폴백 루프 가동
   // 최신 gemini-3.5-flash 우선 시도 후 gemini-2.5-flash, gemini-1.5-flash 순으로 순차 폴백
@@ -78,7 +84,7 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
 
   for (const targetModel of modelsLineup) {
     try {
-      console.log(`[AI Fallback Wrapper] callAiCaller 호출 기동 (모델: ${targetModel}, 이미지존재: ${!!imageInput})`);
+      console.log(`[AI Fallback Wrapper] callAiCaller 호출 기동 (모델: ${targetModel}, 이미지존재: ${!!imageInput}, keyName: ${targetKeyName})`);
       
       callerRes = await callAiCaller(prompt, {
         systemPrompt,
@@ -86,7 +92,7 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
         temperature: temperature ?? 0.7,
         images: imageInput ? [imageInput] : undefined, // 최신 images 배열 규격 연동 지원
         caller: 'egdesk-fallback-wrapper',
-        keyName: 'wonconduct'
+        keyName: targetKeyName
       });
 
       // 503 에러 징후 정밀 추적 및 예외 처리
