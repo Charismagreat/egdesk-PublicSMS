@@ -170,25 +170,8 @@ export async function POST(req: Request) {
 
     const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
 
-    // 1. DB에서 구글 AI 설정 정보 로드 및 이지데스크 연동 키 조회
-    const settingsRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } });
-    let googleApiKey = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
-
-    // 만약 DB에 키가 없거나 실물 구글 API 키 형식이 아닌 경우 (SaaS 환경 / ai-caller 활용 등)
-    // 이지데스크 프록시를 통해 복호화된 키를 수신하여 구동합니다.
-    if (!googleApiKey || !googleApiKey.startsWith('AIzaSy')) {
-      try {
-        const decryptedKeyRes = await getGeminiApiKey({ name: googleApiKey || '' });
-        if (decryptedKeyRes && decryptedKeyRes.success && decryptedKeyRes.apiKey) {
-          googleApiKey = decryptedKeyRes.apiKey;
-        }
-      } catch (keyErr: any) {
-        console.error('⚠️ EGDesk에서 실제 구글 API 키를 해독해오는 데 실패했습니다:', keyErr.message);
-      }
-    }
-
-    // 여전히 키가 없다면 이지데스크가 중계할 수 있도록 'wonconduct'로 폴백 세팅합니다.
-    const apiKey = googleApiKey || 'wonconduct';
+    // 이지데스크 본사에서 제공하는 기본 AI API 키(AI Caller 기능)를 전적으로 상속 사용합니다. (개별 설정 키 로직 제거)
+    const apiKey = 'DUMMY_AI_CALLER_API_KEY';
 
     const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
     const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value

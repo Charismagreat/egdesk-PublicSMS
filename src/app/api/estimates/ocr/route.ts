@@ -42,29 +42,8 @@ export async function POST(req: Request) {
       console.error('수신인 검증 우회 설정 조회 실패:', e);
     }
 
-    // 1. DB에서 API 키 조회 및 이지데스크 연동 키 로드
-    let apiKey: string | null = null;
-    try {
-      const settingsRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } });
-      let googleApiKey = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
-
-      // 만약 DB에 키가 없거나 실물 구글 API 키 형식이 아닌 경우 (SaaS 환경 / ai-caller 활용 등)
-      // 이지데스크 프록시를 통해 복호화된 키를 수신하여 구동합니다.
-      if (!googleApiKey || !googleApiKey.startsWith('AIzaSy')) {
-        try {
-          const decryptedKeyRes = await getGeminiApiKey({ name: googleApiKey || '' });
-          if (decryptedKeyRes && decryptedKeyRes.success && decryptedKeyRes.apiKey) {
-            googleApiKey = decryptedKeyRes.apiKey;
-          }
-        } catch (keyErr: any) {
-          console.error('⚠️ EGDesk에서 실제 구글 API 키를 해독해오는 데 실패했습니다:', keyErr.message);
-        }
-      }
-      apiKey = googleApiKey || 'wonconduct';
-    } catch (e) {
-      console.error('Failed to get api key, using high-fidelity mockup OCR fallback');
-      apiKey = 'wonconduct';
-    }
+    // 이지데스크 본사에서 제공하는 기본 AI API 키(AI Caller 기능)를 전적으로 상속 사용합니다. (개별 설정 키 로직 제거)
+    const apiKey = 'DUMMY_AI_CALLER_API_KEY';
 
     // Base64 프리픽스 제거
     const cleanedBase64 = imageBase64.replace(/^data:(image\/(png|jpeg|jpg|webp|heic|heif)|application\/pdf);base64,/, "");

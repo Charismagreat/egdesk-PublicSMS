@@ -98,14 +98,8 @@ export async function POST(req: Request) {
       base64Data = parts[1];
     }
 
-    // 2. DB에서 구글 AI 설정 정보 로드
-    const settingsRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } });
-    let apiKey = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
-
-    // 만약 DB에 실물 구글 API 키가 등록되어 있지 않은 경우, 전사 AI 중계기 채널(callAiCaller)로 처리하도록 가드 우회
-    if (!apiKey || !apiKey.startsWith('AIzaSy')) {
-      apiKey = 'DUMMY_AI_CALLER_API_KEY';
-    }
+    // 이지데스크 본사에서 제공하는 기본 AI API 키(AI Caller 기능)를 전적으로 상속 사용합니다. (개별 설정 키 로직 제거)
+    const apiKey = 'DUMMY_AI_CALLER_API_KEY';
 
     const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
     const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
