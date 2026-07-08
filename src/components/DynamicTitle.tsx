@@ -58,6 +58,7 @@ function DynamicTitleHandler() {
       "/admin/members": "회원 관리 대장",
       "/my-db": "MY DB",
       "/employees": "직원 관리 대장",
+      "/hr/attendance": "근태 관리 AI"
     };
 
     // 동적 경로 및 특수 조건 분기
