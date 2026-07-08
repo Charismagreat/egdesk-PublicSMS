@@ -677,7 +677,7 @@ export default function HrAttendancePage() {
   const currentEmpRecord = employees.find(e => String(e.id) === String(currentUser?.id));
 
   return (
-    <div className="space-y-8 animate-fade-in relative pb-16 text-slate-800">
+    <div className="w-full px-4 md:px-8 py-8 bg-slate-50 min-h-screen space-y-8 animate-fade-in relative pb-16 text-slate-800">
       {/* 럭셔리 네온 아우라 백그라운드 */}
       <div className="absolute top-0 right-10 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
       <div className="absolute bottom-10 left-10 w-96 h-96 bg-rose-500/5 rounded-full blur-3xl -z-10"></div>
@@ -685,11 +685,11 @@ export default function HrAttendancePage() {
       {/* 1. 상단 헤더 */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 pb-6 border-b border-slate-200 relative z-10 shrink-0">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight flex items-center">
-            <Calendar className="w-8 h-8 text-indigo-650 mr-3" />
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+            <Calendar className="w-8 h-8 text-indigo-660" />
             근태 관리 AI
           </h1>
-          <p className="text-slate-500 mt-2 text-sm">
+          <p className="text-slate-500 mt-2 text-sm pl-10">
             실시간 1초 출퇴근 타임스탬프와 주간/월간 전사 공유 캘린더, 그리고 Gemini AI 자율 인사 평가 및 마감 연계형 실시간 AI 전사 업무 분석 예보를 정밀 관제합니다.
           </p>
         </div>
