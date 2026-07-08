@@ -1,8 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Bot, ArrowRight } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 import DatabaseInitCard from "../DatabaseInitCard";
 import CompanySettingsCard from "../CompanySettingsCard";
 import SmtpSettingsCard from "../SmtpSettingsCard";
@@ -14,10 +15,27 @@ import FeedbackManagementCard from "../FeedbackManagementCard";
 
 // 설정 페이지의 여러 설정 카드들을 레이아웃에 맞춰 배치하는 컨테이너 컴포넌트
 export function SettingsContainer() {
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    async function checkAdmin() {
+      try {
+        const res = await apiFetch("/api/auth/me");
+        const json = await res.json();
+        if (json.success && json.role === "SUPER_ADMIN" && json.username === "admin") {
+          setIsAdmin(true);
+        }
+      } catch (e) {
+        console.error("Failed to check admin status:", e);
+      }
+    }
+    checkAdmin();
+  }, []);
+
   return (
     <div className="space-y-6">
-      {/* 데이터베이스 초기화 카드 */}
-      <DatabaseInitCard />
+      {/* 플랫폼 최고관리자(admin)인 경우에만 데이터베이스 초기화 카드 노출 */}
+      {isAdmin && <DatabaseInitCard />}
       
       {/* 회사 설정 카드 */}
       <CompanySettingsCard />

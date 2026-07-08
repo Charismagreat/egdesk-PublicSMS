@@ -98,6 +98,7 @@ const MENU_STATIC_MAP: Record<string, { label: string; icon: any; color: string 
 
 interface SidebarMenuProps {
   userRole: string;
+  userUsername?: string;
 }
 
 interface MenuSettingItem {
@@ -106,7 +107,7 @@ interface MenuSettingItem {
   sort_order: number;
 }
 
-export default function SidebarMenu({ userRole }: SidebarMenuProps) {
+export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenuProps) {
   const pathname = usePathname();
   
   // 1. 초기 렌더링 시 깜빡임이나 공백 방지를 위해 정적 기본 배열로 초기값 바인딩
@@ -514,6 +515,32 @@ export default function SidebarMenu({ userRole }: SidebarMenuProps) {
       
       {/* 하단 고정 메뉴 영역 */}
       <div className="p-4 border-t border-slate-700/80 bg-slate-900/95 backdrop-blur-md space-y-2 shadow-[0_-12px_24px_-8px_rgba(0,0,0,0.8)] relative z-10">
+        {userRole === "SUPER_ADMIN" && userUsername === "admin" && (
+          <Link
+            href="/admin/members"
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+              isActive("/admin/members")
+                ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
+                : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
+            }`}
+          >
+            <Shield className={`w-5 h-5 shrink-0 ${isActive("/admin/members") ? "text-white" : "text-slate-400"}`} />
+            <span>회원 관리</span>
+          </Link>
+        )}
+        {(userRole === "SUPER_ADMIN" || userRole === "SUB_OPERATOR") && (
+          <Link
+            href="/my-db"
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+              isActive("/my-db")
+                ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
+                : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
+            }`}
+          >
+            <Database className={`w-5 h-5 shrink-0 ${isActive("/my-db") ? "text-white" : "text-slate-400"}`} />
+            <span>MY DB</span>
+          </Link>
+        )}
         <Link
           href="/settings"
           className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${

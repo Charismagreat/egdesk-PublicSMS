@@ -54,6 +54,8 @@ function DynamicTitleHandler() {
       "/settings": "시스템 설정",
       "/ai-settings": "AI 비서 및 하이브리드 라우팅 설정",
       "/login": "로그인",
+      "/admin/members": "회원 관리 대장",
+      "/my-db": "MY DB",
     };
 
     // 동적 경로 및 특수 조건 분기

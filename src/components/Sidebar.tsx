@@ -11,12 +11,16 @@ export default async function Sidebar() {
   
   let userName = '운영자';
   let userRole = 'SUB_OPERATOR';
+  let userUsername = '';
+  let tenantId = 'default';
 
   if (token) {
     try {
       const payload = decodeJwt(token);
       if (payload.name) userName = payload.name as string;
       if (payload.role) userRole = payload.role as string;
+      if (payload.username) userUsername = payload.username as string;
+      if (payload.tenant_id) tenantId = payload.tenant_id as string;
     } catch (e) {
       console.error("Invalid token in Sidebar");
     }
@@ -32,7 +36,14 @@ export default async function Sidebar() {
   let sidebarSubTitle = '평생 무료 문자 발송 시스템';
 
   try {
-    const settingsRes = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
+    const cKey = `${tenantId}:my_company_profile`;
+    let settingsRes = await queryTable('system_settings', { filters: { key: cKey } });
+    
+    // 테넌트 복합 키 매칭 데이터가 없으면 단순 키로 하위 호환 폴백 조회
+    if (!settingsRes.rows || settingsRes.rows.length === 0) {
+      settingsRes = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
+    }
+
     const profileVal = settingsRes.rows?.[0]?.value;
     if (profileVal) {
       const parsed = JSON.parse(profileVal);
@@ -69,7 +80,7 @@ export default async function Sidebar() {
         </p>
       </div>
       
-      <SidebarMenu userRole={userRole} />
+      <SidebarMenu userRole={userRole} userUsername={userUsername} />
 
       <div className="p-4 border-t border-slate-800 flex items-center justify-between">
         <div className="flex items-center space-x-2">

@@ -106,9 +106,9 @@ async function callGemini(
   } else if (typeof callerRes === 'string') {
     text = callerRes;
   }
-  const usage = callerRes?.usage || {};
-  const promptTokens = usage.promptTokens || callerRes?.promptTokens || estimateTokens(prompt + (systemPrompt || ''));
-  const completionTokens = usage.completionTokens || callerRes?.completionTokens || estimateTokens(text);
+  const usage = (callerRes as any)?.usage || {};
+  const promptTokens = (usage as any).promptTokens || (callerRes as any)?.promptTokens || estimateTokens(prompt + (systemPrompt || ''));
+  const completionTokens = (usage as any).completionTokens || (callerRes as any)?.completionTokens || estimateTokens(text);
   const totalTokens = promptTokens + completionTokens;
 
   return { text, promptTokens, completionTokens, totalTokens };

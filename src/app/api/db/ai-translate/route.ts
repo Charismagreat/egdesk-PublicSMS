@@ -5,27 +5,41 @@ import { callAI } from '@/lib/ai-router';
 
 export const dynamic = 'force-dynamic';
 
-// 🔑 최고관리자 권한 검증 헬퍼
-async function verifySuperAdmin() {
+// 🔑 최고관리자 및 작업자 정보, 테넌트 식별자 동시 획득용 헬퍼
+async function verifyUserRole() {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('auth_token')?.value;
-    if (!token) return false;
+    
+    if (!token) return { isAuthorized: false, username: '' };
     
     const payload = decodeJwt(token);
     const role = (payload.role as string || '').toUpperCase();
-    return role === 'SUPER_ADMIN';
+    const username = payload.username as string || '';
+    
+    // 최고관리자(SUPER_ADMIN) 및 부운영자(SUB_OPERATOR) 등급 허용
+    const isAuthorized = role === 'SUPER_ADMIN' || role === 'SUB_OPERATOR';
+    
+    return {
+      isAuthorized,
+      username
+    };
   } catch (e) {
-    return false;
+    return { isAuthorized: false, username: '' };
   }
 }
 
 // 📂 [POST] 자연어 질문을 정교한 SQLite SQL 쿼리로 실시간 번역 (공통 AI 라우터 탑재)
 export async function POST(request: Request) {
   try {
-    const isAuthorized = await verifySuperAdmin();
+    const { isAuthorized, username } = await verifyUserRole();
     if (!isAuthorized) {
-      return NextResponse.json({ success: false, error: '권한이 없습니다. 최고관리자 전용 기능입니다.' }, { status: 403 });
+      return NextResponse.json({ success: false, error: '권한이 없습니다. 관리자 전용 기능입니다.' }, { status: 403 });
+    }
+
+    // 🛡️ 오직 호스트 최고관리자(admin)만 AI 번역 기능 기동 허용
+    if (username !== 'admin') {
+      return NextResponse.json({ success: false, error: '보안 정책 경고: 커스텀 SQL 번역 권한이 없습니다.' }, { status: 403 });
     }
 
     const { prompt, tablesSchema } = await request.json();
