@@ -16,21 +16,24 @@ export default async function Home() {
   let copilotEnabled = true;
 
   try {
+    // 0. system_settings 테이블이 실존하는지 먼저 에러 없이 사전 확인
+    const { listTables } = require("@/../egdesk-helpers");
+    const checkRes = await listTables().catch(() => ({ tables: [] }));
+    const tables = checkRes.tables || [];
+    const hasSettingsTable = tables.some((t: any) => t.tableName === 'system_settings');
+
+    if (!hasSettingsTable) {
+      console.log("⚙️ [Onboarding] system_settings 테이블이 물리적으로 존재하지 않아 전체 DB 셋업을 실행합니다...");
+      const { setupDatabase } = require("@/lib/setup-db");
+      await setupDatabase();
+    }
+
+    // 1. 보장된 테이블에 안전하게 쿼리 수행
     const copilotSetting = await queryTable('system_settings', { filters: { key: 'copilot_widget_enabled' } });
     copilotEnabled = copilotSetting.rows && copilotSetting.rows.length > 0 ? copilotSetting.rows[0].value !== 'false' : true;
   } catch (e: any) {
-    console.error("자율 마케팅 설정 조회 실패, DB 복구 및 백필을 시도합니다:", e.message || String(e));
-    if (String(e.message || "").includes("Table not found")) {
-      try {
-        const { setupDatabase } = require("@/lib/setup-db");
-        await setupDatabase();
-        // DB 테이블 재생성 후 2차 재시도
-        const copilotSetting = await queryTable('system_settings', { filters: { key: 'copilot_widget_enabled' } });
-        copilotEnabled = copilotSetting.rows && copilotSetting.rows.length > 0 ? copilotSetting.rows[0].value !== 'false' : true;
-      } catch (setupErr: any) {
-        console.error("자동 DB 셋업 복구 실패:", setupErr.message || String(setupErr));
-      }
-    }
+    console.warn("⚠️ 자율 마케팅 설정 조회/백필 폴백 처리:", e.message || String(e));
+    copilotEnabled = true;
   }
 
   try {
