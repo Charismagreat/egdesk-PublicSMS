@@ -18,8 +18,19 @@ export default async function Home() {
   try {
     const copilotSetting = await queryTable('system_settings', { filters: { key: 'copilot_widget_enabled' } });
     copilotEnabled = copilotSetting.rows && copilotSetting.rows.length > 0 ? copilotSetting.rows[0].value !== 'false' : true;
-  } catch (e) {
-    console.error("자율 마케팅 설정 조회 실패", e);
+  } catch (e: any) {
+    console.error("자율 마케팅 설정 조회 실패, DB 복구 및 백필을 시도합니다:", e.message || String(e));
+    if (String(e.message || "").includes("Table not found")) {
+      try {
+        const { setupDatabase } = require("@/lib/setup-db");
+        await setupDatabase();
+        // DB 테이블 재생성 후 2차 재시도
+        const copilotSetting = await queryTable('system_settings', { filters: { key: 'copilot_widget_enabled' } });
+        copilotEnabled = copilotSetting.rows && copilotSetting.rows.length > 0 ? copilotSetting.rows[0].value !== 'false' : true;
+      } catch (setupErr: any) {
+        console.error("자동 DB 셋업 복구 실패:", setupErr.message || String(setupErr));
+      }
+    }
   }
 
   try {
