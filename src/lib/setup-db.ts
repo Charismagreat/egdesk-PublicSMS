@@ -196,17 +196,19 @@ export async function setupDatabase() {
     console.error('⚠️ 수입 통관 데이터 시딩 에러:', err.message);
   }
 
-  // 55. 최초 최고관리자 및 게스트 계정 자동 시딩
+  // 55. 최초 최고관리자 및 게스트 계정 자동 시딩 및 구버전 보정
   try {
-    const adminCheck = await queryTable('crm_operators', { limit: 1 });
-    if (!adminCheck.rows || adminCheck.rows.length === 0) {
-      console.log('➡️ 최초 기동: 디폴트 최고관리자 및 테스트용 게스트 계정을 생성합니다.');
-      
-      const bcrypt = require('bcryptjs');
-      const password_hash = await bcrypt.hash('admin123', 10);
-      const guest_password_hash = await bcrypt.hash('1234', 10);
-      const dateStr = new Date().toISOString();
+    const adminCheck = await queryTable('crm_operators', { filters: { username: 'admin' } });
+    const guestCheck = await queryTable('crm_operators', { filters: { username: 'guest' } });
+    
+    const bcrypt = require('bcryptjs');
+    const password_hash = await bcrypt.hash('admin123', 10);
+    const guest_password_hash = await bcrypt.hash('1234', 10);
+    const dateStr = new Date().toISOString();
 
+    // admin 계정이 아예 없거나, 존재하더라도 tenant_id가 비어있다면(구버전 데이터) 업데이트 또는 생성
+    if (!adminCheck.rows || adminCheck.rows.length === 0) {
+      console.log('➡️ 최초 기동: 디폴트 최고관리자 계정을 생성합니다.');
       await insertRows('crm_operators', [
         {
           id: 1,
@@ -216,7 +218,24 @@ export async function setupDatabase() {
           role: 'SUPER_ADMIN',
           tenant_id: 'tenant-admin-id-1111',
           created_at: dateStr
-        },
+        }
+      ]);
+    } else if (!adminCheck.rows[0].tenant_id || adminCheck.rows[0].tenant_id === '') {
+      console.log('⚙️ 최초 기동: 구버전 최고관리자 계정의 테넌트 및 비밀번호 정보를 자동 정규화 보정합니다.');
+      await updateRows('crm_operators', {
+        password_hash: password_hash,
+        tenant_id: 'tenant-admin-id-1111',
+        role: 'SUPER_ADMIN',
+        updated_at: dateStr
+      }, {
+        filters: { username: 'admin' }
+      });
+    }
+
+    // guest 계정이 아예 없거나, 존재하더라도 tenant_id가 비어있다면 업데이트 또는 생성
+    if (!guestCheck.rows || guestCheck.rows.length === 0) {
+      console.log('➡️ 최초 기동: 테스트 게스트 계정을 생성합니다.');
+      await insertRows('crm_operators', [
         {
           id: 2,
           username: 'guest',
@@ -227,10 +246,19 @@ export async function setupDatabase() {
           created_at: dateStr
         }
       ]);
-      console.log('✓ 디폴트 최고관리자 생성 완료 (admin / admin123)');
+    } else if (!guestCheck.rows[0].tenant_id || guestCheck.rows[0].tenant_id === '') {
+      console.log('⚙️ 최초 기동: 테스트 게스트 계정의 테넌트 및 비밀번호 정보를 자동 정규화 보정합니다.');
+      await updateRows('crm_operators', {
+        password_hash: guest_password_hash,
+        tenant_id: 'tenant-guest-id-2222',
+        role: 'SUPER_ADMIN',
+        updated_at: dateStr
+      }, {
+        filters: { username: 'guest' }
+      });
     }
   } catch (err: any) {
-    console.error('⚠️ 최고관리자 계정 자동 생성 에러:', err.message);
+    console.error('⚠️ 최고관리자 계정 자동 생성 및 보정 에러:', err.message);
   }
 
   console.log('Database setup complete.');
