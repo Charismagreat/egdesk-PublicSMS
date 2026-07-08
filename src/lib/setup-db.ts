@@ -196,5 +196,42 @@ export async function setupDatabase() {
     console.error('⚠️ 수입 통관 데이터 시딩 에러:', err.message);
   }
 
+  // 55. 최초 최고관리자 및 게스트 계정 자동 시딩
+  try {
+    const adminCheck = await queryTable('crm_operators', { limit: 1 });
+    if (!adminCheck.rows || adminCheck.rows.length === 0) {
+      console.log('➡️ 최초 기동: 디폴트 최고관리자 및 테스트용 게스트 계정을 생성합니다.');
+      
+      const bcrypt = require('bcryptjs');
+      const password_hash = await bcrypt.hash('admin123', 10);
+      const guest_password_hash = await bcrypt.hash('1234', 10);
+      const dateStr = new Date().toISOString();
+
+      await insertRows('crm_operators', [
+        {
+          id: 1,
+          username: 'admin',
+          password_hash: password_hash,
+          name: '최고관리자',
+          role: 'SUPER_ADMIN',
+          tenant_id: 'tenant-admin-id-1111',
+          created_at: dateStr
+        },
+        {
+          id: 2,
+          username: 'guest',
+          password_hash: guest_password_hash,
+          name: '테스트게스트',
+          role: 'SUPER_ADMIN',
+          tenant_id: 'tenant-guest-id-2222',
+          created_at: dateStr
+        }
+      ]);
+      console.log('✓ 디폴트 최고관리자 생성 완료 (admin / admin123)');
+    }
+  } catch (err: any) {
+    console.error('⚠️ 최고관리자 계정 자동 생성 에러:', err.message);
+  }
+
   console.log('Database setup complete.');
 }
