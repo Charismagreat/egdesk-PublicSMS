@@ -313,6 +313,30 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // 🛡️ 로그인 인증 리다이렉션 가드
+  const isPublicRoute =
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api') ||
+    pathname === '/login' ||
+    pathname.startsWith('/m/') || 
+    pathname === '/m' ||
+    pathname.startsWith('/public/') ||
+    pathname.includes('favicon.ico');
+
+  const token = request.cookies.get('auth_token')?.value;
+
+  // 비로그인 사용자가 보호된 경로 접근 시 -> 로그인으로 리다이렉트
+  if (!token && !isPublicRoute) {
+    const loginUrl = new URL('/login', request.url);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // 이미 로그인한 사용자가 로그인 페이지 접근 시 -> 메인 대시보드로 리다이렉트
+  if (token && pathname === '/login') {
+    const dashboardUrl = new URL('/', request.url);
+    return NextResponse.redirect(dashboardUrl);
+  }
+
   // Continue to next proxy or route
   return NextResponse.next();
 }
