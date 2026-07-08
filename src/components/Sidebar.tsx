@@ -8,6 +8,11 @@ import { redirect } from 'next/navigation';
 export default async function Sidebar() {
   const cookieStore = await cookies();
   const token = cookieStore.get('auth_token')?.value;
+
+  // 🛡️ 로그인 미인증 사용자 강제 리다이렉션 보안 가드
+  if (!token) {
+    redirect('/login');
+  }
   
   let userName = '운영자';
   let userRole = 'SUB_OPERATOR';
