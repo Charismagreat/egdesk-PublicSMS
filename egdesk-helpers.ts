@@ -2030,7 +2030,7 @@ export type AiCallerCallOptions = {
   maxOutputTokens?: number;
   caller?: string;
   responseSchema?: Record<string, any>;
-  responseMimeType?: string;
+  responseMimeType?: 'application/json' | 'text/plain' | string;
   /** Gemini function declarations for tool use */
   tools?: Array<Record<string, any>>;
   /** Function-calling mode and restrictions */

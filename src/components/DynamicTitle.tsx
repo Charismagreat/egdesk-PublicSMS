@@ -25,6 +25,7 @@ function DynamicTitleHandler() {
       "/orders": "주문 관리 AI",
       "/payments": "결제 관리 AI",
       "/finance": "금융 정보 AI",
+      "/finance-management": "금융 관리 AI",
       "/financials": "재무 정보 AI",
       "/coupons": "쿠폰 관리 AI",
       "/reservations": "예약 관리 AI",
@@ -56,6 +57,7 @@ function DynamicTitleHandler() {
       "/login": "로그인",
       "/admin/members": "회원 관리 대장",
       "/my-db": "MY DB",
+      "/employees": "직원 관리 대장",
     };
 
     // 동적 경로 및 특수 조건 분기

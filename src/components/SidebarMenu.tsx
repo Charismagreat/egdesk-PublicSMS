@@ -72,6 +72,7 @@ const MENU_STATIC_MAP: Record<string, { label: string; icon: any; color: string 
   "/orders": { label: "주문 관리 AI", icon: ClipboardList, color: "text-blue-400" },
   "/payments": { label: "결제 관리 AI", icon: CreditCard, color: "text-emerald-400" },
   "/finance": { label: "금융 정보 AI", icon: Landmark, color: "text-sky-400" },
+  "/finance-management": { label: "금융 관리 AI", icon: Landmark, color: "text-sky-500" },
   "/financials": { label: "재무 정보 AI", icon: Landmark, color: "text-teal-400" },
   "/coupons": { label: "쿠폰 관리 AI", icon: Ticket, color: "text-rose-400" },
   "/reservations": { label: "예약 관리 AI", icon: CalendarDays, color: "text-indigo-400" },
@@ -150,7 +151,7 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     if (href === "/") {
       return pathname === "/";
     }
-    return pathname.startsWith(href);
+    return pathname === href || pathname.startsWith(href + "/");
   };
 
   // 2. 동적 메뉴 데이터 가져오기 및 권한별 필터링/정렬 수행 함수
@@ -526,6 +527,19 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
           >
             <Shield className={`w-5 h-5 shrink-0 ${isActive("/admin/members") ? "text-white" : "text-slate-400"}`} />
             <span>회원 관리</span>
+          </Link>
+        )}
+        {(userRole === "SUPER_ADMIN" || userRole === "SUB_OPERATOR") && (
+          <Link
+            href="/employees"
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+              isActive("/employees")
+                ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
+                : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
+            }`}
+          >
+            <Users className={`w-5 h-5 shrink-0 ${isActive("/employees") ? "text-white" : "text-slate-400"}`} />
+            <span>직원 관리</span>
           </Link>
         )}
         {(userRole === "SUPER_ADMIN" || userRole === "SUB_OPERATOR") && (

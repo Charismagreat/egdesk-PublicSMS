@@ -190,7 +190,7 @@ export default function MyDBManagementPage() {
   }
 
   return (
-    <div className="space-y-6 pb-20 bg-slate-50/30 p-2 rounded-3xl text-left">
+    <div className="w-full px-4 md:px-8 pt-8 pb-20 text-left bg-slate-50 min-h-screen space-y-6">
       
       {/* 🛎️ 알림 토스트 컴포넌트 */}
       <Toast toast={toast} />

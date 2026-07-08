@@ -15,12 +15,17 @@ export default function MyDBHeader({
   handleSyncAll
 }: MyDBHeaderProps) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2 select-none">
-      <h1 className="text-3xl font-bold text-slate-800 flex items-center">
-        <Database className="w-8 h-8 mr-3 text-blue-500 shrink-0" />
-        MY DB
-      </h1>
-      <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
+    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6 select-none">
+      <div>
+        <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+          <Database className="w-8 h-8 text-indigo-600 shrink-0" />
+          MY DB
+        </h1>
+        <p className="text-slate-500 mt-2 text-sm pl-10">
+          시스템 데이터베이스를 실시간 관제하고 쿼리를 실행하여 자가를 정비하는 데이터 관리 센터입니다.
+        </p>
+      </div>
+      <div className="flex items-center gap-2.5 shrink-0 self-start md:self-auto mt-2 md:mt-0">
         <button
           onClick={handleResetAllPlayground}
           className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-650 hover:text-rose-700 rounded-xl text-xs font-black shadow-3xs border border-rose-200 cursor-pointer transition-all active:scale-95 shrink-0"

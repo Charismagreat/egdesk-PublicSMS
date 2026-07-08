@@ -12,6 +12,7 @@ const DEFAULT_MENU_ITEMS = [
   { href: "/orders", label: "주문 관리 AI" },
   { href: "/payments", label: "결제 관리 AI" },
   { href: "/finance", label: "금융 정보 AI" },
+  { href: "/finance-management", label: "금융 관리 AI" },
   { href: "/financials", label: "재무 정보 AI" },
   { href: "/coupons", label: "쿠폰 관리 AI" },
   { href: "/reservations", label: "예약 관리 AI" },
