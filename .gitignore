@@ -41,3 +41,12 @@ next-env.d.ts
 storage/
 /public/uploads/
 
+# egdesk config
+egdesk.config.ts
+proxy.backup.ts
+
+# sqlite db files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
