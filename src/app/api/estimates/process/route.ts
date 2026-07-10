@@ -39,6 +39,8 @@ export async function GET(req: Request) {
       console.error('Failed to load pending governance logs:', govErr);
     }
 
+
+
     const tenantId = await resolveTenantId();
 
     if (action === 'po_list') {
@@ -64,7 +66,21 @@ export async function GET(req: Request) {
       }
 
       const enrichedRows = rows.map((po: any) => {
-        const estItems = itemsMap[po.estimate_id] || [];
+        let estItems = itemsMap[po.estimate_id] || [];
+        if (estItems.length === 0) {
+          estItems = [{
+            id: Date.now(),
+            estimate_id: po.estimate_id,
+            product_id: '',
+            item_code: '-',
+            product_name: '수발주 연동 통합 품목 (오토필 복구)',
+            quantity: 1,
+            unit_price: po.total_amount || 0,
+            amount: po.total_amount || 0,
+            delivery_date: '',
+            spec: '-'
+          }];
+        }
         const itemSearchText = estItems.map(item => {
           const specStr = item.spec ? String(item.spec) : '';
           return `${item.product_name} ${specStr}`;
@@ -121,7 +137,21 @@ export async function GET(req: Request) {
       }
 
       const enrichedRows = rows.map((so: any) => {
-        const estItems = itemsMap[so.estimate_id] || [];
+        let estItems = itemsMap[so.estimate_id] || [];
+        if (estItems.length === 0) {
+          estItems = [{
+            id: Date.now(),
+            estimate_id: so.estimate_id,
+            product_id: '',
+            item_code: '-',
+            product_name: '수발주 연동 통합 품목 (오토필 복구)',
+            quantity: 1,
+            unit_price: so.total_amount || 0,
+            amount: so.total_amount || 0,
+            delivery_date: so.delivery_date || '',
+            spec: '-'
+          }];
+        }
         const itemSearchText = estItems.map(item => {
           const specStr = item.spec ? String(item.spec) : '';
           return `${item.product_name} ${specStr}`;

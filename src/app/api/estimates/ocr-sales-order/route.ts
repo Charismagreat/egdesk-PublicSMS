@@ -124,22 +124,30 @@ export async function POST(req: Request) {
       const insertedEst = insertedEstRes.rows && insertedEstRes.rows.length > 0 ? insertedEstRes.rows[0] : null;
       const realEstimateId = insertedEst ? String(insertedEst.id) : estimateId;
 
-      const detailRows = items.map((row: any, idx: number) => ({
-        id: Date.now() + idx,
-        estimate_id: realEstimateId,
-        product_id: '',
-        item_code: row.item_code || '',
-        product_name: row.product_name,
-        spec: row.spec || '',
-        quantity: row.quantity,
-        unit_price: row.unit_price,
-        amount: row.quantity * row.unit_price,
-        delivery_date: row.delivery_date || '',
-        valid_item_code: row.valid_item_code || '',
-        tenant_id: tenantId,
-        _version: 1
-      }));
-      await insertRows('crm_estimate_items', detailRows);
+      const detailRows = items.map((row: any, idx: number) => {
+        const qty = parseInt(row.quantity) || 0;
+        const price = parseInt(row.unit_price) || 0;
+        const amount = qty * price;
+        return {
+          id: Date.now() + idx,
+          estimate_id: realEstimateId,
+          product_id: '',
+          item_code: row.item_code || '',
+          product_name: row.product_name || '미지정 품목',
+          spec: row.spec || '',
+          quantity: qty,
+          unit_price: price,
+          amount: amount,
+          delivery_date: row.delivery_date || '',
+          valid_item_code: row.valid_item_code || '',
+          tenant_id: tenantId,
+          _version: 1
+        };
+      });
+      const resItems = await insertRows('crm_estimate_items', detailRows);
+      if (!resItems.success) {
+        throw new Error('견적 상세 품목 적재에 실패했습니다: ' + (resItems.error || '알 수 없는 DB 오류'));
+      }
 
       await insertRows('crm_sales_orders', [{
         id: soId,
