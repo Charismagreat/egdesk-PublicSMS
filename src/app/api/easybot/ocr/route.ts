@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // 로컬 AI 대용량 연산 지연 대기 허용 (5분)
 
 import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
