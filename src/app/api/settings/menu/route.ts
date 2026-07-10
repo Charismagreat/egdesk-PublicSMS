@@ -42,7 +42,8 @@ export async function GET() {
         menu_href: item.href,
         is_enabled: 1, // 최초에는 모두 활성화 상태
         sort_order: (index + 1) * 10, // 10, 20, 30... 정렬 가중치 할당
-        tenant_id: tenantId
+        tenant_id: tenantId,
+        _version: 1
       }));
 
       await insertRows('system_menu_settings', insertData);
@@ -67,7 +68,8 @@ export async function GET() {
             menu_href: item.href,
             is_enabled: 1,
             sort_order: maxOrder,
-            tenant_id: tenantId
+            tenant_id: tenantId,
+            _version: 1
           };
         });
 
