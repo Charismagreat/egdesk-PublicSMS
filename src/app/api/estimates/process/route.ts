@@ -46,7 +46,7 @@ export async function GET(req: Request) {
       const rows = (res.rows || []).filter((a: any) => !a.deleted_at);
       
       // 견적 상세 아이템 데이터 로드
-      const itemsRes = await queryTable('crm_estimate_items', {});
+      const itemsRes = await queryTable('crm_estimate_items', { filters: { tenant_id: tenantId } });
       const rawItems = itemsRes.rows || [];
       const itemsMap: Record<string, any[]> = {};
       for (const item of rawItems) {
@@ -103,7 +103,7 @@ export async function GET(req: Request) {
       const rows = (res.rows || []).filter((a: any) => !a.deleted_at);
       
       // 견적 상세 아이템 데이터 로드
-      const itemsRes = await queryTable('crm_estimate_items', {});
+      const itemsRes = await queryTable('crm_estimate_items', { filters: { tenant_id: tenantId } });
       const rawItems = itemsRes.rows || [];
       const itemsMap: Record<string, any[]> = {};
       for (const item of rawItems) {

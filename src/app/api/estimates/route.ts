@@ -321,13 +321,13 @@ export async function GET(req: Request) {
         return NextResponse.json({ success: false, error: '견적 번호가 누락되었습니다.' }, { status: 400 });
       }
 
-      const estRes = await queryTable('crm_estimates', { filters: { id: estimateId } });
+      const estRes = await queryTable('crm_estimates', { filters: { id: estimateId, tenant_id: tenantId } });
       let estimate = estRes.rows && estRes.rows.length > 0 && !estRes.rows[0].deleted_at ? estRes.rows[0] : null;
 
       // 💡 안전 가드: 발주서(crm_purchase_orders) 또는 수주서(crm_sales_orders)로의 전환 여부 검사 (queryTable 우회)
-      const poRes = await queryTable('crm_purchase_orders', { filters: { estimate_id: estimateId }, limit: 1 });
+      const poRes = await queryTable('crm_purchase_orders', { filters: { estimate_id: estimateId, tenant_id: tenantId }, limit: 1 });
       const poRows = poRes.rows || [];
-      const soRes = await queryTable('crm_sales_orders', { filters: { estimate_id: estimateId }, limit: 1 });
+      const soRes = await queryTable('crm_sales_orders', { filters: { estimate_id: estimateId, tenant_id: tenantId }, limit: 1 });
       const soRows = soRes.rows || [];
       
       const isLinked = poRows.length > 0 || soRows.length > 0;
@@ -371,7 +371,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ success: false, error: '해당 견적 내역을 찾을 수 없습니다.' }, { status: 404 });
       }
 
-      const itemsRes = await queryTable('crm_estimate_items', { filters: { estimate_id: estimateId } });
+      const itemsRes = await queryTable('crm_estimate_items', { filters: { estimate_id: estimateId, tenant_id: tenantId } });
       let items = itemsRes.rows || [];
 
       // 만약 품목 정보도 누락되어 있다면 가상의 품목을 추가하여 화면이 정상 렌더링되도록 보정
