@@ -3,6 +3,21 @@ export const dynamic = 'force-dynamic';
 import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows } from '../../../../../egdesk-helpers';
+import { cookies } from 'next/headers';
+import { decodeJwt } from 'jose';
+
+// 현재 세션의 테넌트 ID 추출 헬퍼
+async function resolveTenantId(): Promise<string> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('auth_token')?.value;
+  if (!token) return 'default';
+  try {
+    const payload = decodeJwt(token);
+    return (payload.tenant_id as string) || 'default';
+  } catch {
+    return 'default';
+  }
+}
 
 /**
  * POST: 받은 견적서/발주서/거래명세서 이미지 또는 사업자등록증 AI OCR 파싱 및 정제
@@ -34,7 +49,12 @@ export async function POST(req: Request) {
     // 💡 수신인 검증 우회 설정 로드
     let bypassOcrReceiverCheck = false;
     try {
-      const bypassSetting = await queryTable('system_settings', { filters: { key: 'bypass_ocr_receiver_check' } });
+      const tenantId = await resolveTenantId();
+      const cKey = `${tenantId}:bypass_ocr_receiver_check`;
+      let bypassSetting = await queryTable('system_settings', { filters: { key: cKey } });
+      if (!bypassSetting.rows || bypassSetting.rows.length === 0) {
+        bypassSetting = await queryTable('system_settings', { filters: { key: 'bypass_ocr_receiver_check' } });
+      }
       if (bypassSetting.rows && bypassSetting.rows.length > 0) {
         bypassOcrReceiverCheck = bypassSetting.rows[0].value === '1';
       }

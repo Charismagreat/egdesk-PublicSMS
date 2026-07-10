@@ -20,6 +20,19 @@ async function verifyAdminRole() {
   }
 }
 
+// 현재 세션의 테넌트 ID 추출 헬퍼
+async function resolveTenantId(): Promise<string> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('auth_token')?.value;
+  if (!token) return 'default';
+  try {
+    const payload = decodeJwt(token);
+    return (payload.tenant_id as string) || 'default';
+  } catch {
+    return 'default';
+  }
+}
+
 export const maxDuration = 60; // 60초 타임아웃
 export const dynamic = 'force-dynamic';
 
@@ -620,7 +633,12 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
       await executeSQL('ALTER TABLE crm_estimate_items ADD COLUMN delivery_date TEXT');
     } catch(e) {}
 
-    const bypassCheckRes = await queryTable('system_settings', { filters: { key: 'bypass_ocr_receiver_check' } });
+    const tenantId = await resolveTenantId();
+    const cKey = `${tenantId}:bypass_ocr_receiver_check`;
+    let bypassCheckRes = await queryTable('system_settings', { filters: { key: cKey } });
+    if (!bypassCheckRes.rows || bypassCheckRes.rows.length === 0) {
+      bypassCheckRes = await queryTable('system_settings', { filters: { key: 'bypass_ocr_receiver_check' } });
+    }
     const bypassCheck = bypassCheckRes.rows && bypassCheckRes.rows.length > 0 ? bypassCheckRes.rows[0].value : '0';
     const receiverMatched = (bypassCheck === '1') ? true : (isSupplierMyCompany || isBuyerMyCompany);
     return NextResponse.json({
