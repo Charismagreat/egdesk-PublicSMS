@@ -227,6 +227,16 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const action = searchParams.get('action');
 
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    let tenantId = 'default';
+    if (token) {
+      try {
+        const payload = decodeJwt(token);
+        tenantId = (payload.tenant_id as string) || 'default';
+      } catch {}
+    }
+
     // 만약 견적서 목록을 조회하고 싶다면 (관리자용)
     if (action === 'list') {
       // 💡 RAG 결재 대기 중인 문서 ID 세트 조회
@@ -243,6 +253,7 @@ export async function GET(req: Request) {
 
       // 1. 견적서 마스터 목록 조회 (deleted_at IS NULL은 queryTable 내부에서 자체 처리됨)
       const estRes = await queryTable('crm_estimates', {
+        filters: { tenant_id: tenantId },
         orderBy: 'id',
         orderDirection: 'DESC',
         limit: 500
@@ -251,6 +262,7 @@ export async function GET(req: Request) {
 
       // 2. 견적서 상세 아이템 목록 조회
       const itemsRes = await queryTable('crm_estimate_items', {
+        filters: { tenant_id: tenantId },
         limit: 5000
       });
       const rawItems = itemsRes.rows || [];

@@ -3,6 +3,21 @@ export const revalidate = 0;
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, executeSQL } from '../../../../../egdesk-helpers';
 import { checkRagApproval } from '../../../../lib/rag-approval';
+import { cookies } from 'next/headers';
+import { decodeJwt } from 'jose';
+
+// 현재 세션의 테넌트 ID 추출 헬퍼
+async function resolveTenantId(): Promise<string> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('auth_token')?.value;
+  if (!token) return 'default';
+  try {
+    const payload = decodeJwt(token);
+    return (payload.tenant_id as string) || 'default';
+  } catch {
+    return 'default';
+  }
+}
 
 /**
  * GET: 발주 대장 및 수주 대장 목록 조회
@@ -24,8 +39,10 @@ export async function GET(req: Request) {
       console.error('Failed to load pending governance logs:', govErr);
     }
 
+    const tenantId = await resolveTenantId();
+
     if (action === 'po_list') {
-      const res = await queryTable('crm_purchase_orders', {});
+      const res = await queryTable('crm_purchase_orders', { filters: { tenant_id: tenantId } });
       const rows = (res.rows || []).filter((a: any) => !a.deleted_at);
       
       // 견적 상세 아이템 데이터 로드
@@ -39,7 +56,7 @@ export async function GET(req: Request) {
       }
 
       // 견적 마스터 데이터 로드 (비고란 검색용)
-      const estRes = await queryTable('crm_estimates', {});
+      const estRes = await queryTable('crm_estimates', { filters: { tenant_id: tenantId } });
       const rawEsts = estRes.rows || [];
       const estMap: Record<string, any> = {};
       for (const est of rawEsts) {
@@ -82,7 +99,7 @@ export async function GET(req: Request) {
     }
 
     if (action === 'so_list') {
-      const res = await queryTable('crm_sales_orders', {});
+      const res = await queryTable('crm_sales_orders', { filters: { tenant_id: tenantId } });
       const rows = (res.rows || []).filter((a: any) => !a.deleted_at);
       
       // 견적 상세 아이템 데이터 로드
@@ -96,7 +113,7 @@ export async function GET(req: Request) {
       }
 
       // 견적 마스터 데이터 로드 (비고란 검색용)
-      const estRes = await queryTable('crm_estimates', {});
+      const estRes = await queryTable('crm_estimates', { filters: { tenant_id: tenantId } });
       const rawEsts = estRes.rows || [];
       const estMap: Record<string, any> = {};
       for (const est of rawEsts) {

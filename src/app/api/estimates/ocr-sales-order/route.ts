@@ -96,6 +96,8 @@ export async function POST(req: Request) {
         tagsObj.bypass_reason = bypass_reason;
       }
 
+      const tenantId = await resolveTenantId();
+
       const resEst = await insertRows('crm_estimates', [{
         id: estimateId,
         type: 'OUTBOUND',
@@ -109,7 +111,9 @@ export async function POST(req: Request) {
         uuid,
         tags: JSON.stringify(tagsObj),
         sales_order_number: document_number || soId,
-        created_at: nowStr
+        created_at: nowStr,
+        tenant_id: tenantId,
+        _version: 1
       }]);
 
       if (!resEst.success) {
@@ -131,7 +135,9 @@ export async function POST(req: Request) {
         unit_price: row.unit_price,
         amount: row.quantity * row.unit_price,
         delivery_date: row.delivery_date || '',
-        valid_item_code: row.valid_item_code || ''
+        valid_item_code: row.valid_item_code || '',
+        tenant_id: tenantId,
+        _version: 1
       }));
       await insertRows('crm_estimate_items', detailRows);
 
@@ -150,7 +156,9 @@ export async function POST(req: Request) {
               ? `${document_date.trim().replace(/[\.\/]/g, '-')} ${nowStr.substring(11)}` 
               : document_date.trim().replace(/[\.\/]/g, '-'))
           : nowStr,
-        created_at: nowStr
+        created_at: nowStr,
+        tenant_id: tenantId,
+        _version: 1
       }]);
 
       return NextResponse.json({
