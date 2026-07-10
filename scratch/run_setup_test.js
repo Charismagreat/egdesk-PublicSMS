@@ -1,12 +1,13 @@
-const http = require('http');
+const { setupDatabase } = require('../src/lib/setup-db');
 
-http.get('http://localhost:4000/api/setup', (res) => {
-  let data = '';
-  res.on('data', (chunk) => data += chunk);
-  res.on('end', () => {
-    console.log('STATUS:', res.statusCode);
-    console.log('BODY:', data);
-  });
-}).on('error', (err) => {
-  console.error('Error connecting to localhost:4000:', err.message);
-});
+async function run() {
+  console.log("Starting test setupDatabase...");
+  try {
+    await setupDatabase();
+    console.log("setupDatabase finished successfully!");
+  } catch (err) {
+    console.error("setupDatabase crashed with error:", err);
+  }
+}
+
+run();
