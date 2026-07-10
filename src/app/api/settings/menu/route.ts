@@ -189,7 +189,8 @@ export async function POST(req: Request) {
           menu_href: href,
           is_enabled: val.is_enabled,
           sort_order: val.sort_order,
-          tenant_id: tenantId
+          tenant_id: tenantId,
+          _version: 1
         };
       }
 
@@ -199,7 +200,8 @@ export async function POST(req: Request) {
         menu_href: href,
         is_enabled: existing ? Number(existing.is_enabled) : 0,
         sort_order: existing ? Number(existing.sort_order) : maxSortOrder,
-        tenant_id: tenantId
+        tenant_id: tenantId,
+        _version: 1
       };
     });
 
