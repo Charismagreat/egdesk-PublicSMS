@@ -74,7 +74,8 @@ export async function POST(req: Request) {
     await insertRows('system_settings', [{
       key: cKey,
       value,
-      tenant_id: tenantId
+      tenant_id: tenantId,
+      _version: 1
     }]);
 
     return NextResponse.json({ success: true });
