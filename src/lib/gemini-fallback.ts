@@ -98,7 +98,7 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
         responseSchema,
         caller: 'egdesk-fallback-wrapper',
         keyName: targetKeyName
-      });
+      } as any);
 
       // 503 에러 징후 정밀 추적 및 예외 처리
       const checkText = callerRes && typeof callerRes === 'object' 

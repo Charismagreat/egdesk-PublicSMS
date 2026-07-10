@@ -2020,7 +2020,7 @@ export async function callAiCallerTool(
 }
 
 /** Known API key names discovered at setup time from EGDesk AI Keys Manager */
-export const AI_KEY_NAMES = ['wonconduct'] as const;
+export const AI_KEY_NAMES = ['wonconductor'] as const;
 
 export type AiCallerCallOptions = {
   systemPrompt?: string;
@@ -2049,7 +2049,7 @@ export type AiCallerCallOptions = {
     mimeType?: string;
   }>;
   /** Select a specific Google API key by name (as saved in EGDesk AI Keys Manager). Leave empty to use the default key. */
-  keyName?: 'wonconduct' | (string & {});
+  keyName?: 'wonconductor' | (string & {});
 };
 
 export type AiCallerModelDetails = {

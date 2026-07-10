@@ -1,4 +1,5 @@
 import { queryTable, insertRows, updateRows, callAiCaller, getGeminiApiKey } from '../../egdesk-helpers';
+import { getTenantId } from './tenant';
 
 export interface CallAIOptions {
   prompt: string;
@@ -186,19 +187,53 @@ export async function callAI(options: CallAIOptions): Promise<AIResponse> {
   let googleModel = 'gemini-3.5-flash';
 
   try {
-    const [providerRes, urlRes, modelRes, keyRes, gModelRes] = await Promise.all([
-      queryTable('system_settings', { filters: { key: 'ai_provider' } }),
-      queryTable('system_settings', { filters: { key: 'local_llm_url' } }),
-      queryTable('system_settings', { filters: { key: 'local_llm_model' } }),
-      queryTable('system_settings', { filters: { key: 'google_ai_api_key' } }),
-      queryTable('system_settings', { filters: { key: 'google_ai_model' } })
+    let tenantId = 'default';
+    try {
+      const tId = await getTenantId();
+      if (tId) tenantId = tId;
+    } catch (e) {
+      // cookies()가 차단되거나 접근 불가능한 non-HTTP 환경 대응
+    }
+
+    async function getSettingValue(key: string, tenantId: string): Promise<string | null> {
+      // 1차: 현재 사용자 테넌트 전용 키 조회
+      const tenantKey = `${tenantId}:${key}`;
+      const res = await queryTable('system_settings', { filters: { key: tenantKey } });
+      if (res.rows && res.rows.length > 0) {
+        return res.rows[0].value;
+      }
+
+      // 2차: default 테넌트 전용 키 조회
+      if (tenantId !== 'default') {
+        const defaultKey = `default:${key}`;
+        const defaultRes = await queryTable('system_settings', { filters: { key: defaultKey } });
+        if (defaultRes.rows && defaultRes.rows.length > 0) {
+          return defaultRes.rows[0].value;
+        }
+      }
+
+      // 3차: 구버전 레거시 단일 키 조회
+      const legacyRes = await queryTable('system_settings', { filters: { key } });
+      if (legacyRes.rows && legacyRes.rows.length > 0) {
+        return legacyRes.rows[0].value;
+      }
+
+      return null;
+    }
+
+    const [providerVal, urlVal, modelVal, keyVal, gModelVal] = await Promise.all([
+      getSettingValue('ai_provider', tenantId),
+      getSettingValue('local_llm_url', tenantId),
+      getSettingValue('local_llm_model', tenantId),
+      getSettingValue('google_ai_api_key', tenantId),
+      getSettingValue('google_ai_model', tenantId)
     ]);
 
-    if (providerRes.rows?.length > 0) aiProvider = providerRes.rows[0].value;
-    if (urlRes.rows?.length > 0) localLlmUrl = urlRes.rows[0].value;
-    if (modelRes.rows?.length > 0) localLlmModel = modelRes.rows[0].value;
-    if (keyRes.rows?.length > 0) googleApiKey = keyRes.rows[0].value;
-    if (gModelRes.rows?.length > 0) googleModel = gModelRes.rows[0].value;
+    if (providerVal) aiProvider = providerVal;
+    if (urlVal) localLlmUrl = urlVal;
+    if (modelVal) localLlmModel = modelVal;
+    if (keyVal) googleApiKey = keyVal;
+    if (gModelVal) googleModel = gModelVal;
 
     // 로컬 LLM URL이 정의되어 있으나 모델명이 비어있는 경우(또는 'auto' 설정일 때)
     // 이지데스크 로컬 Ollama API를 쿼리하여 적절한 모델명을 자동 지정 및 DB 영구 저장합니다.
