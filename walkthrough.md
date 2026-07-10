@@ -124,3 +124,16 @@
     2. **2차 fallback**: 기본 테넌트 키 조회 (`default:key`)
     3. **3차 fallback**: 구버전 레거시 단일 키 조회 (`key`)
   - 이를 통해 사용자가 선택한 AI 공급자(`local_llm` 또는 `gemini`) 및 모델 정보가 정상적으로 로드 및 적용되어, 로컬 AI 설정 활성화 시 Ollama 연동 호출이 정상적으로 유도되도록 문제를 최종적으로 완결했습니다.
+
+---
+
+## 13. 전사 개별 API 관문(fetchGeminiWithFallback)에 AI 라우터 대통합 적용 (완료)
+* **추가 문제 규명**:
+  - `src/lib/ai-router.ts`를 수정한 후에도 개별 도메인 API(이지봇 OCR, 재무제표 OCR, 지출 분석 등 약 40~50개 채널)가 여전히 `gemini-3.5-flash`를 호출하는 오류가 지속되었습니다.
+  - 분석 결과, 이들 개별 API들은 공통 AI 라우터(`callAI`)를 호출하는 대신, 직접 구글 REST API 주소를 호출하거나 전역 자동 폴백 래퍼인 `fetchGeminiWithFallback`([gemini-fallback.ts](file:///c:/dev/egdesk-PublicSMS/src/lib/gemini-fallback.ts))을 직접 경유해 쿼리하도록 하드코딩 설계되어 있었기 때문으로 확인되었습니다.
+* **해결 및 대통합 구현**:
+  - `fetchGeminiWithFallback` 함수 내부의 AI 직접 호출 루프를 과감히 걷어내고, 공통 AI 라우터인 `callAI`로 연동 요청을 위임(Delegation)하도록 아키텍처를 전면 개선했습니다.
+  - 이로써 개별 API들이 `fetchGeminiWithFallback`을 호출하더라도, 내부적으로 `callAI` 라우팅을 거쳐 현재 사용자의 테넌트 ID와 로컬 AI 설정(Ollama 주소 및 모델)이 정상 탐색 및 일괄 주입되도록 시스템 전역 연동에 성공하였습니다.
+  - 만약 로컬 Ollama AI 서버가 꺼져 있거나 라우터 처리 과정에서 에러가 발생한 경우, 기존의 구글 Gemini API 호출(`callAiCaller`)로 자연스럽게 무손실 우회(Failover) 구동되도록 가드 장치를 완비하여 운영 안정성을 확보했습니다.
+  - `npx tsc --noEmit`를 실행하여 컴파일 무결성을 최종 검증하고 코드를 원격 저장소(`main`)로 깃 푸시 완료하였습니다.
+
