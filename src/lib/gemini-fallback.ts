@@ -3,6 +3,7 @@
  * 주석 및 설명: 한국어 작성 원칙 준수
  */
 import { callAiCaller, getGeminiApiKey } from '@/../egdesk-helpers';
+import { callAI } from './ai-router';
 
 /**
  * 텍스트 글자 수를 기반으로 토큰 수를 예측합니다. (폴백용 계산기)
@@ -79,72 +80,100 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
     ? rawKey
     : undefined; // 기본 키를 타도록 빈값(undefined) 처리
 
-  // 3. 전사 AI Caller 단일 채널 호출 기동 (장애 극복 폴백은 사용자 요청에 의해 미동작 처리)
-  const modelsLineup = [initialModel];
-  let callerRes: any = null;
-  let callerErr: any = null;
+  // 3. 전사 AI 라우터(callAI)를 호출하여 로컬 AI 설정 및 공급자 분기 자동 적용
   let finalModelUsed = initialModel;
-
-  for (const targetModel of modelsLineup) {
-    try {
-      console.log(`[AI Fallback Wrapper] callAiCaller 호출 기동 (모델: ${targetModel}, 이미지존재: ${!!imageInput}, keyName: ${targetKeyName})`);
-      
-      callerRes = await callAiCaller(prompt, {
-        systemPrompt,
-        model: targetModel,
-        temperature: temperature ?? 0.7,
-        images: imageInput ? [imageInput] : undefined, // 최신 images 배열 규격 연동 지원
-        responseMimeType,
-        responseSchema,
-        caller: 'egdesk-fallback-wrapper',
-        keyName: targetKeyName
-      } as any);
-
-      // 503 에러 징후 정밀 추적 및 예외 처리
-      const checkText = callerRes && typeof callerRes === 'object' 
-        ? JSON.stringify(callerRes) 
-        : String(callerRes || '');
-      
-      if (checkText.includes('503 Service Unavailable') || checkText.includes('high demand') || checkText.includes('503')) {
-        throw new Error('Google Gemini 503 Service Unavailable detected in response body');
-      }
-
-      // 성공 시 설정 및 루프 탈출
-      finalModelUsed = targetModel;
-      callerErr = null;
-      break;
-    } catch (err: any) {
-      callerErr = err;
-      console.warn(`[AI Warning] callAiCaller 실패 (모델: ${targetModel}, 원인: ${err.message || err}). 다음 폴백 모델로 우회 시도...`);
-      // 다음 모델 호출 전 짧은 딜레이
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-  }
-
-  // 모든 폴백 라인업이 실패한 경우 최종 에러
-  if (callerErr) {
-    throw new Error(`[GoogleGenerativeAI Error]: callAiCaller 전사 폴백 실패. (최종 에러: ${callerErr.message || callerErr})`);
-  }
-
-  // 4. 원래 구글 API가 반환하던 JSON 구조와 호환되는 가짜 Gemini Response 객체 리턴
   let text = '';
-  if (callerRes && typeof callerRes === 'object') {
-    if ('content' in callerRes && callerRes.content !== undefined && callerRes.content !== null) {
-      text = String(callerRes.content);
-    } else if ('text' in callerRes) {
-      text = String(callerRes.text);
-    } else {
-      text = JSON.stringify(callerRes);
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let totalTokens = 0;
+  let isRouterSuccess = false;
+
+  try {
+    console.log(`[AI Fallback Wrapper] callAI 라우터 호출 기동 (모델: ${initialModel}, 이미지존재: ${!!imageInput})`);
+    
+    const aiRes = await callAI({
+      prompt,
+      systemPrompt,
+      purpose: 'FALLBACK_WRAPPER_ROUTING', // 호출 목적 명시
+      responseMimeType,
+      temperature: temperature ?? 0.7,
+      imageInput
+    });
+
+    if (aiRes && aiRes.success) {
+      text = aiRes.text;
+      finalModelUsed = aiRes.modelUsed;
+      promptTokens = aiRes.promptTokens;
+      completionTokens = aiRes.completionTokens;
+      totalTokens = aiRes.totalTokens;
+      isRouterSuccess = true;
     }
-  } else if (typeof callerRes === 'string') {
-    text = callerRes;
+  } catch (err: any) {
+    console.warn(`[AI Warning] callAI 라우터 호출 실패, 원래 모델(${initialModel})로 긴급 직접 호출 시도... 원인: ${err.message || err}`);
   }
 
-  const usage = callerRes?.usage || {};
-  const promptTokens = usage.promptTokens || callerRes?.promptTokens || estimateTokens(prompt + (systemPrompt || ''));
-  const completionTokens = usage.completionTokens || callerRes?.completionTokens || estimateTokens(text);
-  const totalTokens = promptTokens + completionTokens;
+  // 4. 라우터 호출 실패 시 기존 방식(구글 API 직접 호출)으로 폴백(Failover) 구동
+  if (!isRouterSuccess) {
+    const modelsLineup = [initialModel];
+    let callerRes: any = null;
+    let callerErr: any = null;
 
+    for (const targetModel of modelsLineup) {
+      try {
+        console.log(`[AI Fallback Wrapper Failover] callAiCaller 직접 호출 기동 (모델: ${targetModel}, 이미지존재: ${!!imageInput}, keyName: ${targetKeyName})`);
+        
+        callerRes = await callAiCaller(prompt, {
+          systemPrompt,
+          model: targetModel,
+          temperature: temperature ?? 0.7,
+          images: imageInput ? [imageInput] : undefined,
+          responseMimeType,
+          responseSchema,
+          caller: 'egdesk-fallback-wrapper-failover',
+          keyName: targetKeyName
+        } as any);
+
+        const checkText = callerRes && typeof callerRes === 'object' 
+          ? JSON.stringify(callerRes) 
+          : String(callerRes || '');
+        
+        if (checkText.includes('503 Service Unavailable') || checkText.includes('high demand') || checkText.includes('503')) {
+          throw new Error('Google Gemini 503 Service Unavailable detected in response body');
+        }
+
+        finalModelUsed = targetModel;
+        callerErr = null;
+        break;
+      } catch (err: any) {
+        callerErr = err;
+        console.warn(`[AI Warning] Failover callAiCaller 실패 (모델: ${targetModel}, 원인: ${err.message || err}).`);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+
+    if (callerErr) {
+      throw new Error(`[GoogleGenerativeAI Error]: callAI 라우터 및 직접 폴백 호출 모두 실패. (최종 에러: ${callerErr.message || callerErr})`);
+    }
+
+    if (callerRes && typeof callerRes === 'object') {
+      if ('content' in callerRes && callerRes.content !== undefined && callerRes.content !== null) {
+        text = String(callerRes.content);
+      } else if ('text' in callerRes) {
+        text = String(callerRes.text);
+      } else {
+        text = JSON.stringify(callerRes);
+      }
+    } else if (typeof callerRes === 'string') {
+      text = callerRes;
+    }
+
+    const usage = callerRes?.usage || {};
+    promptTokens = usage.promptTokens || callerRes?.promptTokens || estimateTokens(prompt + (systemPrompt || ''));
+    completionTokens = usage.completionTokens || callerRes?.completionTokens || estimateTokens(text);
+    totalTokens = promptTokens + completionTokens;
+  }
+
+  // 5. 원래 구글 API가 반환하던 JSON 구조와 호환되는 가짜 Gemini Response 객체 리턴
   const mockGeminiData = {
     candidates: [
       {
