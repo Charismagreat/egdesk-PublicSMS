@@ -19,6 +19,7 @@ export interface Expense {
   transfer_fee?: number;
   created_at: string;
   card_approval_no?: string | null;
+  tags?: string;
 }
 
 export interface ExpenseSettings {
@@ -830,7 +831,6 @@ export function useExpenses() {
             tags: inferredTags,
           });
           
-          alert("✨ AI 영수증 자율 스캔 및 분석이 완료되었습니다! 검수 후 [지출 등록하기]를 눌러 장부에 적재하세요.");
         } else {
           alert("AI 영수증 분석 오류: " + json.error);
         }

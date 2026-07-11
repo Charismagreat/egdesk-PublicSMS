@@ -34,6 +34,7 @@ export default function ExpenseEditModal({
     deduction_amount: 0,
     transfer_fee: 0,
     memo: "",
+    tags: "",
     payee: "",
     requisition_date: "",
     card_approval_no: "",
@@ -68,6 +69,7 @@ export default function ExpenseEditModal({
         transfer_fee: editExpense.transfer_fee || 0,
         actual_expense_date: editExpense.actual_expense_date || "",
         card_approval_no: editExpense.card_approval_no || "",
+        tags: editExpense.tags || "",
       });
 
       setApprovalMemo(editExpense.approval_memo || "");
@@ -115,6 +117,7 @@ export default function ExpenseEditModal({
         deduction_amount: Number(formFields.deduction_amount) || 0,
         transfer_fee: Number(formFields.transfer_fee) || 0,
         memo: formFields.memo || "",
+        tags: formFields.tags || "",
         expense_date: formFields.requisition_date,
         card_approval_no: formFields.card_approval_no || null,
         ai_analysis: JSON.stringify({
@@ -277,14 +280,27 @@ export default function ExpenseEditModal({
               </div>
             </div>
 
-            {/* 비고(태그) */}
+            {/* 상세비고 */}
             <div className="col-span-2">
-              <label className="block text-[10px] font-extrabold text-slate-500 mb-1">비고 (지출태그)</label>
-              <input 
-                type="text"
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1">상세비고</label>
+              <textarea 
+                rows={2}
                 value={formFields.memo || ""}
                 onChange={e => handleFieldChange('memo', e.target.value)}
+                className="w-full border border-slate-250 rounded-xl px-3.5 py-2.5 outline-none font-bold text-xs bg-white text-slate-805 resize-none focus:ring-2 focus:ring-rose-500/20"
+                placeholder="지출 및 영수증 관련 상세 내역(예: 송금 정보 등)을 기입하세요."
+              />
+            </div>
+
+            {/* 지출 태그 */}
+            <div className="col-span-2">
+              <label className="block text-[10px] font-extrabold text-slate-500 mb-1">태그</label>
+              <input 
+                type="text"
+                value={formFields.tags || ""}
+                onChange={e => handleFieldChange('tags', e.target.value)}
                 className="w-full border border-slate-250 rounded-xl px-3.5 py-2.5 outline-none font-bold text-xs bg-white text-slate-805 focus:ring-2 focus:ring-rose-500/20"
+                placeholder="태그를 쉼표(,)로 구분하여 입력하거나 빠른 편집을 활용하세요."
               />
             </div>
 

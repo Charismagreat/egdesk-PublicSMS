@@ -312,7 +312,28 @@ export async function DELETE(request: Request) {
     }
 
     const idsToDelete = idsParam ? idsParam.split(',') : [id!];
-    await deleteRows('crm_expenses', { ids: idsToDelete.map(Number) });
+
+    // 토큰에서 삭제 작업자 정보 추출
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    let deletedBy = 'system';
+    if (token) {
+      try {
+        const payload = decodeJwt(token);
+        deletedBy = (payload.username as string) || (payload.role as string) || 'system';
+      } catch {}
+    }
+
+    const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+
+    // 소프트 삭제 처리 (updateRows 활용)
+    for (const idToDelete of idsToDelete) {
+      await updateRows('crm_expenses', {
+        deleted_at: nowStr,
+        deleted_by: deletedBy
+      }, { filters: { id: idToDelete } });
+    }
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting expense:', error);

@@ -573,7 +573,7 @@ export default function ExpenseLedgerTable({
                         }}
                         title={hasAdminAccess ? "클릭하여 태그 편집" : "지출 태그 목록"}
                       >
-                        {parseTags(exp.memo).length === 0 ? (
+                        {parseTags(exp.tags).length === 0 ? (
                           hasAdminAccess ? (
                             <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity">
                               <Plus className="w-3 h-3" /> 태그 추가
@@ -582,7 +582,7 @@ export default function ExpenseLedgerTable({
                             <span className="text-slate-350 font-bold">-</span>
                           )
                         ) : (
-                          parseTags(exp.memo).map((tag, idx) => (
+                          parseTags(exp.tags).map((tag, idx) => (
                             <span 
                               key={idx} 
                               className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-50 text-rose-600 border border-rose-100"
@@ -591,7 +591,7 @@ export default function ExpenseLedgerTable({
                             </span>
                           ))
                         )}
-                        {hasAdminAccess && parseTags(exp.memo).length > 0 && (
+                        {hasAdminAccess && parseTags(exp.tags).length > 0 && (
                           <span className="text-slate-350 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
                             <Edit className="w-3 h-3" />
                           </span>
@@ -628,7 +628,7 @@ export default function ExpenseLedgerTable({
                             <p className="text-[9.5px] font-extrabold text-slate-400 uppercase tracking-wider">공식 태그</p>
                             <div className="flex flex-wrap gap-1 max-h-[100px] overflow-y-auto pr-1">
                               {dbTags.map(tagObj => {
-                                const isSelected = parseTags(exp.memo).includes(tagObj.name);
+                                const isSelected = parseTags(exp.tags).includes(tagObj.name);
                                 return (
                                   <button
                                     key={tagObj.id}
