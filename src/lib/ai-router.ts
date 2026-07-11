@@ -88,18 +88,11 @@ async function callGemini(
   imageInput: string | undefined
 ): Promise<{ text: string; promptTokens: number; completionTokens: number; totalTokens: number }> {
   // 사용자의 특별 지침에 따라 모든 API 호출을 이지데스크의 AI caller를 통해서만 수행합니다.
-  const isPdf = imageInput ? imageInput.includes('application/pdf') : false;
   const callerRes = await callAiCaller(prompt, {
     systemPrompt,
     model: modelName,
     temperature: temperature ?? 0.1,
-    images: !isPdf && imageInput ? [imageInput] : undefined,
-    files: isPdf && imageInput ? [{
-      name: 'document.pdf',
-      content: imageInput.includes(';base64,') ? imageInput.split(';base64,')[1] : imageInput,
-      encoding: 'base64',
-      mimeType: 'application/pdf'
-    }] : undefined,
+    images: imageInput ? [imageInput] : undefined,
     caller: 'egdesk-ai-router',
     keyName: (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct'
   } as any);
