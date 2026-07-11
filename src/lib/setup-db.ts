@@ -261,5 +261,84 @@ export async function setupDatabase() {
     console.error('⚠️ 최고관리자 계정 자동 생성 및 보정 에러:', err.message);
   }
 
+  // 56. 기본 계정과목 자동 시딩
+  try {
+    const catCheck = await queryTable('expense_categories', { limit: 1 });
+    if (!catCheck.rows || catCheck.rows.length === 0) {
+      console.log('➡️ 최초 기동: 디폴트 국세청 표준 계정과목 목록을 생성합니다.');
+      
+      const nationalTaxCategories = [
+        { main_category: "판매비와관리비", mid_category: "인건비", sub_category: "급여" },
+        { main_category: "판매비와관리비", mid_category: "인건비", sub_category: "퇴직급여" },
+        { main_category: "판매비와관리비", mid_category: "복리후생", sub_category: "복리후생비" },
+        { main_category: "판매비와관리비", mid_category: "여정/통신", sub_category: "여비교통비" },
+        { main_category: "판매비와관리비", mid_category: "여정/통신", sub_category: "통신비" },
+        { main_category: "판매비와관리비", mid_category: "에너지/유틸", sub_category: "수도광열비" },
+        { main_category: "판매비와관리비", mid_category: "공과/세금", sub_category: "세금과공과" },
+        { main_category: "판매비와관리비", mid_category: "임대/감가", sub_category: "감가상각비" },
+        { main_category: "판매비와관리비", mid_category: "임대/감가", sub_category: "지급임차료" },
+        { main_category: "판매비와관리비", mid_category: "유지/보수", sub_category: "수선비" },
+        { main_category: "판매비와관리비", mid_category: "유지/보수", sub_category: "보험료" },
+        { main_category: "판매비와관리비", mid_category: "유지/보수", sub_category: "차량유지비" },
+        { main_category: "판매비와관리비", mid_category: "업무/선전", sub_category: "기업업무추진비(접대비)" },
+        { main_category: "판매비와관리비", mid_category: "업무/선전", sub_category: "광고선전비" },
+        { main_category: "판매비와관리비", mid_category: "업무/선전", sub_category: "교육훈련비" },
+        { main_category: "판매비와관리비", mid_category: "업무/선전", sub_category: "회의비" },
+        { main_category: "판매비와관리비", mid_category: "소모/기타", sub_category: "소모품비" },
+        { main_category: "판매비와관리비", mid_category: "소모/기타", sub_category: "도서인쇄비" },
+        { main_category: "판매비와관리비", mid_category: "소모/기타", sub_category: "지급수수료" },
+        { main_category: "판매비와관리비", mid_category: "소모/기타", sub_category: "경상연구개발비" },
+        { main_category: "판매비와관리비", mid_category: "소모/기타", sub_category: "대손상각비" },
+        { main_category: "판매비와관리비", mid_category: "소모/기타", sub_category: "기타판매비와관리비" },
+        { main_category: "제조경비", mid_category: "원자재", sub_category: "원재료비" },
+        { main_category: "제조경비", mid_category: "원자재", sub_category: "부재료비" },
+        { main_category: "제조경비", mid_category: "공장 노무비", sub_category: "임금" },
+        { main_category: "제조경비", mid_category: "공장 노무비", sub_category: "급여" },
+        { main_category: "제조경비", mid_category: "공장 노무비", sub_category: "퇴직급여" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "복리후생비" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "여비교통비" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "가스수도료" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "전력비" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "세금과공과" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "감가상각비" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "지급임차료" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "수선비" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "보험료" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "소모품비" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "외주가공비" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "특허권사용료" },
+        { main_category: "제조경비", mid_category: "공장 경비", sub_category: "기타제조경비" },
+        { main_category: "영업외비용", mid_category: "금융/통상", sub_category: "이자비용" },
+        { main_category: "영업외비용", mid_category: "금융/통상", sub_category: "외환차손" },
+        { main_category: "영업외비용", mid_category: "금융/통상", sub_category: "외화환산손실" },
+        { main_category: "영업외비용", mid_category: "금융/통상", sub_category: "매출채권처분손실" },
+        { main_category: "영업외비용", mid_category: "자산/손실", sub_category: "유형자산처분손실" },
+        { main_category: "영업외비용", mid_category: "자산/손실", sub_category: "투자자산처분손실" },
+        { main_category: "영업외비용", mid_category: "자산/손실", sub_category: "재고자산감모손실" },
+        { main_category: "영업외비용", mid_category: "자산/손실", sub_category: "재해손실" },
+        { main_category: "영업외비용", mid_category: "기부/기타", sub_category: "기부금" },
+        { main_category: "영업외비용", mid_category: "기부/기타", sub_category: "잡손실" },
+        { main_category: "법인세비용", mid_category: "법인세", sub_category: "법인세비용" }
+      ];
+
+      const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+      const baseTime = Date.now();
+
+      const rowsToInsert = nationalTaxCategories.map((cat, index) => ({
+        id: `cat-nt-${baseTime}-${index}`,
+        main_category: cat.main_category,
+        mid_category: cat.mid_category,
+        sub_category: cat.sub_category,
+        is_active: 1,
+        created_at: nowStr
+      }));
+
+      await insertRows('expense_categories', rowsToInsert);
+      console.log('✓ 국세청 표준 계정과목 목록 자동 시딩 완료.');
+    }
+  } catch (err: any) {
+    console.error('⚠️ 계정과목 목록 자동 생성 및 보정 에러:', err.message);
+  }
+
   console.log('Database setup complete.');
 }
