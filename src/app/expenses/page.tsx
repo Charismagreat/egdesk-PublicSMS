@@ -68,6 +68,7 @@ export default function ExpenseManagementAiPage() {
     handleDeleteProject,
     handleUpdateExpense,
     handleApproveExpense,
+    handleToggleCategoryActive,
   } = useExpenses();
 
   // 🔑 최고관리자 권한 상태 선언
@@ -212,6 +213,7 @@ export default function ExpenseManagementAiPage() {
                 handleAddCategory={handleAddCategory}
                 handleBulkAddCategories={handleBulkAddCategories}
                 handleDeleteCategory={handleDeleteCategory}
+                handleToggleCategoryActive={handleToggleCategoryActive}
                 dbTags={dbTags}
                 handleAddTag={handleAddTag}
                 handleDeleteTag={handleDeleteTag}

@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, deleteRows } from '@/../egdesk-helpers';
+import { queryTable, insertRows, deleteRows, updateRows } from '@/../egdesk-helpers';
 import { setupDatabase } from '@/lib/setup-db';
 
 export async function GET() {
@@ -84,6 +84,7 @@ export async function POST(request: Request) {
         main_category: cat.main,
         mid_category: cat.mid,
         sub_category: cat.sub,
+        is_active: 1,
         created_at: nowStr
       }));
 
@@ -124,6 +125,7 @@ export async function POST(request: Request) {
       main_category: main,
       mid_category: mid,
       sub_category: sub,
+      is_active: 1,
       created_at: nowStr
     }]);
 
@@ -147,6 +149,28 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting category:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, is_active } = body;
+
+    if (!id || is_active === undefined) {
+      return NextResponse.json({ success: false, error: 'ID와 사용 여부(is_active) 값이 필요합니다.' }, { status: 400 });
+    }
+
+    await updateRows(
+      'expense_categories', 
+      { is_active: Number(is_active) }, 
+      { filters: { id } }
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error updating category active status:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

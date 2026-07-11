@@ -46,6 +46,7 @@ export interface DbExpenseCategory {
   main_category: string;
   mid_category: string;
   sub_category: string;
+  is_active?: number;
   created_at: string;
 }
 
@@ -801,6 +802,36 @@ export function useExpenses() {
     });
   };
 
+  // ⚡ 계정과목 사용/비사용 토글 핸들러
+  const handleToggleCategoryActive = async (id: string, currentActive: number) => {
+    const nextActive = currentActive === 0 ? 1 : 0;
+    
+    // UI 낙관적 업데이트
+    setDbCategories(prev =>
+      prev.map(cat => (cat.id === id ? { ...cat, is_active: nextActive } : cat))
+    );
+
+    try {
+      const res = await apiFetch("/api/expenses/categories", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, is_active: nextActive })
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setDbCategories(prev =>
+          prev.map(cat => (cat.id === id ? { ...cat, is_active: currentActive } : cat))
+        );
+        alert("계정과목 활성 상태 업데이트에 실패했습니다: " + json.error);
+      }
+    } catch (e) {
+      setDbCategories(prev =>
+        prev.map(cat => (cat.id === id ? { ...cat, is_active: currentActive } : cat))
+      );
+      alert("서버와 통신 중 에러가 발생했습니다.");
+    }
+  };
+
   // 검색 및 필터링 적용 목록
   const filteredExpenses = expenses.filter(exp => {
     const matchesCategory = activeCategoryFilter === "ALL" || exp.category === activeCategoryFilter;
@@ -905,6 +936,7 @@ export function useExpenses() {
     handleAddProject,
     handleDeleteProject,
     handleUpdateExpense,
-    handleApproveExpense
+    handleApproveExpense,
+    handleToggleCategoryActive
   };
 }

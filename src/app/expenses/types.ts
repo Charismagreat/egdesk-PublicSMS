@@ -45,6 +45,7 @@ export interface DbExpenseCategory {
   main_category: string;
   mid_category: string;
   sub_category: string;
+  is_active?: number;
   created_at: string;
 }
 

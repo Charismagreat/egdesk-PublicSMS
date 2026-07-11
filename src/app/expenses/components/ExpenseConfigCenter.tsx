@@ -14,6 +14,7 @@ export interface ExpenseConfigCenterProps {
   handleAddCategory: (main: string, mid: string, sub: string) => Promise<{ success: boolean; error?: string }>;
   handleBulkAddCategories: (categories: any[]) => Promise<{ success: boolean; addedCount?: number; message?: string; error?: string }>;
   handleDeleteCategory: (id: string) => Promise<void>;
+  handleToggleCategoryActive: (id: string, currentActive: number) => Promise<void>;
   dbTags: DbExpenseTag[];
   handleAddTag: (name: string, scope?: string) => Promise<{ success: boolean; error?: string }>;
   handleDeleteTag: (id: string) => Promise<void>;
@@ -36,6 +37,7 @@ export default function ExpenseConfigCenter({
   handleAddCategory,
   handleBulkAddCategories,
   handleDeleteCategory,
+  handleToggleCategoryActive,
   dbTags,
   handleAddTag,
   handleDeleteTag,
@@ -522,12 +524,32 @@ export default function ExpenseConfigCenter({
               ) : (
                 dbCategories.map(cat => (
                   <div key={cat.id} className="flex justify-between items-center p-2.5 hover:bg-slate-50/50 transition-colors">
-                    <div className="space-y-0.5 min-w-0 pr-2">
-                      <span className="inline-flex px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[8px] font-bold border border-slate-200 mr-1.5">
-                        {cat.main_category}
-                      </span>
-                      <span className="text-slate-400 font-bold text-[9px] mr-1">{cat.mid_category} 〉</span>
-                      <span className="text-slate-850 font-black text-[10px]">{cat.sub_category}</span>
+                    <div className="flex items-center space-x-3 min-w-0 pr-2">
+                      {/* 온/오프 토글 스위치 */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCategoryActive(cat.id, cat.is_active ?? 1)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          (cat.is_active ?? 1) === 1 ? "bg-rose-500" : "bg-slate-200"
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            (cat.is_active ?? 1) === 1 ? "translate-x-4" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                      <div className="space-y-0.5 min-w-0">
+                        <span className="inline-flex px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[8px] font-bold border border-slate-200 mr-1.5">
+                          {cat.main_category}
+                        </span>
+                        <span className="text-slate-400 font-bold text-[9px] mr-1">{cat.mid_category} 〉</span>
+                        <span className={`font-black text-[10px] ${
+                          (cat.is_active ?? 1) === 1 ? "text-slate-850" : "text-slate-400 line-through"
+                        }`}>
+                          {cat.sub_category}
+                        </span>
+                      </div>
                     </div>
                     <button
                       type="button"

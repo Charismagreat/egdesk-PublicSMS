@@ -558,6 +558,7 @@ export const COLUMN_DEFINITIONS = {
     { name: 'main_category', type: 'TEXT', notNull: true },
     { name: 'mid_category', type: 'TEXT', notNull: true },
     { name: 'sub_category', type: 'TEXT', notNull: true },
+    { name: 'is_active', type: 'INTEGER', defaultValue: 1 },
     { name: 'created_at', type: 'TEXT', notNull: true },
   ],
   expense_tags: [

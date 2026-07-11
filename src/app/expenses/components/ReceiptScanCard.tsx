@@ -49,6 +49,7 @@ export default function ReceiptScanCard({
       };
     }
     dbCategories.forEach(cat => {
+      if (cat.is_active === 0) return;
       const main = cat.main_category;
       const mid = cat.mid_category;
       const sub = cat.sub_category;
