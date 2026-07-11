@@ -784,12 +784,33 @@ export function useExpenses() {
           }
 
           // AI OCR 분석 결과 폼 자동 채우기
+          const titleLowerForPay = (json.title || "").toLowerCase();
+          const payeeLowerForPay = (json.payee || json.merchant || "").toLowerCase();
+          const memoLowerForPay = (json.memo || "").toLowerCase();
+          const hasCardApproval = !!(json.card_approval_no && String(json.card_approval_no).trim());
+
+          const inferredPaymentMethod = hasCardApproval 
+            ? (json.payment_method || "법인카드")
+            : (
+              (
+                titleLowerForPay.includes("송금") || 
+                titleLowerForPay.includes("입금") ||
+                titleLowerForPay.includes("계좌") ||
+                titleLowerForPay.includes("보험") ||
+                titleLowerForPay.includes("통보") ||
+                payeeLowerForPay.includes("무역보험") ||
+                payeeLowerForPay.includes("보험") ||
+                memoLowerForPay.includes("은행") ||
+                memoLowerForPay.includes("계좌")
+              ) ? "계좌송금" : "기타"
+            );
+
           setNewExpense({
             title: json.title || "",
             category: mappedCategory,
             amount: String(json.amount) || "",
             expense_date: json.expense_date || new Date().toISOString().slice(0, 10),
-            payment_method: json.payment_method || "법인카드",
+            payment_method: inferredPaymentMethod,
             memo: json.memo || "",
             attachment_url: base64.slice(0, 100), // 프론트 데모용으로 축약 저장
             ai_analysis: JSON.stringify({ ocrParsed: true, filename: file.name, method: json.method }),

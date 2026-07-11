@@ -678,9 +678,9 @@ export default function ReceiptScanCard({
             />
           </div>
 
-          {/* 품의 일자 */}
+          {/* 지출예정일 */}
           <div>
-            <label className="block text-[10px] font-extrabold text-slate-500 mb-1">품의 일자 *</label>
+            <label className="block text-[10px] font-extrabold text-slate-500 mb-1">지출예정일 *</label>
             <input 
               type="date"
               value={newExpense.requisition_date || ""}
