@@ -470,7 +470,7 @@ export default function ReceiptScanCard({
         <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center justify-between border-b pb-2 mb-2">
           <span className="flex items-center text-rose-500 font-extrabold text-[11px]">
             <FileText className="w-3.5 h-3.5 mr-1" />
-            📝 지출결의서 규격 실물 검수 및 자동 기입
+            📝 지출결의서 자동 작성
           </span>
           <button 
             onClick={resetExpenseForm}
