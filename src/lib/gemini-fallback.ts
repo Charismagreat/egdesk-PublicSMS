@@ -120,13 +120,20 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
 
     for (const targetModel of modelsLineup) {
       try {
-        console.log(`[AI Fallback Wrapper Failover] callAiCaller 직접 호출 기동 (모델: ${targetModel}, 이미지존재: ${!!imageInput}, keyName: ${targetKeyName})`);
+        const isPdf = imageInput ? imageInput.includes('application/pdf') : false;
+        console.log(`[AI Fallback Wrapper Failover] callAiCaller 직접 호출 기동 (모델: ${targetModel}, 이미지존재: ${!!imageInput}, keyName: ${targetKeyName}, PDF여부: ${isPdf})`);
         
         callerRes = await callAiCaller(prompt, {
           systemPrompt,
           model: targetModel,
           temperature: temperature ?? 0.7,
-          images: imageInput ? [imageInput] : undefined,
+          images: !isPdf && imageInput ? [imageInput] : undefined,
+          files: isPdf && imageInput ? [{
+            name: 'document.pdf',
+            content: imageInput.includes(';base64,') ? imageInput.split(';base64,')[1] : imageInput,
+            encoding: 'base64',
+            mimeType: 'application/pdf'
+          }] : undefined,
           responseMimeType,
           responseSchema,
           caller: 'egdesk-fallback-wrapper-failover',
