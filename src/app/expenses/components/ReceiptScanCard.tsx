@@ -198,23 +198,23 @@ export default function ReceiptScanCard({
     }
   };
 
-  // 비고 란 쉼표 구분 태그 토글 헬퍼 함수
+  // 태그 란 쉼표 구분 태그 토글 헬퍼 함수
   const toggleTag = (tag: string) => {
-    const currentMemo = newExpense.memo || "";
-    let tags = currentMemo
+    const currentTags = newExpense.tags || "";
+    let tagsList = currentTags
       .split(",")
       .map(t => t.trim())
       .filter(t => t !== "");
 
-    if (tags.includes(tag)) {
-      tags = tags.filter(t => t !== tag);
+    if (tagsList.includes(tag)) {
+      tagsList = tagsList.filter(t => t !== tag);
     } else {
-      tags.push(tag);
+      tagsList.push(tag);
     }
     
     setNewExpense(prev => ({
       ...prev,
-      memo: tags.join(", ")
+      tags: tagsList.join(", ")
     }));
   };
 
@@ -769,20 +769,32 @@ export default function ReceiptScanCard({
             )}
           </div>
 
-          {/* 비고 및 지출 태그 */}
+          {/* 상세비고 */}
           <div className="col-span-3">
-            <label className="block text-[10px] font-extrabold text-slate-500 mb-1">비고 (지출 태그 입력)</label>
+            <label className="block text-[10px] font-extrabold text-slate-500 mb-1">상세비고</label>
+            <textarea 
+              placeholder="지출 및 영수증 관련 상세 텍스트(예: 송금 정보 등)를 기입하세요"
+              value={newExpense.memo || ""}
+              onChange={e => setNewExpense(prev => ({ ...prev, memo: e.target.value }))}
+              rows={2}
+              className="w-full border border-slate-250 rounded-xl px-3.5 py-2.5 outline-none font-semibold text-xs bg-white focus:ring-2 focus:ring-rose-500 transition-all text-slate-800 resize-none h-[60px]"
+            />
+          </div>
+
+          {/* 태그 */}
+          <div className="col-span-3">
+            <label className="block text-[10px] font-extrabold text-slate-500 mb-1">태그</label>
             <input 
               type="text"
               placeholder="태그를 쉼표(,)로 구분하여 입력하거나 아래 추천 태그를 클릭해 보세요"
-              value={newExpense.memo || ""}
-              onChange={e => setNewExpense(prev => ({ ...prev, memo: e.target.value }))}
+              value={newExpense.tags || ""}
+              onChange={e => setNewExpense(prev => ({ ...prev, tags: e.target.value }))}
               className="w-full border border-slate-250 rounded-xl px-3.5 py-2.5 outline-none font-semibold text-xs bg-white focus:ring-2 focus:ring-rose-500 transition-all text-slate-800"
             />
             
             <div className="mt-2 flex flex-wrap gap-1.5">
               {PRESET_TAGS.map(tag => {
-                const isSelected = (newExpense.memo || "")
+                const isSelected = (newExpense.tags || "")
                   .split(",")
                   .map(t => t.trim())
                   .includes(tag);

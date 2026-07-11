@@ -18,6 +18,7 @@ export interface Expense {
   approval_status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'HOLD'; // 결재 승인 상태
   approval_memo?: string; // 결재 사유 메모
   card_approval_no?: string | null; // 카드 승인번호
+  tags?: string;
 }
 
 export interface ExpenseSettings {

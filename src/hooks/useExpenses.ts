@@ -132,6 +132,7 @@ export function useExpenses() {
     deduction_amount: 0,
     transfer_fee: 0,
     card_approval_no: "",
+    tags: "",
   });
 
   const [dbCategories, setDbCategories] = useState<DbExpenseCategory[]>([]);
@@ -805,6 +806,12 @@ export function useExpenses() {
               ) ? "계좌송금" : "기타"
             );
 
+          const inferredTags = (
+            titleLowerForPay.includes("보험") || 
+            titleLowerForPay.includes("정기") ||
+            memoLowerForPay.includes("보험")
+          ) ? "정기지출, 긴급비용" : "일반경비";
+
           setNewExpense({
             title: json.title || "",
             category: mappedCategory,
@@ -820,6 +827,7 @@ export function useExpenses() {
             deduction_amount: 0,
             transfer_fee: 0,
             card_approval_no: json.card_approval_no || "",
+            tags: inferredTags,
           });
           
           alert("✨ AI 영수증 자율 스캔 및 분석이 완료되었습니다! 검수 후 [지출 등록하기]를 눌러 장부에 적재하세요.");
@@ -851,6 +859,7 @@ export function useExpenses() {
       deduction_amount: 0,
       transfer_fee: 0,
       card_approval_no: "",
+      tags: "",
     });
   };
 

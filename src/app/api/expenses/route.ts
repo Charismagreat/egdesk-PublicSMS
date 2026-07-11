@@ -116,7 +116,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { 
       title, category, amount, expense_date, payment_method, attachment_url, ai_analysis, memo,
-      actual_expense_date, deduction_amount, transfer_fee, card_approval_no
+      actual_expense_date, deduction_amount, transfer_fee, card_approval_no, tags
     } = body;
 
     if (!title || !category || !amount || !expense_date || !payment_method) {
@@ -149,6 +149,7 @@ export async function POST(request: Request) {
       attachment_url: attachment_url || '',
       ai_analysis: ai_analysis ? (typeof ai_analysis === 'string' ? ai_analysis : JSON.stringify(ai_analysis)) : '',
       memo: memo || '',
+      tags: tags || '',
       actual_expense_date: null, // 신규 등록 시에는 미결재(PENDING) 상태이므로 실제 지출일은 강제 무력화(Null)
       deduction_amount: 0,       // 신규 등록 시에는 미결재 상태이므로 공제액 0 강제
       transfer_fee: 0,           // 신규 등록 시에는 미결재 상태이므로 송금수수료 0 강제
@@ -330,7 +331,7 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const { 
       id, title, category, amount, expense_date, payment_method, attachment_url, ai_analysis, memo,
-      actual_expense_date, deduction_amount, transfer_fee, card_approval_no
+      actual_expense_date, deduction_amount, transfer_fee, card_approval_no, tags
     } = body;
 
     if (!id || !title || !category || !amount || !expense_date || !payment_method) {
@@ -371,6 +372,7 @@ export async function PUT(request: Request) {
       attachment_url: attachment_url || '',
       ai_analysis: ai_analysis ? (typeof ai_analysis === 'string' ? ai_analysis : JSON.stringify(ai_analysis)) : '',
       memo: memo || '',
+      tags: tags || '',
       actual_expense_date: finalActualExpenseDate,
       deduction_amount: finalDeductionAmount,
       transfer_fee: finalTransferFee,
