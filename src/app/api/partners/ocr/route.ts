@@ -271,11 +271,23 @@ export async function POST(req: Request) {
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      // 에러 로그 기록
+      try {
+        const fs = require('fs');
+        fs.writeFileSync('C:\\dev\\egdesk-PublicSMS\\ocr_debug.log', `=== OCR ERROR ===\nStatus: ${response.status}\nBody: ${errorText}\n`);
+      } catch (e) {}
       throw new Error(`Gemini OCR API 통신 실패: HTTP ${response.status}`);
     }
 
     const aiData = await response.json();
     const rawText = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    // 디버그 로그 기록
+    try {
+      const fs = require('fs');
+      fs.writeFileSync('C:\\dev\\egdesk-PublicSMS\\ocr_debug.log', `=== OCR SUCCESS ===\nRawText: ${rawText}\n`);
+    } catch (e) {}
 
     // AI 토큰 사용량 로깅
     try {
