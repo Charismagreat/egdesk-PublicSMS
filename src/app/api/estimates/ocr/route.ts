@@ -448,6 +448,16 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
             cleanText = cleanText.replace(/```$/, '').trim();
           }
           ocrJson = JSON.parse(cleanText);
+          // 2차 파싱 가드 (본사 중계 content 문자열 해독)
+          if (ocrJson && typeof ocrJson === 'object' && typeof ocrJson.content === 'string') {
+            try {
+              const innerText = ocrJson.content.trim();
+              const cleanedInner = innerText.replace(/^```json/i, '').replace(/```$/, '').trim();
+              ocrJson = JSON.parse(cleanedInner);
+            } catch (e) {
+              console.error('2차 파싱 실패 폴백:', e);
+            }
+          }
           console.log('📌 [OCR Final Parsed JSON]:', JSON.stringify(ocrJson, null, 2));
         }
 

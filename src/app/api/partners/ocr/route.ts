@@ -326,6 +326,17 @@ export async function POST(req: Request) {
       }
     }
 
+    // 2차 파싱 가드 (본사 중계 content 문자열 해독)
+    if (parsedData && typeof parsedData === 'object' && typeof parsedData.content === 'string') {
+      try {
+        const innerText = parsedData.content.trim();
+        const cleanedInner = innerText.replace(/^```json/i, '').replace(/```$/, '').trim();
+        parsedData = JSON.parse(cleanedInner);
+      } catch (e) {
+        console.error('2차 파싱 실패 폴백:', e);
+      }
+    }
+
     // 4. 데이터 정형화/정밀화 처리
     const cleanedNumber = normalizeBusinessNumber(parsedData.businessNumber || '');
     const cleanedPhone = normalizePhone(parsedData.phone || '');

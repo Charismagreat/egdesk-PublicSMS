@@ -198,7 +198,14 @@ export async function POST(req: Request) {
         throw new Error('Gemini AI로부터 작업 감지 응답을 수신하지 못했습니다.');
       }
 
-      const parsedResult = JSON.parse(rawText.trim());
+      let parsedResult = JSON.parse(rawText.trim());
+      if (parsedResult && typeof parsedResult === 'object' && typeof parsedResult.content === 'string') {
+        try {
+          const innerText = parsedResult.content.trim();
+          const cleanedInner = innerText.replace(/^```json/i, '').replace(/```$/, '').trim();
+          parsedResult = JSON.parse(cleanedInner);
+        } catch (e) {}
+      }
       return NextResponse.json({
         success: true,
         suggestedTypes: parsedResult.suggestedTypes || []
@@ -400,6 +407,17 @@ ${JSON.stringify(facilitiesListForRag)}
         parsedResult = JSON.parse(jsonMatch[0].trim());
       } else {
         throw new Error('AI 하이브리드 분석 응답 포맷이 올바르지 않습니다.');
+      }
+    }
+
+    // 2차 파싱 가드 (본사 중계 content 문자열 해독)
+    if (parsedResult && typeof parsedResult === 'object' && typeof parsedResult.content === 'string') {
+      try {
+        const innerText = parsedResult.content.trim();
+        const cleanedInner = innerText.replace(/^```json/i, '').replace(/```$/, '').trim();
+        parsedResult = JSON.parse(cleanedInner);
+      } catch (e) {
+        console.error('2차 파싱 실패 폴백:', e);
       }
     }
 

@@ -190,7 +190,17 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
     responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
 
     try {
-      const parsedOcr = JSON.parse(responseText);
+      let parsedOcr = JSON.parse(responseText);
+      // 2차 파싱 가드 (본사 중계 content 문자열 해독)
+      if (parsedOcr && typeof parsedOcr === 'object' && typeof parsedOcr.content === 'string') {
+        try {
+          const innerText = parsedOcr.content.trim();
+          const cleanedInner = innerText.replace(/^```json/i, '').replace(/```$/, '').trim();
+          parsedOcr = JSON.parse(cleanedInner);
+        } catch (e) {
+          console.error('2차 파싱 실패 폴백:', e);
+        }
+      }
 
       // 2차 거래 메타데이터 조합 중복 검사
       let isMetaDuplicate = false;

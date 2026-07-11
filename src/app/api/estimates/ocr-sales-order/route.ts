@@ -485,6 +485,17 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
           throw err;
         }
       }
+
+      // 2차 파싱 가드 (본사 중계 content 문자열 해독)
+      if (parsedData && typeof parsedData === 'object' && typeof parsedData.content === 'string') {
+        try {
+          const innerText = parsedData.content.trim();
+          const cleanedInner = innerText.replace(/^```json/i, '').replace(/```$/, '').trim();
+          parsedData = JSON.parse(cleanedInner);
+        } catch (e) {
+          console.error('2차 파싱 실패 폴백:', e);
+        }
+      }
       
     } catch (e: any) {
       console.error('Failed to parse Gemini Pass 2 response:', responseTextPass2);

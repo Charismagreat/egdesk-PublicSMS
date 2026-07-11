@@ -120,7 +120,17 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
           console.error('AI 토큰 로깅 실패:', e.message);
         }
 
-        const ocrJson = JSON.parse(text.trim());
+        let ocrJson = JSON.parse(text.trim());
+        // 2차 파싱 가드 (본사 중계 content 문자열 해독)
+        if (ocrJson && typeof ocrJson === 'object' && typeof ocrJson.content === 'string') {
+          try {
+            const innerText = ocrJson.content.trim();
+            const cleanedInner = innerText.replace(/^```json/i, '').replace(/```$/, '').trim();
+            ocrJson = JSON.parse(cleanedInner);
+          } catch (e) {
+            console.error('2차 파싱 실패 폴백:', e);
+          }
+        }
 
         if (ocrJson.title && ocrJson.amount && ocrJson.category) {
           return NextResponse.json({
