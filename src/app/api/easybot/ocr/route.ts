@@ -5,7 +5,7 @@ import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
-import { queryTable, insertRows, executeSQL, getGeminiApiKey } from '../../../../../egdesk-helpers';
+import { queryTable, insertRows, executeSQL, getGeminiApiKey, AI_KEY_NAMES } from '../../../../../egdesk-helpers';
 import fs from 'fs';
 import path from 'path';
 
@@ -130,8 +130,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // 여전히 키가 없다면 이지데스크가 중계할 수 있도록 'wonconduct'로 폴백 세팅합니다.
-    const apiKey = googleApiKey || 'wonconduct';
+    // 여전히 키가 없다면 이지데스크가 중계할 수 있도록 AI_KEY_NAMES[0]로 폴백 세팅합니다.
+    const apiKey = googleApiKey || ((AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct');
 
     const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
     const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value

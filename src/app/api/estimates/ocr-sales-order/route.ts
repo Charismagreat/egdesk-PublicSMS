@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchGeminiWithFallback, repairJson } from '../../../../lib/gemini-fallback';
-import { executeSQL, insertRows, queryTable, listBusinessIdentitySnapshots, listKnowledgeDocuments, getKnowledgeDocument, getGeminiApiKey } from '../../../../../egdesk-helpers';
+import { executeSQL, insertRows, queryTable, listBusinessIdentitySnapshots, listKnowledgeDocuments, getKnowledgeDocument, getGeminiApiKey, AI_KEY_NAMES } from '../../../../../egdesk-helpers';
 import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
 
@@ -199,8 +199,8 @@ export async function POST(req: Request) {
 
     const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
 
-    // 이지데스크 본사에서 제공하는 기본 AI API 키(AI Caller 기능)를 전적으로 상속 사용합니다. (개별 설정 키 로직 제거)
-    const apiKey = 'DUMMY_AI_CALLER_API_KEY';
+    // 이지데스크 본사에서 제공하는 AI API 키 이름을 egdesk-helpers에서 동적으로 추출하여 사용합니다. (설치된 PC 환경 호환성 확보)
+    const apiKey = (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'DUMMY_AI_CALLER_API_KEY';
 
     const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
     const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value

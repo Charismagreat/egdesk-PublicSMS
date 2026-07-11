@@ -1,7 +1,7 @@
 export const maxDuration = 300; // 로컬 AI 대용량 연산 지연 대기 허용 (5분)
 import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, executeSQL, getGeminiApiKey } from '../../../../../egdesk-helpers';
+import { queryTable, insertRows, executeSQL, getGeminiApiKey, AI_KEY_NAMES } from '../../../../../egdesk-helpers';
 
 // 시스템 설정에서 Google API Key 및 모델 조회
 async function getAiConfig() {
@@ -22,7 +22,7 @@ async function getAiConfig() {
       }
     }
 
-    const apiKey = googleApiKey || 'wonconduct';
+    const apiKey = googleApiKey || ((AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct');
 
     const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
     const model = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
@@ -32,7 +32,7 @@ async function getAiConfig() {
     return { apiKey, model };
   } catch (err) {
     console.error('[EasyBot Event Handler] AI 설정 로드 실패:', err);
-    return { apiKey: 'wonconduct', model: 'gemini-3.5-flash' };
+    return { apiKey: ((AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct'), model: 'gemini-3.5-flash' };
   }
 }
 

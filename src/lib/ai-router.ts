@@ -1,4 +1,4 @@
-import { queryTable, insertRows, updateRows, callAiCaller, getGeminiApiKey } from '../../egdesk-helpers';
+import { queryTable, insertRows, updateRows, callAiCaller, getGeminiApiKey, AI_KEY_NAMES } from '../../egdesk-helpers';
 import { getTenantId } from './tenant';
 
 export interface CallAIOptions {
@@ -94,7 +94,7 @@ async function callGemini(
     temperature: temperature ?? 0.1,
     imageInput, // 이미지 존재 시 이지데스크 caller가 처리하도록 전달
     caller: 'egdesk-ai-router',
-    keyName: 'wonconduct'
+    keyName: (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct'
   } as any);
 
   let text = '';
@@ -300,10 +300,10 @@ export async function callAI(options: CallAIOptions): Promise<AIResponse> {
     }
 
     if (!googleApiKey) {
-      googleApiKey = 'wonconduct';
+      googleApiKey = (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct';
     }
   } catch (err) {
-    googleApiKey = 'wonconduct';
+    googleApiKey = (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct';
     console.error('⚠️ DB 설정 로드 실패 (기본값 설정):', err);
   }
 

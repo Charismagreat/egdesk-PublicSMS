@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, getGeminiApiKey } from '@/../egdesk-helpers';
+import { queryTable, insertRows, getGeminiApiKey, AI_KEY_NAMES } from '@/../egdesk-helpers';
 
 export async function POST(req: Request) {
   try {
@@ -29,10 +29,10 @@ export async function POST(req: Request) {
           console.error('⚠️ EGDesk에서 실제 구글 API 키를 해독해오는 데 실패했습니다:', keyErr.message);
         }
       }
-      apiKey = googleApiKey || 'wonconduct';
+      apiKey = googleApiKey || ((AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct');
     } catch (e) {
       console.error('Failed to get api key, using high-fidelity mockup OCR fallback');
-      apiKey = 'wonconduct';
+      apiKey = (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct';
     }
 
     // Base64 프리픽스 제거

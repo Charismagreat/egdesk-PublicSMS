@@ -1,7 +1,7 @@
 export const maxDuration = 300; // 로컬 AI 대용량 연산 지연 대기 허용 (5분)
 import { fetchGeminiWithFallback } from '../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
-import { queryTable, executeSQL, listTables, insertRows, createTable, getGeminiApiKey } from '../../../../egdesk-helpers';
+import { queryTable, executeSQL, listTables, insertRows, createTable, getGeminiApiKey, AI_KEY_NAMES } from '../../../../egdesk-helpers';
 import fs from 'fs';
 import path from 'path';
 import { cookies } from 'next/headers';
@@ -215,8 +215,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // 여전히 키가 없다면 이지데스크가 중계할 수 있도록 'wonconduct'로 폴백 세팅합니다.
-    const apiKey = googleApiKey || 'wonconduct';
+    // 여전히 키가 없다면 이지데스크가 중계할 수 있도록 AI_KEY_NAMES[0]로 폴백 세팅합니다.
+    const apiKey = googleApiKey || ((AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct');
 
     // 1-2. DB에서 구글 AI 모델명 조회 (없다면 3.5 기본값 적용)
     const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
