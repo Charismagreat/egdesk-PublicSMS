@@ -679,8 +679,14 @@ function WebViewContent() {
     const activeHeaders = columns.filter((h) => visibleColumns.includes(h));
     const headerIndices = activeHeaders.map((h) => data.headers.indexOf(h));
 
-    const activeRows = data.rows.map((row) =>
-      headerIndices.map((idx) => (idx !== -1 ? row[idx] : ""))
+    const activeRows = sortedRows.map((row) =>
+      headerIndices.map((idx) => {
+        if (idx === -1) return "";
+        const val = row[idx];
+        const strVal = String(val);
+        if (strVal.startsWith("data:")) return "";
+        return val;
+      })
     );
 
     const csvContent =
