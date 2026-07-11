@@ -92,7 +92,7 @@ async function callGemini(
     systemPrompt,
     model: modelName,
     temperature: temperature ?? 0.1,
-    imageInput, // 이미지 존재 시 이지데스크 caller가 처리하도록 전달
+    images: imageInput ? [imageInput] : undefined, // 이미지 존재 시 이지데스크 caller가 처리하도록 전달 (images 배열로 정정)
     caller: 'egdesk-ai-router',
     keyName: (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct'
   } as any);
