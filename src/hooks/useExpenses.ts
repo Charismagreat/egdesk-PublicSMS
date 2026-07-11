@@ -675,11 +675,24 @@ export function useExpenses() {
               "기타": "지급수수료"
             };
 
-            const targetMidCat = OCR_MID_CAT_MAP[json.category] || json.category;
+            const titleLower = (json.title || "").toLowerCase();
+            const payeeLower = (json.payee || json.merchant || "").toLowerCase();
+
+            // ⚡ 금융/통상/외환 관련 지능형 사전 가드 (외환차손 유도)
+            let targetMidCat = OCR_MID_CAT_MAP[json.category] || json.category;
+            
+            if (
+              titleLower.includes("환변동") || 
+              titleLower.includes("외환") || 
+              titleLower.includes("이익금회수") || 
+              payeeLower.includes("무역보험공사")
+            ) {
+              targetMidCat = "금융/통상"; // 외환차손이 속한 국세청 중분류
+            }
+
             const matchedCats = dbCategories.filter(cat => cat.mid_category === targetMidCat);
 
             if (matchedCats.length > 0) {
-              const titleLower = (json.title || "").toLowerCase();
               let subCat = matchedCats[0].sub_category; // 기본값은 해당 중분류의 첫 번째 소분류
               
               if (targetMidCat === "복리후생비") {
@@ -738,16 +751,34 @@ export function useExpenses() {
                   const found = matchedCats.find(c => c.sub_category === "거래처식사비");
                   if (found) subCat = found.sub_category;
                 }
+              } else if (targetMidCat === "금융/통상") {
+                if (titleLower.includes("외환") || titleLower.includes("환변동") || titleLower.includes("보험")) {
+                  const found = matchedCats.find(c => c.sub_category === "외환차손");
+                  if (found) subCat = found.sub_category;
+                } else if (titleLower.includes("이자")) {
+                  const found = matchedCats.find(c => c.sub_category === "이자비용");
+                  if (found) subCat = found.sub_category;
+                }
               }
               
               mappedCategory = subCat;
             } else {
               // 중분류 매칭 실패 시 소분류 직접 일치 확인
-              const matchedSub = dbCategories.find(cat => cat.sub_category === json.category);
+              const matchedSub = dbCategories.find(cat => 
+                cat.sub_category === json.category || 
+                cat.sub_category.includes(json.category) || 
+                json.category.includes(cat.sub_category)
+              );
               if (matchedSub) {
                 mappedCategory = matchedSub.sub_category;
-              } else if (dbCategories.length > 0) {
-                mappedCategory = dbCategories[0].sub_category;
+              } else {
+                if (titleLower.includes("이자") || titleLower.includes("금융") || titleLower.includes("보험")) {
+                  const safeFallback = dbCategories.find(c => c.sub_category === "이자비용" || c.sub_category === "외환차손" || c.sub_category === "잡손실");
+                  mappedCategory = safeFallback ? safeFallback.sub_category : (dbCategories[0]?.sub_category || "기타판매비와관리비");
+                } else {
+                  const safeFallback = dbCategories.find(c => c.sub_category === "기타판매비와관리비" || c.sub_category === "소모품비");
+                  mappedCategory = safeFallback ? safeFallback.sub_category : (dbCategories[0]?.sub_category || "기타판매비와관리비");
+                }
               }
             }
           }
