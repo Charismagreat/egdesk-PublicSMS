@@ -35,6 +35,13 @@ export default function CompanySettingsCard() {
   const [saving, setSaving] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // 🎨 스마트 도장(직인) 자동 생성 모달 상태
+  const [isSealModalOpen, setIsSealModalOpen] = useState<boolean>(false);
+  const [sealText, setSealText] = useState<string>('');
+  const [sealType, setSealType] = useState<'circle-grid' | 'circle-round' | 'square'>('square');
+  const [sealFont, setSealFont] = useState<string>('Gungsuh');
+  const [useStampEffect, setUseStampEffect] = useState<boolean>(true);
+
   // AI OCR 및 드래그 앤 드롭 업로드 상태
   const [isOcrAnalyzing, setIsOcrAnalyzing] = useState<boolean>(false);
   const [fileDragOver, setFileDragOver] = useState<boolean>(false);
@@ -119,6 +126,19 @@ export default function CompanySettingsCard() {
     fetchCompanyProfile();
     fetchFinancials();
   }, []);
+
+  // 🎨 도장 생성 옵션 변경 시 미리보기 Canvas 실시간 드로잉 연동
+  useEffect(() => {
+    if (isSealModalOpen && sealText) {
+      const timer = setTimeout(() => {
+        const canvas = document.getElementById('seal-preview-canvas') as HTMLCanvasElement;
+        if (canvas) {
+          drawSeal(canvas, sealText, sealType, sealFont, useStampEffect);
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isSealModalOpen, sealText, sealType, sealFont, useStampEffect]);
 
   // 2. 사업자등록증 파일 업로드 및 AI 스캔 연동
   const handleFileUpload = async (fileObj: File) => {
@@ -583,40 +603,56 @@ export default function CompanySettingsCard() {
               </div>
             ))}
 
-            {/* 업로드 버튼 */}
+            {/* 업로드 및 AI 생성 버튼 */}
             {(!profile.sealImages || profile.sealImages.length < 3) && (
-              <div
-                onClick={() => document.getElementById('company-seal-uploader')?.click()}
-                className="w-20 h-20 border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-white rounded-xl flex flex-col items-center justify-center text-center cursor-pointer transition-colors group"
-                title="도장 업로드"
-              >
-                <Plus className="w-5 h-5 text-slate-400 group-hover:text-indigo-500 transition-colors" />
-                <span className="text-[8px] text-slate-400 font-bold mt-1.5">PNG 업로드</span>
-                <input
-                  type="file"
-                  id="company-seal-uploader"
-                  accept="image/png"
-                  onChange={async (e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      const file = e.target.files[0];
-                      if (file.type !== 'image/png') {
-                        alert('⚠️ 배경이 투명한 PNG 형식의 도장 파일만 등록할 수 있습니다.');
-                        return;
+              <div className="flex gap-4 items-center">
+                <div
+                  onClick={() => document.getElementById('company-seal-uploader')?.click()}
+                  className="w-20 h-20 border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-white rounded-xl flex flex-col items-center justify-center text-center cursor-pointer transition-colors group"
+                  title="도장 업로드"
+                >
+                  <Plus className="w-5 h-5 text-slate-400 group-hover:text-indigo-500 transition-colors" />
+                  <span className="text-[8px] text-slate-400 font-bold mt-1.5">PNG 업로드</span>
+                  <input
+                    type="file"
+                    id="company-seal-uploader"
+                    accept="image/png"
+                    onChange={async (e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        const file = e.target.files[0];
+                        if (file.type !== 'image/png') {
+                          alert('⚠️ 배경이 투명한 PNG 형식의 도장 파일만 등록할 수 있습니다.');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const base64 = ev.target?.result as string;
+                          const currentSeals = profile.sealImages || [];
+                          setProfile({
+                            ...profile,
+                            sealImages: [...currentSeals, base64]
+                          });
+                        };
+                        reader.readAsDataURL(file);
                       }
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        const base64 = ev.target?.result as string;
-                        const currentSeals = profile.sealImages || [];
-                        setProfile({
-                          ...profile,
-                          sealImages: [...currentSeals, base64]
-                        });
-                      };
-                      reader.readAsDataURL(file);
-                    }
+                    }}
+                    className="hidden"
+                  />
+                </div>
+
+                {/* 🎨 AI 도장 자동 생성 버튼 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSealText(profile.companyName || profile.representative || '이지데스크');
+                    setIsSealModalOpen(true);
                   }}
-                  className="hidden"
-                />
+                  className="w-20 h-20 border-2 border-dashed border-indigo-200 hover:border-indigo-500 bg-indigo-50/10 hover:bg-indigo-50/30 rounded-xl flex flex-col items-center justify-center text-center cursor-pointer transition-all group"
+                  title="AI 도장 생성"
+                >
+                  <Sparkles className="w-5 h-5 text-indigo-500 group-hover:scale-110 transition-transform" />
+                  <span className="text-[8px] text-indigo-650 font-black mt-1.5">AI 도장 생성</span>
+                </button>
               </div>
             )}
           </div>
@@ -910,6 +946,340 @@ export default function CompanySettingsCard() {
           )}
         </div>
       </div>
+
+      {/* 🎨 AI 도장 자동 생성 모달 */}
+      {isSealModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white border border-slate-200/80 rounded-3xl shadow-2xl w-full max-w-lg p-6 space-y-6 mx-4 relative">
+            
+            {/* 헤더 */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-indigo-600 animate-pulse" />
+                EGDesk AI 스마트 도장/직인 생성기
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsSealModalOpen(false)}
+                className="text-slate-400 hover:text-slate-650 font-bold p-1 rounded-full hover:bg-slate-100 transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+
+            {/* 본문 콘텐츠 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* 왼쪽: 설정 옵션 */}
+              <div className="space-y-4 text-xs font-semibold">
+                
+                {/* 1. 도장 텍스트 입력 */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-extrabold text-slate-700">도장 텍스트 (상호/이름)</label>
+                  <input
+                    type="text"
+                    value={sealText}
+                    onChange={(e) => setSealText(e.target.value)}
+                    maxLength={16}
+                    placeholder="상호 또는 대표자명 입력"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white text-slate-800 font-bold"
+                  />
+                </div>
+
+                {/* 2. 도장 형태 선택 */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-extrabold text-slate-700">도장 모양 형태</label>
+                  <select
+                    value={sealType}
+                    onChange={(e) => setSealType(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white text-slate-800 font-bold"
+                  >
+                    <option value="square">🔲 사각형 법인 직인형 (자동 격자 정렬)</option>
+                    <option value="circle-grid">🔴 원형 격자형 (4자 이하에 추천)</option>
+                    <option value="circle-round">🌀 원형 둘레 회전형 (긴 상호명에 추천)</option>
+                  </select>
+                </div>
+
+                {/* 3. 서체 선택 */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-extrabold text-slate-700">도장 폰트 서체</label>
+                  <select
+                    value={sealFont}
+                    onChange={(e) => setSealFont(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white text-slate-800 font-bold"
+                  >
+                    <option value="Gungsuh">궁서체 (정통 서체)</option>
+                    <option value="Batang">바탕체 (정갈한 서체)</option>
+                    <option value="Dotum">돋움체 (현대적 서체)</option>
+                  </select>
+                </div>
+
+                {/* 4. 아날로그 인주 마모 효과 */}
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="stamp-effect-toggle"
+                    checked={useStampEffect}
+                    onChange={(e) => setUseStampEffect(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="stamp-effect-toggle" className="text-slate-700 text-xs font-bold select-none cursor-pointer">
+                    실제 인주 질감 적용 (아날로그 마모 효과)
+                  </label>
+                </div>
+
+              </div>
+
+              {/* 오른쪽: 실시간 캔버스 프리뷰 */}
+              <div className="flex flex-col items-center justify-center border border-slate-100 bg-slate-50/50 rounded-2xl p-4 space-y-3 shadow-inner">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  실시간 렌더링 미리보기
+                </span>
+                
+                <div className="w-[160px] h-[160px] bg-transparent border-0 flex items-center justify-center p-2 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-transparent opacity-10 pointer-events-none" style={{
+                    backgroundImage: 'radial-gradient(#000 15%, transparent 15%)',
+                    backgroundSize: '10px 10px'
+                  }}></div>
+                  <canvas
+                    id="seal-preview-canvas"
+                    className="max-w-full max-h-full object-contain relative z-10 filter drop-shadow-sm"
+                  />
+                </div>
+                
+                <span className="text-[9px] text-slate-400 text-center leading-relaxed">
+                  ※ 배경이 투명하게 자동 처리되어 문서 삽입 시 매우 자연스럽게 연동됩니다.
+                </span>
+              </div>
+
+            </div>
+
+            {/* 하단 푸터 버튼 */}
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setIsSealModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const canvas = document.getElementById('seal-preview-canvas') as HTMLCanvasElement;
+                  if (canvas) {
+                    const dataUrl = canvas.toDataURL('image/png');
+                    const currentSeals = profile.sealImages || [];
+                    setProfile({
+                      ...profile,
+                      sealImages: [...currentSeals, dataUrl]
+                    });
+                    setIsSealModalOpen(false);
+                  }
+                }}
+                className="px-4 py-2.5 rounded-xl border-0 bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 shadow-md shadow-indigo-600/10 cursor-pointer transition-all flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                생성 및 도장 리스트 등록
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// 🎨 스마트 도장(직인) Canvas 드로잉 유틸리티 함수
+const drawSeal = (
+  canvas: HTMLCanvasElement,
+  text: string,
+  type: 'circle-grid' | 'circle-round' | 'square',
+  fontFamily: string,
+  useStamp: boolean
+) => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  // 캔버스 크기 초기화 (고해상도 240x240)
+  const size = 240;
+  canvas.width = size;
+  canvas.height = size;
+  ctx.clearRect(0, 0, size, size);
+
+  // 안티앨리어싱 활성화
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const redColor = '#d32f2f'; // 정통 인주 빨간색
+
+  ctx.strokeStyle = redColor;
+  ctx.fillStyle = redColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // 1. 레이아웃에 따른 외곽선 및 글자 그리기
+  if (type === 'circle-grid') {
+    // === 원형 격자 도장 (4자 기준) ===
+    let processed = text.replace(/\s/g, '');
+    if (processed.length === 2) {
+      processed = processed + '지인';
+    } else if (processed.length === 3) {
+      processed = processed + '인';
+    } else if (processed.length > 4) {
+      processed = processed.slice(0, 4);
+    }
+
+    // 외곽 굵은 원
+    ctx.beginPath();
+    ctx.arc(cx, cy, 105, 0, Math.PI * 2);
+    ctx.lineWidth = 12;
+    ctx.stroke();
+
+    const chars = [
+      processed[0] || '',
+      processed[1] || '',
+      processed[2] || '',
+      processed[3] || '',
+    ];
+
+    ctx.font = `bold 64px ${fontFamily}, "Gungsuh", serif`;
+    const offset = 42;
+
+    // 우상
+    ctx.fillText(chars[0], cx + offset, cy - offset);
+    // 우하
+    ctx.fillText(chars[1], cx + offset, cy + offset);
+    // 좌상
+    ctx.fillText(chars[2], cx - offset, cy - offset);
+    // 좌하
+    ctx.fillText(chars[3], cx - offset, cy + offset);
+
+  } else if (type === 'circle-round') {
+    // === 원형 둘레 회전 도장 ===
+    let processed = text.replace(/\s/g, '');
+    if (processed.length < 2) processed = processed + '회사';
+
+    // 외곽 굵은 원
+    ctx.beginPath();
+    ctx.arc(cx, cy, 105, 0, Math.PI * 2);
+    ctx.lineWidth = 10;
+    ctx.stroke();
+
+    // 중앙 문자 (예: 대표 또는 직인)
+    const centerText = processed.length <= 4 ? '인' : '대표';
+    ctx.font = `bold 46px ${fontFamily}, "Gungsuh", serif`;
+    ctx.fillText(centerText, cx, cy);
+
+    // 둥글게 글자 돌리기
+    const len = processed.length;
+    const startAngle = -Math.PI * 0.8;
+    const endAngle = Math.PI * 0.8;
+    const angleRange = endAngle - startAngle;
+
+    ctx.font = `bold 30px ${fontFamily}, "Gungsuh", sans-serif`;
+    const radius = 70;
+
+    for (let i = 0; i < len; i++) {
+      const angle = startAngle + (i / (len - 1 || 1)) * angleRange;
+      ctx.save();
+      ctx.translate(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
+      ctx.rotate(angle + Math.PI / 2);
+      ctx.fillText(processed[i], 0, 0);
+      ctx.restore();
+    }
+
+  } else if (type === 'square') {
+    // === 사각형 법인 직인형 ===
+    let processed = text.replace(/\s/g, '');
+    const len = processed.length;
+
+    let gridDim = 3;
+    let maxChars = 9;
+    if (len > 9) {
+      gridDim = 4;
+      maxChars = 16;
+    }
+
+    let fillText = processed;
+    if (fillText.length < maxChars) {
+      const diff = maxChars - fillText.length;
+      if (diff === 1) fillText += '인';
+      else if (diff === 2) fillText += '직인';
+      else if (diff === 3) fillText += '의직인';
+      else {
+        fillText += '의법인직인'.slice(0, diff);
+      }
+    } else if (fillText.length > maxChars) {
+      fillText = fillText.slice(0, maxChars);
+    }
+
+    // 외곽 사각형
+    ctx.beginPath();
+    ctx.lineWidth = 14;
+    ctx.strokeRect(15, 15, 210, 210);
+
+    const cellW = 180 / gridDim;
+    const cellH = 180 / gridDim;
+    const fontSize = gridDim === 3 ? 46 : 34;
+    ctx.font = `bold ${fontSize}px ${fontFamily}, "Gungsuh", serif`;
+
+    for (let col = 0; col < gridDim; col++) {
+      for (let row = 0; row < gridDim; row++) {
+        const charIdx = col * gridDim + row;
+        const char = fillText[charIdx] || '';
+        
+        const x = 30 + (gridDim - 1 - col) * cellW + cellW / 2;
+        const y = 30 + row * cellH + cellH / 2;
+        
+        ctx.fillText(char, x, y);
+      }
+    }
+  }
+
+  // 2. 아날로그 인주 마모 효과 필터 (useStamp)
+  if (useStamp) {
+    try {
+      const imgData = ctx.getImageData(0, 0, size, size);
+      const data = imgData.data;
+
+      // 2-1. 랜덤 픽셀 갉아먹기 (노이즈)
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 120 && data[i + 1] < 80) {
+          const rand = Math.random();
+          if (rand < 0.08) {
+            data[i + 3] = 0;
+          } else if (rand < 0.18) {
+            data[i + 3] = Math.floor(data[i + 3] * 0.4);
+          }
+        }
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+
+      // 2-2. 테두리 마모 효과 (데스티네이션 아웃)
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0,0,0,1)';
+      
+      const scratchCount = 25;
+      for (let k = 0; k < scratchCount; k++) {
+        const sx = cx + (Math.random() - 0.5) * 190;
+        const sy = cy + (Math.random() - 0.5) * 190;
+        const r = 1 + Math.random() * 2.5;
+        
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+    } catch (e) {
+      console.error('인주 질감 효과 연산 오류:', e);
+    }
+  }
+};
+
