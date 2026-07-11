@@ -101,7 +101,7 @@ export default function ExpenseLedgerTable({
     
     setIsUpdatingTag(expense.id);
     try {
-      const currentTags = parseTags(expense.memo);
+      const currentTags = parseTags(expense.tags);
       let nextTags: string[];
       if (currentTags.includes(tag)) {
         nextTags = currentTags.filter(t => t !== tag);
@@ -109,7 +109,7 @@ export default function ExpenseLedgerTable({
         nextTags = [...currentTags, tag];
       }
       
-      const updatedMemo = nextTags.join(", ");
+      const updatedTags = nextTags.join(", ");
       
       let parsedAi = {};
       try {
@@ -126,7 +126,8 @@ export default function ExpenseLedgerTable({
         actual_expense_date: expense.actual_expense_date || null,
         deduction_amount: Number(expense.deduction_amount) || 0,
         transfer_fee: Number(expense.transfer_fee) || 0,
-        memo: updatedMemo,
+        memo: expense.memo || "",
+        tags: updatedTags,
         expense_date: expense.expense_date,
         ai_analysis: expense.ai_analysis || ""
       };
@@ -150,14 +151,14 @@ export default function ExpenseLedgerTable({
     const tag = newTagInput.trim();
     setIsUpdatingTag(expense.id);
     try {
-      const currentTags = parseTags(expense.memo);
+      const currentTags = parseTags(expense.tags);
       if (currentTags.includes(tag)) {
         setNewTagInput("");
         return;
       }
       
       const nextTags = [...currentTags, tag];
-      const updatedMemo = nextTags.join(", ");
+      const updatedTags = nextTags.join(", ");
       
       let parsedAi = {};
       try {
@@ -174,7 +175,8 @@ export default function ExpenseLedgerTable({
         actual_expense_date: expense.actual_expense_date || null,
         deduction_amount: Number(expense.deduction_amount) || 0,
         transfer_fee: Number(expense.transfer_fee) || 0,
-        memo: updatedMemo,
+        memo: expense.memo || "",
+        tags: updatedTags,
         expense_date: expense.expense_date,
         ai_analysis: expense.ai_analysis || ""
       };
@@ -481,17 +483,17 @@ export default function ExpenseLedgerTable({
                     className="rounded border-slate-300 text-rose-600 focus:ring-rose-500/20 w-4 h-4 cursor-pointer"
                   />
                 </th>
+                <th className="p-3.5 text-left w-32">등록일시</th>
                 <th className="p-3.5 text-left w-14">결재</th>
-                <th className="p-3.5 text-left w-24">품의 일자</th>
-                <th className="p-3.5 text-left w-24">실지출일</th>
+                <th className="p-3.5 text-left w-24">지출예정일</th>
                 <th className="p-3.5 text-left w-28">계정과목</th>
-                <th className="p-3.5 text-left min-w-[200px]">적요 (용도 및 세부내역)</th>
-                <th className="p-3.5 text-left min-w-[150px]">태그</th>
                 <th className="p-3.5 text-left w-32">거래처/영수인</th>
+                <th className="p-3.5 text-left min-w-[180px]">적요 (용도)</th>
+                <th className="p-3.5 text-left min-w-[180px]">상세비고</th>
+                <th className="p-3.5 text-left min-w-[140px]">태그</th>
                 <th className="p-3.5 text-left w-24">결제수단</th>
-                <th className="p-3.5 text-left w-28">승인번호</th>
                 <th className="p-3.5 text-right w-24">지출액</th>
-                <th className="p-3.5 text-center w-20 sticky right-0 bg-slate-50 border-l z-10">제어</th>
+                <th className="p-3.5 text-center w-20 sticky right-0 bg-slate-50 border-l z-10">작업</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 font-mono text-[11px] text-slate-650">
@@ -524,6 +526,7 @@ export default function ExpenseLedgerTable({
 
                 return (
                   <tr key={exp.id} className="hover:bg-slate-50/50 transition-colors">
+                    {/* 1. 선택 체크박스 */}
                     <td className="p-3.5 text-center">
                       <input 
                         type="checkbox"
@@ -532,16 +535,29 @@ export default function ExpenseLedgerTable({
                         className="rounded border-slate-300 text-rose-600 focus:ring-rose-500/20 w-4 h-4 cursor-pointer"
                       />
                     </td>
+                    {/* 2. 등록일시 */}
+                    <td className="p-3.5 font-sans text-slate-500 whitespace-nowrap">{exp.created_at || "-"}</td>
+                    {/* 3. 결재 상태 */}
                     <td className="p-3.5">
                       <span className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-black border uppercase tracking-wider ${statusBadge}`}>
                         {statusLabel}
                       </span>
                     </td>
-                    <td className="p-3.5 font-sans font-semibold text-slate-700">{reqDate}</td>
-                    <td className="p-3.5 font-sans text-slate-450">{exp.actual_expense_date || "-"}</td>
-                    <td className="p-3.5 font-sans font-bold text-rose-600">{exp.category}</td>
-                    <td className="p-3.5 truncate max-w-[280px] font-sans font-semibold text-slate-800" title={exp.title}>
+                    {/* 4. 지출예정일 */}
+                    <td className="p-3.5 font-sans font-semibold text-slate-700 whitespace-nowrap">{reqDate}</td>
+                    {/* 5. 계정과목 */}
+                    <td className="p-3.5 font-sans font-bold text-rose-600 whitespace-nowrap">{exp.category}</td>
+                    {/* 6. 거래처/영수인 */}
+                    <td className="p-3.5 truncate max-w-[120px] font-sans font-bold text-slate-700" title={payeeText}>
+                      {payeeText}
+                    </td>
+                    {/* 7. 적요 (용도) */}
+                    <td className="p-3.5 truncate max-w-[180px] font-sans font-semibold text-slate-800" title={exp.title}>
                       {exp.title}
+                    </td>
+                    {/* 8. 상세비고 */}
+                    <td className="p-3.5 truncate max-w-[180px] font-sans text-slate-450" title={exp.memo}>
+                      {exp.memo || "-"}
                     </td>
                     <td className="p-3.5 relative">
                       <div 
@@ -678,14 +694,13 @@ export default function ExpenseLedgerTable({
                         </div>
                       )}
                     </td>
-                    <td className="p-3.5 truncate max-w-[120px] font-sans font-bold text-slate-700" title={payeeText}>
-                      {payeeText}
-                    </td>
-                    <td className="p-3.5 font-sans font-bold text-slate-500">{exp.payment_method}</td>
-                    <td className="p-3.5 font-sans text-slate-450 font-semibold">{exp.card_approval_no || "-"}</td>
-                    <td className="p-3.5 text-right font-bold text-slate-900">
+                    {/* 10. 결제수단 */}
+                    <td className="p-3.5 font-sans font-bold text-slate-500 whitespace-nowrap">{exp.payment_method}</td>
+                    {/* 11. 지출액 */}
+                    <td className="p-3.5 text-right font-bold text-slate-900 whitespace-nowrap">
                       {exp.amount.toLocaleString()}원
                     </td>
+                    {/* 12. 작업 제어 */}
                     <td className="p-3.5 text-center sticky right-0 bg-white/95 border-l border-slate-50 z-10">
                       <div className="flex items-center justify-center gap-1">
                         <button
