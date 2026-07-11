@@ -2,11 +2,19 @@ import { NextResponse } from 'next/server';
 import { queryTable } from '../../../../../egdesk-helpers';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
+import { setupDatabase } from '@/lib/setup-db';
+
+let isDbInitialized = false;
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'egdesk-super-secret-key');
 
 export async function POST(req: Request) {
   try {
+    if (!isDbInitialized) {
+      await setupDatabase();
+      isDbInitialized = true;
+    }
+
     const { username, password } = await req.json();
 
     if (!username || !password) {

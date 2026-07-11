@@ -146,9 +146,14 @@ export default function LoginPage() {
         </div>
 
         {/* 로컬 개발 테스트 편의를 위한 크레덴셜 정보 안내 영역 */}
-        <div className="mt-6 p-3 bg-blue-50/50 border border-blue-100 rounded-2xl text-center">
-          <p className="text-[10px] text-blue-750 font-bold">💡 로컬 개발 테스트용 최고관리자 계정</p>
-          <p className="text-[10px] text-blue-500 font-bold mt-1">아이디: <span className="font-mono text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">admin</span> / 비밀번호: <span className="font-mono text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">admin123</span></p>
+        <div className="mt-6 p-3 bg-blue-50/50 border border-blue-100 rounded-2xl text-center space-y-1">
+          <p className="text-[10px] text-blue-750 font-bold">💡 로컬 개발 테스트용 계정 정보</p>
+          <p className="text-[10px] text-blue-500 font-bold">
+            관리자 ID: <span className="font-mono text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">admin</span> / PW: <span className="font-mono text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">admin123</span>
+          </p>
+          <p className="text-[10px] text-blue-500 font-bold">
+            게스트 ID: <span className="font-mono text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">guest</span> / PW: <span className="font-mono text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">1234</span>
+          </p>
         </div>
 
         <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[9px] text-slate-400 font-bold">
