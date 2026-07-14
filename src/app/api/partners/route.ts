@@ -3,32 +3,33 @@ import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, deleteRows, executeSQL } from '../../../../egdesk-helpers';
 
 /**
- * ⚡ 이지데스크 user_data_query 툴의 내부 1000개 수신 한계(Clamping Limit)를 우회하기 위해
- * offset 페이징 처리를 하여 전체 데이터를 안전하게 합산해 로드해주는 헬퍼 함수입니다.
+ * ⚡ 이지데스크 user_data_query 툴의 내부 1000개 수신 한계(Clamping Limit) 및 offset 오작동을 우회하기 위해
+ * executeSQL 로우 쿼리를 활용해 1000건 초과 데이터도 한 번에 안전하게 긁어오는 헬퍼 함수입니다.
+ * (소프트 삭제 필터링 'deleted_at IS NULL' 기본 내장)
  */
 async function queryTableAll(
   tableName: string,
-  options: { filters?: Record<string, string>; orderBy?: string; orderDirection?: 'ASC' | 'DESC' } = {}
+  options: { filters?: Record<string, string> } = {}
 ) {
-  let allRows: any[] = [];
-  let offset = 0;
-  const limit = 1000;
-
-  while (true) {
-    const res = await queryTable(tableName, {
-      ...options,
-      limit,
-      offset
-    });
-    const rows = res.rows || [];
-    allRows = allRows.concat(rows);
-    if (rows.length < limit) {
-      break;
+  try {
+    let query = `SELECT * FROM ${tableName} WHERE deleted_at IS NULL`;
+    
+    // 추가 필터가 있을 경우 AND 조건문 동적 조립
+    if (options && options.filters) {
+      for (const [key, val] of Object.entries(options.filters)) {
+        query += ` AND ${key} = '${String(val).replace(/'/g, "''")}'`;
+      }
     }
-    offset += limit;
+    
+    const res = await executeSQL(query);
+    const rows = (res as any)?.rows || (Array.isArray(res) ? res : []);
+    return { success: true, rows };
+  } catch (err) {
+    console.error(`[queryTableAll SQL 조회 실패] 폴백 가동:`, err);
+    // 폴백 조치: 기본 쿼리 툴로 1000개 로드
+    const fallbackRes = await queryTable(tableName, { limit: 1000, ...options });
+    return { success: true, rows: fallbackRes.rows || [] };
   }
-
-  return { success: true, rows: allRows };
 }
 
 /**
