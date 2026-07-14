@@ -35,6 +35,7 @@ export function PartnerBulkImportModal({ isOpen, onClose, onImport }: PartnerBul
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsedData, setParsedData] = useState<any[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
+  const [importStatus, setImportStatus] = useState<string>("엑셀 파싱 및 데이터 검증 진행 중...");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -167,21 +168,44 @@ export function PartnerBulkImportModal({ isOpen, onClose, onImport }: PartnerBul
   };
 
   // 서버로 벌크 전송
+  // 서버로 벌크 전송 (프론트엔드 청킹 순차 전송)
   const handleImportSubmit = async () => {
     if (parsedData.length === 0) return;
     setLoading(true);
+    setErrors([]);
+    
+    const clientChunkSize = 300; // 300개 단위로 쪼개서 서버로 순차적 전송
+    let totalAdded = 0;
+    let hasError = false;
+    let errorMsg = "";
+
     try {
-      const res = await onImport(parsedData);
-      if (res.success) {
+      for (let i = 0; i < parsedData.length; i += clientChunkSize) {
+        const chunk = parsedData.slice(i, i + clientChunkSize);
+        setImportStatus(`거래처 등록 중... (${Math.min(i + clientChunkSize, parsedData.length)} / ${parsedData.length}건)`);
+        
+        const res = await onImport(chunk);
+        if (res.success) {
+          totalAdded += res.addedCount || 0;
+        } else {
+          hasError = true;
+          errorMsg = res.error || "일부 데이터를 저장하는 도중 오류가 발생했습니다.";
+          break;
+        }
+      }
+
+      if (hasError) {
+        setErrors([errorMsg]);
+      } else {
+        alert(`✨ 총 ${totalAdded}개의 거래처가 성공적으로 일괄 등록되었습니다. (기존 중복 거래처는 제외됨)`);
         onClose();
         resetModal();
-      } else {
-        setErrors([res.error || "일괄 등록 저장에 실패했습니다."]);
       }
     } catch (e: any) {
       setErrors(["일괄 등록 통신 중 시스템 오류가 발생했습니다."]);
     } finally {
       setLoading(false);
+      setImportStatus("엑셀 파싱 및 데이터 검증 진행 중...");
     }
   };
 
@@ -309,7 +333,7 @@ export function PartnerBulkImportModal({ isOpen, onClose, onImport }: PartnerBul
           {loading && (
             <div className="flex flex-col items-center justify-center py-6 gap-2">
               <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-[10px] text-slate-400 font-bold">엑셀 파싱 및 데이터 검증 진행 중...</p>
+              <p className="text-[10px] text-slate-450 font-bold">{importStatus}</p>
             </div>
           )}
 
