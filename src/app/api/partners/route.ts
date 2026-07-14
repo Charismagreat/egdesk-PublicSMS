@@ -334,6 +334,94 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    // 1. 대량 일괄 등록 (Bulk Import) 처리 분기
+    if (body.partners && Array.isArray(body.partners)) {
+      const { partners } = body;
+      const validPartners = partners.filter((pt: any) => pt.company_name?.trim() && pt.type?.trim());
+
+      if (validPartners.length === 0) {
+        return NextResponse.json({ success: false, error: '등록할 유효한 거래처 데이터가 존재하지 않습니다.' }, { status: 400 });
+      }
+
+      // 기존 데이터 조회 (상호명 기준 중복 차단)
+      const existingRes = await queryTable('crm_partners', {});
+      const existingList = existingRes.rows || [];
+      const existingCompanyNames = new Set(existingList.map((p: any) => String(p.company_name || '').trim()));
+
+      const baseTime = Date.now();
+      const rowsToInsert = [];
+      let idx = 1;
+
+      for (const pt of validPartners) {
+        const companyName = pt.company_name.trim();
+        if (existingCompanyNames.has(companyName)) {
+          continue;
+        }
+
+        const partnerId = `PT-${baseTime}-${idx}`;
+        rowsToInsert.push({
+          id: partnerId,
+          type: pt.type || 'BUYER',
+          company_name: companyName,
+          business_number: pt.business_number || '',
+          representative: pt.representative || '',
+          phone: pt.phone || '',
+          fax: pt.fax || '',
+          manager_name: pt.manager_name || '',
+          manager_phone: pt.manager_phone || '',
+          manager_position: pt.manager_position || '',
+          manager_email: pt.manager_email || '',
+          email: pt.email || '',
+          address: pt.address || '',
+          vip_level: pt.vip_level || 'NORMAL',
+          credit_limit: parseInt(pt.credit_limit as any) || 0,
+          business_license_url: '',
+          memo: pt.memo || '',
+          created_at: nowStr
+        });
+        idx++;
+      }
+
+      if (rowsToInsert.length === 0) {
+        return NextResponse.json({ success: true, addedCount: 0, message: '모든 거래처가 이미 등록되어 있어 추가된 내역이 없습니다.' });
+      }
+
+      await insertRows('crm_partners', rowsToInsert);
+
+      // 추가로 crm_partner_contacts 에 대표담당자 동시 백필
+      const contactsToInsert = [];
+      const contactsResForMax = await queryTable('crm_partner_contacts', {});
+      const currentAllContacts = contactsResForMax.rows || [];
+      let nextContactId = currentAllContacts.length > 0 
+        ? Math.max(...currentAllContacts.map((c: any) => parseInt(c.id) || 0)) + 1 
+        : 1;
+
+      for (const row of rowsToInsert) {
+        if (row.manager_name && row.manager_name.trim() !== '' && row.manager_name.trim() !== '미지정') {
+          contactsToInsert.push({
+            id: nextContactId,
+            partner_id: String(row.id),
+            name: row.manager_name,
+            position: row.manager_position || '대표담당자',
+            phone: row.manager_phone || row.phone || '',
+            email: row.manager_email || row.email || '',
+            is_primary: 1,
+            created_at: nowStr
+          });
+          nextContactId++;
+        }
+      }
+
+      if (contactsToInsert.length > 0) {
+        await insertRows('crm_partner_contacts', contactsToInsert);
+      }
+
+      return NextResponse.json({ success: true, addedCount: rowsToInsert.length });
+    }
+
+    // 2. 단일 거래처 등록 (기존 하위 호환성 유지)
     const { 
       type, 
       company_name, 
@@ -359,7 +447,6 @@ export async function POST(req: Request) {
     }
 
     const partnerId = `PT-${Date.now()}`;
-    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
     await insertRows('crm_partners', [{
       id: partnerId,

@@ -1,5 +1,7 @@
+"use client";
+
 import React from "react";
-import { Search, Plus, Edit2, Trash2 } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, FileSpreadsheet } from "lucide-react";
 import { Partner } from "../types";
 
 interface PartnerTableProps {
@@ -12,8 +14,9 @@ interface PartnerTableProps {
   handleEditClick: (pt: Partner, e: React.MouseEvent) => void;
   handleCreateClick: () => void;
   handleDeletePartner: (pt: Partner, e: React.MouseEvent) => void;
-  // 🔍 AI 위해 모니터링 Props 추가
   openAnalysisPopup: (pt: Partner, e: React.MouseEvent) => void;
+  // 📂 엑셀 일괄 등록 트리거
+  handleBulkImportClick: () => void;
 }
 
 export function PartnerTable({
@@ -26,13 +29,13 @@ export function PartnerTable({
   handleEditClick,
   handleCreateClick,
   handleDeletePartner,
-  // 🔍 AI 위해 모니터링 Props 추가
-  openAnalysisPopup
+  openAnalysisPopup,
+  handleBulkImportClick
 }: PartnerTableProps) {
   return (
-    <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-5">
+    <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-5">
       
-      {/* 검색 및 추가 버튼 */}
+      {/* 검색 및 추가/일괄 등록 버튼 */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
@@ -45,37 +48,49 @@ export function PartnerTable({
           />
         </div>
 
-        <button
-          onClick={handleCreateClick}
-          className="px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-slate-900/10 border-none cursor-pointer"
-        >
-          <Plus className="w-4 h-4 text-emerald-400" />
-          신규 {activeTab === 'VENDOR' ? '공급사' : '바이어'} 등록
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 📂 엑셀 일괄 등록 버튼 */}
+          <button
+            onClick={handleBulkImportClick}
+            className="px-4 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-black rounded-xl flex items-center gap-1.5 border border-emerald-100 cursor-pointer transition-all shadow-sm"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            엑셀 일괄 등록
+          </button>
+
+          <button
+            onClick={handleCreateClick}
+            className="px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-slate-900/10 border-none cursor-pointer"
+          >
+            <Plus className="w-4 h-4 text-emerald-400" />
+            신규 {activeTab === 'VENDOR' ? '공급사' : '바이어'} 등록
+          </button>
+        </div>
       </div>
 
-      {/* 메인 테이블 */}
+      {/* 메인 테이블 (가로 폭을 충분히 확보하여 데이터 누수 방지) */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs font-semibold border-collapse">
+        <table className="w-full text-left text-xs font-semibold border-collapse min-w-[1300px]">
           <thead>
-            <tr className="border-b border-slate-100 text-slate-400">
-              <th className="py-3 px-3">코드</th>
-              <th className="py-3 px-3">상호명 / 대표자</th>
-              <th className="py-3 px-3">B2B 담당자</th>
-              <th className="py-3 px-3">계산서 이메일</th>
-              <th className="py-3 px-3">우대 등급</th>
-              <th className="py-3 px-3">누적 거래액</th>
-              <th className="py-3 px-3 text-right">관리</th>
+            <tr className="border-b border-slate-100 text-slate-400 bg-slate-50/50">
+              <th className="py-3 px-3.5 rounded-l-xl">구분 / 코드</th>
+              <th className="py-3 px-3.5">상호명 / 대표자 / 사업자번호</th>
+              <th className="py-3 px-3.5">연락처 / 팩스 / 주소</th>
+              <th className="py-3 px-3.5">대표담당자 정보</th>
+              <th className="py-3 px-3.5">계산서 이메일</th>
+              <th className="py-3 px-3.5">등급 / 여신한도</th>
+              <th className="py-3 px-3.5">누적 거래액</th>
+              <th className="py-3 px-3.5 text-right rounded-r-xl">관리</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="text-center py-12 text-slate-400">거래처 목록 분석 중...</td>
+                <td colSpan={8} className="text-center py-12 text-slate-400">거래처 목록 분석 중...</td>
               </tr>
             ) : filteredPartners.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-12 text-slate-400">
+                <td colSpan={8} className="text-center py-12 text-slate-400">
                   등록된 {activeTab === 'VENDOR' ? '공급처가' : activeTab === 'BUYER' ? '바이어가' : '관계사가'} 없습니다.
                 </td>
               </tr>
@@ -84,58 +99,110 @@ export function PartnerTable({
                 <tr 
                   key={pt.id} 
                   onClick={() => openDetailPopup(pt)}
-                  className="border-b border-slate-55 hover:bg-slate-50/50 cursor-pointer transition-colors"
+                  className="border-b border-slate-50 hover:bg-slate-50/50 cursor-pointer transition-colors"
                 >
-                  <td className="py-4 px-3 font-mono text-slate-500">{pt.id}</td>
-                  <td className="py-4 px-3">
-                    <span className="font-extrabold text-slate-800 block">{pt.company_name}</span>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">
-                      대표: {pt.representative || '미기입'} | {pt.business_number || '사업자 없음'}
+                  {/* 1. 구분 및 코드 */}
+                  <td className="py-4 px-3.5">
+                    <span className={`inline-flex px-2 py-0.5 rounded text-[8px] font-black tracking-wider ${
+                      pt.type === 'VENDOR' 
+                        ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
+                        : pt.type === 'BUYER' 
+                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                        : 'bg-amber-50 text-amber-600 border border-amber-100'
+                    }`}>
+                      {pt.type === 'VENDOR' ? '공급사' : pt.type === 'BUYER' ? '바이어' : '관계사'}
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-400 block mt-1.5">{pt.id}</span>
+                  </td>
+
+                  {/* 2. 상호명 / 대표자 / 사업자번호 */}
+                  <td className="py-4 px-3.5">
+                    <span className="font-extrabold text-slate-800 block text-xs">{pt.company_name}</span>
+                    <span className="text-[10px] text-slate-450 block mt-1">
+                      대표: <span className="text-slate-600 font-bold">{pt.representative || '미기입'}</span>
+                      <span className="mx-1 text-slate-200">|</span>
+                      사업자: <span className="font-mono text-slate-500">{pt.business_number ? pt.business_number.replace(/(\d{3})(\d{2})(\d{5})/, '$1-$2-$3') : '사업자 없음'}</span>
                     </span>
                   </td>
-                  <td className="py-4 px-3">
-                    <span className="font-bold text-slate-700 block">{pt.manager_name || '미지정'}</span>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">{pt.manager_phone || pt.phone}</span>
+
+                  {/* 3. 연락처 / 팩스 / 주소 */}
+                  <td className="py-4 px-3.5">
+                    <span className="text-slate-700 block">{pt.phone || '전화 없음'}</span>
+                    <span className="text-[10px] text-slate-450 block mt-1">
+                      팩스: <span className="font-mono">{pt.fax || '-'}</span>
+                      <span className="mx-1 text-slate-200">|</span>
+                      주소: <span className="text-slate-500 font-medium">{pt.address || '주소 미기입'}</span>
+                    </span>
                   </td>
-                  <td className="py-4 px-3 text-slate-500 font-mono">{pt.email || '계산서 미발행'}</td>
-                  <td className="py-4 px-3">
+
+                  {/* 4. 대표담당자 정보 */}
+                  <td className="py-4 px-3.5">
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-slate-700">{pt.manager_name || '미지정'}</span>
+                      {pt.manager_position && (
+                        <span className="text-[9px] bg-slate-100 text-slate-500 px-1 py-0.2 rounded font-bold">{pt.manager_position}</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-450 block mt-1.5">
+                      연락처: <span className="text-slate-600 font-semibold">{pt.manager_phone || '-'}</span>
+                      {pt.manager_email && (
+                        <>
+                          <span className="mx-1 text-slate-200">|</span>
+                          이메일: <span className="font-mono text-slate-500">{pt.manager_email}</span>
+                        </>
+                      )}
+                    </span>
+                  </td>
+
+                  {/* 5. 계산서 이메일 */}
+                  <td className="py-4 px-3.5 text-slate-550 font-mono">{pt.email || '계산서 미지정'}</td>
+
+                  {/* 6. 우대 등급 / 여신한도 */}
+                  <td className="py-4 px-3.5">
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
-                      pt.type === 'AFFILIATE'
-                        ? 'bg-indigo-50 text-indigo-600 border border-indigo-100'
-                        : pt.vip_level === 'VIP'
+                      pt.vip_level === 'VIP'
                         ? 'bg-amber-100 text-amber-600 border border-amber-200' 
+                        : pt.vip_level === 'VVIP'
+                        ? 'bg-rose-100 text-rose-600 border border-rose-200'
                         : 'bg-slate-100 text-slate-500'
                     }`}>
-                      {pt.type === 'AFFILIATE' ? '🤝 관계사' : pt.vip_level}
+                      {pt.vip_level || 'NORMAL'}
+                    </span>
+                    <span className="text-[10px] text-slate-450 block mt-1.5">
+                      여신: <span className="font-extrabold text-slate-700">{(pt.credit_limit || 0).toLocaleString()}원</span>
                     </span>
                   </td>
-                  <td className="py-4 px-3">
-                    <span className="font-extrabold text-indigo-600">{(pt.total_performance || 0).toLocaleString()}원</span>
+
+                  {/* 7. 누적 거래액 / 외상 건수 */}
+                  <td className="py-4 px-3.5">
+                    <span className="font-black text-indigo-600">{(pt.total_performance || 0).toLocaleString()}원</span>
                     {pt.pending_count! > 0 && (
                       <span className="text-[9px] bg-rose-50 text-rose-500 border border-rose-100 px-1.5 py-0.2 rounded ml-1.5 font-bold">
                         외상 {pt.pending_count}건
                       </span>
                     )}
                   </td>
-                  <td className="py-4 px-3 text-right">
+
+                  {/* 8. 관리 버튼 */}
+                  <td className="py-4 px-3.5 text-right">
                     <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
                       <button 
                         onClick={(e) => openAnalysisPopup(pt, e)}
-                        className="flex items-center gap-1.5 py-1.5 px-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg transition-colors border-none cursor-pointer text-[10px] font-black shrink-0"
+                        className="flex items-center gap-1.5 py-1.5 px-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg transition-all border-none cursor-pointer text-[10px] font-black shrink-0"
                         title="AI 위해 분석"
                       >
                         🔍 AI 분석
                       </button>
                       <button 
                         onClick={(e) => handleEditClick(pt, e)}
-                        className="p-1.5 bg-slate-100 text-slate-650 hover:bg-slate-200 rounded-lg transition-colors border-none cursor-pointer"
+                        className="p-1.5 bg-slate-100 text-slate-650 hover:bg-slate-200 rounded-lg transition-all border-none cursor-pointer"
                         title="수정"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button 
                         onClick={(e) => handleDeletePartner(pt, e)}
-                        className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors border-none cursor-pointer"
+                        className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-all border-none cursor-pointer"
                         title="삭제"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

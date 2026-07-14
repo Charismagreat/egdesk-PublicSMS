@@ -1,5 +1,6 @@
 "use client";
  
+import React, { useState } from "react";
 import { usePartners } from "./hooks/usePartners";
 import { Header } from "./components/Header";
 import { StatsSummary } from "./components/StatsSummary";
@@ -7,6 +8,7 @@ import { PartnerTable } from "./components/PartnerTable";
 import { PartnerFormModal } from "./components/PartnerFormModal";
 import { PartnerDetailModal } from "./components/PartnerDetailModal";
 import { PartnerAnalysisModal } from "./components/PartnerAnalysisModal";
+import { PartnerBulkImportModal } from "./components/PartnerBulkImportModal";
 
 export default function PartnersDashboard() {
   const {
@@ -50,12 +52,18 @@ export default function PartnersDashboard() {
     isAnalysisOpen,
     setIsAnalysisOpen,
     analysisPartner,
+    setAnalysisPartner,
     partnerReports,
     isAnalyzing,
     openAnalysisPopup,
     handleRunAiAnalysis,
-    refetchDetail
+    refetchDetail,
+    // 📂 엑셀 일괄 등록
+    handleBulkImport
   } = usePartners();
+
+  // 📂 엑셀 일괄 등록 모달 열림 상태
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
 
   // 외상 거래 경고 거래처 집계
   const pendingAlertCount = partners.filter(p => p.pending_count! > 0).length;
@@ -91,8 +99,9 @@ export default function PartnersDashboard() {
         handleEditClick={handleEditClick}
         handleCreateClick={handleCreateClick}
         handleDeletePartner={handleDeletePartner}
-        // 🔍 AI 위해 모니터링 추가
         openAnalysisPopup={openAnalysisPopup}
+        // 📂 엑셀 일괄 등록 클릭 트리거
+        handleBulkImportClick={() => setIsBulkImportOpen(true)}
       />
 
       <PartnerFormModal
@@ -129,6 +138,13 @@ export default function PartnersDashboard() {
         partnerReports={partnerReports}
         isAnalyzing={isAnalyzing}
         handleRunAiAnalysis={handleRunAiAnalysis}
+      />
+
+      {/* 📂 엑셀/CSV 일괄 등록 모달 */}
+      <PartnerBulkImportModal
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        onImport={handleBulkImport}
       />
 
     </div>

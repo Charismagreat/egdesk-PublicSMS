@@ -458,6 +458,26 @@ export function usePartners() {
     }
   };
 
+  // 📂 대량 일괄 등록 API 호출
+  const handleBulkImport = async (partnersData: any[]) => {
+    try {
+      const res = await apiFetch("/api/partners", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partners: partnersData })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchPartners();
+        return { success: true, addedCount: data.addedCount };
+      } else {
+        return { success: false, error: data.error };
+      }
+    } catch (err) {
+      return { success: false, error: "서버 통신 중 오류가 발생했습니다." };
+    }
+  };
+
   // 검색 필터링
   const filteredPartners = partners.filter(pt => {
     if (!pt.type || !pt.type.split(',').includes(activeTab)) return false;
@@ -531,6 +551,8 @@ export function usePartners() {
     partnerReports,
     isAnalyzing,
     openAnalysisPopup,
-    handleRunAiAnalysis
+    handleRunAiAnalysis,
+    // 📂 엑셀 일괄 등록
+    handleBulkImport
   };
 }
