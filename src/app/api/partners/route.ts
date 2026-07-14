@@ -401,25 +401,55 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: '등록할 유효한 거래처 데이터가 존재하지 않습니다.' }, { status: 400 });
       }
 
-      // 기존 데이터 조회 (상호명 기준 중복 차단)
+      // 기존 데이터 조회 (상호명 기준 중복 차단 및 역할 병합용)
       const existingRes = await queryTableAll('crm_partners');
       const existingList = existingRes.rows || [];
-      const existingCompanyNames = new Set(existingList.map((p: any) => String(p.company_name || '').trim()));
+      
+      // 상호명을 Key로 기존 파트너 정보를 매핑하는 Map 생성
+      const existingPartnerMap = new Map<string, any>();
+      for (const p of existingList) {
+        if (p.company_name) {
+          existingPartnerMap.set(String(p.company_name).trim(), p);
+        }
+      }
 
       const baseTime = Date.now();
       const rowsToInsert = [];
+      const rowsToUpdate = []; // 기존 역할에 더해 새로운 거래처 구분이 추가된 거래처 리스트
       let idx = 1;
 
       for (const pt of validPartners) {
         const companyName = pt.company_name.trim();
-        if (existingCompanyNames.has(companyName)) {
+        const newType = pt.type || 'BUYER';
+
+        if (existingPartnerMap.has(companyName)) {
+          // ⚡ 기존에 이미 등록된 거래처인 경우: 역할(type) 병합 업데이트 가동
+          const existingPt = existingPartnerMap.get(companyName);
+          const existingTypes = (existingPt.type || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+          const newTypes = newType.split(',').map((t: string) => t.trim()).filter(Boolean);
+          
+          // 중복이 없는 합집합 생성 (예: VENDOR + BUYER = VENDOR,BUYER)
+          const mergedTypesSet = new Set([...existingTypes, ...newTypes]);
+          const mergedTypeStr = Array.from(mergedTypesSet).join(',');
+
+          // 역할 구분에 변화가 생긴 경우 (역할 승격/겸업 확장)
+          if (mergedTypeStr !== existingPt.type) {
+            rowsToUpdate.push({
+              id: existingPt.id,
+              company_name: companyName,
+              newType: mergedTypeStr
+            });
+            // 메모리상의 Map도 실시간 갱신해 줌으로써 이후 반복 처리 차단
+            existingPt.type = mergedTypeStr;
+          }
           continue;
         }
 
+        // 완전히 새로운 거래처인 경우 신규 등록 처리
         const partnerId = `PT-${baseTime}-${idx}`;
         rowsToInsert.push({
           id: partnerId,
-          type: pt.type || 'BUYER',
+          type: newType,
           company_name: companyName,
           business_number: pt.business_number || '',
           representative: pt.representative || '',
@@ -440,18 +470,31 @@ export async function POST(req: Request) {
         idx++;
       }
 
-      if (rowsToInsert.length === 0) {
-        return NextResponse.json({ success: true, addedCount: 0, message: '모든 거래처가 이미 등록되어 있어 추가된 내역이 없습니다.' });
+      if (rowsToInsert.length === 0 && rowsToUpdate.length === 0) {
+        return NextResponse.json({ success: true, addedCount: 0, message: '모든 거래처가 이미 동일한 역할로 등록되어 있어 추가/변경된 내역이 없습니다.' });
       }
 
-      // SQLite too many variables 에러 예방을 위해 50개 단위 청크 순차 인서트
+      // 1. 역할이 확장된 겸업 거래처들 일괄 업데이트 실행 (순수 egdesk-helpers.ts의 updateRows 사용)
+      if (rowsToUpdate.length > 0) {
+        for (const up of rowsToUpdate) {
+          await updateRows('crm_partners', 
+            { type: up.newType }, 
+            { filters: { id: up.id } }
+          );
+          console.log(`✓ [B2B 겸업 거래처 승격] 거래처 '${up.company_name}'의 역할을 '${up.newType}'(으)로 병합 업데이트 완료.`);
+        }
+      }
+
+      // 2. 신규 거래처 일괄 인서트 실행 (SQLite 변수 초과 방지 55개 단위 청킹)
       const chunkSize = 55;
-      for (let i = 0; i < rowsToInsert.length; i += chunkSize) {
-        const chunk = rowsToInsert.slice(i, i + chunkSize);
-        await insertRows('crm_partners', chunk);
+      if (rowsToInsert.length > 0) {
+        for (let i = 0; i < rowsToInsert.length; i += chunkSize) {
+          const chunk = rowsToInsert.slice(i, i + chunkSize);
+          await insertRows('crm_partners', chunk);
+        }
       }
 
-      // 추가로 crm_partner_contacts 에 대표담당자 동시 백필
+      // 3. 추가로 crm_partner_contacts 에 대표담당자 동시 백필
       const contactsToInsert = [];
       const contactsResForMax = await queryTableAll('crm_partner_contacts');
       const currentAllContacts = contactsResForMax.rows || [];
@@ -482,7 +525,9 @@ export async function POST(req: Request) {
         }
       }
 
-      return NextResponse.json({ success: true, addedCount: rowsToInsert.length });
+      // 신규 등록된 개수와 역할이 병합/업데이트된 개수를 통합하여 최종 반환
+      const totalProcessedCount = rowsToInsert.length + rowsToUpdate.length;
+      return NextResponse.json({ success: true, addedCount: totalProcessedCount });
     }
 
     // 2. 단일 거래처 등록 (기존 하위 호환성 유지)
