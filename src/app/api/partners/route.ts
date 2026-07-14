@@ -9,10 +9,10 @@ import { queryTable, insertRows, updateRows, deleteRows, executeSQL } from '../.
  */
 async function healPartnerContactsData() {
   try {
-    const contactsRes = await queryTable('crm_partner_contacts', {});
+    const contactsRes = await queryTable('crm_partner_contacts', { limit: 100000 });
     const contacts = contactsRes.rows || [];
     
-    const partnersRes = await queryTable('crm_partners', {});
+    const partnersRes = await queryTable('crm_partners', { limit: 100000 });
     const partners = partnersRes.rows || [];
 
     for (const contact of contacts) {
@@ -74,7 +74,7 @@ async function healPartnerContactsData() {
         console.log(`[담당자 미보유 복구 대상] 거래처: ${partner.company_name}, 대표담당자명: ${mName}`);
         
         // crm_partner_contacts 테이블의 새로운 ID 구하기 (순수 egdesk-helpers.ts 활용)
-        const contactsResForMax = await queryTable('crm_partner_contacts', {});
+        const contactsResForMax = await queryTable('crm_partner_contacts', { limit: 100000 });
         const currentAllContacts = contactsResForMax.rows || [];
         const nextId = currentAllContacts.length > 0 
           ? Math.max(...currentAllContacts.map((c: any) => parseInt(c.id) || 0)) + 1 
@@ -119,7 +119,7 @@ export async function GET(req: Request) {
     // 0-0. 기존 명함 대장 조회 (AI 추천용)
     // ────────────────────────────────────────────────────────
     if (action === 'contacts') {
-      const contactsRes = await queryTable('crm_partner_contacts', {});
+      const contactsRes = await queryTable('crm_partner_contacts', { limit: 100000 });
       const contacts = (contactsRes.rows || []).filter((c: any) => !c.deleted_at);
       return NextResponse.json({ success: true, contacts });
     }
@@ -153,7 +153,7 @@ export async function GET(req: Request) {
 
       let partners: any[] = [];
       try {
-        const allPartnersRes = await queryTable('crm_partners', {});
+        const allPartnersRes = await queryTable('crm_partners', { limit: 100000 });
         const allPartners = allPartnersRes.rows || [];
         partners = allPartners.filter((p: any) => 
           !p.deleted_at && 
@@ -239,17 +239,17 @@ export async function GET(req: Request) {
     // ────────────────────────────────────────────────────────
     // 2. 전체 거래처 리스트 조회 및 실시간 거래 지표 합계 산출
     // ────────────────────────────────────────────────────────
-    const partnersRes = await queryTable('crm_partners', {});
+    const partnersRes = await queryTable('crm_partners', { limit: 100000 });
     const partners = (partnersRes.rows || []).filter((pt: any) => !pt.deleted_at);
 
     // 각 거래처별 수/발주 총 거래액을 집계하기 위해 전체 발주/수주 테이블 마이닝
     let allPos: any[] = [];
     let allSos: any[] = [];
     try {
-      const poRes = await queryTable('crm_purchase_orders', {});
+      const poRes = await queryTable('crm_purchase_orders', { limit: 100000 });
       allPos = (poRes.rows || []).filter((r: any) => !r.deleted_at);
       
-      const soRes = await queryTable('crm_sales_orders', {});
+      const soRes = await queryTable('crm_sales_orders', { limit: 100000 });
       allSos = (soRes.rows || []).filter((r: any) => !r.deleted_at);
     } catch (e) {
       console.error('SCM 집계용 베이스 마이닝 지연:', e);
@@ -259,7 +259,7 @@ export async function GET(req: Request) {
     let allContacts: any[] = [];
     let primaryContacts: any[] = [];
     try {
-      const contactsRes = await queryTable('crm_partner_contacts', {});
+      const contactsRes = await queryTable('crm_partner_contacts', { limit: 100000 });
       allContacts = (contactsRes.rows || []).filter((c: any) => !c.deleted_at);
       primaryContacts = allContacts.filter((c: any) => Number(c.is_primary) === 1);
     } catch (e) {
@@ -346,7 +346,7 @@ export async function POST(req: Request) {
       }
 
       // 기존 데이터 조회 (상호명 기준 중복 차단)
-      const existingRes = await queryTable('crm_partners', {});
+      const existingRes = await queryTable('crm_partners', { limit: 100000 });
       const existingList = existingRes.rows || [];
       const existingCompanyNames = new Set(existingList.map((p: any) => String(p.company_name || '').trim()));
 
@@ -388,11 +388,16 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: true, addedCount: 0, message: '모든 거래처가 이미 등록되어 있어 추가된 내역이 없습니다.' });
       }
 
-      await insertRows('crm_partners', rowsToInsert);
+      // SQLite too many variables 에러 예방을 위해 50개 단위 청크 순차 인서트
+      const chunkSize = 55;
+      for (let i = 0; i < rowsToInsert.length; i += chunkSize) {
+        const chunk = rowsToInsert.slice(i, i + chunkSize);
+        await insertRows('crm_partners', chunk);
+      }
 
       // 추가로 crm_partner_contacts 에 대표담당자 동시 백필
       const contactsToInsert = [];
-      const contactsResForMax = await queryTable('crm_partner_contacts', {});
+      const contactsResForMax = await queryTable('crm_partner_contacts', { limit: 100000 });
       const currentAllContacts = contactsResForMax.rows || [];
       let nextContactId = currentAllContacts.length > 0 
         ? Math.max(...currentAllContacts.map((c: any) => parseInt(c.id) || 0)) + 1 
@@ -415,7 +420,10 @@ export async function POST(req: Request) {
       }
 
       if (contactsToInsert.length > 0) {
-        await insertRows('crm_partner_contacts', contactsToInsert);
+        for (let i = 0; i < contactsToInsert.length; i += chunkSize) {
+          const chunk = contactsToInsert.slice(i, i + chunkSize);
+          await insertRows('crm_partner_contacts', chunk);
+        }
       }
 
       return NextResponse.json({ success: true, addedCount: rowsToInsert.length });
