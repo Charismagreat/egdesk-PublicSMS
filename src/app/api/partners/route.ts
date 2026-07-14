@@ -416,19 +416,21 @@ export async function POST(req: Request) {
       const baseTime = Date.now();
       const rowsToInsert = [];
       const rowsToUpdate = []; // 기존 역할에 더해 새로운 거래처 구분이 추가된 거래처 리스트
+      
+      // ⚡ 이번 엑셀 내에서 신규 삽입 대상으로 분류된 상호명 매핑 Map
+      const newInsertedMap = new Map<string, any>();
       let idx = 1;
 
       for (const pt of validPartners) {
         const companyName = pt.company_name.trim();
         const newType = pt.type || 'BUYER';
 
+        // 1. 기존 데이터베이스에 이미 존재하는 거래처인 경우 (역할 병합)
         if (existingPartnerMap.has(companyName)) {
-          // ⚡ 기존에 이미 등록된 거래처인 경우: 역할(type) 병합 업데이트 가동
           const existingPt = existingPartnerMap.get(companyName);
           const existingTypes = (existingPt.type || '').split(',').map((t: string) => t.trim()).filter(Boolean);
           const newTypes = newType.split(',').map((t: string) => t.trim()).filter(Boolean);
           
-          // 중복이 없는 합집합 생성 (예: VENDOR + BUYER = VENDOR,BUYER)
           const mergedTypesSet = new Set([...existingTypes, ...newTypes]);
           const mergedTypeStr = Array.from(mergedTypesSet).join(',');
 
@@ -439,15 +441,28 @@ export async function POST(req: Request) {
               company_name: companyName,
               newType: mergedTypeStr
             });
-            // 메모리상의 Map도 실시간 갱신해 줌으로써 이후 반복 처리 차단
             existingPt.type = mergedTypeStr;
           }
           continue;
         }
 
-        // 완전히 새로운 거래처인 경우 신규 등록 처리
+        // 2. ⚡ 이번 엑셀 파일 자체 내에서 앞서 신규 삽입 예정으로 분류된 거래처인 경우 (메모리상 역할 병합)
+        if (newInsertedMap.has(companyName)) {
+          const insertTarget = newInsertedMap.get(companyName);
+          const existingTypes = (insertTarget.type || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+          const newTypes = newType.split(',').map((t: string) => t.trim()).filter(Boolean);
+          
+          const mergedTypesSet = new Set([...existingTypes, ...newTypes]);
+          const mergedTypeStr = Array.from(mergedTypesSet).join(',');
+          
+          // 메모리상 삽입 예정 대상의 type 필드를 직접 겸업(VENDOR,BUYER)으로 확장
+          insertTarget.type = mergedTypeStr;
+          continue;
+        }
+
+        // 3. 완전히 새로운 거래처인 경우 신규 등록 처리
         const partnerId = `PT-${baseTime}-${idx}`;
-        rowsToInsert.push({
+        const newRow = {
           id: partnerId,
           type: newType,
           company_name: companyName,
@@ -466,7 +481,9 @@ export async function POST(req: Request) {
           business_license_url: '',
           memo: pt.memo || '',
           created_at: nowStr
-        });
+        };
+        rowsToInsert.push(newRow);
+        newInsertedMap.set(companyName, newRow); // 이번 엑셀 삽입 추적 Map에 등록
         idx++;
       }
 
