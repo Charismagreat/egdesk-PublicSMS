@@ -8,6 +8,7 @@ export function usePartners() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<'VENDOR' | 'BUYER' | 'AFFILIATE'>('egdesk_partners_activeTab', 'VENDOR');
   const [searchQuery, setSearchQuery, isSearchQueryRestored] = usePersistedState("egdesk_partners_searchQuery", "");
+  const [currentPage, setCurrentPage, isCurrentPageRestored] = usePersistedState<number>('egdesk_partners_currentPage', 1);
 
   // 등록/수정 모달 상태
   const [isModalOpen, setIsModalOpen, isModalOpenRestored] = usePersistedState("egdesk_partners_isModalOpen", false);
@@ -59,7 +60,7 @@ export function usePartners() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   // 모든 세션 상태 복원이 완료되었는지 감시하는 플래그
-  const isRestored = isActiveTabRestored && isSearchQueryRestored && isModalOpenRestored && isModalModeRestored && isEditingIdRestored && isFormRestored && isDetailOpenRestored && isSelectedPartnerRestored;
+  const isRestored = isActiveTabRestored && isSearchQueryRestored && isModalOpenRestored && isModalModeRestored && isEditingIdRestored && isFormRestored && isDetailOpenRestored && isSelectedPartnerRestored && isCurrentPageRestored;
 
   // 📂 B2B 사업자등록증 이미지/PDF 파일 업로드 및 AI 스캔 연동
   const handleFileUpload = async (fileObj: File) => {
@@ -248,6 +249,13 @@ export function usePartners() {
       setIsAnalyzing(false);
     }
   };
+
+  // ⚡ 탭 전환 또는 검색어 변경 시 페이지 1페이지로 리셋
+  useEffect(() => {
+    if (isRestored) {
+      setCurrentPage(1);
+    }
+  }, [activeTab, searchQuery, isRestored]);
 
   useEffect(() => {
     if (isRestored) {
@@ -493,6 +501,13 @@ export function usePartners() {
     );
   });
 
+  // ⚡ 페이지네이션 연산 추가 (10개씩 페이징)
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(filteredPartners.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedPartners = filteredPartners.slice(startIndex, endIndex);
+
   // 집계 수치 산출
   const totalVendors = partners.filter(p => p.type && p.type.split(',').includes('VENDOR')).length;
   const totalBuyers = partners.filter(p => p.type && p.type.split(',').includes('BUYER')).length;
@@ -553,6 +568,11 @@ export function usePartners() {
     openAnalysisPopup,
     handleRunAiAnalysis,
     // 📂 엑셀 일괄 등록
-    handleBulkImport
+    handleBulkImport,
+    // ⚡ 페이지네이션 관련 프로퍼티 추가
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    paginatedPartners
   };
 }

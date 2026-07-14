@@ -59,7 +59,12 @@ export default function PartnersDashboard() {
     handleRunAiAnalysis,
     refetchDetail,
     // 📂 엑셀 일괄 등록
-    handleBulkImport
+    handleBulkImport,
+    // ⚡ 페이지네이션 추가
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    paginatedPartners
   } = usePartners();
 
   // 📂 엑셀 일괄 등록 모달 열림 상태
@@ -102,6 +107,11 @@ export default function PartnersDashboard() {
         openAnalysisPopup={openAnalysisPopup}
         // 📂 엑셀 일괄 등록 클릭 트리거
         handleBulkImportClick={() => setIsBulkImportOpen(true)}
+        // ⚡ 페이지네이션 연동 추가
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        totalPages={totalPages}
+        paginatedPartners={paginatedPartners}
       />
 
       <PartnerFormModal

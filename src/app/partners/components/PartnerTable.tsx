@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Search, Plus, Edit2, Trash2, FileSpreadsheet } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight } from "lucide-react";
 import { Partner } from "../types";
 
 interface PartnerTableProps {
@@ -17,6 +17,11 @@ interface PartnerTableProps {
   openAnalysisPopup: (pt: Partner, e: React.MouseEvent) => void;
   // 📂 엑셀 일괄 등록 트리거
   handleBulkImportClick: () => void;
+  // ⚡ 페이지네이션 Props 추가
+  currentPage: number;
+  setCurrentPage: (page: number) => void;
+  totalPages: number;
+  paginatedPartners: Partner[];
 }
 
 export function PartnerTable({
@@ -30,8 +35,44 @@ export function PartnerTable({
   handleCreateClick,
   handleDeletePartner,
   openAnalysisPopup,
-  handleBulkImportClick
+  handleBulkImportClick,
+  // ⚡ 페이지네이션 Props 연동
+  currentPage,
+  setCurrentPage,
+  totalPages,
+  paginatedPartners
 }: PartnerTableProps) {
+  
+  // 페이지 번호 리스트 계산 (최대 5개씩 묶어서 출력)
+  const renderPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = startPage + maxVisiblePages - 1;
+
+    if (endPage > totalPages) {
+      endPage = totalPages;
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <button
+          key={i}
+          onClick={() => setCurrentPage(i)}
+          className={`w-8 h-8 rounded-lg text-xs font-black border transition-all ${
+            currentPage === i
+              ? "bg-emerald-600 border-emerald-600 text-white shadow-sm shadow-emerald-600/20"
+              : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50 hover:border-slate-300"
+          } cursor-pointer`}
+        >
+          {i}
+        </button>
+      );
+    }
+    return pages;
+  };
+
   return (
     <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-5">
       
@@ -88,14 +129,14 @@ export function PartnerTable({
               <tr>
                 <td colSpan={8} className="text-center py-12 text-slate-400">거래처 목록 분석 중...</td>
               </tr>
-            ) : filteredPartners.length === 0 ? (
+            ) : paginatedPartners.length === 0 ? (
               <tr>
                 <td colSpan={8} className="text-center py-12 text-slate-400">
                   등록된 {activeTab === 'VENDOR' ? '공급처가' : activeTab === 'BUYER' ? '바이어가' : '관계사가'} 없습니다.
                 </td>
               </tr>
             ) : (
-              filteredPartners.map(pt => (
+              paginatedPartners.map(pt => (
                 <tr 
                   key={pt.id} 
                   onClick={() => openDetailPopup(pt)}
@@ -215,6 +256,43 @@ export function PartnerTable({
           </tbody>
         </table>
       </div>
+
+      {/* ⚡ 페이지네이션 바 */}
+      {totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-100 text-xs font-semibold text-slate-500">
+          <div>
+            총 <span className="text-slate-800 font-extrabold">{filteredPartners.length}</span>건 중{" "}
+            <span className="text-slate-800 font-extrabold">{(currentPage - 1) * 10 + 1}</span> -{" "}
+            <span className="text-slate-800 font-extrabold">
+              {Math.min(currentPage * 10, filteredPartners.length)}
+            </span>
+            건 표시
+          </div>
+          
+          <div className="flex items-center gap-1.5">
+            {/* 이전 페이지 버튼 */}
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(currentPage - 1)}
+              className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            
+            {/* 페이지 번호 목록 */}
+            {renderPageNumbers()}
+            
+            {/* 다음 페이지 버튼 */}
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(currentPage + 1)}
+              className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );
