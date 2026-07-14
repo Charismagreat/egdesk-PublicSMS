@@ -3,33 +3,56 @@ import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, deleteRows, executeSQL } from '../../../../egdesk-helpers';
 
 /**
- * ⚡ 이지데스크 user_data_query 툴의 내부 1000개 수신 한계(Clamping Limit) 및 offset 오작동을 우회하기 위해
- * executeSQL 로우 쿼리를 활용해 1000건 초과 데이터도 한 번에 안전하게 긁어오는 헬퍼 함수입니다.
- * (소프트 삭제 필터링 'deleted_at IS NULL' 기본 내장)
+ * ⚡ 이지데스크 user_data_query 툴의 내부 1000개 수신 한계(Clamping Limit)를 우회하기 위해
+ * offset 페이징 처리를 하여 전체 데이터를 안전하게 합산해 로드해주는 헬퍼 함수입니다.
+ * (순수 queryTable 헬퍼만 사용하며, offset 오작동에 따른 무한 루프를 방지하기 위해 이중 안전 가드가 내장되어 있습니다.)
  */
 async function queryTableAll(
   tableName: string,
   options: { filters?: Record<string, string> } = {}
 ) {
-  try {
-    let query = `SELECT * FROM ${tableName} WHERE deleted_at IS NULL`;
-    
-    // 추가 필터가 있을 경우 AND 조건문 동적 조립
-    if (options && options.filters) {
-      for (const [key, val] of Object.entries(options.filters)) {
-        query += ` AND ${key} = '${String(val).replace(/'/g, "''")}'`;
+  let allRows: any[] = [];
+  let offset = 0;
+  const limit = 1000;
+  const seenIds = new Set<string>();
+  let iteration = 0;
+  const maxIterations = 30; // 최대 3만 건 제한 가드 (무한루프 방지)
+
+  while (iteration < maxIterations) {
+    iteration++;
+    const res = await queryTable(tableName, {
+      ...options,
+      limit,
+      offset
+    });
+    const rows = res.rows || [];
+    if (rows.length === 0) {
+      break;
+    }
+
+    let hasNewData = false;
+    for (const r of rows) {
+      // deleted_at 이 걸려있는 레코드는 필터링 (소프트 삭제 규정 준수)
+      if (r.deleted_at) continue;
+
+      const idKey = r.id ? String(r.id) : JSON.stringify(r);
+      if (!seenIds.has(idKey)) {
+        seenIds.add(idKey);
+        allRows.push(r);
+        hasNewData = true;
       }
     }
-    
-    const res = await executeSQL(query);
-    const rows = (res as any)?.rows || (Array.isArray(res) ? res : []);
-    return { success: true, rows };
-  } catch (err) {
-    console.error(`[queryTableAll SQL 조회 실패] 폴백 가동:`, err);
-    // 폴백 조치: 기본 쿼리 툴로 1000개 로드
-    const fallbackRes = await queryTable(tableName, { limit: 1000, ...options });
-    return { success: true, rows: fallbackRes.rows || [] };
+
+    // 만약 새로 긁어온 1000개 중 이전에 보지 못한 새로운 데이터가 하나도 없거나
+    // limit 개수 미만으로 데이터를 긁어왔다면 더 이상 데이터가 없는 것으로 판별하여 루프 종료
+    if (!hasNewData || rows.length < limit) {
+      break;
+    }
+
+    offset += limit;
   }
+
+  return { success: true, rows: allRows };
 }
 
 /**
@@ -44,6 +67,11 @@ async function healPartnerContactsData() {
     
     const partnersRes = await queryTableAll('crm_partners');
     const partners = partnersRes.rows || [];
+
+    // ID 최대값 계산 (루프 밖에서 1회만 계산)
+    let nextContactId = contacts.length > 0 
+      ? Math.max(...contacts.map((c: any) => parseInt(c.id) || 0)) + 1 
+      : 1;
 
     for (const contact of contacts) {
       if (contact.deleted_at) continue;
@@ -103,18 +131,9 @@ async function healPartnerContactsData() {
       if (matchedContacts.length === 0) {
         console.log(`[담당자 미보유 복구 대상] 거래처: ${partner.company_name}, 대표담당자명: ${mName}`);
         
-        // crm_partner_contacts 테이블의 새로운 ID 구하기 (순수 egdesk-helpers.ts 활용)
-        const contactsResForMax = await queryTableAll('crm_partner_contacts');
-        const currentAllContacts = contactsResForMax.rows || [];
-        const nextId = currentAllContacts.length > 0 
-          ? Math.max(...currentAllContacts.map((c: any) => parseInt(c.id) || 0)) + 1 
-          : 1;
-
         const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
-
-        // crm_partner_contacts 에 자동 생성 인서트
-        await insertRows('crm_partner_contacts', [{
-          id: nextId,
+        const newContact = {
+          id: nextContactId,
           partner_id: String(partner.id),
           name: mName,
           position: partner.manager_position || '대표담당자',
@@ -122,7 +141,14 @@ async function healPartnerContactsData() {
           email: partner.manager_email || partner.email || '',
           is_primary: 1, // 대표담당자로 강제 지정
           created_at: nowStr
-        }]);
+        };
+
+        // crm_partner_contacts 에 자동 생성 인서트
+        await insertRows('crm_partner_contacts', [newContact]);
+        
+        // 메모리 상의 캐시도 동기화하여 이후 중복 생성을 원천 방지
+        contacts.push(newContact);
+        nextContactId++;
 
         console.log(`✓ [데이터 복구 완료] 거래처 '${partner.company_name}' 소속 대표담당자 '${mName}' 님 레코드를 crm_partner_contacts 에 자동 백필 완료.`);
       }
