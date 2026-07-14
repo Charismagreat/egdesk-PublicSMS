@@ -145,7 +145,7 @@ export function PartnerTable({
                   {/* 1. 구분 및 코드 */}
                   <td className="py-4 px-3.5">
                     <div className="flex flex-wrap gap-1">
-                      {(pt.type || '').split(',').filter(Boolean).map(t => (
+                      {(pt.type || '').toUpperCase().split(',').filter(Boolean).map(t => (
                         <span key={t} className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-black tracking-wider ${
                           t === 'VENDOR' 
                             ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
@@ -153,7 +153,7 @@ export function PartnerTable({
                             ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
                             : 'bg-amber-50 text-amber-600 border border-amber-100'
                         }`}>
-                          {t === 'VENDOR' ? '공급사' : t === 'BUYER' ? '바이어' : '관계사'}
+                          {t === 'VENDOR' ? '공급사' : t === 'BUYER' ? '바이어' : t === 'AFFILIATE' ? '관계사' : t}
                         </span>
                       ))}
                     </div>
