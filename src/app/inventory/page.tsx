@@ -496,7 +496,7 @@ export default function InventoryPage() {
           const json = await res.json();
 
           if (json.success) {
-            alert(`🎉 엑셀 일괄 등록 완료!\n수신 데이터: ${json.totalReceived}개 중 ${json.count}개의 신규 품목이 등록되었습니다.\n(중복된 동일 품목명의 데이터는 자동 스킵되었습니다.)`);
+            alert(`🎉 엑셀 일괄 등록 완료!\n수신 데이터: ${json.totalReceived}개 중 ${json.count}개의 신규 품목이 등록되었습니다.\n(중복된 동일 바코드/품목코드의 데이터는 자동 스킵되었습니다.)`);
             fetchData();
           } else {
             alert('일괄 등록 실패: ' + (json.error || '알 수 없는 오류'));
