@@ -231,6 +231,11 @@ export function useProducts() {
 
   const handleEditClick = (product: Product) => {
     const isPriceTbd = product.price === '상담후결정';
+    
+    // 지원되지 않는 분류('미분류' 등)일 경우 기본값 '스토어용'으로 정격 강제 보정
+    const validCategories = ['스토어용', '테이블용', '예약용'];
+    const initialCategory = validCategories.includes(product.category || '') ? product.category : '스토어용';
+
     setForm({
       name: product.name || '',
       price: isPriceTbd ? '' : (product.price || ''),
@@ -238,7 +243,7 @@ export function useProducts() {
       description: product.description || '',
       main_image_url: product.main_image_url || '',
       detail_image_url: product.detail_image_url || '',
-      category: product.category || '스토어용',
+      category: initialCategory,
       menu_category: product.menu_category || '',
       isPriceTbd,
       available_methods: product.available_methods ? product.available_methods.split(',') : ['매장에서', '가져가기', '배달', '배송']
