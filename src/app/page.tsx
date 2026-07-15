@@ -69,7 +69,7 @@ export default async function Home() {
         <div>
           <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2.5">
             <HomeIcon className="w-8 h-8 text-blue-500" />
-            <span>대시보드</span>
+            <span>모바일 채널</span>
           </h1>
           <p className="text-slate-500 mt-2 text-sm font-semibold">
             Gemini AI 비서와 연동하여 실시간 마케팅, 고객 관리 및 비즈니스 자동화 현황을 모니터링합니다.
