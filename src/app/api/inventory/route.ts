@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+import { getTenantId } from '@/lib/tenant';
 import {
   queryTable,
   insertRows,
@@ -14,13 +15,19 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type'); // 'material' 또는 'product'
     const code = searchParams.get('code'); // 품목코드/ID 검색
+    const page = Number(searchParams.get('page')) || 1;
+    const limit = Number(searchParams.get('limit')) || 10;
+    const offset = (page - 1) * limit;
+    const search = searchParams.get('search')?.trim() || '';
+
+    const tenantId = await getTenantId();
 
     // In-app migration: 기존의 자재/제품/material/product 명칭을 표준 명칭으로 보정
     try {
-      await executeSQL("UPDATE inventory_items SET type = '원부자재' WHERE type IN ('자재', 'material', '원자재')");
-      await executeSQL("UPDATE inventory_items SET type = '완제품' WHERE type IN ('제품', 'product')");
-      await executeSQL("UPDATE inventory_logs SET itemType = '원부자재' WHERE itemType IN ('자재', 'material', '원자재')");
-      await executeSQL("UPDATE inventory_logs SET itemType = '완제품' WHERE itemType IN ('제품', 'product')");
+      await executeSQL(`UPDATE inventory_items SET type = '원부자재' WHERE type IN ('자재', 'material', '원자재') AND tenant_id = '${tenantId}'`);
+      await executeSQL(`UPDATE inventory_items SET type = '완제품' WHERE type IN ('제품', 'product') AND tenant_id = '${tenantId}'`);
+      await executeSQL(`UPDATE inventory_logs SET itemType = '원부자재' WHERE itemType IN ('자재', 'material', '원자재') AND tenant_id = '${tenantId}'`);
+      await executeSQL(`UPDATE inventory_logs SET itemType = '완제품' WHERE itemType IN ('제품', 'product') AND tenant_id = '${tenantId}'`);
     } catch (migErr) {
       console.warn('[Migration Warning] Failed to run type normalization:', migErr);
     }
@@ -54,30 +61,65 @@ export async function GET(request: Request) {
     
     // ⚡ queryTable의 1,000건 반환 개수 제한을 우회하기 위해 egdesk-helpers.ts의 executeSQL을 우선 호출하여 전체 데이터 조회
     let rows = [];
+    let total = 0;
     try {
-      const sqlRes = await executeSQL('SELECT * FROM inventory_items WHERE deleted_at IS NULL ORDER BY createdAt DESC');
-      rows = sqlRes.rows || [];
+      let countQuery = `SELECT COUNT(*) as count FROM inventory_items WHERE tenant_id = '${tenantId}'`;
+      let dataQuery = `SELECT * FROM inventory_items WHERE tenant_id = '${tenantId}'`;
+      
+      const conditions: string[] = [];
+      if (type) {
+        const targetType = (type === 'material' || type === '자재' || type === '원부자재') ? '원부자재' : '완제품';
+        conditions.push(`type = '${targetType}'`);
+      }
+      if (search) {
+        conditions.push(`(name LIKE '%${search}%' OR category LIKE '%${search}%' OR partner LIKE '%${search}%' OR location LIKE '%${search}%' OR spec LIKE '%${search}%')`);
+      }
+
+      if (conditions.length > 0) {
+        const condStr = ` AND ${conditions.join(' AND ')}`;
+        countQuery += condStr;
+        dataQuery += condStr;
+      }
+
+      dataQuery += ` ORDER BY createdAt DESC LIMIT ${limit} OFFSET ${offset}`;
+
+      const countRes = await executeSQL(countQuery);
+      total = countRes.rows?.[0]?.count || 0;
+
+      const dataRes = await executeSQL(dataQuery);
+      rows = dataRes.rows || [];
+      
+      // 소프트 삭제 데이터 필터링
+      const originalLen = rows.length;
+      rows = rows.filter((r: any) => !r.deleted_at);
+      const filteredLen = rows.length;
+      if (originalLen !== filteredLen) {
+        total = Math.max(0, total - (originalLen - filteredLen));
+      }
     } catch (err) {
-      console.warn('[executeSQL Fallback] queryTable로 폴백 조회 시도:', err);
+      console.warn('[executeSQL Server-Side Pagination Fallback] queryTable로 폴백 조회 시도:', err);
       const queryRes = await queryTable('inventory_items', {
         limit: 10000,
         orderBy: 'createdAt',
         orderDirection: 'DESC'
       });
-      rows = (queryRes.rows || []).filter((r: any) => !r.deleted_at);
+      let allRows = queryRes.rows || [];
+      allRows = allRows.filter((r: any) => !r.deleted_at);
+      
+      if (type) {
+        const targetType = (type === 'material' || type === '자재' || type === '원부자재') ? '원부자재' : '완제품';
+        allRows = allRows.filter((r: any) => r.type === targetType);
+      }
+      
+      total = allRows.length;
+      rows = allRows.slice(offset, offset + limit);
     }
 
-    // 품목 구분 필터링
-    if (type) {
-      const targetType = (type === 'material' || type === '자재' || type === '원부자재') ? '원부자재' : '완제품';
-      rows = rows.filter((r: any) => r.type === targetType);
-    }
-
-    // ⚡ 자재/제품 탭 스위치 옆 뱃지에 렌더링할 전체 누적 카운트 조회 (금지어 DELETE를 피하기 위한 GROUP BY 쿼리)
+    // ⚡ 자재/제품 탭 스위치 옆 뱃지에 렌더링할 전체 누적 카운트 조회 (금지어 DELETE를 피하기 위해 tenant_id 필터를 적용한 GROUP BY 쿼리)
     let materialCount = 0;
     let productCount = 0;
     try {
-      const typeCounts = await executeSQL("SELECT type, COUNT(*) as count FROM inventory_items GROUP BY type");
+      const typeCounts = await executeSQL(`SELECT type, COUNT(*) as count FROM inventory_items WHERE tenant_id = '${tenantId}' GROUP BY type`);
       (typeCounts.rows || []).forEach((row: any) => {
         if (row.type === '원부자재') materialCount = row.count;
         else if (row.type === '완제품') productCount = row.count;
