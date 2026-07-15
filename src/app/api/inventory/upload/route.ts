@@ -18,14 +18,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. 기존 DB 내 등록된 모든 품목명(name) 가져와서 중복 방지 캐싱
-    const existingNames = new Set<string>();
+    // 1. 기존 DB 내 등록된 모든 바코드(barcode) 가져와서 중복 방지 캐싱
+    const existingBarcodes = new Set<string>();
     try {
-      const rowsRes = await executeSQL('SELECT name FROM inventory_items');
+      const rowsRes = await executeSQL('SELECT barcode FROM inventory_items');
       const rows = rowsRes.rows || [];
       rows.forEach((row: any) => {
-        if (row.name) {
-          existingNames.add(row.name.trim());
+        if (row.barcode && row.barcode.trim()) {
+          existingBarcodes.add(row.barcode.trim());
         }
       });
     } catch (e) {
@@ -39,12 +39,13 @@ export async function POST(request: Request) {
       const name = item.name?.trim();
       const type = item.type === 'product' ? 'product' : 'material';
       const category = item.category?.trim() || '미분류';
+      const barcode = item.barcode?.trim() || '';
 
       // 필수값 부재 시 패스
       if (!name) continue;
 
-      // 이미 동일한 이름의 품목이 있는 경우 스킵
-      if (existingNames.has(name)) continue;
+      // ⚡ [바코드/품목코드] 단독 기준 중복 체크 작동 (바코드가 기재된 경우에만 중복 제외 스킵)
+      if (barcode && existingBarcodes.has(barcode)) continue;
 
       const price = Number(item.price) || 0;
       const safeStock = Number(item.safeStock) || 0;
