@@ -22,6 +22,29 @@ export async function GET(request: Request) {
 
     const tenantId = await getTenantId();
 
+    // ⚡ 중복 데이터 정합성 긴급 진단 가드
+    if (searchParams.get('debug') === 'duplication') {
+      let duplicationRows = [];
+      let errMessage = null;
+      let totalCount = 0;
+      try {
+        const totalRes = await executeSQL(`SELECT COUNT(*) as count FROM inventory_items WHERE tenant_id = '${tenantId}'`);
+        totalCount = totalRes.rows?.[0]?.count || 0;
+
+        const dupRes = await executeSQL(`SELECT name, barcode, COUNT(*) as cnt FROM inventory_items WHERE tenant_id = '${tenantId}' GROUP BY name, barcode HAVING cnt > 1 LIMIT 50`);
+        duplicationRows = dupRes.rows || [];
+      } catch (dbErr: any) {
+        errMessage = dbErr.message;
+      }
+      return NextResponse.json({ 
+        currentSessionTenantId: tenantId, 
+        errMessage,
+        totalItemsInDb: totalCount,
+        duplicationSampleCount: duplicationRows.length, 
+        duplicationRows 
+      });
+    }
+
     // ⚡ 자가 복구 가드(Self-Healing Guard): 
     // 기존 마이그레이션 또는 대량 업로드 시 tenant_id가 NULL로 적재된 레코드들을 현재 로그인된 테넌트 세션 ID로 자동 바인딩 보정 (Max 2,000건씩 안전 슬라이싱)
     try {
