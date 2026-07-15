@@ -59,7 +59,7 @@ const SYSTEM_SENSITIVE_TABLES = [
 // 📂 [GET] 테이블 목록, 특정 테이블 스키마 DDL, 레코드 페이지네이션 조회 (egdesk-helpers 통일 적용)
 export async function GET(request: Request) {
   try {
-    const { isAuthorized, name: operatorName, username, tenantId } = await verifyUserRole();
+    const { isAuthorized, role, name: operatorName, username, tenantId } = await verifyUserRole();
     if (!isAuthorized) {
       return NextResponse.json({ success: false, error: '권한이 없습니다. 관리자 전용 기능입니다.' }, { status: 403 });
     }
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
           
           // 개수 셀 때 본인 테넌트 데이터만 필터링
           const queryFilters: any = {};
-          if (hasTenantIdCol && username !== 'admin') {
+          if (hasTenantIdCol && role !== 'SUPER_ADMIN') {
             queryFilters.tenant_id = tenantId;
           }
 
@@ -129,7 +129,15 @@ export async function GET(request: Request) {
             displayName,
             count: cnt
           });
-        } catch (err) {
+        } catch (err: any) {
+          try {
+            const fs = require('fs');
+            const path = require('path');
+            fs.appendFileSync(
+              path.join(process.cwd(), 'scratch', 'error_log.txt'),
+              `[${name}] Error: ${err.message}\nStack: ${err.stack}\n\n`
+            );
+          } catch (e) {}
           tablesWithCount.push({
             name,
             displayName: t.displayName || name,
@@ -205,7 +213,7 @@ export async function GET(request: Request) {
 
       // 🛡️ 테넌트 격리 필터 주입
       const queryFilters: any = {};
-      if (hasTenantIdCol && username !== 'admin') {
+      if (hasTenantIdCol && role !== 'SUPER_ADMIN') {
         queryFilters.tenant_id = tenantId;
       }
 
