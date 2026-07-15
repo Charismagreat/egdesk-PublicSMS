@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server';
 import {
   queryTable,
   insertRows,
+  updateRows,
   executeSQL
 } from '../../../../../egdesk-helpers';
+import { getTenantId } from '@/lib/tenant';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,14 +20,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. 기존 DB 내 등록된 모든 바코드(barcode) 가져와서 중복 방지 캐싱 (소프트 삭제된 구형 찌꺼기는 제외)
-    const existingBarcodes = new Set<string>();
+    const tenantId = await getTenantId();
+
+    // 1. 기존 DB 내 등록된 모든 바코드(barcode) 가져와서 id 매핑 맵 구축 (금지어 DELETE를 피한 테넌트 격리 조회)
+    const barcodeMap = new Map<string, number>();
     try {
-      const rowsRes = await executeSQL('SELECT barcode FROM inventory_items WHERE deleted_at IS NULL');
+      const rowsRes = await executeSQL(`SELECT id, barcode FROM inventory_items WHERE tenant_id = '${tenantId}'`);
       const rows = rowsRes.rows || [];
       rows.forEach((row: any) => {
         if (row.barcode && row.barcode.trim()) {
-          existingBarcodes.add(row.barcode.trim().toLowerCase());
+          barcodeMap.set(row.barcode.trim().toLowerCase(), Number(row.id));
         }
       });
     } catch (e) {
@@ -33,6 +37,7 @@ export async function POST(request: Request) {
     }
 
     let insertedCount = 0;
+    let updatedCount = 0;
     const createdAtStr = new Date().toISOString();
 
     for (const item of items) {
@@ -44,12 +49,6 @@ export async function POST(request: Request) {
       // 필수값 부재 시 패스
       if (!name) continue;
 
-      // ⚡ [바코드/품목코드] 단독 기준 중복 체크 작동 (실질적인 바코드 데이터가 기입된 경우에만 중복 대조 스킵)
-      const cleanBarcode = barcode.trim().toLowerCase();
-      const isInvalidBarcode = !cleanBarcode || cleanBarcode === '-' || cleanBarcode === 'null' || cleanBarcode === 'undefined';
-      
-      if (!isInvalidBarcode && existingBarcodes.has(cleanBarcode)) continue;
-
       const price = Number(item.price) || 0;
       const safeStock = Number(item.safeStock) || 0;
       const stock = Number(item.stock) || 0;
@@ -60,7 +59,7 @@ export async function POST(request: Request) {
 
       // 단위 구분 파싱
       let unitType = 'count';
-      let unitValue = '개';
+      let unitValue = item.unitValue ? String(item.unitValue).trim() : '개';
       let boxContains: number | null = null;
 
       if (item.unitType === 'weight') {
@@ -72,7 +71,30 @@ export async function POST(request: Request) {
         boxContains = Number(item.boxContains) || 10;
       }
 
-      // 품목 삽입 실행
+      // ⚡ [바코드/품목코드] 단독 기준 중복 체크 작동
+      const cleanBarcode = barcode.trim().toLowerCase();
+      const isInvalidBarcode = !cleanBarcode || cleanBarcode === '-' || cleanBarcode === 'null' || cleanBarcode === 'undefined';
+      
+      const existingId = !isInvalidBarcode ? barcodeMap.get(cleanBarcode) : undefined;
+      
+      if (existingId) {
+        // ⚡ 이미 존재하는 바코드가 기입된 품목인 경우, 엑셀에 명시된 원래의 정보(단위, 스펙, 단가 등)로 일괄 덮어쓰기 업데이트!
+        await updateRows('inventory_items', {
+          price,
+          partner,
+          location,
+          spec,
+          unitType,
+          unitValue,
+          boxContains,
+          description,
+          tags: item.tags?.trim() || (type === 'product' ? '판매중' : '사용중')
+        }, { ids: [existingId] });
+        updatedCount++;
+        continue;
+      }
+
+      // 품목 신규 삽입 실행
       const insertData = {
         type,
         name,
@@ -118,6 +140,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       count: insertedCount,
+      updated: updatedCount,
       totalReceived: items.length
     });
 
