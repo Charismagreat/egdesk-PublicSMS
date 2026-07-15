@@ -14,31 +14,14 @@ export async function GET(req: Request) {
 
     // ⚡ 테넌트 불일치 자가 복구 가드(Self-Healing Guard):
     // 기존에 다른 테넌트 ID('tenant-guest-id-2222' 또는 NULL)로 적재된 상품 데이터를
-    // 현재 세션의 활성 테넌트 ID(tenantId)로 자동 바인딩 보정 처리합니다. (while 루프로 전량 완벽 이식)
+    // 현재 세션의 활성 테넌트 ID(tenantId)로 자동 바인딩 보정 처리합니다. (다이렉트 SQL UPDATE 활용)
     try {
       if (tenantId !== 'tenant-guest-id-2222') {
-        while (true) {
-          const wrongProdRes = await executeSQL(`SELECT id FROM products WHERE (tenant_id IS NULL OR tenant_id = 'tenant-guest-id-2222' OR tenant_id = 'default') LIMIT 1000`);
-          const wrongProdRows = wrongProdRes.rows || [];
-          if (wrongProdRows.length === 0) break;
-          
-          const ids = wrongProdRows.map((r: any) => r.id);
-          await updateRows('products', { tenant_id: tenantId }, { ids });
-          console.log(`[Self-Healing] Migrated ${ids.length} products to current tenant: ${tenantId}`);
-          
-          if (wrongProdRows.length < 1000) break;
-        }
+        await executeSQL(`UPDATE products SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL OR tenant_id = 'tenant-guest-id-2222' OR tenant_id = 'default'`);
+        console.log(`[Self-Healing] Migrated products to current tenant: ${tenantId}`);
       } else {
-        while (true) {
-          const nullRes = await executeSQL("SELECT id FROM products WHERE (tenant_id IS NULL OR tenant_id = 'default') LIMIT 1000");
-          const nullRows = nullRes.rows || [];
-          if (nullRows.length === 0) break;
-          
-          const ids = nullRows.map((r: any) => r.id);
-          await updateRows('products', { tenant_id: tenantId }, { ids });
-          
-          if (nullRows.length < 1000) break;
-        }
+        await executeSQL(`UPDATE products SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL OR tenant_id = 'default'`);
+        console.log(`[Self-Healing] Cleaned null/default products to guest tenant: ${tenantId}`);
       }
     } catch (patchErr: any) {
       console.warn('[Self-Healing Warning] Failed to run tenant migration in products:', patchErr.message);
