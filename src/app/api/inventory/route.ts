@@ -47,7 +47,7 @@ export async function GET(request: Request) {
         }
       } else {
         while (true) {
-          const nullRes = await executeSQL("SELECT id FROM inventory_items WHERE tenant_id IS NULL LIMIT 1000");
+          const nullRes = await executeSQL("SELECT id FROM inventory_items WHERE (tenant_id IS NULL OR tenant_id = 'default') LIMIT 1000");
           const nullRows = nullRes.rows || [];
           if (nullRows.length === 0) break;
           
