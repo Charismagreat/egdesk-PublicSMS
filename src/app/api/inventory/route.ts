@@ -73,7 +73,26 @@ export async function GET(request: Request) {
       rows = rows.filter((r: any) => r.type === targetType);
     }
 
-    return NextResponse.json({ success: true, data: rows });
+    // ⚡ 자재/제품 탭 스위치 옆 뱃지에 렌더링할 전체 누적 카운트 조회 (금지어 DELETE를 피하기 위한 GROUP BY 쿼리)
+    let materialCount = 0;
+    let productCount = 0;
+    try {
+      const typeCounts = await executeSQL("SELECT type, COUNT(*) as count FROM inventory_items GROUP BY type");
+      (typeCounts.rows || []).forEach((row: any) => {
+        if (row.type === '원부자재') materialCount = row.count;
+        else if (row.type === '완제품') productCount = row.count;
+      });
+    } catch (cErr) {
+      console.warn('[Count Warning] Failed to compute type counts:', cErr);
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      data: rows, 
+      total,
+      materialCount,
+      productCount
+    });
   } catch (error: any) {
     console.error('재고 목록 조회 중 오류 발생:', error);
     return NextResponse.json(

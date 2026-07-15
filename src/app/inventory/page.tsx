@@ -47,6 +47,9 @@ export default function InventoryPage() {
   const [currentPage, setCurrentPage, isCurrentPageRestored] = usePersistedState('egdesk_inventory_currentPage', 1);
   const [itemsPerPage, setItemsPerPage, isItemsPerPageRestored] = usePersistedState('egdesk_inventory_itemsPerPage', 10);
   const [selectedTags, setSelectedTags, isSelectedTagsRestored] = usePersistedState<string[]>('egdesk_inventory_selectedTags', []);
+  const [totalItems, setTotalItems] = useState(0);
+  const [materialCount, setMaterialCount] = useState(0);
+  const [productCount, setProductCount] = useState(0);
   const [valuationMethod, setValuationMethod, isValuationMethodRestored] = usePersistedState<'moving_average' | 'fifo' | 'lifo'>('egdesk_inventory_valuationMethod', 'moving_average');
 
   // 모든 세션 상태 복원이 완료되었는지 감시하는 플래그
@@ -64,7 +67,7 @@ export default function InventoryPage() {
     if (isRestored) {
       fetchData();
     }
-  }, [searchQuery, activeTab, isRestored]);
+  }, [searchQuery, activeTab, currentPage, itemsPerPage, isRestored]);
 
   // 모달 상태
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
@@ -317,12 +320,18 @@ export default function InventoryPage() {
         console.warn('자동완성 마스터 데이터 로드 실패:', err);
       }
 
-      const itemsRes = await apiFetch('/api/inventory');
+      const itemsRes = await apiFetch(`/api/inventory?page=${currentPage}&limit=${itemsPerPage}&type=${activeTab}&search=${searchQuery}`);
       const itemsData = await itemsRes.json();
       if (itemsData.success) {
         setItems(Array.isArray(itemsData.data) ? itemsData.data : []);
+        setTotalItems(itemsData.total || 0);
+        setMaterialCount(itemsData.materialCount || 0);
+        setProductCount(itemsData.productCount || 0);
       } else {
         setItems([]);
+        setTotalItems(0);
+        setMaterialCount(0);
+        setProductCount(0);
       }
 
       const logsRes = await apiFetch('/api/inventory/logs');
@@ -1005,6 +1014,9 @@ export default function InventoryPage() {
             onDeleteItem={handleItemDelete}
             inbounds={inbounds}
             onOpenInboundDetail={openInboundDetail}
+            totalItemsCount={totalItems}
+            materialCount={materialCount}
+            productCount={productCount}
           />
         )}
 

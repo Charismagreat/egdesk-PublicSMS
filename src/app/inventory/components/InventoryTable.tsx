@@ -22,6 +22,9 @@ interface InventoryTableProps {
   onDeleteItem: (id: number) => void;
   inbounds: any[];
   onOpenInboundDetail: (inboundId: string) => void;
+  totalItemsCount: number;
+  materialCount: number;
+  productCount: number;
 }
 
 // 태그별 세련된 네온 배지 컬러 클래스 연산
@@ -59,39 +62,16 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
   onOpenLabelPrintModal,
   onDeleteItem,
   inbounds,
-  onOpenInboundDetail
+  onOpenInboundDetail,
+  totalItemsCount,
+  materialCount,
+  productCount
 }) => {
-  const materials = items.filter(it => (it.type as string) === '원부자재' || it.type === 'material' || (it.type as string) === '자재' || (it.type as string) === '원자재');
-  const products = items.filter(it => (it.type as string) === '완제품' || it.type === 'product' || (it.type as string) === '제품');
-
-  // 현재 탭 및 검색 쿼리에 따른 필터링된 아이템 리스트
-  const filteredItems = items
-    .filter(item => {
-      if (activeTab === 'material') {
-        return (item.type as string) === '원부자재' || item.type === 'material' || (item.type as string) === '자재' || (item.type as string) === '원자재';
-      }
-      if (activeTab === 'product') {
-        return (item.type as string) === '완제품' || item.type === 'product' || (item.type as string) === '제품';
-      }
-      return (item.type as string) === activeTab;
-    })
-    .filter(item => {
-      const query = searchQuery.toLowerCase();
-      return (
-        item.name.toLowerCase().includes(query) ||
-        item.category.toLowerCase().includes(query) ||
-        (item.location && item.location.toLowerCase().includes(query)) ||
-        (item.partner && item.partner.toLowerCase().includes(query))
-      );
-    });
-
-  // 페이지네이션 슬라이싱 로직
-  const totalItemsCount = filteredItems.length;
-
+  // ⚡ 서버 사이드 페이지네이션 윈도우 계산
   const totalPages = Math.ceil(totalItemsCount / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedItems = filteredItems.slice(startIndex, endIndex);
+  const endIndex = startIndex + items.length;
+  const paginatedItems = items; // 서버가 페이지 단위로 쪼개 준 데이터 자체를 바로 렌더링
 
   return (
     <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
@@ -127,7 +107,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
               }`}
             >
               <Package className="w-3.5 h-3.5 text-blue-500" />
-              <span>원부자재({materials.length})</span>
+              <span>원부자재({materialCount})</span>
             </button>
             <button
               onClick={() => {
@@ -141,7 +121,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
               }`}
             >
               <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-              <span>완제품({products.length})</span>
+              <span>완제품({productCount})</span>
             </button>
 
             <button
