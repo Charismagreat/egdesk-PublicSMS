@@ -23,19 +23,32 @@ export async function GET(request: Request) {
     const tenantId = await getTenantId();
 
     // ⚡ 자가 복구 가드(Self-Healing Guard): 
-    // 기존 마이그레이션 또는 대량 업로드 시 tenant_id가 NULL로 적재된 레코드들을 현재 로그인된 테넌트 세션 ID로 자동 바인딩 보정
+    // 기존 마이그레이션 또는 대량 업로드 시 tenant_id가 NULL로 적재된 레코드들을 현재 로그인된 테넌트 세션 ID로 자동 바인딩 보정 (Max 2,000건씩 안전 슬라이싱)
     try {
-      await executeSQL(`UPDATE inventory_items SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL`);
+      const nullRes = await executeSQL("SELECT id FROM inventory_items WHERE tenant_id IS NULL LIMIT 2000");
+      const nullRows = nullRes.rows || [];
+      if (nullRows.length > 0) {
+        const ids = nullRows.map((r: any) => Number(r.id));
+        await updateRows('inventory_items', { tenant_id: tenantId }, { ids });
+        console.log(`[Self-Healing] Successfully bound ${ids.length} NULL tenant_id items to ${tenantId}`);
+      }
     } catch (patchErr) {
-      console.warn('[Self-Healing Warning] Failed to bind NULL tenant_ids:', patchErr);
+      console.warn('[Self-Healing Warning] Failed to bind NULL tenant_ids via updateRows:', patchErr);
     }
 
     // In-app migration: 기존의 자재/제품/material/product 명칭을 표준 명칭으로 보정
     try {
-      await executeSQL(`UPDATE inventory_items SET type = '원부자재' WHERE type IN ('자재', 'material', '원자재') AND tenant_id = '${tenantId}'`);
-      await executeSQL(`UPDATE inventory_items SET type = '완제품' WHERE type IN ('제품', 'product') AND tenant_id = '${tenantId}'`);
-      await executeSQL("UPDATE inventory_logs SET itemType = '원부자재' WHERE itemType IN ('자재', 'material', '원자재')");
-      await executeSQL("UPDATE inventory_logs SET itemType = '완제품' WHERE itemType IN ('제품', 'product')");
+      const migMatRes = await executeSQL(`SELECT id FROM inventory_items WHERE type IN ('자재', 'material', '원자재') AND tenant_id = '${tenantId}' LIMIT 1000`);
+      const migMatRows = migMatRes.rows || [];
+      if (migMatRows.length > 0) {
+        await updateRows('inventory_items', { type: '원부자재' }, { ids: migMatRows.map((r: any) => Number(r.id)) });
+      }
+
+      const migProdRes = await executeSQL(`SELECT id FROM inventory_items WHERE type IN ('제품', 'product') AND tenant_id = '${tenantId}' LIMIT 1000`);
+      const migProdRows = migProdRes.rows || [];
+      if (migProdRows.length > 0) {
+        await updateRows('inventory_items', { type: '완제품' }, { ids: migProdRows.map((r: any) => Number(r.id)) });
+      }
     } catch (migErr) {
       console.warn('[Migration Warning] Failed to run type normalization:', migErr);
     }
