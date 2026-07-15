@@ -3,6 +3,7 @@
 import { apiFetch } from '@/lib/api';
 import { useState, useEffect } from "react";
 import { Product, ProductForm, HoverImage } from "../types";
+import { usePersistedState } from "@/hooks/usePersistedState";
 
 export function useProducts() {
   const [data, setData] = useState<Product[]>([]);
@@ -21,24 +22,27 @@ export function useProducts() {
   const [editTargetId, setEditTargetId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [hoverImage, setHoverImage] = useState<HoverImage | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [searchQuery, setSearchQuery, isSearchRestored] = usePersistedState('products_searchQuery', '');
+  const [currentPage, setCurrentPage, isPageRestored] = usePersistedState('products_currentPage', 1);
+  const [itemsPerPage, setItemsPerPage, isLimitRestored] = usePersistedState('products_itemsPerPage', 10);
   const [isUploadingExcel, setIsUploadingExcel] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'DRAFT'>('ACTIVE');
+  const [statusFilter, setStatusFilter, isFilterRestored] = usePersistedState<'ACTIVE' | 'DRAFT'>('products_statusFilter', 'ACTIVE');
   const [totalCount, setTotalCount] = useState(0);
   const [activeCount, setActiveCount] = useState(0);
   const [draftCount, setDraftCount] = useState(0);
 
-  // 검색어 및 필터 전환 시 페이지 번호 1로 세팅
+  // 검색어 및 필터 전환 시 페이지 번호 1로 세팅 (복원 완료 후 작동 가드)
   useEffect(() => {
+    if (!isSearchRestored || !isFilterRestored) return;
     setCurrentPage(1);
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, isSearchRestored, isFilterRestored]);
 
   // 페이지, 필터, 검색어가 최종 결정되면 데이터 요청
   useEffect(() => {
+    // ⚡ 세션 정보 복원 전 이중 페칭 방지 가드 (Return Guard)
+    if (!isSearchRestored || !isPageRestored || !isLimitRestored || !isFilterRestored) return;
     fetchData();
-  }, [statusFilter, currentPage, itemsPerPage, searchQuery]);
+  }, [statusFilter, currentPage, itemsPerPage, searchQuery, isSearchRestored, isPageRestored, isLimitRestored, isFilterRestored]);
 
   const fetchData = async () => {
     try {
