@@ -163,7 +163,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
             <span className="text-xs text-slate-500 font-semibold">SQLite 안전 테이블 조회 중...</span>
           </div>
 
-        ) : filteredItems.length === 0 ? (
+        ) : totalItemsCount === 0 ? (
           <div className="py-20 text-center text-slate-400 space-y-2">
             <Package className="w-12 h-12 text-slate-300 mx-auto" />
             <p className="text-sm font-semibold">해당 탭에 등록된 품목이 존재하지 않습니다.</p>
@@ -332,9 +332,9 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                   <option value={100}>100개씩 보기</option>
                 </select>
                 <span className="text-xs text-slate-400 font-semibold ml-2 shrink-0">
-                  {filteredItems.length === 0 
+                  {totalItemsCount === 0 
                     ? "전체 0건 표시" 
-                    : `전체 ${filteredItems.length}건 중 ${startIndex + 1}-${Math.min(endIndex, filteredItems.length)}건 표시`}
+                    : `전체 ${totalItemsCount}건 중 ${startIndex + 1}-${Math.min(endIndex, totalItemsCount)}건 표시`}
                 </span>
               </div>
               
