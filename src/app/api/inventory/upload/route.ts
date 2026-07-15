@@ -6,6 +6,7 @@ import {
   executeSQL
 } from '../../../../../egdesk-helpers';
 import { getTenantId } from '@/lib/tenant';
+import { syncInventoryToProduct } from '@/lib/sync-products-helper';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
       
       if (existingId) {
         // ⚡ 이미 존재하는 바코드가 기입된 품목인 경우, 엑셀에 명시된 원래의 정보(단위, 스펙, 단가 등)로 일괄 덮어쓰기 업데이트!
-        await updateRows('inventory_items', {
+        const updatePayload = {
           price,
           partner,
           location,
@@ -89,7 +90,18 @@ export async function POST(request: Request) {
           boxContains,
           description,
           tags: item.tags?.trim() || (type === 'product' ? '판매중' : '사용중')
-        }, { ids: [existingId] });
+        };
+        await updateRows('inventory_items', updatePayload, { ids: [existingId] });
+
+        // 완제품 상품 동기화
+        await syncInventoryToProduct({
+          id: existingId,
+          type,
+          name,
+          category,
+          ...updatePayload
+        }, 'UPDATE');
+
         updatedCount++;
         continue;
       }
@@ -117,11 +129,18 @@ export async function POST(request: Request) {
       await insertRows('inventory_items', [insertData]);
       insertedCount++;
 
+      // 방금 등록된 ID 획득
+      const maxIdRes = await executeSQL('SELECT MAX(id) as maxId FROM inventory_items');
+      const insertedId = maxIdRes.rows?.[0]?.maxId || 0;
+
+      // 완제품 상품 동기화
+      await syncInventoryToProduct({
+        id: insertedId,
+        ...insertData
+      }, 'INSERT');
+
       // 최초 재고가 0보다 큰 경우, 변동 로그 함께 생성
       if (stock > 0) {
-        const maxIdRes = await executeSQL('SELECT MAX(id) as maxId FROM inventory_items');
-        const insertedId = maxIdRes.rows?.[0]?.maxId || 0;
-
         const logData = {
           itemId: insertedId,
           itemName: name,

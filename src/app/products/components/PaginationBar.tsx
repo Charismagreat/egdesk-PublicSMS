@@ -63,19 +63,72 @@ export function PaginationBar({
             1
           </button>
         ) : (
-          Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-            <button 
-              key={page}
-              onClick={() => setCurrentPage(page)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                currentPage === page 
-                  ? 'bg-blue-605 text-white shadow-sm border-transparent bg-blue-600' 
-                  : 'border-slate-200 bg-white text-slate-650 hover:bg-slate-50 cursor-pointer'
-              }`}
-            >
-              {page}
-            </button>
-          ))
+          (() => {
+            const pages = [];
+            const maxPageButtons = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxPageButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
+
+            if (endPage - startPage + 1 < maxPageButtons) {
+              startPage = Math.max(1, endPage - maxPageButtons + 1);
+            }
+
+            if (startPage > 1) {
+              pages.push(
+                <button
+                  key={1}
+                  onClick={() => setCurrentPage(1)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-200 bg-white text-slate-650 hover:bg-slate-50 cursor-pointer"
+                >
+                  1
+                </button>
+              );
+              if (startPage > 2) {
+                pages.push(
+                  <span key="left-ellipsis" className="px-1 py-1 text-xs text-slate-400 font-bold select-none">
+                    ...
+                  </span>
+                );
+              }
+            }
+
+            for (let page = startPage; page <= endPage; page++) {
+              pages.push(
+                <button 
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                    currentPage === page 
+                      ? 'bg-blue-600 text-white shadow-sm border-transparent' 
+                      : 'border-slate-200 bg-white text-slate-650 hover:bg-slate-50 cursor-pointer'
+                  }`}
+                >
+                  {page}
+                </button>
+              );
+            }
+
+            if (endPage < totalPages) {
+              if (endPage < totalPages - 1) {
+                pages.push(
+                  <span key="right-ellipsis" className="px-1 py-1 text-xs text-slate-400 font-bold select-none">
+                    ...
+                  </span>
+                );
+              }
+              pages.push(
+                <button
+                  key={totalPages}
+                  onClick={() => setCurrentPage(totalPages)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-slate-200 bg-white text-slate-650 hover:bg-slate-50 cursor-pointer"
+                >
+                  {totalPages}
+                </button>
+              );
+            }
+
+            return pages;
+          })()
         )}
         <button 
           disabled={currentPage === totalPages || totalPages <= 1} 

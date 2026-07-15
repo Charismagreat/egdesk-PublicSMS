@@ -18,7 +18,9 @@ export const calculateValuation = (
   const hasInitialLog = itemLogs.some(log => log.note?.includes('기초') || log.note?.includes('최초'));
   
   if (!hasInitialLog && item.stock > 0) {
-    batches.push({ quantity: item.stock, price: item.price });
+    const isProd = item.type === 'product' || (item.type as string) === '완제품' || (item.type as string) === '제품';
+    const basePrice = isProd ? (item.purchasePrice || 0) : item.price;
+    batches.push({ quantity: item.stock, price: basePrice });
   }
 
   // 모든 로그를 돌며 입출고 배치 소진 연산
@@ -50,12 +52,14 @@ export const calculateValuation = (
 
   if (method === 'moving_average') {
     // 이동평균법 가중 연산
-    let avgPrice = item.price;
+    const isProd = item.type === 'product' || (item.type as string) === '완제품' || (item.type as string) === '제품';
+    const basePrice = isProd ? (item.purchasePrice || 0) : item.price;
+    let avgPrice = basePrice;
     let curQty = 0;
     
     if (!hasInitialLog && item.stock > 0) {
       curQty = item.stock;
-      avgPrice = item.price;
+      avgPrice = basePrice;
     }
 
     itemLogs.forEach(log => {

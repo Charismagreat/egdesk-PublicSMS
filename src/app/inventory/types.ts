@@ -6,6 +6,7 @@ export interface InventoryItem {
   name: string;
   category: string;
   price: number;
+  purchasePrice?: number; // 신설: 구매 단가 (매입 원가)
   partner?: string;
   stock: number;
   safeStock: number;
@@ -51,6 +52,7 @@ export interface ItemFormState {
   name: string;
   category: string;
   price: string;
+  purchasePrice: string; // 신설: 구매 단가 (매입 원가)
   partner: string;
   stock: string;
   safeStock: string;

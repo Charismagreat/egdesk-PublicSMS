@@ -64,9 +64,19 @@ export async function setupDatabase() {
           if (needsMigration) {
             console.log(`[Auto-Migration] Table "${tableName}" requires schema updates. Starting data-preserving migration...`);
             
-            // A. 기존 데이터 백업 (Read)
-            const readRes = await queryTable(tableName, { limit: 500000 });
-            const existingRows = readRes.rows || [];
+            // A. 기존 데이터 백업 (Read) - 1,000건 단위 분할 백업으로 MCP 제한 극복
+            const existingRows: any[] = [];
+            let offset = 0;
+            const batchSize = 1000;
+            while (true) {
+              const batchRes = await queryTable(tableName, { limit: batchSize, offset });
+              const batchRows = batchRes.rows || [];
+              existingRows.push(...batchRows);
+              if (batchRows.length < batchSize) {
+                break;
+              }
+              offset += batchSize;
+            }
             console.log(`[Auto-Migration] Backed up ${existingRows.length} rows from "${tableName}".`);
 
             // B. 기존 테이블 제거 (Drop)
@@ -338,6 +348,86 @@ export async function setupDatabase() {
     }
   } catch (err: any) {
     console.error('⚠️ 계정과목 목록 자동 생성 및 보정 에러:', err.message);
+  }
+
+  // 57. 기존 등록된 재고 완제품 상품 DRAFT 백필 처리
+  try {
+    console.log('➡️ 기존 등록된 재고 완제품 백필 검사를 수행합니다.');
+    
+    // 재고에서 삭제되지 않은 완제품 목록 조회 (1,000건 제한 우회 페칭)
+    const finishedGoods: any[] = [];
+    let offset = 0;
+    const batchSize = 1000;
+    while (true) {
+      const batchRes = await queryTable('inventory_items', { limit: batchSize, offset });
+      const batchRows = batchRes.rows || [];
+      const filtered = batchRows.filter((item: any) => 
+        !item.deleted_at && (item.type === '완제품' || item.type === 'product')
+      );
+      finishedGoods.push(...filtered);
+      if (batchRows.length < batchSize) {
+        break;
+      }
+      offset += batchSize;
+    }
+
+    if (finishedGoods.length > 0) {
+      // 이미 연동 매핑되어 등록되어 있는 상품 정보 조회 (1,000건 제한 우회 페칭)
+      const existingProducts: any[] = [];
+      let prodOffset = 0;
+      while (true) {
+        const batchRes = await queryTable('products', { limit: batchSize, offset: prodOffset });
+        const batchRows = batchRes.rows || [];
+        existingProducts.push(...batchRows);
+        if (batchRows.length < batchSize) {
+          break;
+        }
+        prodOffset += batchSize;
+      }
+
+      const mappedInventoryIds = new Set(
+        existingProducts
+          .map((p: any) => p.inventory_item_id)
+          .filter((id: any) => id !== null && id !== undefined)
+      );
+
+      // 매핑되어 있지 않은 완제품 추출
+      const missingFinishedGoods = finishedGoods.filter((item: any) => !mappedInventoryIds.has(item.id));
+
+      if (missingFinishedGoods.length > 0) {
+        console.log(`➡️ 누락된 기존 완제품 ${missingFinishedGoods.length}건에 대해 상품 DRAFT 백필을 시작합니다.`);
+        
+        const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+        const rowsToInsert = missingFinishedGoods.map((item: any) => {
+          const newProductId = `PROD-${item.id}`;
+          return {
+            id: newProductId,
+            tenant_id: item.tenant_id || 'default',
+            name: item.name || '',
+            price: item.price !== undefined && item.price !== null ? String(item.price) : '0',
+            description: item.description || '',
+            category: item.category || '',
+            status: 'DRAFT',
+            inventory_item_id: item.id,
+            uuid: item.uuid || null,
+            is_estimate_price: 0,
+            is_coupon_excludable: 0,
+            created_at: nowStr,
+            updated_at: nowStr,
+            updated_by: 'system_backfill'
+          };
+        });
+
+        await insertRows('products', rowsToInsert);
+        console.log(`✓ 기존 완제품 ${missingFinishedGoods.length}건 백필 완료.`);
+      } else {
+        console.log('✓ 모든 기존 완제품이 이미 상품 테이블에 연동되어 있습니다.');
+      }
+    } else {
+      console.log('✓ 재고 대장에 등록된 완제품이 존재하지 않습니다.');
+    }
+  } catch (err: any) {
+    console.error('⚠️ 기존 완제품 상품 백필 중 에러:', err.message);
   }
 
   console.log('Database setup complete.');

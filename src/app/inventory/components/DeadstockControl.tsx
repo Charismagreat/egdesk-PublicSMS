@@ -10,12 +10,14 @@ interface DeadstockControlProps {
   items: InventoryItem[];
   activeTab: 'material' | 'product' | 'deadstock';
   setActiveTab: (tab: 'material' | 'product' | 'deadstock') => void;
+  lastActiveTab?: 'material' | 'product';
 }
 
 export const DeadstockControl: React.FC<DeadstockControlProps> = ({
   items,
   activeTab,
-  setActiveTab
+  setActiveTab,
+  lastActiveTab
 }) => {
   // 상태 관리
   const [deadstockItems, setDeadstockItems] = useState<any[]>([]);
@@ -227,7 +229,7 @@ export const DeadstockControl: React.FC<DeadstockControlProps> = ({
 
         <div className="flex items-center gap-2.5 self-start md:self-auto">
           <button
-            onClick={() => setActiveTab('material')}
+            onClick={() => setActiveTab(lastActiveTab || 'material')}
             className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-3 rounded-2xl border border-slate-200 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />

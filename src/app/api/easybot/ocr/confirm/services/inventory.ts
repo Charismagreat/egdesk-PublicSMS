@@ -1,4 +1,5 @@
 import { queryTable, insertRows, updateRows } from '../../../../../../../egdesk-helpers';
+import { syncInventoryToProduct } from '@/lib/sync-products-helper';
 
 export async function handleInventoryInbound(reqBody: any, nowStr: string) {
   const {
@@ -71,14 +72,26 @@ export async function handleInventoryInbound(reqBody: any, nowStr: string) {
           throw new Error(`이미 '${currentItem.type}'으로 등록된 기존 품목('${itemName}', 코드: ITEM-${finalMatchedItemId})에 대해, 다른 구분인 '${normType}'으로의 입고 등록은 불가합니다.`);
         }
 
-        await updateRows('inventory_items', {
+        const updatePayload = {
           type: normType,
           category: item.category || currentItem.category || '기타',
           stock: newStock,
           price: price > 0 ? price : currentItem.price,
           description: [currentItem.description, item.note].filter(Boolean).join(' | '),
           updated_at: nowStr
-        }, { filters: { id: String(finalMatchedItemId) } });
+        };
+
+        await updateRows('inventory_items', updatePayload, { filters: { id: String(finalMatchedItemId) } });
+
+        // 완제품 상품 동기화
+        await syncInventoryToProduct({
+          id: finalMatchedItemId,
+          type: normType,
+          name: itemName || currentItem.name,
+          category: updatePayload.category,
+          price: updatePayload.price,
+          description: updatePayload.description
+        }, 'UPDATE');
 
 
       }
@@ -99,7 +112,7 @@ export async function handleInventoryInbound(reqBody: any, nowStr: string) {
         }
       }
 
-      await insertRows('inventory_items', [{
+      const insertPayload = {
         id: finalMatchedItemId,
         type: normType,
         name: itemName,
@@ -117,7 +130,12 @@ export async function handleInventoryInbound(reqBody: any, nowStr: string) {
         barcode: barcode,
         createdAt: nowStr,
         uuid: `ITEM-${Date.now()}-${i}`
-      }]);
+      };
+
+      await insertRows('inventory_items', [insertPayload]);
+
+      // 완제품 상품 동기화
+      await syncInventoryToProduct(insertPayload, 'INSERT');
 
 
     }

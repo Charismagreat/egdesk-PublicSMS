@@ -5,6 +5,8 @@ import { Search, Pencil, Trash2 } from "lucide-react";
 import { Product, HoverImage } from "../types";
 
 interface ProductTableProps {
+  statusFilter?: 'ACTIVE' | 'DRAFT';
+  onApprove?: (id: string, price: string, mainImageUrl: string) => Promise<void>;
   searchQuery: string;
   setSearchQuery: (val: string) => void;
   filteredDataCount: number;
@@ -16,7 +18,127 @@ interface ProductTableProps {
   onDeleteClick: (id: string) => void;
 }
 
+// ⚙️ 승인 대기 완제품 전용 인라인 편집 및 승인 렌더링 컴포넌트
+function DraftRow({ 
+  product, 
+  onApprove, 
+  onDeleteClick, 
+  onHoverImage 
+}: { 
+  product: Product; 
+  onApprove: (id: string, price: string, mainImageUrl: string) => Promise<void>;
+  onDeleteClick: (id: string) => void;
+  onHoverImage: (img: HoverImage | null) => void;
+}) {
+  const [price, setPrice] = React.useState(product.price || '');
+  const [mainImageUrl, setMainImageUrl] = React.useState(product.main_image_url || '');
+  const [isUploading, setIsUploading] = React.useState(false);
+
+  const handleApprove = async () => {
+    if (!price || String(price).trim() === '') {
+      alert('소비자 판매가를 입력해 주세요.');
+      return;
+    }
+    if (onApprove) {
+      await onApprove(product.id, price, mainImageUrl);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMainImageUrl(json.url);
+      } else {
+        alert('업로드 실패: ' + json.error);
+      }
+    } catch (err) {
+      alert('업로드 중 오류가 발생했습니다.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <tr className="hover:bg-amber-50/10 transition-colors">
+      <td className="p-4 text-xs font-mono text-slate-400">{String(product.id || '').slice(-6)}</td>
+      <td className="p-4">
+        <span className="px-2.5 py-1 text-xs font-semibold text-amber-600 bg-amber-50 rounded-lg">완제품 연동</span>
+      </td>
+      <td className="p-4 text-sm text-slate-650 font-bold">{product.menu_category || '-'}</td>
+      <td className="p-4">
+        <div className="font-bold text-slate-800 text-sm">{product.name}</div>
+        <p className="text-xs text-slate-450 mt-1 truncate max-w-[180px]" title={product.description}>
+          {product.description || '재고관리 설명 없음'}
+        </p>
+      </td>
+      <td className="p-4 text-slate-600 font-semibold text-sm whitespace-nowrap text-right">
+        {Number(product.price || 0).toLocaleString()}원
+      </td>
+      <td className="p-4">
+        <input 
+          type="text" 
+          value={price}
+          onChange={e => setPrice(e.target.value)}
+          placeholder="소비자 판매가 입력"
+          className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-bold w-32 focus:ring-1 focus:ring-amber-500 outline-none bg-white text-slate-800"
+        />
+      </td>
+      <td className="p-4">
+        <div className="flex items-center gap-2">
+          {mainImageUrl ? (
+            <img 
+              src={mainImageUrl} 
+              alt="Preview" 
+              className="w-8 h-8 object-cover rounded shadow-sm cursor-pointer"
+              onMouseEnter={(e) => onHoverImage({url: mainImageUrl, x: e.clientX, y: e.clientY})}
+              onMouseMove={(e) => onHoverImage({url: mainImageUrl, x: e.clientX, y: e.clientY})}
+              onMouseLeave={() => onHoverImage(null)}
+            />
+          ) : (
+            <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center text-[8px] text-slate-400 font-bold select-none">No Img</div>
+          )}
+          <label className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-650 rounded-lg text-[10px] font-bold cursor-pointer transition-all active:scale-95 whitespace-nowrap">
+            {isUploading ? '업로드 중...' : '이미지 변경'}
+            <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+          </label>
+        </div>
+      </td>
+      <td className="p-4 text-center">
+        <div className="flex items-center justify-center gap-2">
+          <button 
+            onClick={handleApprove}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm hover:shadow transition-all cursor-pointer whitespace-nowrap border-0"
+          >
+            승인 & 활성화
+          </button>
+          <button 
+            onClick={() => onDeleteClick(product.id)} 
+            className="text-slate-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50 border-0 bg-transparent cursor-pointer" 
+            title="반려 및 삭제"
+          >
+            <Trash2 className="w-4 h-4"/>
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export function ProductTable({
+  statusFilter = 'ACTIVE',
+  onApprove,
   searchQuery,
   setSearchQuery,
   filteredDataCount,
@@ -27,10 +149,14 @@ export function ProductTable({
   onEditClick,
   onDeleteClick
 }: ProductTableProps) {
+  const isDraftTab = statusFilter === 'DRAFT';
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden w-full text-slate-800">
       <div className="p-4 border-b border-slate-100 bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-        <h2 className="font-bold text-slate-800 shrink-0">등록된 상품 목록 ({filteredDataCount}건)</h2>
+        <h2 className="font-bold text-slate-800 shrink-0">
+          {isDraftTab ? '승인 대기 완제품 목록' : '등록된 상품 목록'} ({filteredDataCount}건)
+        </h2>
         <div className="relative w-full md:w-64">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
           <input
@@ -49,22 +175,45 @@ export function ProductTable({
               <th className="p-4 font-semibold text-slate-600">ID</th>
               <th className="p-4 font-semibold text-slate-600">분류</th>
               <th className="p-4 font-semibold text-slate-600">카테고리</th>
-              <th className="p-4 font-semibold text-slate-600 w-[25%]">상품정보</th>
-              <th className="p-4 font-semibold text-slate-600 text-right">가격</th>
-              <th className="p-4 font-semibold text-slate-600">쿠폰 적용</th>
-              <th className="p-4 font-semibold text-slate-600">상세 설명</th>
-              <th className="p-4 font-semibold text-slate-600 text-center w-24">관리</th>
+              <th className="p-4 font-semibold text-slate-600 w-[22%]">상품정보</th>
+              {isDraftTab ? (
+                <>
+                  <th className="p-4 font-semibold text-slate-600 text-right">기초 원가</th>
+                  <th className="p-4 font-semibold text-slate-600">소비자 판매가</th>
+                  <th className="p-4 font-semibold text-slate-600">대표 이미지</th>
+                  <th className="p-4 font-semibold text-slate-600 text-center w-36">승인 관리</th>
+                </>
+              ) : (
+                <>
+                  <th className="p-4 font-semibold text-slate-600 text-right">가격</th>
+                  <th className="p-4 font-semibold text-slate-600">쿠폰 적용</th>
+                  <th className="p-4 font-semibold text-slate-600">상세 설명</th>
+                  <th className="p-4 font-semibold text-slate-600 text-center w-24">관리</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {paginatedData.length === 0 ? (
               <tr>
                 <td colSpan={8} className="p-8 text-center text-slate-450 font-bold text-sm">
-                  {totalDataLength === 0 ? "등록된 상품이 없습니다." : "검색 결과와 일치하는 상품이 없습니다."}
+                  {totalDataLength === 0 ? "조회할 상품이 없습니다." : "검색 결과와 일치하는 상품이 없습니다."}
                 </td>
               </tr>
             ) : (
               paginatedData.map(t => {
+                if (isDraftTab) {
+                  return (
+                    <DraftRow
+                      key={t.id}
+                      product={t}
+                      onApprove={onApprove!}
+                      onDeleteClick={onDeleteClick}
+                      onHoverImage={onHoverImage}
+                    />
+                  );
+                }
+
                 const isPriceTbd = t.price === '상담후결정';
                 const numericPrice = isPriceTbd ? 0 : Number(String(t.price).replace(/[^0-9]/g, ''));
                 return (
@@ -155,3 +304,4 @@ export function ProductTable({
     </div>
   );
 }
+

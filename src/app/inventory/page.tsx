@@ -37,6 +37,7 @@ export default function InventoryPage() {
     projects: string[];
   }>({ partners: [], staff: [], departments: [], projects: [] });
   const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<'material' | 'product' | 'deadstock'>('egdesk_inventory_activeTab', 'material');
+  const [lastActiveTab, setLastActiveTab] = usePersistedState<'material' | 'product'>('egdesk_inventory_lastActiveTab', 'material');
   const [inbounds, setInbounds] = useState<any[]>([]);
   const [selectedInboundId, setSelectedInboundId] = useState<string | null>(null);
   const [inboundDetails, setInboundDetails] = useState<any[]>([]);
@@ -47,27 +48,46 @@ export default function InventoryPage() {
   const [currentPage, setCurrentPage, isCurrentPageRestored] = usePersistedState('egdesk_inventory_currentPage', 1);
   const [itemsPerPage, setItemsPerPage, isItemsPerPageRestored] = usePersistedState('egdesk_inventory_itemsPerPage', 10);
   const [selectedTags, setSelectedTags, isSelectedTagsRestored] = usePersistedState<string[]>('egdesk_inventory_selectedTags', []);
+  const [sortKey, setSortKey, isSortKeyRestored] = usePersistedState<string>('egdesk_inventory_sortKey', 'createdAt');
+  const [sortDir, setSortDir, isSortDirRestored] = usePersistedState<'ASC' | 'DESC'>('egdesk_inventory_sortDir', 'DESC');
+  const [selectedCategories, setSelectedCategories, isSelectedCategoriesRestored] = usePersistedState<string[]>('egdesk_inventory_selectedCategories', []);
+  const [dbCategories, setDbCategories] = useState<string[]>([]);
+  const [dbStats, setDbStats] = useState({
+    totalMaterialStock: 0,
+    totalProductStock: 0,
+    totalMaterialValue: 0,
+    totalProductValue: 0,
+    outOfStockCount: 0
+  });
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
   const [materialCount, setMaterialCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
   const [valuationMethod, setValuationMethod, isValuationMethodRestored] = usePersistedState<'moving_average' | 'fifo' | 'lifo'>('egdesk_inventory_valuationMethod', 'moving_average');
 
   // 모든 세션 상태 복원이 완료되었는지 감시하는 플래그
-  const isRestored = isActiveTabRestored && isSearchQueryRestored && isCurrentPageRestored && isItemsPerPageRestored && isSelectedTagsRestored && isValuationMethodRestored;
+  const isRestored = isActiveTabRestored && isSearchQueryRestored && isCurrentPageRestored && isItemsPerPageRestored && isSelectedTagsRestored && isValuationMethodRestored && isSortKeyRestored && isSortDirRestored && isSelectedCategoriesRestored;
 
-  // 검색어 또는 탭 변경 시 페이지 번호 및 데이터 새로고침 (단, 세션 복원이 마쳐진 상태에서만 작동하도록 가드)
+  // 검색어, 탭, 정렬, 카테고리 변경 시 페이지 번호 1페이지로 세팅
   useEffect(() => {
     if (isRestored) {
       setCurrentPage(1);
     }
-  }, [searchQuery, activeTab, isRestored]);
+  }, [searchQuery, activeTab, sortKey, sortDir, selectedCategories, isRestored]);
+
+  // activeTab이 자재 또는 제품일 때 직전 활성 탭 상태 기록
+  useEffect(() => {
+    if (activeTab === 'material' || activeTab === 'product') {
+      setLastActiveTab(activeTab);
+    }
+  }, [activeTab, setLastActiveTab]);
 
   // 데이터 로드는 복원 완료 시점에 맞춰서 기동
   useEffect(() => {
     if (isRestored) {
       fetchData();
     }
-  }, [searchQuery, activeTab, currentPage, itemsPerPage, isRestored]);
+  }, [searchQuery, activeTab, currentPage, itemsPerPage, sortKey, sortDir, selectedCategories, isRestored]);
 
   // 모달 상태
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
@@ -88,6 +108,7 @@ export default function InventoryPage() {
     name: '',
     category: '',
     price: '',
+    purchasePrice: '',
     partner: '',
     stock: '',
     safeStock: '',
@@ -320,18 +341,25 @@ export default function InventoryPage() {
         console.warn('자동완성 마스터 데이터 로드 실패:', err);
       }
 
-      const itemsRes = await apiFetch(`/api/inventory?page=${currentPage}&limit=${itemsPerPage}&type=${activeTab}&search=${searchQuery}`);
+      const catsParam = selectedCategories.join(',');
+      const tagsParam = selectedTags.join(',');
+      const itemsRes = await apiFetch(`/api/inventory?page=${currentPage}&limit=${itemsPerPage}&type=${activeTab}&search=${searchQuery}&orderBy=${sortKey}&orderDirection=${sortDir}&categories=${catsParam}&tags=${tagsParam}`);
       const itemsData = await itemsRes.json();
       if (itemsData.success) {
         setItems(Array.isArray(itemsData.data) ? itemsData.data : []);
         setTotalItems(itemsData.total || 0);
         setMaterialCount(itemsData.materialCount || 0);
         setProductCount(itemsData.productCount || 0);
+        setDbCategories(itemsData.categoriesList || []);
+        if (itemsData.stats) {
+          setDbStats(itemsData.stats);
+        }
       } else {
         setItems([]);
         setTotalItems(0);
         setMaterialCount(0);
         setProductCount(0);
+        setDbCategories([]);
       }
 
       const logsRes = await apiFetch('/api/inventory/logs');
@@ -462,12 +490,13 @@ export default function InventoryPage() {
             const nameVal = row['품목명'] || row['이름'] || row['name'] || '';
             const categoryVal = row['카테고리'] || row['분류'] || row['category'] || '';
             const priceVal = row['단가'] || row['공급 단가'] || row['공급단가'] || row['매입가'] || row['판매가'] || row['price'] || 0;
+            const purchasePriceVal = row['구매 단가'] || row['구매단가'] || row['매입 원가'] || row['매입원가'] || row['purchasePrice'] || 0;
             const partnerVal = row['거래처'] || row['매입처'] || row['주매입거래처'] || row['partner'] || '';
             const locationVal = row['적재 위치'] || row['창고 위치'] || row['적재위치'] || row['location'] || '';
             const specVal = row['규격'] || row['세부 스펙'] || row['spec'] || '';
-            const unitTypeVal = row['단위'] || row['단위 구분'] || row['unitType'] || '개수';
-            const unitValueVal = row['세부 단위'] || row['unitValue'] || '';
-            const boxContainsVal = row['박스당 입수량'] || row['n개입'] || row['boxContains'] || '';
+            const unitTypeVal = row['단위 구분'] || row['unitType'] || '개수';
+            const unitValueVal = row['세부 단위'] || row['단위'] || row['unitValue'] || '';
+            const boxContainsVal = row['입수량'] || row['박스당입수량'] || row['박스당 입수량'] || row['n개입'] || row['boxContains'] || '';
             const safeStockVal = row['안전 재고'] || row['적정 재고'] || row['안전재고량'] || row['safeStock'] || 0;
             const stockVal = row['최초 재고'] || row['현재 재고'] || row['최초기초재고'] || row['stock'] || 0;
             const barcodeVal = row['바코드'] || row['품목코드'] || row['바코드/품목코드'] || row['코드'] || row['barcode'] || '';
@@ -478,6 +507,7 @@ export default function InventoryPage() {
               name: nameVal,
               category: categoryVal,
               price: priceVal,
+              purchasePrice: purchasePriceVal,
               partner: partnerVal,
               location: locationVal,
               spec: specVal,
@@ -538,7 +568,8 @@ export default function InventoryPage() {
         '규격',
         '단위',
         '박스당 입수량',
-        '단가',
+        '판매단가',
+        '구매단가',
         '거래처',
         '적재 위치',
         '안전 재고',
@@ -555,7 +586,8 @@ export default function InventoryPage() {
           '규격': '15mm x 150mm',
           '단위': '박스',
           '박스당 입수량': 10,
-          '단가': 12500,
+          '판매단가': 15000,
+          '구매단가': 12500,
           '거래처': '한성정밀(주)',
           '적재 위치': 'A홀 3번 선반',
           '안전 재고': 15,
@@ -570,7 +602,8 @@ export default function InventoryPage() {
           '규격': '고진공 스테인리스 이중벽',
           '단위': '개수',
           '박스당 입수량': '',
-          '단가': 8700,
+          '판매단가': 19800,
+          '구매단가': 8700,
           '거래처': '글로벌 트레이딩',
           '적재 위치': 'B홀 12번 적재함',
           '안전 재고': 30,
@@ -593,6 +626,94 @@ export default function InventoryPage() {
     } catch (err) {
       console.error('템플릿 생성 중 에러:', err);
       alert('템플릿 파일을 생성하지 못했습니다. 다시 시도해 주세요.');
+    }
+  };
+
+  // 실시간 재고자산 대장 목록 전체 엑셀 내보내기 기능
+  const exportInventoryToExcel = async () => {
+    if (isExportingExcel) return;
+    setIsExportingExcel(true);
+    try {
+      const catsParam = selectedCategories.join(',');
+      const tagsParam = selectedTags.join(',');
+      // 페이징 없이 전체 조회를 위해 limit=10000 쿼리
+      const res = await apiFetch(`/api/inventory?page=1&limit=10000&type=${activeTab}&search=${searchQuery}&orderBy=${sortKey}&orderDirection=${sortDir}&categories=${catsParam}&tags=${tagsParam}`);
+      const json = await res.json();
+      
+      if (!json.success || !Array.isArray(json.data)) {
+        alert(json.error || '대장 데이터를 가져오지 못했습니다.');
+        setIsExportingExcel(false);
+        return;
+      }
+
+      const allItems = json.data;
+
+      // SheetJS 동적 임포트
+      const XLSX = await import('xlsx');
+
+      const headers = [
+        '품목구분',
+        '품목코드',
+        '바코드',
+        '카테고리',
+        '품목명',
+        '태그',
+        '규격',
+        '단위',
+        '입수량',
+        '적재 위치',
+        '현재고',
+        '안전재고',
+        '구매단가',
+        '평가 가치액',
+        '상세 설명'
+      ];
+
+      const rows = allItems.map((item: any) => {
+        const displayBarcode = item.barcode && item.barcode !== '-' && item.barcode !== 'null' ? item.barcode : '';
+        const code = `INV-${item.id}`;
+        const valuation = calculateValuation(item, logs, valuationMethod);
+        const isProd = item.type === 'product' || (item.type as string) === '완제품' || (item.type as string) === '제품';
+        const basePrice = isProd ? (item.purchasePrice || 0) : item.price;
+        const displayPrice = valuation.unitPrice > 0 ? valuation.unitPrice : basePrice;
+
+        return {
+          '품목구분': item.type === 'product' ? '완제품' : '원부자재',
+          '품목코드': code,
+          '바코드': displayBarcode,
+          '카테고리': item.category || '미분류',
+          '품목명': item.name,
+          '태그': item.tags || '',
+          '규격': item.spec || '-',
+          '단위': item.unitValue || '개',
+          '입수량': item.boxContains ? `${item.boxContains}개입` : '-',
+          '적재 위치': item.location || '위치 미지정',
+          '현재고': item.stock,
+          '안전재고': item.safeStock,
+          '구매단가': displayPrice,
+          '평가 가치액': valuation.totalValue,
+          '상세 설명': item.description || ''
+        };
+      });
+
+      const aoaData: any[][] = [headers];
+      rows.forEach((row) => {
+        const rowData = headers.map((header) => row[header as keyof typeof row] ?? '');
+        aoaData.push(rowData);
+      });
+
+      const worksheet = XLSX.utils.aoa_to_sheet(aoaData);
+      const workbook = XLSX.utils.book_new();
+      const tabName = activeTab === 'product' ? '완제품 대장' : activeTab === 'material' ? '원부자재 대장' : '전체 대장';
+      XLSX.utils.book_append_sheet(workbook, worksheet, tabName);
+
+      const filename = `실시간_재고자산_대장_${activeTab === 'product' ? '완제품' : '원부자재'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(workbook, filename);
+    } catch (err) {
+      console.error('엑셀 내보내기 에러:', err);
+      alert('엑셀 파일을 내보내는 중 에러가 발생했습니다.');
+    } finally {
+      setIsExportingExcel(false);
     }
   };
 
@@ -637,6 +758,7 @@ export default function InventoryPage() {
       name: '',
       category: '',
       price: '',
+      purchasePrice: '',
       partner: '',
       stock: '',
       safeStock: '',
@@ -692,6 +814,7 @@ export default function InventoryPage() {
       name: item.name,
       category: item.category,
       price: String(item.price),
+      purchasePrice: item.purchasePrice ? String(item.purchasePrice) : '',
       partner: item.partner || '',
       stock: String(item.stock),
       safeStock: String(item.safeStock),
@@ -807,18 +930,12 @@ export default function InventoryPage() {
     }
   };
 
-  // 통계 연산 (한글 표준 명칭인 '원부자재' 및 '완제품' 호환 필터링 적용)
-  const materials = items.filter(it => (it.type as string) === '원부자재' || it.type === 'material' || (it.type as string) === '자재' || (it.type as string) === '원자재');
-  const products = items.filter(it => (it.type as string) === '완제품' || it.type === 'product' || (it.type as string) === '제품');
-  
-  const totalMaterialStock = materials.reduce((acc, cur) => acc + (Number(cur.stock) || 0), 0);
-  const totalProductStock = products.reduce((acc, cur) => acc + (Number(cur.stock) || 0), 0);
-
-  const totalMaterialValue = materials.reduce((acc, cur) => acc + calculateValuation(cur, logs, valuationMethod).totalValue, 0);
-  const totalProductValue = products.reduce((acc, cur) => acc + calculateValuation(cur, logs, valuationMethod).totalValue, 0);
-
-  const outOfStockItems = items.filter(it => it.stock <= it.safeStock);
-  const outOfStockCount = outOfStockItems.length;
+  // ⚡ 대시보드 요약 카드는 페이징된 10개 기준이 아닌 DB 전체 누적 통계(dbStats)를 바인딩합니다.
+  const totalMaterialStock = dbStats.totalMaterialStock;
+  const totalProductStock = dbStats.totalProductStock;
+  const totalMaterialValue = dbStats.totalMaterialValue;
+  const totalProductValue = dbStats.totalProductValue;
+  const outOfStockCount = dbStats.outOfStockCount;
 
   const currentMonthLogs = logs.filter(log => {
     const logDate = new Date(log.createdAt);
@@ -962,6 +1079,8 @@ export default function InventoryPage() {
           totalProductValue={totalProductValue}
           outOfStockCount={outOfStockCount}
           monthlyTxCount={monthlyTxCount}
+          materialCount={materialCount}
+          productCount={productCount}
         />
 
         {/* 2. 🔥 AI 인공지능 샌드박스 터미널 (비전 & 음성/자연어 2개 기둥) */}
@@ -993,6 +1112,7 @@ export default function InventoryPage() {
             items={items}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
+            lastActiveTab={lastActiveTab}
           />
         ) : (
           <InventoryTable
@@ -1017,6 +1137,18 @@ export default function InventoryPage() {
             totalItemsCount={totalItems}
             materialCount={materialCount}
             productCount={productCount}
+            sortKey={sortKey}
+            setSortKey={setSortKey}
+            sortDir={sortDir}
+            setSortDir={setSortDir}
+            selectedCategories={selectedCategories}
+            setSelectedCategories={setSelectedCategories}
+            dbCategories={dbCategories}
+            selectedTags={selectedTags}
+            setSelectedTags={setSelectedTags}
+            dbTags={dbTags}
+            onExportExcel={exportInventoryToExcel}
+            isExportingExcel={isExportingExcel}
           />
         )}
 

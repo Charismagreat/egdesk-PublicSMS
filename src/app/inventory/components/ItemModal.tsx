@@ -156,50 +156,55 @@ export const ItemModal: React.FC<ItemModalProps> = ({
                   }}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white font-semibold cursor-pointer"
                 >
-                  <option value="count">개수 (개)</option>
+                  <option value="count">개수 (개, 조, SET 등)</option>
                   <option value="weight">중량/부피 (g, kg, L 등)</option>
-                  <option value="box">박스 (BOX)</option>
+                  <option value="box">박스/포장 단위 (드럼, 카톤 등)</option>
                 </select>
               </div>
             </div>
 
             {/* 단위별 상세 입력 폼 */}
+            {itemForm.unitType === 'count' && (
+              <div className="bg-indigo-50/30 border border-indigo-150/40 p-3.5 rounded-xl animate-in fade-in slide-in-from-top-1 duration-150">
+                <label className="text-[10px] font-black text-indigo-600 block mb-1">상세 단위 명칭 직접 입력</label>
+                <input
+                  type="text"
+                  value={itemForm.unitValue === '개' ? '' : itemForm.unitValue || ''}
+                  onChange={(e) => setItemForm(prev => ({ ...prev, unitValue: e.target.value || '개' }))}
+                  placeholder="예: 개, 조, SET, 장, 켤레, 롤 (비어있을 시 '개'로 지정)"
+                  className="w-full px-3 py-2 bg-white rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                />
+              </div>
+            )}
+
             {itemForm.unitType === 'weight' && (
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl">
+              <div className="grid grid-cols-2 gap-3 bg-indigo-50/30 border border-indigo-150/40 p-3.5 rounded-xl animate-in fade-in slide-in-from-top-1 duration-150">
                 <div>
-                  <label className="text-[10px] font-bold text-indigo-600 block mb-1">중량/부피 세부 단위</label>
-                  <select
-                    value={itemForm.unitValue || 'g'}
-                    onChange={(e) => setItemForm(prev => ({ ...prev, unitValue: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-250 text-xs focus:ring-1 focus:ring-indigo-500 outline-none bg-white font-medium cursor-pointer"
-                  >
-                    <option value="g">g (그램)</option>
-                    <option value="kg">kg (킬로그램)</option>
-                    <option value="ton">ton (톤)</option>
-                    <option value="ml">ml (밀리리터)</option>
-                    <option value="L">L (리터)</option>
-                    <option value="kL">kL (킬로리터)</option>
-                    <option value="m3">m³ (세제곱미터)</option>
-                    <option value="km3">km³ (세제곱킬로미터)</option>
-                  </select>
+                  <label className="text-[10px] font-black text-indigo-600 block mb-1">중량/부피 세부 단위 직접 입력</label>
+                  <input
+                    type="text"
+                    value={itemForm.unitValue === 'g' ? '' : itemForm.unitValue || ''}
+                    onChange={(e) => setItemForm(prev => ({ ...prev, unitValue: e.target.value || 'g' }))}
+                    placeholder="예: g, kg, ton, ml, L (비어있을 시 'g'로 지정)"
+                    className="w-full px-3 py-2 bg-white rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                  />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-indigo-600 block mb-1">단위 수량 (소수점 지원)</label>
+                  <label className="text-[10px] font-black text-indigo-600 block mb-1">단위 수량</label>
                   <input
                     type="number"
                     step="0.01"
-                    placeholder="n.00"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-250 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                    placeholder="예: 1.00"
+                    className="w-full px-3 py-2 bg-white rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                   />
-                  <span className="text-[9px] text-slate-400 mt-1 block">소수점 둘째 자리까지 지원</span>
                 </div>
               </div>
             )}
 
             {itemForm.unitType === 'box' && (
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-indigo-100 animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="grid grid-cols-2 gap-3 bg-indigo-50/30 border border-indigo-150/40 p-3.5 rounded-xl animate-in fade-in slide-in-from-top-1 duration-150">
                 <div>
-                  <label className="text-[10px] font-bold text-indigo-600 block mb-1">박스당 입수량 (추가 단위 표시)</label>
+                  <label className="text-[10px] font-bold text-indigo-600 block mb-1">입수량 (포장 단위당 개수)</label>
                   <div className="relative flex items-center">
                     <input
                       type="number"
@@ -207,22 +212,24 @@ export const ItemModal: React.FC<ItemModalProps> = ({
                       value={itemForm.boxContains || ''}
                       onChange={(e) => setItemForm(prev => ({ ...prev, boxContains: e.target.value }))}
                       placeholder="10"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-250 pr-12 text-xs focus:ring-1 focus:ring-indigo-500 outline-none font-bold"
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-slate-200 pr-12 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-bold"
                     />
                     <span className="absolute right-3 text-[10px] text-indigo-500 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">n개입</span>
                   </div>
                 </div>
                 <div className="flex flex-col justify-center">
-                  <span className="text-xs text-slate-655 font-semibold block">최종 규격화 단위명:</span>
-                  <span className="text-xs font-bold text-indigo-655 mt-0.5 bg-indigo-50/50 border border-indigo-100 rounded-lg px-2 py-1 inline-block w-fit">
-                    1박스 ({itemForm.boxContains || '10'}개입)
+                  <span className="text-xs text-slate-500 font-semibold block">최종 규격화 단위명:</span>
+                  <span className="text-xs font-bold text-indigo-600 mt-0.5 bg-indigo-50/50 border border-indigo-100 rounded-lg px-2 py-1 inline-block w-fit">
+                    1{itemForm.unitValue || '박스'} ({itemForm.boxContains || '10'}개입)
                   </span>
                 </div>
               </div>
             )}
 
             {/* 3. 공급 단가 & 거래처 */}
-            <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+            <div className={`grid gap-3 border-t border-slate-100 pt-3 ${
+              itemForm.type === 'product' ? 'grid-cols-3' : 'grid-cols-2'
+            }`}>
               <div>
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
                   {itemForm.type === 'material' ? '공급 단가 (매입가)' : '매출 단가 (판매가)'}
@@ -239,6 +246,25 @@ export const ItemModal: React.FC<ItemModalProps> = ({
                   />
                 </div>
               </div>
+
+              {itemForm.type === 'product' && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    구매 단가 (매입 원가)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-xs text-slate-400">₩</span>
+                    <input
+                      type="number"
+                      value={itemForm.purchasePrice}
+                      onChange={(e) => setItemForm(prev => ({ ...prev, purchasePrice: e.target.value }))}
+                      placeholder="0"
+                      className="w-full pl-7 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none animate-none"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
                   {itemForm.type === 'material' ? '주 매입 거래처' : '주요 거래처'}

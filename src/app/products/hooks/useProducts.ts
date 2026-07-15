@@ -25,21 +25,31 @@ export function useProducts() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isUploadingExcel, setIsUploadingExcel] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'DRAFT'>('ACTIVE');
+  const [totalCount, setTotalCount] = useState(0);
+  const [activeCount, setActiveCount] = useState(0);
+  const [draftCount, setDraftCount] = useState(0);
 
-  // 검색어 입력 시 페이지 번호 초기화
+  // 검색어 및 필터 전환 시 페이지 번호 1로 세팅
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, statusFilter]);
 
+  // 페이지, 필터, 검색어가 최종 결정되면 데이터 요청
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [statusFilter, currentPage, itemsPerPage, searchQuery]);
 
   const fetchData = async () => {
     try {
-      const res = await apiFetch('/api/products');
+      const res = await apiFetch(`/api/products?status=${statusFilter}&page=${currentPage}&limit=${itemsPerPage}&search=${encodeURIComponent(searchQuery)}`);
       const json = await res.json();
-      if (json.success) setData(json.products);
+      if (json.success) {
+        setData(json.products || []);
+        setTotalCount(json.filteredCount || 0);
+        setActiveCount(json.activeCount || 0);
+        setDraftCount(json.draftCount || 0);
+      }
     } catch (e) {
       console.error('Failed to fetch products:', e);
     }
@@ -167,20 +177,12 @@ export function useProducts() {
     }
   };
 
-  const filteredData = data.filter(t => {
-    const query = searchQuery.toLowerCase();
-    return (
-      (t.name && t.name.toLowerCase().includes(query)) ||
-      (t.menu_category && t.menu_category.toLowerCase().includes(query)) ||
-      (t.description && t.description.toLowerCase().includes(query))
-    );
-  });
-
-  // 페이지네이션 슬라이싱 로직
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  // ⚡ 이미 서버 사이드에서 필터링 및 페이징이 완료되었으므로 바로 바인딩
+  const filteredData = data;
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedData = filteredData.slice(startIndex, endIndex);
+  const endIndex = startIndex + data.length;
+  const paginatedData = data;
 
   const addData = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -317,6 +319,29 @@ export function useProducts() {
     }
   };
 
+  const approveProduct = async (id: string, price: string, mainImageUrl: string) => {
+    try {
+      const res = await apiFetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          status: 'ACTIVE',
+          price,
+          main_image_url: mainImageUrl
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        fetchData();
+      } else {
+        alert('승인 처리 중 오류 발생: ' + json.error);
+      }
+    } catch (err) {
+      alert('네트워크 오류가 발생했습니다.');
+    }
+  };
+
   return {
     data,
     form, setForm,
@@ -327,6 +352,11 @@ export function useProducts() {
     currentPage, setCurrentPage,
     itemsPerPage, setItemsPerPage,
     isUploadingExcel,
+    statusFilter, setStatusFilter,
+    approveProduct,
+    activeCount,
+    draftCount,
+    totalCount,
     totalPages,
     startIndex,
     endIndex,
