@@ -39,24 +39,55 @@ export async function GET(req: Request) {
     const offset = (page - 1) * limit;
     const search = searchParams.get('search')?.trim() || '';
 
-    // 1. 전체 조건 카운트 및 데이터 페칭 쿼리
-    let countQuery = `SELECT COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
-    let dataQuery = `SELECT * FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
+    // 1. 전체 조건 카운트 및 데이터 페칭 쿼리 (SQL 방화벽 에러 감지 시 queryTable로 폴백)
+    let rows = [];
+    let filteredCount = 0;
 
-    if (search) {
-      const searchCond = ` AND (name LIKE '%${search}%' OR category LIKE '%${search}%' OR description LIKE '%${search}%')`;
-      countQuery += searchCond;
-      dataQuery += searchCond;
+    try {
+      let countQuery = `SELECT COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
+      let dataQuery = `SELECT * FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
+
+      if (search) {
+        const searchCond = ` AND (name LIKE '%${search}%' OR category LIKE '%${search}%' OR description LIKE '%${search}%')`;
+        countQuery += searchCond;
+        dataQuery += searchCond;
+      }
+
+      dataQuery += ` ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`;
+
+      const countRes = await executeSQL(countQuery);
+      filteredCount = countRes.rows?.[0]?.count || 0;
+
+      const dataRes = await executeSQL(dataQuery);
+      rows = dataRes.rows || [];
+      
+      // 소프트 삭제 레코드 배제 필터링
+      rows = rows.filter((r: any) => !r.deleted_at);
+    } catch (err) {
+      console.warn('[executeSQL Fallback] queryTable로 폴백하여 상품 데이터를 조회합니다:', err);
+      
+      const queryRes = await queryTable('products', {
+        limit: 10000,
+        orderBy: 'id',
+        orderDirection: 'DESC'
+      });
+      let allRows = queryRes.rows || [];
+      
+      // 메모리 기반 테넌트, 삭제, 상태 필터링
+      allRows = allRows.filter((r: any) => !r.deleted_at && r.tenant_id === tenantId && (r.status || 'ACTIVE') === status);
+      
+      if (search) {
+        const cleanSearch = search.toLowerCase();
+        allRows = allRows.filter((r: any) => 
+          (r.name && String(r.name).toLowerCase().includes(cleanSearch)) ||
+          (r.category && String(r.category).toLowerCase().includes(cleanSearch)) ||
+          (r.description && String(r.description).toLowerCase().includes(cleanSearch))
+        );
+      }
+      
+      filteredCount = allRows.length;
+      rows = allRows.slice(offset, offset + limit);
     }
-
-    // 정렬 및 페이징 범위 적용
-    dataQuery += ` ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`;
-
-    const countRes = await executeSQL(countQuery);
-    const filteredCount = countRes.rows?.[0]?.count || 0;
-
-    const dataRes = await executeSQL(dataQuery);
-    const rows = dataRes.rows || [];
 
     const products = rows.map((r: any) => ({
       id: r.id,
@@ -74,17 +105,30 @@ export async function GET(req: Request) {
       inventory_item_id: r.inventory_item_id || null
     }));
 
-    // 2. 각 탭의 뱃지에 출력될 전체 활성/임시저장 상품 수 통계 산출 (1,000건 제한 우회)
-    const statsQuery = `SELECT status, COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' GROUP BY status`;
-    const statsRes = await executeSQL(statsQuery);
-    const statsRows = statsRes.rows || [];
-    
+    // 2. 각 탭의 뱃지에 출력될 전체 활성/임시저장 상품 수 통계 산출 (에러 감지 시 폴백 적용)
     let activeCount = 0;
     let draftCount = 0;
-    statsRows.forEach((row: any) => {
-      if (row.status === 'ACTIVE') activeCount = row.count;
-      else if (row.status === 'DRAFT') draftCount = row.count;
-    });
+    
+    try {
+      const statsQuery = `SELECT status, COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' GROUP BY status`;
+      const statsRes = await executeSQL(statsQuery);
+      const statsRows = statsRes.rows || [];
+      statsRows.forEach((row: any) => {
+        if (row.status === 'ACTIVE') activeCount = row.count;
+        else if (row.status === 'DRAFT') draftCount = row.count;
+      });
+    } catch (statsErr) {
+      console.warn('[Stats executeSQL Fallback] queryTable로 통계 폴백 계산:', statsErr);
+      const statsQueryRes = await queryTable('products', { limit: 10000 });
+      let allStatsRows = statsQueryRes.rows || [];
+      allStatsRows = allStatsRows.filter((r: any) => !r.deleted_at && r.tenant_id === tenantId);
+      
+      allStatsRows.forEach((row: any) => {
+        const rowStatus = row.status || 'ACTIVE';
+        if (rowStatus === 'ACTIVE') activeCount++;
+        else if (rowStatus === 'DRAFT') draftCount++;
+      });
+    }
 
     return NextResponse.json({ 
       success: true, 
