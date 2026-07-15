@@ -134,6 +134,7 @@ export function useExpenses() {
     transfer_fee: 0,
     card_approval_no: "",
     tags: "",
+    evidence_id: "",
   });
 
   const [dbCategories, setDbCategories] = useState<DbExpenseCategory[]>([]);

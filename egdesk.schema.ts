@@ -526,6 +526,7 @@ export const COLUMN_DEFINITIONS = {
     { name: 'transfer_fee', type: 'INTEGER', defaultValue: 0 },
     { name: 'card_approval_no', type: 'TEXT' },
     { name: 'tags', type: 'TEXT' },
+    { name: 'evidence_id', type: 'TEXT' },
     { name: 'created_at', type: 'TEXT', notNull: true },
     { name: 'uuid', type: 'TEXT' },
     { name: 'updated_at', type: 'TEXT' },

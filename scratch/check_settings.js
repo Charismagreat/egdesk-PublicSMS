@@ -1,13 +1,17 @@
 const { queryTable } = require('../egdesk-helpers');
 
-async function main() {
+async function run() {
   try {
     const res = await queryTable('system_settings', {});
-    console.log('--- system_settings 데이터 목록 ---');
-    console.log(JSON.stringify(res.rows, null, 2));
+    console.log("=== SYSTEM SETTINGS DUMP ===");
+    res.rows.forEach(r => {
+      if (r.key.includes('ai') || r.key.includes('llm') || r.key.includes('company')) {
+        console.log(`[${r.key}]: ${r.value}`);
+      }
+    });
   } catch (err) {
-    console.error('에러 발생:', err);
+    console.error('Failed:', err);
   }
 }
 
-main();
+run();

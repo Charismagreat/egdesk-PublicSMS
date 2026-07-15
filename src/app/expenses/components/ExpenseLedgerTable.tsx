@@ -548,8 +548,15 @@ export default function ExpenseLedgerTable({
                     {/* 5. 계정과목 */}
                     <td className="p-3.5 font-sans font-bold text-rose-600 whitespace-nowrap">{exp.category}</td>
                     {/* 6. 거래처/영수인 */}
-                    <td className="p-3.5 truncate max-w-[120px] font-sans font-bold text-slate-700" title={payeeText}>
-                      {payeeText}
+                    <td className="p-3.5 truncate max-w-[120px] font-sans font-bold text-slate-705" title={payeeText}>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className="truncate">{payeeText}</span>
+                        {exp.evidence_id && (
+                          <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-rose-50 text-rose-600 border border-rose-100 uppercase tracking-wider scale-90 -translate-x-1 origin-left">
+                            🏛️ 국세청 연동
+                          </span>
+                        )}
+                      </div>
                     </td>
                     {/* 7. 적요 (용도) */}
                     <td className="p-3.5 truncate max-w-[180px] font-sans font-semibold text-slate-800" title={exp.title}>

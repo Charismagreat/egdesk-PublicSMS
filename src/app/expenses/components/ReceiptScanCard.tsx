@@ -80,6 +80,58 @@ export default function ReceiptScanCard({
   const [selectedMainCat, setSelectedMainCat] = useState<string>("판매비와관리비");
   const [selectedMidCat, setSelectedMidCat] = useState<string>("복리후생비");
 
+  // 🏛️ 국세청 홈택스 자료 연동 상태 및 페치 로직 정의
+  const [importMode, setImportMode] = useState<"ocr" | "hometax">("ocr");
+  const [hometaxInvoices, setHometaxInvoices] = useState<any[]>([]);
+  const [isLoadingHometax, setIsLoadingHometax] = useState(false);
+  const [hometaxSearch, setHometaxSearch] = useState("");
+
+  const fetchHometaxInvoices = async () => {
+    setIsLoadingHometax(true);
+    try {
+      const res = await fetch("/api/expenses/hometax");
+      const json = await res.json();
+      if (json.success) {
+        setHometaxInvoices(json.invoices || []);
+      }
+    } catch (e) {
+      console.error("Hometax purchase list fetch error:", e);
+    } finally {
+      setIsLoadingHometax(false);
+    }
+  };
+
+  useEffect(() => {
+    if (importMode === "hometax") {
+      fetchHometaxInvoices();
+    }
+  }, [importMode, newExpense.evidence_id]);
+
+  const filteredHometaxInvoices = useMemo(() => {
+    if (!hometaxSearch.trim()) return hometaxInvoices;
+    const cleanSearch = hometaxSearch.toLowerCase();
+    return hometaxInvoices.filter(
+      (inv: any) =>
+        (inv.supplierName || "").toLowerCase().includes(cleanSearch) ||
+        (inv.itemName || "").toLowerCase().includes(cleanSearch) ||
+        (inv.totalAmount || "").toString().includes(cleanSearch)
+    );
+  }, [hometaxInvoices, hometaxSearch]);
+
+  const handleSelectHometax = (inv: any) => {
+    setNewExpense(prev => ({
+      ...prev,
+      title: `@${inv.supplierName} ${inv.itemName || '전자세금계산서 매입'}`,
+      amount: String(inv.totalAmount),
+      expense_date: inv.issueDate,
+      requisition_date: inv.issueDate,
+      payee: inv.supplierName,
+      payment_method: "계좌송금",
+      evidence_id: inv.evidenceId,
+      memo: `[국세청 매입 연동] 승인번호/ID: ${inv.id}`,
+    }));
+  };
+
   // 🏷️ 적요란 '@' 지능형 자동완성 제어용 상태
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchWord, setSearchWord] = useState("");
@@ -465,6 +517,138 @@ export default function ReceiptScanCard({
         )}
       </div>
 
+      {/* 📂 증빙 연동 모드 탭 스위치 */}
+      <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200/80 shadow-3xs w-full">
+        <button
+          type="button"
+          onClick={() => setImportMode("ocr")}
+          className={`flex-1 py-2 rounded-xl text-xs font-black transition-all cursor-pointer text-center ${
+            importMode === "ocr"
+              ? "bg-white text-slate-800 shadow-xs"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          📸 영수증 이미지/PDF 스캔
+        </button>
+        <button
+          type="button"
+          onClick={() => setImportMode("hometax")}
+          className={`flex-1 py-2 rounded-xl text-xs font-black transition-all cursor-pointer text-center ${
+            importMode === "hometax"
+              ? "bg-white text-slate-800 shadow-xs"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          🏛️ 국세청 홈택스 세금계산서 연동 (매입)
+        </button>
+      </div>
+
+      {importMode === "ocr" ? (
+        /* 드롭존 영역 */
+        <div 
+          data-easybot-hint="지출 영수증 파일 업로드 영역: 이곳에 지출 증빙용 이미지(PNG, JPG, WEBP)나 PDF 파일을 드래그 앤 드롭하거나 클릭하여 업로드하면, AI가 자동으로 텍스트를 인식(OCR)하여 지출 일자, 공급자명, 금액 등을 파악하고 지출 전표 생성을 도와줍니다."
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center group ${
+            isAnalyzingReceipt 
+              ? 'border-rose-400 bg-rose-50/20' 
+              : 'border-slate-200 hover:border-rose-300 hover:bg-slate-50/50'
+          }`}
+        >
+          <input 
+            type="file" 
+            ref={fileInputRef}
+            className="hidden"
+            accept="image/jpeg,image/png,image/jpg,image/webp,application/pdf"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFileUpload(file);
+            }}
+          />
+          
+          {isAnalyzingReceipt ? (
+            <div className="space-y-3">
+              <RefreshCw className="w-10 h-10 text-rose-500 animate-spin mx-auto" />
+              <p className="font-extrabold text-xs text-rose-500">Gemini AI가 영수증 글자와 금액을 해독하고 있습니다...</p>
+              <p className="text-[10px] text-slate-400 font-semibold">비목(카테고리) 자율 분류 분석 연산 작동 중</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Upload className="w-10 h-10 text-slate-350 mx-auto group-hover:text-rose-455 transition-colors" />
+              <p className="font-extrabold text-xs text-slate-700">여기에 영수증 이미지 또는 전자영수증 PDF를 드래그 앤 드롭하세요</p>
+              <p className="text-[10px] text-slate-455 font-semibold">또는 이 영역을 클릭하여 PC 내부 파일을 선택하세요</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* 국세청 홈택스 세금계산서 리스트 뷰 영역 */
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <input 
+              type="text"
+              placeholder="공급자명, 품목명, 합계금액 검색..."
+              value={hometaxSearch}
+              onChange={(e) => setHometaxSearch(e.target.value)}
+              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-rose-500 transition-all text-left"
+            />
+            <button
+              type="button"
+              onClick={fetchHometaxInvoices}
+              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl cursor-pointer transition-all active:scale-95"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoadingHometax ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          <div className="border border-slate-100 rounded-2xl bg-slate-50/50 p-2 max-h-[190px] overflow-y-auto space-y-2 text-left">
+            {isLoadingHometax ? (
+              <div className="py-12 text-center text-xs font-bold text-slate-400">
+                국세청 홈택스 매입 자료 로딩 중...
+              </div>
+            ) : filteredHometaxInvoices.length === 0 ? (
+              <div className="py-12 text-center text-xs font-bold text-slate-400">
+                연동할 수 있는 미결의 매입 세금계산서가 없습니다.
+              </div>
+            ) : (
+              filteredHometaxInvoices.map((inv: any) => (
+                <div
+                  key={inv.evidenceId}
+                  onClick={() => handleSelectHometax(inv)}
+                  className={`p-3 bg-white border rounded-xl cursor-pointer hover:border-rose-350 transition-all shadow-3xs flex items-center justify-between gap-3 ${
+                    newExpense.evidence_id === inv.evidenceId ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-150'
+                  }`}
+                >
+                  <div className="space-y-1 truncate flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-black tracking-wider ${
+                        inv.sourceTable === 'tax' 
+                          ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
+                          : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                      }`}>
+                        {inv.sourceTable === 'tax' ? '과세 매입' : '면세 매입'}
+                      </span>
+                      <span className="font-mono text-[9px] text-slate-400">{inv.issueDate}</span>
+                    </div>
+                    <div className="font-extrabold text-[11px] text-slate-800 truncate">
+                      {inv.supplierName} <span className="text-slate-400 font-medium">| {inv.itemName || '품목명 없음'}</span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-black text-xs text-slate-900">
+                      {inv.totalAmount.toLocaleString()}원
+                    </div>
+                    <div className="text-[9px] text-slate-455 font-semibold">
+                      공급: {inv.supplyAmount.toLocaleString()} / 세: {inv.taxAmount.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
       {/* AI 인식 결과 검수 & 등록 폼 */}
       <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 shadow-inner space-y-4">
         <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center justify-between border-b pb-2 mb-2">
@@ -479,6 +663,26 @@ export default function ReceiptScanCard({
             초기화
           </button>
         </h3>
+
+        {/* 🏛️ 국세청 홈택스 세금계산서 연동 뱃지 가드 */}
+        {newExpense.evidence_id && (
+          <div className="bg-rose-50/70 border border-rose-100 rounded-xl px-3.5 py-2 flex items-center justify-between gap-2 text-left">
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="text-[9px] bg-rose-600 text-white px-1.5 py-0.5 rounded-md font-black shrink-0">🏛️ 국세청 연동</span>
+              <span className="text-[11px] text-rose-800 font-black truncate">
+                {newExpense.payee} ({Number(newExpense.amount).toLocaleString()}원)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNewExpense(prev => ({ ...prev, evidence_id: "", memo: "" }))}
+              className="text-rose-500 hover:text-rose-700 font-black text-xs border-none bg-transparent cursor-pointer shrink-0"
+              title="연동 취소"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3.5 text-left">
           {/* 적요 */}
