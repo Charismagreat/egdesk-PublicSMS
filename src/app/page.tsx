@@ -1,6 +1,7 @@
 import { Users, MessageSquare, CheckCircle, Clock, AlertTriangle, Home as HomeIcon } from "lucide-react";
 import { queryTable } from "@/../egdesk-helpers";
 import AiCopilotWidget from "@/components/AiCopilotWidget";
+import MobileHubWidget from "@/components/MobileHubWidget";
 
 
 // Next.js 캐싱 비활성화 (항상 최신 데이터 유지)
@@ -79,6 +80,9 @@ export default async function Home() {
 
       {/* AI 자율 마케팅 파트너 어시스턴트 위젯 */}
       {copilotEnabled && <AiCopilotWidget />}
+
+      {/* 📱 모바일 채널 허브 위젯 (링크 복사, QR 생성, SMS 발송) */}
+      <MobileHubWidget />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
