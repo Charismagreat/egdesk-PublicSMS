@@ -31,13 +31,16 @@ export async function GET(request: Request) {
 
     // ⚡ 테넌트 불일치 자가 복구 가드(Self-Healing Guard):
     // 기존에 다른 테넌트 ID('tenant-guest-id-2222' 또는 NULL)로 적재된 재고 데이터를
-    // 현재 세션의 활성 테넌트 ID(tenantId)로 자동 바인딩 보정 처리합니다. (다이렉트 SQL UPDATE 활용)
+    // 현재 세션의 활성 테넌트 ID(tenantId)로 자동 바인딩 보정 처리합니다. (updateRows filters 활용)
     try {
       if (tenantId !== 'tenant-guest-id-2222') {
-        await executeSQL(`UPDATE inventory_items SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL OR tenant_id = 'tenant-guest-id-2222' OR tenant_id = 'default'`);
+        await updateRows('inventory_items', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
+        await updateRows('inventory_items', { tenant_id: tenantId }, { filters: { tenant_id: 'tenant-guest-id-2222' } });
+        await updateRows('inventory_items', { tenant_id: tenantId }, { filters: { tenant_id: null as any } });
         console.log(`[Self-Healing] Migrated inventory items to current tenant: ${tenantId}`);
       } else {
-        await executeSQL(`UPDATE inventory_items SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL OR tenant_id = 'default'`);
+        await updateRows('inventory_items', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
+        await updateRows('inventory_items', { tenant_id: tenantId }, { filters: { tenant_id: null as any } });
         console.log(`[Self-Healing] Cleaned null/default inventory to guest tenant: ${tenantId}`);
       }
     } catch (patchErr: any) {

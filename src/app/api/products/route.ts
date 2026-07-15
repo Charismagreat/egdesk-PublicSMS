@@ -1,13 +1,15 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, deleteRows, executeSQL } from '../../../../egdesk-helpers';
+import { queryTable, insertRows, deleteRows, executeSQL, updateRows } from '../../../../egdesk-helpers';
 import { couponCache } from '@/lib/coupon-cache';
 import { getTenantId } from '@/lib/tenant';
 
 // GET /api/products : 상품 목록 조회 (서버 사이드 페이지네이션 및 상태 집계)
+
 export async function GET(req: Request) {
   try {
     const tenantId = await getTenantId();
+
     if (!tenantId) {
       return NextResponse.json({ success: false, error: '인증이 필요합니다.' }, { status: 401 });
     }
@@ -17,10 +19,13 @@ export async function GET(req: Request) {
     // 현재 세션의 활성 테넌트 ID(tenantId)로 자동 바인딩 보정 처리합니다. (다이렉트 SQL UPDATE 활용)
     try {
       if (tenantId !== 'tenant-guest-id-2222') {
-        await executeSQL(`UPDATE products SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL OR tenant_id = 'tenant-guest-id-2222' OR tenant_id = 'default'`);
+        await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
+        await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: 'tenant-guest-id-2222' } });
+        await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: null as any } });
         console.log(`[Self-Healing] Migrated products to current tenant: ${tenantId}`);
       } else {
-        await executeSQL(`UPDATE products SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL OR tenant_id = 'default'`);
+        await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
+        await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: null as any } });
         console.log(`[Self-Healing] Cleaned null/default products to guest tenant: ${tenantId}`);
       }
     } catch (patchErr: any) {
