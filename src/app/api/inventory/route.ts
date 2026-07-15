@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
     const tenantId = await getTenantId();
 
-    // ⚡ 중복 데이터 정합성 긴급 진단 가드
+    // ⚡ 중복 데이터 정합성 긴급 진단 및 자가 복구 가드 (Clean & Diagnosis)
     if (searchParams.get('debug') === 'duplication') {
       let duplicationRows = [];
       let errMessage = null;
@@ -42,6 +42,41 @@ export async function GET(request: Request) {
         totalItemsInDb: totalCount,
         duplicationSampleCount: duplicationRows.length, 
         duplicationRows 
+      });
+    }
+
+    if (searchParams.get('debug') === 'clean') {
+      let cleanedCount = 0;
+      let errMessage = null;
+      try {
+        const dupIdsRes = await executeSQL(`
+          SELECT id FROM inventory_items 
+          WHERE tenant_id = '${tenantId}' 
+            AND id NOT IN (
+              SELECT MIN(id) FROM inventory_items 
+              WHERE tenant_id = '${tenantId}' 
+              GROUP BY name, barcode
+            )
+        `);
+        const dupRows = dupIdsRes.rows || [];
+        if (dupRows.length > 0) {
+          const idsToDelete = dupRows.map((r: any) => Number(r.id));
+          const chunkSize = 900;
+          for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+            const chunk = idsToDelete.slice(i, i + chunkSize);
+            await deleteRows('inventory_items', { ids: chunk });
+            cleanedCount += chunk.length;
+          }
+        }
+      } catch (dbErr: any) {
+        errMessage = dbErr.message;
+      }
+      return NextResponse.json({ 
+        success: !errMessage,
+        currentSessionTenantId: tenantId, 
+        errMessage,
+        cleanedCount,
+        message: `성공적으로 중복 적재된 찌꺼기 품목 ${cleanedCount}건을 물리적으로 삭제 정리 완료했습니다.`
       });
     }
 
