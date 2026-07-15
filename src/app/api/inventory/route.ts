@@ -24,19 +24,18 @@ export async function GET(request: Request) {
 
     // ⚡ 긴급 디버깅 가드: 실물 DB 내 적재된 데이터의 tenant_id 값과 현재 세션의 tenantId 일치 여부 판별
     if (searchParams.get('debug') === 'raw') {
-      let sampleRows = [];
+      let tenantDistribution = [];
       let errMessage = null;
       try {
-        const allRows = await executeSQL('SELECT id, name, tenant_id, deleted_at FROM inventory_items LIMIT 15');
-        sampleRows = allRows.rows || [];
+        const distRes = await executeSQL('SELECT tenant_id, COUNT(*) as count FROM inventory_items GROUP BY tenant_id');
+        tenantDistribution = distRes.rows || [];
       } catch (dbErr: any) {
         errMessage = dbErr.message;
       }
       return NextResponse.json({ 
         currentSessionTenantId: tenantId, 
         errMessage,
-        dbRowsCount: sampleRows.length, 
-        sampleRows 
+        tenantDistribution 
       });
     }
 
