@@ -130,18 +130,10 @@ export async function GET(request: Request) {
             count: cnt
           });
         } catch (err: any) {
-          try {
-            const fs = require('fs');
-            const path = require('path');
-            fs.appendFileSync(
-              path.join(process.cwd(), 'scratch', 'error_log.txt'),
-              `[${name}] Error: ${err.message}\nStack: ${err.stack}\n\n`
-            );
-          } catch (e) {}
           tablesWithCount.push({
             name,
             displayName: t.displayName || name,
-            count: 'Error'
+            count: `Error: ${err.message}`
           });
         }
       }
