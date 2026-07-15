@@ -22,21 +22,13 @@ export async function GET(request: Request) {
 
     const tenantId = await getTenantId();
 
-    // ⚡ 긴급 디버깅 가드: 실물 DB 내 적재된 데이터의 tenant_id 값과 현재 세션의 tenantId 일치 여부 판별
-    if (searchParams.get('debug') === 'raw') {
-      let tenantDistribution = [];
-      let errMessage = null;
-      try {
-        const distRes = await executeSQL('SELECT tenant_id, COUNT(*) as count FROM inventory_items GROUP BY tenant_id');
-        tenantDistribution = distRes.rows || [];
-      } catch (dbErr: any) {
-        errMessage = dbErr.message;
-      }
-      return NextResponse.json({ 
-        currentSessionTenantId: tenantId, 
-        errMessage,
-        tenantDistribution 
-      });
+    // ⚡ 자가 복구 가드(Self-Healing Guard): 
+    // 기존 마이그레이션 또는 대량 업로드 시 tenant_id가 NULL로 적재된 레코드들을 현재 로그인된 테넌트 세션 ID로 자동 바인딩 보정
+    try {
+      await executeSQL(`UPDATE inventory_items SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL`);
+      await executeSQL(`UPDATE inventory_logs SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL`);
+    } catch (patchErr) {
+      console.warn('[Self-Healing Warning] Failed to bind NULL tenant_ids:', patchErr);
     }
 
     // In-app migration: 기존의 자재/제품/material/product 명칭을 표준 명칭으로 보정
