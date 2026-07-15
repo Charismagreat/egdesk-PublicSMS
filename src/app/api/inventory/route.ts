@@ -35,7 +35,6 @@ export async function GET(request: Request) {
     try {
       if (tenantId !== 'tenant-guest-id-2222') {
         await updateRows('inventory_items', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
-        await updateRows('inventory_items', { tenant_id: tenantId }, { filters: { tenant_id: 'tenant-guest-id-2222' } });
         await updateRows('inventory_items', { tenant_id: tenantId }, { filters: { tenant_id: null as any } });
         console.log(`[Self-Healing] Migrated inventory items to current tenant: ${tenantId}`);
       } else {

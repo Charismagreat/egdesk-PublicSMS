@@ -20,7 +20,6 @@ export async function GET(req: Request) {
     try {
       if (tenantId !== 'tenant-guest-id-2222') {
         await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
-        await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: 'tenant-guest-id-2222' } });
         await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: null as any } });
         console.log(`[Self-Healing] Migrated products to current tenant: ${tenantId}`);
       } else {
