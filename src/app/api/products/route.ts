@@ -218,7 +218,7 @@ export async function PUT(req: Request) {
       name,
       price: price || '',
       url: url || '',
-      category: category || '일반상품',
+      category: category || '스토어용',
       menu_category: menu_category || '',
       description: description || '',
       main_image_url: main_image_url || '',
@@ -230,7 +230,12 @@ export async function PUT(req: Request) {
     if (status !== undefined) updates.status = status;
     if (inventory_item_id !== undefined) updates.inventory_item_id = inventory_item_id;
 
-    await updateRows('products', updates, { filters: { id: id } });
+    console.log(`[Debug Product PUT] Target ID: ${id}`);
+    console.log(`[Debug Product PUT] Received category:`, category);
+    console.log(`[Debug Product PUT] Updates object:`, JSON.stringify(updates));
+
+    const result = await updateRows('products', updates, { filters: { id: id } });
+    console.log(`[Debug Product PUT] updateRows DB result:`, JSON.stringify(result));
 
     // 캐시 무효화
     couponCache.clear();
