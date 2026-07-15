@@ -93,14 +93,27 @@ export async function GET(request: Request) {
           const hasTenantIdCol = columns.some((col: any) => col.name === 'tenant_id');
           
           // 개수 셀 때 본인 테넌트 데이터만 필터링
-          let cnt = 0;
           const queryFilters: any = {};
           if (hasTenantIdCol && username !== 'admin') {
             queryFilters.tenant_id = tenantId;
           }
 
-          const queryRes = await queryTable(name, { limit: 10000, filters: queryFilters });
-          let rows = queryRes.rows || [];
+          let rows: any[] = [];
+          let currentOffset = 0;
+          const batchSize = 1000;
+          
+          while (true) {
+            const queryRes = await queryTable(name, { 
+              limit: batchSize, 
+              offset: currentOffset,
+              filters: queryFilters 
+            });
+            const batchRows = queryRes.rows || [];
+            rows = rows.concat(batchRows);
+            
+            if (batchRows.length < batchSize) break;
+            currentOffset += batchSize;
+          }
           
           if (hasDeletedCol) {
             rows = rows.filter((r: any) => r.deleted_at === null || r.deleted_at === undefined || r.deleted_at === '');
@@ -196,13 +209,24 @@ export async function GET(request: Request) {
         queryFilters.tenant_id = tenantId;
       }
 
-      const queryRes = await queryTable(tableName, {
-        limit: 10000, // 최대 1만건까지 넉넉하게 조회
-        orderBy: pkCol,
-        orderDirection: 'DESC',
-        filters: queryFilters // 필터 강제
-      });
-      let rows = queryRes.rows || [];
+      let rows: any[] = [];
+      let currentOffset = 0;
+      const batchSize = 1000;
+
+      while (true) {
+        const queryRes = await queryTable(tableName, {
+          limit: batchSize,
+          offset: currentOffset,
+          orderBy: pkCol,
+          orderDirection: 'DESC',
+          filters: queryFilters
+        });
+        const batchRows = queryRes.rows || [];
+        rows = rows.concat(batchRows);
+        
+        if (batchRows.length < batchSize) break;
+        currentOffset += batchSize;
+      }
 
       // 소프트 삭제 필터링 적용
       if (hasDeletedCol) {
