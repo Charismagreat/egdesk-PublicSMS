@@ -173,7 +173,11 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
+                <th className="py-4 px-4">바코드/품목코드</th>
                 <th className="py-4 px-4">품목명</th>
+                <th className="py-4 px-4">규격</th>
+                <th className="py-4 px-4">단위</th>
+                <th className="py-4 px-4 text-right">박스당입수량</th>
                 <th className="py-4 px-4">카테고리</th>
                 <th className="py-4 px-4">보관 위치</th>
                 <th className="py-4 px-4 text-right">현재고 / 안전재고</th>
@@ -190,8 +194,14 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
               {paginatedItems.map((item) => {
                 const isAlert = item.stock <= item.safeStock;
                 const valuation = calculateValuation(item, logs, valuationMethod);
+                const displayBarcode = item.barcode && item.barcode !== '-' && item.barcode !== 'null' ? item.barcode : `INV-${item.id}`;
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="py-4 px-4 font-mono font-semibold text-slate-650">
+                      <span className="bg-slate-100 px-2 py-1 rounded-md text-[10px] border border-slate-200/80">
+                        {displayBarcode}
+                      </span>
+                    </td>
                     <td className="py-4 px-4">
                       <div className="flex flex-col space-y-1">
                         <div className="flex items-center space-x-2.5">
@@ -217,6 +227,11 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                           </div>
                         )}
                       </div>
+                    </td>
+                    <td className="py-4 px-4 text-slate-500">{item.spec || '-'}</td>
+                    <td className="py-4 px-4 text-slate-500 font-semibold">{item.unitValue || '개'}</td>
+                    <td className="py-4 px-4 text-right text-slate-500 font-medium">
+                      {item.unitType === 'box' && item.boxContains ? `${item.boxContains} 개` : '-'}
                     </td>
                     <td className="py-4 px-4 text-slate-500">{item.category}</td>
                     <td className="py-4 px-4">
