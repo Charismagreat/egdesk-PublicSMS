@@ -52,16 +52,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, data: matchedRow ? [matchedRow] : [] });
     }
     
-    // SQL 금지어 DELETE 회피를 위해 queryTable 사용 후 JS 레벨에서 소프트 삭제 데이터 필터링
-    const queryRes = await queryTable('inventory_items', {
-      limit: 10000,
-      orderBy: 'createdAt',
-      orderDirection: 'DESC'
-    });
-    let rows = queryRes.rows || [];
-
-    // 소프트 삭제 필터링
-    rows = rows.filter((r: any) => !r.deleted_at);
+    // ⚡ queryTable의 1,000건 반환 개수 제한을 우회하기 위해 egdesk-helpers.ts의 executeSQL을 우선 호출하여 전체 데이터 조회
+    let rows = [];
+    try {
+      const sqlRes = await executeSQL('SELECT * FROM inventory_items WHERE deleted_at IS NULL ORDER BY createdAt DESC');
+      rows = sqlRes.rows || [];
+    } catch (err) {
+      console.warn('[executeSQL Fallback] queryTable로 폴백 조회 시도:', err);
+      const queryRes = await queryTable('inventory_items', {
+        limit: 10000,
+        orderBy: 'createdAt',
+        orderDirection: 'DESC'
+      });
+      rows = (queryRes.rows || []).filter((r: any) => !r.deleted_at);
+    }
 
     // 품목 구분 필터링
     if (type) {
