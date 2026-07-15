@@ -22,63 +22,7 @@ export async function GET(request: Request) {
 
     const tenantId = await getTenantId();
 
-    // ⚡ 중복 데이터 정합성 긴급 진단 및 자가 복구 가드 (Clean & Diagnosis)
-    if (searchParams.get('debug') === 'duplication') {
-      let duplicationRows = [];
-      let errMessage = null;
-      let totalCount = 0;
-      try {
-        const totalRes = await executeSQL(`SELECT COUNT(*) as count FROM inventory_items WHERE tenant_id = '${tenantId}'`);
-        totalCount = totalRes.rows?.[0]?.count || 0;
 
-        const dupRes = await executeSQL(`SELECT name, barcode, COUNT(*) as cnt FROM inventory_items WHERE tenant_id = '${tenantId}' GROUP BY name, barcode HAVING cnt > 1 LIMIT 50`);
-        duplicationRows = dupRes.rows || [];
-      } catch (dbErr: any) {
-        errMessage = dbErr.message;
-      }
-      return NextResponse.json({ 
-        currentSessionTenantId: tenantId, 
-        errMessage,
-        totalItemsInDb: totalCount,
-        duplicationSampleCount: duplicationRows.length, 
-        duplicationRows 
-      });
-    }
-
-    if (searchParams.get('debug') === 'clean') {
-      let cleanedCount = 0;
-      let errMessage = null;
-      try {
-        const dupIdsRes = await executeSQL(`
-          SELECT id FROM inventory_items 
-          WHERE tenant_id = '${tenantId}' 
-            AND id NOT IN (
-              SELECT MIN(id) FROM inventory_items 
-              WHERE tenant_id = '${tenantId}' 
-              GROUP BY name, barcode
-            )
-        `);
-        const dupRows = dupIdsRes.rows || [];
-        if (dupRows.length > 0) {
-          const idsToDelete = dupRows.map((r: any) => Number(r.id));
-          const chunkSize = 900;
-          for (let i = 0; i < idsToDelete.length; i += chunkSize) {
-            const chunk = idsToDelete.slice(i, i + chunkSize);
-            await deleteRows('inventory_items', { ids: chunk });
-            cleanedCount += chunk.length;
-          }
-        }
-      } catch (dbErr: any) {
-        errMessage = dbErr.message;
-      }
-      return NextResponse.json({ 
-        success: !errMessage,
-        currentSessionTenantId: tenantId, 
-        errMessage,
-        cleanedCount,
-        message: `성공적으로 중복 적재된 찌꺼기 품목 ${cleanedCount}건을 물리적으로 삭제 정리 완료했습니다.`
-      });
-    }
 
     // ⚡ 자가 복구 가드(Self-Healing Guard): 
     // 기존 마이그레이션 또는 대량 업로드 시 tenant_id가 NULL로 적재된 레코드들을 현재 로그인된 테넌트 세션 ID로 자동 바인딩 보정 (Max 2,000건씩 안전 슬라이싱)
