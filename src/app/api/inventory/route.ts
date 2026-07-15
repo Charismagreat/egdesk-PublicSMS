@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     
     // SQL 금지어 DELETE 회피를 위해 queryTable 사용 후 JS 레벨에서 소프트 삭제 데이터 필터링
     const queryRes = await queryTable('inventory_items', {
-      limit: 1000,
+      limit: 10000,
       orderBy: 'createdAt',
       orderDirection: 'DESC'
     });
@@ -68,9 +68,6 @@ export async function GET(request: Request) {
       const targetType = (type === 'material' || type === '자재' || type === '원부자재') ? '원부자재' : '완제품';
       rows = rows.filter((r: any) => r.type === targetType);
     }
-
-    // 100건으로 슬라이싱 제한
-    rows = rows.slice(0, 100);
 
     return NextResponse.json({ success: true, data: rows });
   } catch (error: any) {
