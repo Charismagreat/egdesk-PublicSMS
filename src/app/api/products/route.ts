@@ -39,9 +39,9 @@ export async function GET(req: Request) {
     const offset = (page - 1) * limit;
     const search = searchParams.get('search')?.trim() || '';
 
-    // 1. 전체 조건 카운트 및 데이터 페칭 쿼리 (deleted_at IS NULL 엄격 적용)
-    let countQuery = `SELECT COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}' AND deleted_at IS NULL`;
-    let dataQuery = `SELECT * FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}' AND deleted_at IS NULL`;
+    // 1. 전체 조건 카운트 및 데이터 페칭 쿼리
+    let countQuery = `SELECT COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
+    let dataQuery = `SELECT * FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
 
     if (search) {
       const searchCond = ` AND (name LIKE '%${search}%' OR category LIKE '%${search}%' OR description LIKE '%${search}%')`;
@@ -75,7 +75,7 @@ export async function GET(req: Request) {
     }));
 
     // 2. 각 탭의 뱃지에 출력될 전체 활성/임시저장 상품 수 통계 산출 (1,000건 제한 우회)
-    const statsQuery = `SELECT status, COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' AND deleted_at IS NULL GROUP BY status`;
+    const statsQuery = `SELECT status, COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' GROUP BY status`;
     const statsRes = await executeSQL(statsQuery);
     const statsRows = statsRes.rows || [];
     
