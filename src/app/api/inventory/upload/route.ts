@@ -36,10 +36,10 @@ export async function POST(request: Request) {
     const createdAtStr = new Date().toISOString();
 
     for (const item of items) {
-      const name = item.name?.trim();
+      const name = item.name ? String(item.name).trim() : '';
       const type = item.type === 'product' ? 'product' : 'material';
-      const category = item.category?.trim() || '미분류';
-      const barcode = item.barcode?.trim() || '';
+      const category = item.category ? String(item.category).trim() : '미분류';
+      const barcode = item.barcode ? String(item.barcode).trim() : '';
 
       // 필수값 부재 시 패스
       if (!name) continue;
@@ -50,10 +50,10 @@ export async function POST(request: Request) {
       const price = Number(item.price) || 0;
       const safeStock = Number(item.safeStock) || 0;
       const stock = Number(item.stock) || 0;
-      const partner = item.partner?.trim() || '';
-      const location = item.location?.trim() || '';
-      const spec = item.spec?.trim() || '';
-      const description = item.description?.trim() || '';
+      const partner = item.partner ? String(item.partner).trim() : '';
+      const location = item.location ? String(item.location).trim() : '';
+      const spec = item.spec ? String(item.spec).trim() : '';
+      const description = item.description ? String(item.description).trim() : '';
 
       // 단위 구분 파싱
       let unitType = 'count';
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
       if (item.unitType === 'weight') {
         unitType = 'weight';
-        unitValue = item.unitValue?.trim() || 'g';
+        unitValue = item.unitValue ? String(item.unitValue).trim() : 'g';
       } else if (item.unitType === 'box') {
         unitType = 'box';
         unitValue = '박스';
