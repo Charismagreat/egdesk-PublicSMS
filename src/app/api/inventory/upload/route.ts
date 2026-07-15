@@ -18,14 +18,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. 기존 DB 내 등록된 모든 바코드(barcode) 가져와서 중복 방지 캐싱
+    // 1. 기존 DB 내 등록된 모든 바코드(barcode) 가져와서 중복 방지 캐싱 (소프트 삭제된 구형 찌꺼기는 제외)
     const existingBarcodes = new Set<string>();
     try {
-      const rowsRes = await executeSQL('SELECT barcode FROM inventory_items');
+      const rowsRes = await executeSQL('SELECT barcode FROM inventory_items WHERE deleted_at IS NULL');
       const rows = rowsRes.rows || [];
       rows.forEach((row: any) => {
         if (row.barcode && row.barcode.trim()) {
-          existingBarcodes.add(row.barcode.trim());
+          existingBarcodes.add(row.barcode.trim().toLowerCase());
         }
       });
     } catch (e) {
@@ -44,8 +44,11 @@ export async function POST(request: Request) {
       // 필수값 부재 시 패스
       if (!name) continue;
 
-      // ⚡ [바코드/품목코드] 단독 기준 중복 체크 작동 (바코드가 기재된 경우에만 중복 제외 스킵)
-      if (barcode && existingBarcodes.has(barcode)) continue;
+      // ⚡ [바코드/품목코드] 단독 기준 중복 체크 작동 (실질적인 바코드 데이터가 기입된 경우에만 중복 대조 스킵)
+      const cleanBarcode = barcode.trim().toLowerCase();
+      const isInvalidBarcode = !cleanBarcode || cleanBarcode === '-' || cleanBarcode === 'null' || cleanBarcode === 'undefined';
+      
+      if (!isInvalidBarcode && existingBarcodes.has(cleanBarcode)) continue;
 
       const price = Number(item.price) || 0;
       const safeStock = Number(item.safeStock) || 0;
