@@ -38,10 +38,10 @@ export async function POST(request: Request) {
     for (const item of items) {
       const name = item.name?.trim();
       const type = item.type === 'product' ? 'product' : 'material';
-      const category = item.category?.trim();
+      const category = item.category?.trim() || '미분류';
 
       // 필수값 부재 시 패스
-      if (!name || !category) continue;
+      if (!name) continue;
 
       // 이미 동일한 이름의 품목이 있는 경우 스킵
       if (existingNames.has(name)) continue;
