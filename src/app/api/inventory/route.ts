@@ -26,7 +26,6 @@ export async function GET(request: Request) {
     // 기존 마이그레이션 또는 대량 업로드 시 tenant_id가 NULL로 적재된 레코드들을 현재 로그인된 테넌트 세션 ID로 자동 바인딩 보정
     try {
       await executeSQL(`UPDATE inventory_items SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL`);
-      await executeSQL(`UPDATE inventory_logs SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL`);
     } catch (patchErr) {
       console.warn('[Self-Healing Warning] Failed to bind NULL tenant_ids:', patchErr);
     }
@@ -35,8 +34,8 @@ export async function GET(request: Request) {
     try {
       await executeSQL(`UPDATE inventory_items SET type = '원부자재' WHERE type IN ('자재', 'material', '원자재') AND tenant_id = '${tenantId}'`);
       await executeSQL(`UPDATE inventory_items SET type = '완제품' WHERE type IN ('제품', 'product') AND tenant_id = '${tenantId}'`);
-      await executeSQL(`UPDATE inventory_logs SET itemType = '원부자재' WHERE itemType IN ('자재', 'material', '원자재') AND tenant_id = '${tenantId}'`);
-      await executeSQL(`UPDATE inventory_logs SET itemType = '완제품' WHERE itemType IN ('제품', 'product') AND tenant_id = '${tenantId}'`);
+      await executeSQL("UPDATE inventory_logs SET itemType = '원부자재' WHERE itemType IN ('자재', 'material', '원자재')");
+      await executeSQL("UPDATE inventory_logs SET itemType = '완제품' WHERE itemType IN ('제품', 'product')");
     } catch (migErr) {
       console.warn('[Migration Warning] Failed to run type normalization:', migErr);
     }
