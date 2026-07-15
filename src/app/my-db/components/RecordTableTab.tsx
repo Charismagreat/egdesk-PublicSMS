@@ -249,11 +249,11 @@ export default function RecordTableTab({
       {/* 하단 페이지네이션 */}
       {totalPages > 1 && (
         <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/50 rounded-xl">
-          <span className="text-xs text-slate-400 font-semibold">
+          <span className="text-xs text-slate-400 font-semibold shrink-0 whitespace-nowrap">
             전체 {totalRows}건 중 {(currentPage - 1) * itemsPerPage + 1}-
             {Math.min(totalRows, currentPage * itemsPerPage)}건 표시
           </span>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             <button
               onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
@@ -262,19 +262,76 @@ export default function RecordTableTab({
               이전
             </button>
 
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                onClick={() => handlePageChange(page)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  currentPage === page
-                    ? "bg-blue-600 text-white shadow-sm border-none"
-                    : "border bg-white text-slate-600 hover:bg-slate-50 cursor-pointer"
-                }`}
-              >
-                {page}
-              </button>
-            ))}
+            {(() => {
+              const pages = [];
+              const range = 2; // 현재 페이지 앞뒤로 보여줄 범위
+              
+              let start = Math.max(1, currentPage - range);
+              let end = Math.min(totalPages, currentPage + range);
+              
+              // 윈도우 크기를 5개로 맞추기 위한 보정
+              if (currentPage <= range) {
+                end = Math.min(totalPages, 5);
+              } else if (currentPage > totalPages - range) {
+                start = Math.max(1, totalPages - 4);
+              }
+              
+              if (start > 1) {
+                pages.push(
+                  <button
+                    key={1}
+                    onClick={() => handlePageChange(1)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold border bg-white text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  >
+                    1
+                  </button>
+                );
+                if (start > 2) {
+                  pages.push(
+                    <span key="dots-start" className="px-2 text-slate-400 text-xs font-bold select-none">
+                      ...
+                    </span>
+                  );
+                }
+              }
+              
+              for (let page = start; page <= end; page++) {
+                pages.push(
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      currentPage === page
+                        ? "bg-blue-600 text-white shadow-sm border-none"
+                        : "border bg-white text-slate-600 hover:bg-slate-50 cursor-pointer"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              }
+              
+              if (end < totalPages) {
+                if (end < totalPages - 1) {
+                  pages.push(
+                    <span key="dots-end" className="px-2 text-slate-400 text-xs font-bold select-none">
+                      ...
+                    </span>
+                  );
+                }
+                pages.push(
+                  <button
+                    key={totalPages}
+                    onClick={() => handlePageChange(totalPages)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold border bg-white text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  >
+                    {totalPages}
+                  </button>
+                );
+              }
+              
+              return pages;
+            })()}
 
             <button
               onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}

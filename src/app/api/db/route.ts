@@ -98,6 +98,7 @@ export async function GET(request: Request) {
             queryFilters.tenant_id = tenantId;
           }
 
+          let cnt = 0;
           let rows: any[] = [];
           let currentOffset = 0;
           const batchSize = 1000;
@@ -133,7 +134,7 @@ export async function GET(request: Request) {
           tablesWithCount.push({
             name,
             displayName: t.displayName || name,
-            count: `Error: ${err.message}`
+            count: 'Error'
           });
         }
       }
