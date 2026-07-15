@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     try {
       if (tenantId !== 'tenant-guest-id-2222') {
         while (true) {
-          const wrongInvRes = await executeSQL(`SELECT id FROM inventory_items WHERE (tenant_id IS NULL OR tenant_id = 'tenant-guest-id-2222') LIMIT 1000`);
+          const wrongInvRes = await executeSQL(`SELECT id FROM inventory_items WHERE (tenant_id IS NULL OR tenant_id = 'tenant-guest-id-2222' OR tenant_id = 'default') LIMIT 1000`);
           const wrongInvRows = wrongInvRes.rows || [];
           if (wrongInvRows.length === 0) break;
           
