@@ -9,6 +9,32 @@ interface OrderSuccessScreenProps {
 }
 
 export function OrderSuccessScreen({ tableId, onClose }: OrderSuccessScreenProps) {
+  const [bankInfo, setBankInfo] = React.useState({
+    bankName: "국민은행",
+    accountNumber: "123456-12-123456",
+    accountHolder: "주식회사 이지데스크"
+  });
+
+  React.useEffect(() => {
+    async function loadBankInfo() {
+      try {
+        const res = await fetch('/api/settings?key=my_company_profile');
+        const data = await res.json();
+        if (data.success && data.value) {
+          const parsed = JSON.parse(data.value);
+          setBankInfo({
+            bankName: parsed.bankName || "국민은행",
+            accountNumber: parsed.accountNumber || "123456-12-123456",
+            accountHolder: parsed.accountHolder || "주식회사 이지데스크"
+          });
+        }
+      } catch (err) {
+        console.warn('계좌 정보 로드 실패 (기본 폴백 적용):', err);
+      }
+    }
+    loadBankInfo();
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-center text-white">
       <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mb-6">
@@ -22,8 +48,8 @@ export function OrderSuccessScreen({ tableId, onClose }: OrderSuccessScreenProps
         <p className="text-sm text-slate-300 mb-1">카운터 방문이 어려우신 경우 아래 계좌로 송금해 주세요.</p>
         <div className="bg-black/20 p-3 rounded-xl border border-white/5 mt-3">
           <div className="font-mono text-sm font-bold text-white">
-            국민은행 123456-12-123456
-            <span className="block text-xs text-slate-400 mt-1">예금주: 주식회사 이지데스크</span>
+            {bankInfo.bankName} {bankInfo.accountNumber}
+            <span className="block text-xs text-slate-400 mt-1">예금주: {bankInfo.accountHolder}</span>
           </div>
         </div>
       </div>

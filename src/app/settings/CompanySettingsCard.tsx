@@ -15,6 +15,9 @@ interface CompanyProfile {
   sidebarMainTitle: string;
   sidebarSubTitle: string;
   sealImages?: string[];
+  bankName?: string;
+  accountNumber?: string;
+  accountHolder?: string;
 }
 
 export default function CompanySettingsCard() {
@@ -29,6 +32,9 @@ export default function CompanySettingsCard() {
     sidebarMainTitle: 'EGDESK SMS',
     sidebarSubTitle: '우리 회사 스마트 AI 시스템',
     sealImages: [],
+    bankName: '국민은행',
+    accountNumber: '123456-12-123456',
+    accountHolder: '주식회사 이지데스크',
   });
 
   const [loading, setLoading] = useState<boolean>(true);
@@ -89,6 +95,9 @@ export default function CompanySettingsCard() {
               sidebarMainTitle: parsed.sidebarMainTitle || 'EGDESK SMS',
               sidebarSubTitle: parsed.sidebarSubTitle || '우리 회사 스마트 AI 시스템',
               sealImages: parsed.sealImages || [],
+              bankName: parsed.bankName || '국민은행',
+              accountNumber: parsed.accountNumber || '123456-12-123456',
+              accountHolder: parsed.accountHolder || '주식회사 이지데스크',
             });
           } catch (e) {
             console.error('회사 프로필 JSON 파싱 에러:', e);
@@ -106,6 +115,9 @@ export default function CompanySettingsCard() {
             sidebarMainTitle: 'EGDESK SMS',
             sidebarSubTitle: '우리 회사 스마트 AI 시스템',
             sealImages: [],
+            bankName: '국민은행',
+            accountNumber: '123456-12-123456',
+            accountHolder: '주식회사 이지데스크',
           };
           setProfile(defaultVal);
           
@@ -573,6 +585,45 @@ export default function CompanySettingsCard() {
               onChange={(e) => handleInputChange('address', e.target.value)}
               className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white text-slate-800 placeholder-slate-400 transition-all font-semibold"
             />
+          </div>
+
+          {/* 💳 대표 입금 계좌 설정 */}
+          <div className="space-y-1.5 md:col-span-2 pt-4 border-t border-slate-100/80">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+              💳 무통장 입금 계좌 설정
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-650">입금 은행명</label>
+                <input
+                  type="text"
+                  placeholder="예: 국민은행"
+                  value={profile.bankName || ''}
+                  onChange={(e) => handleInputChange('bankName', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white text-slate-800 placeholder-slate-400 transition-all font-semibold"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-650">계좌번호</label>
+                <input
+                  type="text"
+                  placeholder="예: 123456-12-123456"
+                  value={profile.accountNumber || ''}
+                  onChange={(e) => handleInputChange('accountNumber', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white text-slate-800 placeholder-slate-400 transition-all font-semibold font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-650">예금주</label>
+                <input
+                  type="text"
+                  placeholder="예: 주식회사 이지데스크"
+                  value={profile.accountHolder || ''}
+                  onChange={(e) => handleInputChange('accountHolder', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white text-slate-800 placeholder-slate-400 transition-all font-semibold"
+                />
+              </div>
+            </div>
           </div>
 
         </div>

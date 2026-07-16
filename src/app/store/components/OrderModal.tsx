@@ -81,6 +81,32 @@ export function OrderModal({
   submitOrder,
   getNumericPrice
 }: OrderModalProps) {
+  const [bankInfo, setBankInfo] = React.useState({
+    bankName: "국민은행",
+    accountNumber: "123456-12-123456",
+    accountHolder: "주식회사 이지데스크"
+  });
+
+  React.useEffect(() => {
+    async function loadBankInfo() {
+      try {
+        const res = await fetch('/api/settings?key=my_company_profile');
+        const data = await res.json();
+        if (data.success && data.value) {
+          const parsed = JSON.parse(data.value);
+          setBankInfo({
+            bankName: parsed.bankName || "국민은행",
+            accountNumber: parsed.accountNumber || "123456-12-123456",
+            accountHolder: parsed.accountHolder || "주식회사 이지데스크"
+          });
+        }
+      } catch (err) {
+        console.warn('계좌 정보 로드 실패 (기본 폴백 적용):', err);
+      }
+    }
+    loadBankInfo();
+  }, []);
+
   if (!selectedProduct) return null;
 
   const unitPrice = getNumericPrice(selectedProduct.price);
@@ -146,8 +172,8 @@ export function OrderModal({
                   <p className="text-xs text-slate-500 mb-3">현재 결제는 계좌 송금 방식으로만 진행됩니다. 아래 계좌로 입금해 주세요.</p>
                   <div className="bg-white p-3 rounded-xl border border-slate-200">
                     <div className="font-mono text-sm font-bold text-slate-800">
-                      국민은행 123456-12-123456
-                      <span className="block text-xs text-slate-500 mt-1">예금주: 주식회사 이지데스크</span>
+                      {bankInfo.bankName} {bankInfo.accountNumber}
+                      <span className="block text-xs text-slate-500 mt-1">예금주: {bankInfo.accountHolder}</span>
                     </div>
                   </div>
                 </div>
