@@ -2,12 +2,15 @@ import React from "react";
 import { Calendar as CalendarIcon, Clock, User, Phone, ChevronRight } from "lucide-react";
 import { ReserveForm } from "../types";
 
+import { ServiceItem } from "../types";
+
 interface ReserveFormSectionProps {
   form: ReserveForm;
   isSubmitting: boolean;
   timeSlots: string[];
   onUpdateField: (key: keyof ReserveForm, value: string) => void;
   onSubmit: (e: React.FormEvent) => Promise<void>;
+  services: ServiceItem[];
 }
 
 export function ReserveFormSection({
@@ -15,8 +18,11 @@ export function ReserveFormSection({
   isSubmitting,
   timeSlots,
   onUpdateField,
-  onSubmit
+  onSubmit,
+  services
 }: ReserveFormSectionProps) {
+  const hasNoServices = services.length === 0;
+
   return (
     <div className="w-full md:w-7/12 p-5 sm:p-8">
       <form onSubmit={onSubmit}>
@@ -37,7 +43,7 @@ export function ReserveFormSection({
               min={new Date().toISOString().split('T')[0]}
               value={form.reservationDate}
               onChange={(e) => onUpdateField("reservationDate", e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition-all bg-white"
             />
           </div>
           <div>
@@ -77,7 +83,7 @@ export function ReserveFormSection({
               placeholder="홍길동"
               value={form.customerName}
               onChange={(e) => onUpdateField("customerName", e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition-all bg-white"
             />
           </div>
           <div>
@@ -91,7 +97,7 @@ export function ReserveFormSection({
               placeholder="010-1234-5678"
               value={form.customerPhone}
               onChange={(e) => onUpdateField("customerPhone", e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 transition-all bg-white"
             />
           </div>
         </div>
@@ -99,15 +105,24 @@ export function ReserveFormSection({
         <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="text-sm text-slate-500">
             선택한 서비스:<br />
-            <strong className="text-blue-600 text-base">{form.serviceName}</strong>
+            <strong className="text-blue-600 text-base">{form.serviceName || '선택 없음'}</strong>
+            {(() => {
+              const matched = services.find(s => s.name === form.serviceName);
+              if (!matched || !matched.price) return null;
+              return (
+                <span className="block text-slate-700 font-black text-xs mt-1">
+                  금액: <span className="text-slate-900 font-extrabold text-sm">{matched.price}</span>
+                </span>
+              );
+            })()}
           </div>
           <button 
             type="submit" 
-            disabled={isSubmitting}
+            disabled={isSubmitting || hasNoServices}
             className={`w-full sm:w-auto px-8 py-4 rounded-xl font-bold text-white transition-all flex items-center justify-center shadow-lg ${
-              isSubmitting 
-                ? 'bg-slate-400 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-500/30 hover:-translate-y-0.5'
+              isSubmitting || hasNoServices
+                ? 'bg-slate-400 cursor-not-allowed shadow-none' 
+                : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-500/30 hover:-translate-y-0.5 border-none cursor-pointer'
             }`}
           >
             {isSubmitting ? '예약 중...' : '예약 완료하기'} 

@@ -10,4 +10,6 @@ export interface ServiceItem {
   id: string;
   name: string;
   desc: string;
+  price?: string;
+  main_image_url?: string | null;
 }

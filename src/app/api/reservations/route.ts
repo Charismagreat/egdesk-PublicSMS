@@ -20,6 +20,23 @@ export async function POST(req: Request) {
     const data = await req.json();
     const id = data.id || Date.now().toString();
     
+    // 🏢 [백엔드 안전망] 가격 정보가 넘어오지 않은 경우, products 테이블에서 해당 품목의 단가를 역추적
+    let resolvedAmount = data.amount ? String(data.amount) : '';
+    if (!resolvedAmount && data.serviceName) {
+      try {
+        const prodRes = await queryTable('products', { filters: { name: data.serviceName } });
+        if (prodRes.rows && prodRes.rows.length > 0) {
+          const matchedProd = prodRes.rows[0];
+          if (matchedProd.price && matchedProd.price !== '상담후결정') {
+            const numericStr = matchedProd.price.replace(/[^0-9]/g, '');
+            if (numericStr) resolvedAmount = numericStr;
+          }
+        }
+      } catch (priceErr) {
+        console.warn('[Reservations POST Price Resolve Warn]:', priceErr);
+      }
+    }
+    
     // 1. 예약 내역 (crm_reservations) 생성
     await insertRows('crm_reservations', [{
       id,
@@ -37,7 +54,7 @@ export async function POST(req: Request) {
       customer_name: data.customerName,
       customer_phone: data.customerPhone,
       product_name: `[예약] ${data.serviceName}`,
-      amount: data.amount ? String(data.amount) : '',
+      amount: resolvedAmount,
       order_date: data.reservationDate || new Date().toISOString().split('T')[0],
       status: '결제대기', // 예약의 기본 상태는 결제대기
       order_id: id // 원천 예약 ID 기록

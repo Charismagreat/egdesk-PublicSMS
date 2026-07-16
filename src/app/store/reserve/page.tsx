@@ -10,6 +10,8 @@ import { ReserveFormSection } from "./components/ReserveFormSection";
 export default function ReservePage() {
   const {
     form,
+    services,
+    loading,
     isSubmitting,
     success,
     generateTimeSlots,
@@ -38,9 +40,10 @@ export default function ReservePage() {
           <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 flex flex-col md:flex-row">
             {/* 좌측: 서비스 선택 */}
             <ServiceSelection 
-              services={SERVICES}
+              services={services}
               selectedServiceName={form.serviceName}
               onSelectService={(name) => updateForm("serviceName", name)}
+              loading={loading}
             />
 
             {/* 우측: 일정 및 고객 정보 입력 */}
@@ -50,6 +53,7 @@ export default function ReservePage() {
               timeSlots={timeSlots}
               onUpdateField={updateForm}
               onSubmit={submitReservation}
+              services={services}
             />
           </div>
         )}
