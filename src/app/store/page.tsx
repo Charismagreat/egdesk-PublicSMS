@@ -6,6 +6,7 @@ import { ProductList } from "./components/ProductList";
 import { OrderModal } from "./components/OrderModal";
 import { VoiceWizardModal } from "./components/VoiceWizardModal";
 import { PointGuideModal } from "./components/PointGuideModal";
+import { CartModal } from "./components/CartModal";
 import { Bot } from "lucide-react";
 
 export default function StorefrontPage() {
@@ -61,6 +62,14 @@ export default function StorefrontPage() {
     submitOrder,
     handleApplyCoupon,
     filteredProducts,
+    cart,
+    isCartOpen,
+    setIsCartOpen,
+    addToCart,
+    updateCartQuantity,
+    removeFromCart,
+    clearCart,
+    submitCartOrder,
   } = useStorefront();
 
   return (
@@ -114,6 +123,7 @@ export default function StorefrontPage() {
         handleApplyCoupon={handleApplyCoupon}
         submitOrder={submitOrder}
         getNumericPrice={getNumericPrice}
+        onAddToCart={addToCart}
       />
 
       <VoiceWizardModal
@@ -129,6 +139,18 @@ export default function StorefrontPage() {
       <PointGuideModal
         showPointGuide={showPointGuide}
         setShowPointGuide={setShowPointGuide}
+        pointEarningRate={pointEarningRate}
+      />
+
+      <CartModal
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        cart={cart}
+        updateCartQuantity={updateCartQuantity}
+        removeFromCart={removeFromCart}
+        clearCart={clearCart}
+        submitCartOrder={submitCartOrder}
+        getNumericPrice={getNumericPrice}
         pointEarningRate={pointEarningRate}
       />
 

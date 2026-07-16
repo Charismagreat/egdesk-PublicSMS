@@ -40,6 +40,10 @@ export function useStorefront() {
   const [showPointGuide, setShowPointGuide] = useState(false); // 포인트 안내 모달 상태 추가
   const [pointEarningRate, setPointEarningRate] = useState<number>(1); // 포인트 적립 비율 상태 추가 (기본값 1%)
 
+  // Cart State
+  const [cart, setCart] = useState<{ product: StoreProduct; quantity: number }[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
   // Voice Wizard State
   const [voiceStep, setVoiceStep] = useState<VoiceStep>('IDLE');
   const [transcript, setTranscript] = useState('');
@@ -61,6 +65,13 @@ export function useStorefront() {
         
         setRecognition(rec);
       }
+    }
+
+    // 🔔 다른 페이지(예: 예약 등)의 헤더 장바구니 버튼 클릭을 처리하는 리스너
+    const handleOpenCart = () => setIsCartOpen(true);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('open-cart', handleOpenCart);
+      return () => window.removeEventListener('open-cart', handleOpenCart);
     }
   }, []);
 
@@ -189,6 +200,162 @@ export function useStorefront() {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 🛒 장바구니 로컬스토리지 복구
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('egdesk_store_cart');
+        if (stored) {
+          setCart(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.error('Failed to load cart from localStorage:', e);
+      }
+    }
+  }, []);
+
+  const saveCartToStorage = (newCart: { product: StoreProduct; quantity: number }[]) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('egdesk_store_cart', JSON.stringify(newCart));
+        window.dispatchEvent(new Event('cart-updated'));
+      } catch (e) {
+        console.error('Failed to save cart to localStorage:', e);
+      }
+    }
+  };
+
+  const addToCart = (product: StoreProduct, qty: number) => {
+    setCart(prev => {
+      const idx = prev.findIndex(item => item.product.id === product.id);
+      let newCart;
+      if (idx > -1) {
+        newCart = [...prev];
+        newCart[idx] = { ...newCart[idx], quantity: newCart[idx].quantity + qty };
+      } else {
+        newCart = [...prev, { product, quantity: qty }];
+      }
+      saveCartToStorage(newCart);
+      return newCart;
+    });
+    alert(`🛒 장바구니에 [${product.name}] 상품 ${qty}개가 담겼습니다.`);
+    closeModal();
+  };
+
+  const updateCartQuantity = (productId: string, newQty: number) => {
+    if (newQty < 1) return;
+    setCart(prev => {
+      const newCart = prev.map(item => 
+        item.product.id === productId ? { ...item, quantity: newQty } : item
+      );
+      saveCartToStorage(newCart);
+      return newCart;
+    });
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart(prev => {
+      const newCart = prev.filter(item => item.product.id !== productId);
+      saveCartToStorage(newCart);
+      return newCart;
+    });
+  };
+
+  const clearCart = () => {
+    setCart([]);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('egdesk_store_cart');
+      window.dispatchEvent(new Event('cart-updated'));
+    }
+  };
+
+  const submitCartOrder = async (
+    e: React.FormEvent,
+    cartForm: OrderForm,
+    cartAppliedPoints: number,
+    cartPointCustomerId: number | null,
+    cartAppliedCoupon: AppliedCoupon | null
+  ) => {
+    e.preventDefault();
+    if (cart.length === 0) {
+      alert("장바구니가 비어 있습니다.");
+      return;
+    }
+    if (!cartForm.customerName || !cartForm.customerPhone) {
+      alert("이름과 연락처를 입력해주세요.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
+    const totalOriginalPrice = cart.reduce((sum, item) => {
+      const p = getNumericPrice(item.product.price);
+      return sum + (p * item.quantity);
+    }, 0);
+
+    const couponDiscount = cartAppliedCoupon ? cartAppliedCoupon.discountAmount : 0;
+    const finalCartPrice = Math.max(0, totalOriginalPrice - couponDiscount - cartAppliedPoints);
+
+    const firstProdName = cart[0].product.name;
+    const resolvedProductName = cart.length > 1 ? `${firstProdName} 외 ${cart.length - 1}건` : firstProdName;
+    
+    let detailedMemo = `[장바구니 통합 주문 상세]\n`;
+    cart.forEach(item => {
+      const unitP = getNumericPrice(item.product.price);
+      detailedMemo += `- ${item.product.name} x ${item.quantity}개 (${(unitP * item.quantity).toLocaleString()}원)\n`;
+    });
+    if (cartForm.customerMemo) {
+      detailedMemo += `\n[고객 메모]: ${cartForm.customerMemo}`;
+    }
+    if (cartAppliedCoupon) {
+      detailedMemo += `\n[쿠폰사용: ${cartAppliedCoupon.code} (-${couponDiscount.toLocaleString()}원 할인)]`;
+    }
+    if (cartAppliedPoints > 0) {
+      detailedMemo += `\n[포인트사용: -${cartAppliedPoints.toLocaleString()}원 할인]`;
+    }
+
+    try {
+      const res = await apiFetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: cartForm.customerName,
+          customerPhone: cartForm.customerPhone,
+          productName: resolvedProductName,
+          quantity: totalQty.toString(),
+          totalPrice: finalCartPrice.toString(),
+          deliveryMethod: cartForm.deliveryMethod,
+          shippingAddress: cartForm.shippingAddress,
+          customerMemo: detailedMemo.trim(),
+          status: '결제대기'
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        if (cartAppliedPoints > 0 && cartPointCustomerId) {
+          await apiFetch('/api/points', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customerId: cartPointCustomerId,
+              amount: -cartAppliedPoints,
+              reason: `스토어 장바구니 통합 결제 포인트 사용`
+            })
+          }).catch(err => console.error('장바구니 주문 성공 후 포인트 실차감 요청 실패:', err));
+        }
+
+        clearCart();
+        setOrderSuccess(true);
+      } else {
+        alert("주문 접수 중 오류가 발생했습니다.");
+      }
+    } catch (err) {
+      alert("네트워크 오류가 발생했습니다.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -516,5 +683,14 @@ export function useStorefront() {
     submitOrder,
     handleApplyCoupon,
     filteredProducts,
+    cart,
+    setCart,
+    isCartOpen,
+    setIsCartOpen,
+    addToCart,
+    updateCartQuantity,
+    removeFromCart,
+    clearCart,
+    submitCartOrder,
   };
 }

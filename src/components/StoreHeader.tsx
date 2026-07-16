@@ -5,10 +5,35 @@ import { ShoppingBag, Calendar, Menu } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { apiFetch } from '@/lib/api';
 
-export default function StoreHeader() {
+interface StoreHeaderProps {
+  cartCount?: number;
+  onCartClick?: () => void;
+}
+
+export default function StoreHeader({ cartCount = 0, onCartClick }: StoreHeaderProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [storeName, setStoreName] = useState("EGDESK SHOP");
+
+  const [localCartCount, setLocalCartCount] = useState(0);
+
+  // 🛒 장바구니 실시간 뱃지 동기화 로직
+  const updateCartCount = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('egdesk_store_cart');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const totalQty = parsed.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+          setLocalCartCount(totalQty);
+        } else {
+          setLocalCartCount(0);
+        }
+      } catch (e) {
+        console.error('Failed to load cart count inside header:', e);
+      }
+    }
+  };
 
   // 🏢 테넌트 설정으로부터 회사명(상점 이름) 실시간 자동 파싱
   useEffect(() => {
@@ -28,7 +53,22 @@ export default function StoreHeader() {
       }
     }
     loadStoreName();
+    updateCartCount();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('cart-updated', updateCartCount);
+      return () => window.removeEventListener('cart-updated', updateCartCount);
+    }
   }, []);
+
+  const handleCartClick = () => {
+    if (onCartClick) {
+      onCartClick();
+    } else if (typeof window !== 'undefined') {
+      // 다른 서브경로(예: /store/reserve)에서도 장바구니 모달이 열리도록 전역 이벤트 전송
+      window.dispatchEvent(new Event('open-cart'));
+    }
+  };
 
   return (
     <header className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-100 shadow-sm">
@@ -59,14 +99,30 @@ export default function StoreHeader() {
             </Link>
           </nav>
 
-          {/* Mobile menu button */}
-          <div className="md:hidden flex items-center">
+          {/* Cart Icon & Badge Button */}
+          <div className="flex items-center space-x-4">
             <button 
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="text-slate-600 hover:text-slate-900 focus:outline-none"
+              onClick={handleCartClick}
+              className="relative p-2 bg-slate-50 hover:bg-slate-100 rounded-full transition-colors border-0 cursor-pointer flex items-center justify-center text-slate-700 hover:text-blue-600"
+              title="장바구니 보기"
             >
-              <Menu className="w-6 h-6" />
+              <ShoppingBag className="w-5 h-5 shrink-0" />
+              {localCartCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white animate-scale-up">
+                  {localCartCount}
+                </span>
+              )}
             </button>
+
+            {/* Mobile menu button */}
+            <div className="md:hidden flex items-center">
+              <button 
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="text-slate-600 hover:text-slate-900 focus:outline-none border-none bg-transparent cursor-pointer"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

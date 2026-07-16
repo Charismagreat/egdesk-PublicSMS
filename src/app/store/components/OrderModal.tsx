@@ -40,10 +40,12 @@ interface OrderModalProps {
   handleApplyCoupon: () => Promise<void>;
   submitOrder: (e: React.FormEvent) => Promise<void>;
   getNumericPrice: (priceStr: string) => number;
+  onAddToCart: (product: StoreProduct, qty: number) => void;
 }
 
 export function OrderModal({
   selectedProduct,
+  onAddToCart,
   closeModal,
   form,
   setForm,
@@ -502,17 +504,33 @@ export function OrderModal({
                   </div>
                 </div>
 
-                <button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className={`w-full py-4 font-bold text-lg text-white transition-all duration-300 flex justify-center items-center rounded-xl shadow-lg border border-transparent cursor-pointer ${
-                    isSubmitting 
-                      ? 'bg-slate-400 cursor-not-allowed' 
-                      : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-500/50 active:scale-[0.98]'
-                  }`}
-                >
-                  {isSubmitting ? '처리 중...' : (isTbd ? '상담/견적 요청하기' : '주문 접수하기')}
-                </button>
+                <div className="flex gap-4">
+                  <button 
+                    type="button"
+                    onClick={() => onAddToCart(selectedProduct, form.quantity)}
+                    disabled={isSubmitting || isTbd}
+                    className={`w-1/2 py-4 font-bold text-lg rounded-xl border border-slate-200 transition-all duration-300 flex justify-center items-center gap-2 shadow-sm ${
+                      isSubmitting || isTbd
+                        ? 'bg-slate-50 text-slate-350 cursor-not-allowed border-slate-100 shadow-none'
+                        : 'bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 cursor-pointer active:scale-[0.98]'
+                    }`}
+                  >
+                    <ShoppingBag className="w-5 h-5 shrink-0" />
+                    장바구니 담기
+                  </button>
+
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className={`w-1/2 py-4 font-bold text-lg text-white transition-all duration-300 flex justify-center items-center rounded-xl shadow-lg border border-transparent cursor-pointer ${
+                      isSubmitting 
+                        ? 'bg-slate-400 cursor-not-allowed' 
+                        : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-500/50 active:scale-[0.98]'
+                    }`}
+                  >
+                    {isSubmitting ? '처리 중...' : (isTbd ? '상담/견적 요청하기' : '바로 주문하기')}
+                  </button>
+                </div>
               </form>
             )}
           </div>
