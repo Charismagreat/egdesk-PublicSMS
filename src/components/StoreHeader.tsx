@@ -2,11 +2,33 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ShoppingBag, Calendar, Menu } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { apiFetch } from '@/lib/api';
 
 export default function StoreHeader() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [storeName, setStoreName] = useState("EGDESK SHOP");
+
+  // 🏢 테넌트 설정으로부터 회사명(상점 이름) 실시간 자동 파싱
+  useEffect(() => {
+    async function loadStoreName() {
+      try {
+        const res = await apiFetch('/api/settings?key=my_company_profile');
+        const data = await res.json();
+        if (data.success && data.value) {
+          const parsed = JSON.parse(data.value);
+          if (parsed.companyName) {
+            // "회사명 SHOP" 또는 "회사명" 형태로 노출
+            setStoreName(parsed.companyName.endsWith("SHOP") ? parsed.companyName : `${parsed.companyName} SHOP`);
+          }
+        }
+      } catch (err) {
+        console.warn('상점 타이틀 로드 실패 (기본 폴백 적용):', err);
+      }
+    }
+    loadStoreName();
+  }, []);
 
   return (
     <header className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-100 shadow-sm">
@@ -15,7 +37,7 @@ export default function StoreHeader() {
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
             <Link href="/store" className="text-2xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              EGDESK SHOP
+              {storeName}
             </Link>
           </div>
 
