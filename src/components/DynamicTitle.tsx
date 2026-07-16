@@ -83,7 +83,20 @@ function DynamicTitleHandler() {
     } else if (pathname.startsWith("/shared/view")) {
       title = "공유 문서 뷰어";
     } else if (pathname.startsWith("/store")) {
-      title = "테이블 오더 상점";
+      title = "EGDESK SHOP";
+      // 🏢 테넌트 설정의 회사명과 브라우저 탭 타이틀 실시간 동기화
+      fetch('/api/settings?key=my_company_profile')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.value) {
+            const parsed = JSON.parse(data.value);
+            if (parsed.companyName) {
+              const storeTitle = parsed.companyName.endsWith("SHOP") ? parsed.companyName : `${parsed.companyName} SHOP`;
+              document.title = storeTitle;
+            }
+          }
+        })
+        .catch(err => console.warn('상점 타이틀 동적 로드 실패:', err));
     } else if (pathname.startsWith("/table-order")) {
       title = "테이블 오더";
     } else if (pathname.startsWith("/booking")) {

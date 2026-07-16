@@ -1,5 +1,5 @@
 import React from "react";
-import { X, ShoppingBag, Store, Package, MapPin, Truck, Coins } from "lucide-react";
+import { X, ShoppingBag, Store, Package, MapPin, Truck, Coins, UploadCloud, Loader2 } from "lucide-react";
 import { StoreProduct, OrderForm, AppliedCoupon } from "../types";
 
 interface OrderModalProps {
@@ -41,6 +41,12 @@ interface OrderModalProps {
   submitOrder: (e: React.FormEvent) => Promise<void>;
   getNumericPrice: (priceStr: string) => number;
   onAddToCart: (product: StoreProduct, qty: number) => void;
+  isNewPartnerOrder?: boolean;
+  attachmentFilename?: string;
+  isOcrLoading?: boolean;
+  ocrParsedTotalAmount?: number | null;
+  ocrParsedTotalQty?: number | null;
+  handleOcrUpload?: (file: File) => Promise<void>;
 }
 
 export function OrderModal({
@@ -81,13 +87,31 @@ export function OrderModal({
   handleVerifyOtp,
   handleApplyCoupon,
   submitOrder,
-  getNumericPrice
+  getNumericPrice,
+  isNewPartnerOrder = false,
+  attachmentFilename = '',
+  isOcrLoading = false,
+  ocrParsedTotalAmount = null,
+  ocrParsedTotalQty = null,
+  handleOcrUpload
 }: OrderModalProps) {
   const [bankInfo, setBankInfo] = React.useState({
     bankName: "국민은행",
     accountNumber: "123456-12-123456",
     accountHolder: "주식회사 이지데스크"
   });
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProduct) return;
+    const currentTotal = getNumericPrice(selectedProduct.price) * form.quantity;
+    if (ocrParsedTotalAmount !== null && ocrParsedTotalAmount !== currentTotal) {
+      if (!window.confirm(`⚠️ 경고: 업로드하신 실물 발주서 총액(${ocrParsedTotalAmount.toLocaleString()}원)과 현재 계산된 스토어 주문 총액(${currentTotal.toLocaleString()}원)이 일치하지 않습니다. 그래도 주문을 진행하시겠습니까?`)) {
+        return;
+      }
+    }
+    await submitOrder(e);
+  };
 
   React.useEffect(() => {
     async function loadBankInfo() {
@@ -108,6 +132,32 @@ export function OrderModal({
     }
     loadBankInfo();
   }, []);
+
+  // 🏢 사업자등록번호 감지 후 기존 B2B 거래처 정보 자동 입력 (Autofill)
+  React.useEffect(() => {
+    if (!form.isTaxRequested) return;
+    const cleanNumber = (form.businessNumber || '').replace(/[^0-9]/g, '');
+    if (cleanNumber.length === 10) {
+      async function autoFillBusiness() {
+        try {
+          const res = await fetch(`/api/partners?action=check-biz&business_number=${cleanNumber}`);
+          const data = await res.json();
+          if (data.success && data.exists && data.partner) {
+            const p = data.partner;
+            setForm(prev => ({
+              ...prev,
+              companyName: p.company_name || prev.companyName,
+              representativeName: p.representative || p.manager_name || prev.representativeName,
+              taxEmail: p.email || p.manager_email || prev.taxEmail
+            }));
+          }
+        } catch (err) {
+          console.warn('기존 B2B 거래처 실시간 조회 실패:', err);
+        }
+      }
+      autoFillBusiness();
+    }
+  }, [form.businessNumber, form.isTaxRequested, setForm]);
 
   if (!selectedProduct) return null;
 
@@ -160,35 +210,57 @@ export function OrderModal({
           {/* Right Column: Order Form */}
           <div className="md:w-1/2 p-6 md:p-8 md:overflow-y-auto">
             {orderSuccess ? (
-              <div className="text-center py-12 flex flex-col items-center justify-center h-full">
-                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
-                  </svg>
+              isNewPartnerOrder ? (
+                <div className="text-center py-12 flex flex-col items-center justify-center h-full animate-scale-up">
+                  <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-3xs border border-blue-200">
+                    <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl font-black text-slate-800 mb-3 tracking-tight">첫 주문을 남겨주셔서 깊이 감사드립니다!</h3>
+                  <p className="text-slate-500 mb-8 text-sm leading-relaxed max-w-md mx-auto">
+                    보내주신 발주서 파일과 주문 상세 내역을 AI가 성공적으로 접수했습니다.<br/>
+                    담당자 검토 후 거래처 승인 및 주문 확정 안내 문자가 영업일 내 즉시 발송됩니다.
+                  </p>
+                  
+                  <button 
+                    onClick={closeModal} 
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-md active:scale-95 border-none cursor-pointer w-full max-w-xs"
+                  >
+                    확인
+                  </button>
                 </div>
-                <h3 className="text-2xl font-bold text-slate-800 mb-2">주문이 완료되었습니다!</h3>
-                <p className="text-slate-500 mb-6">주문 내역과 결제 안내 문자가 곧 발송됩니다.</p>
-                
-                <div className="bg-slate-50 rounded-2xl p-5 text-left w-full mb-6 border border-slate-100">
-                  <h4 className="text-sm font-bold text-slate-800 mb-2">무통장 입금 안내 (송금 결제)</h4>
-                  <p className="text-xs text-slate-500 mb-3">현재 결제는 계좌 송금 방식으로만 진행됩니다. 아래 계좌로 입금해 주세요.</p>
-                  <div className="bg-white p-3 rounded-xl border border-slate-200">
-                    <div className="font-mono text-sm font-bold text-slate-800">
-                      {bankInfo.bankName} {bankInfo.accountNumber}
-                      <span className="block text-xs text-slate-500 mt-1">예금주: {bankInfo.accountHolder}</span>
+              ) : (
+                <div className="text-center py-12 flex flex-col items-center justify-center h-full">
+                  <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-800 mb-2">주문이 완료되었습니다!</h3>
+                  <p className="text-slate-500 mb-6">주문 내역과 결제 안내 문자가 곧 발송됩니다.</p>
+                  
+                  <div className="bg-slate-50 rounded-2xl p-5 text-left w-full mb-6 border border-slate-100">
+                    <h4 className="text-sm font-bold text-slate-800 mb-2">무통장 입금 안내 (송금 결제)</h4>
+                    <p className="text-xs text-slate-500 mb-3">현재 결제는 계좌 송금 방식으로만 진행됩니다. 아래 계좌로 입금해 주세요.</p>
+                    <div className="bg-white p-3 rounded-xl border border-slate-200">
+                      <div className="font-mono text-sm font-bold text-slate-800">
+                        {bankInfo.bankName} {bankInfo.accountNumber}
+                        <span className="block text-xs text-slate-500 mt-1">예금주: {bankInfo.accountHolder}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <button 
-                  onClick={closeModal} 
-                  className="bg-slate-900 text-white font-bold py-3 px-8 rounded-xl hover:bg-slate-800 transition-colors w-full border-none cursor-pointer"
-                >
-                  확인
-                </button>
-              </div>
+                  <button 
+                    onClick={closeModal} 
+                    className="bg-slate-900 text-white font-bold py-3 px-8 rounded-xl hover:bg-slate-800 transition-colors w-full border-none cursor-pointer"
+                  >
+                    확인
+                  </button>
+                </div>
+              )
             ) : (
-              <form onSubmit={submitOrder} className="space-y-5">
+              <form onSubmit={handleFormSubmit} className="space-y-5">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1">주문자 이름 *</label>
                   <input 
@@ -299,6 +371,111 @@ export function OrderModal({
                         className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white font-semibold text-xs text-slate-800"
                         placeholder="주소를 상세히 입력해주세요"
                       />
+                    </div>
+                  )}
+                </div>
+
+                {/* 🏢 사업자 증빙 (세금계산서 신청) */}
+                <div className="pt-4 border-t border-slate-100">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      checked={form.isTaxRequested || false} 
+                      onChange={(e) => setForm({...form, isTaxRequested: e.target.checked})}
+                      className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="text-sm font-bold text-slate-700">사업자 증빙 (세금계산서 신청)</span>
+                  </label>
+                  
+                  {form.isTaxRequested && (
+                    <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3.5 animate-scale-up">
+                      {/* 📂 AI OCR 발주서 업로드 안내 라벨 */}
+                      {attachmentFilename && (
+                        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-100/50 text-blue-600 rounded-full flex items-center justify-center shrink-0">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                          </div>
+                          <div className="text-left overflow-hidden">
+                            <span className="text-[10px] font-black text-blue-600 block">AI 판독 발주서 문서가 연결되었습니다</span>
+                            <span className="text-[10px] text-slate-500 font-extrabold truncate max-w-[200px] block">{attachmentFilename}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ⚖️ OCR 실물 수치 대조 및 이중 가드 시각화 */}
+                      {ocrParsedTotalAmount !== null && (
+                        <div className="bg-white p-3 rounded-xl border border-slate-150 flex flex-col gap-2">
+                          <div className="flex justify-between items-center text-xs font-bold">
+                            <span className="text-slate-500">실물 발주서 총액:</span>
+                            <span className="font-mono text-slate-800">{ocrParsedTotalAmount.toLocaleString()}원</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs font-bold">
+                            <span className="text-slate-500">현재 주문 총액:</span>
+                            <span className="font-mono text-slate-800">
+                              {(getNumericPrice(selectedProduct.price) * form.quantity).toLocaleString()}원
+                            </span>
+                          </div>
+                          <div className="flex justify-end pt-1.5 border-t border-slate-100">
+                            {ocrParsedTotalAmount === (getNumericPrice(selectedProduct.price) * form.quantity) ? (
+                              <span className="inline-flex items-center bg-green-50 text-green-600 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-green-200">
+                                ✓ 실물 금액 일치
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center bg-amber-50 text-amber-600 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-amber-200">
+                                ⚠️ 금액 불일치 (재확인 권장)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">사업자등록번호 *</label>
+                        <input 
+                          type="text" 
+                          required={form.isTaxRequested}
+                          value={form.businessNumber || ''}
+                          onChange={(e) => setForm({...form, businessNumber: e.target.value})}
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold bg-white text-slate-800"
+                          placeholder="000-00-00000"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-650 mb-1">상호명 (회사명) *</label>
+                          <input 
+                            type="text" 
+                            required={form.isTaxRequested}
+                            value={form.companyName || ''}
+                            onChange={(e) => setForm({...form, companyName: e.target.value})}
+                            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold bg-white text-slate-800"
+                            placeholder="이지데스크"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-650 mb-1">대표자명 *</label>
+                          <input 
+                            type="text" 
+                            required={form.isTaxRequested}
+                            value={form.representativeName || ''}
+                            onChange={(e) => setForm({...form, representativeName: e.target.value})}
+                            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold bg-white text-slate-800"
+                            placeholder="홍길동"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">세금계산서 수신 이메일 *</label>
+                        <input 
+                          type="email" 
+                          required={form.isTaxRequested}
+                          value={form.taxEmail || ''}
+                          onChange={(e) => setForm({...form, taxEmail: e.target.value})}
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold bg-white text-slate-800"
+                          placeholder="tax@egdesk.com"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

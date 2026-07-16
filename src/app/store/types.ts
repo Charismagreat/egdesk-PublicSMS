@@ -17,6 +17,11 @@ export interface OrderForm {
   deliveryMethod: string;
   shippingAddress: string;
   customerMemo: string;
+  isTaxRequested?: boolean;
+  businessNumber?: string;
+  companyName?: string;
+  representativeName?: string;
+  taxEmail?: string;
 }
 
 export interface AppliedCoupon {

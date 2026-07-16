@@ -9,6 +9,9 @@ interface ProductListProps {
   filteredProducts: StoreProduct[];
   openModal: (product: StoreProduct) => void;
   getNumericPrice: (priceStr: string) => number;
+  categories: string[];
+  selectedCategory: string;
+  setSelectedCategory: (val: string) => void;
 }
 
 export function ProductList({
@@ -17,14 +20,17 @@ export function ProductList({
   setSearchTerm,
   filteredProducts,
   openModal,
-  getNumericPrice
+  getNumericPrice,
+  categories = [],
+  selectedCategory = '전체',
+  setSelectedCategory
 }: ProductListProps) {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-10">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <h2 className="text-3xl font-extrabold text-slate-800 flex items-center tracking-tight">
           <ShoppingBag className="w-8 h-8 mr-3 text-blue-600" />
-          전체 상품
+          {selectedCategory === '전체' ? '전체 상품' : `${selectedCategory} 상품`}
         </h2>
         {/* 스마트 실시간 상품 검색창 */}
         <div className="relative w-full sm:max-w-xs flex items-center bg-white border border-slate-200 rounded-2xl px-3.5 py-2.5 shadow-sm focus-within:border-blue-500 transition-colors">
@@ -47,6 +53,29 @@ export function ProductList({
           )}
         </div>
       </div>
+
+      {/* 🏷️ 카테고리 탭 (실시간 탭 필터링) */}
+      {categories.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-6 mb-8 border-b border-slate-100 scroll-smooth">
+          {categories.map(cat => {
+            const isSelected = selectedCategory === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-2 rounded-full text-xs font-black transition-all border shrink-0 cursor-pointer ${
+                  isSelected 
+                    ? 'bg-blue-600 border-blue-600 text-white shadow-sm scale-102' 
+                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-350 hover:bg-slate-50'
+                }`}
+              >
+                {cat}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -97,6 +126,11 @@ export function ProductList({
                 )}
               </div>
               <div className="p-6 flex flex-col flex-grow">
+                {product.menu_category && (
+                  <span className="inline-block bg-slate-100 text-slate-600 text-[10px] font-extrabold px-2 py-0.5 rounded-md mb-2 w-fit">
+                    {product.menu_category}
+                  </span>
+                )}
                 <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-blue-600 transition-colors">{product.name}</h3>
                 <p className="text-slate-500 text-sm mb-4 line-clamp-2 flex-grow whitespace-pre-line">{product.description || '상세 설명이 없습니다.'}</p>
                 <div className="flex justify-between items-center mt-auto pt-4 border-t border-slate-50">

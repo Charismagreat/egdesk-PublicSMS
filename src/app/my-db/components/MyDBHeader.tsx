@@ -38,7 +38,7 @@ export default function MyDBHeader({
         <button
           onClick={handleSyncAll}
           disabled={isLoading}
-          className="flex items-center justify-center gap-1.5 px-4.5 py-2.5 bg-blue-655 hover:bg-blue-600 text-white rounded-xl text-xs font-black shadow-3xs border-none cursor-pointer transition-all active:scale-95 disabled:opacity-50 shrink-0"
+          className="flex items-center justify-center gap-1.5 px-4.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-3xs border-none cursor-pointer transition-all active:scale-95 disabled:opacity-50 shrink-0"
           title="서버 데이터베이스 테이블 개수 및 레코드 실시간 동기화"
         >
           <RefreshCw className={`w-3.5 h-3.5 text-white ${isLoading ? 'animate-spin' : ''}`} />

@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, deleteRows, updateRows } from '../../../../egdesk-helpers';
+import { queryTable, insertRows, deleteRows, updateRows, uploadFile } from '../../../../egdesk-helpers';
 import { triggerAutomation } from '@/lib/automation-trigger';
 import { PointService } from '@/lib/point-service';
 import { getTenantId } from '@/lib/tenant';
+import { gmAutomation } from '@/lib/google-messages';
 
 export async function GET() {
   try {
@@ -33,9 +34,159 @@ export async function POST(req: Request) {
     }
 
     const data = await req.json();
-    const { customerName, customerPhone, productName, quantity, totalPrice, deliveryMethod, shippingAddress, status, attachmentUrl, customerMemo } = data;
+    const { 
+      customerName, 
+      customerPhone, 
+      productName, 
+      quantity, 
+      totalPrice, 
+      deliveryMethod, 
+      shippingAddress, 
+      status, 
+      attachmentUrl, 
+      customerMemo,
+      isTaxRequested,
+      businessNumber,
+      companyName,
+      representativeName,
+      taxEmail,
+      attachmentBase64,
+      attachmentFilename
+    } = data;
     const id = data.id || Date.now().toString();
-    
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    let isNewPartner = false;
+
+    // 📂 첨부파일(발주서/사업자등록증 등) 격리 스토리지 자동 저장
+    let resolvedAttachmentUrl = attachmentUrl || '';
+    if (attachmentBase64) {
+      try {
+        const base64Data = attachmentBase64.replace(/^data:.*?;base64,/, "");
+        const uploadRes = await uploadFile(
+          'crm_orders', 
+          id, 
+          'attachment_url', 
+          attachmentFilename || 'order_invoice.pdf', 
+          Buffer.from(base64Data, 'base64')
+        );
+        if (uploadRes.success && uploadRes.fileUrl) {
+          resolvedAttachmentUrl = uploadRes.fileUrl;
+          console.log(`✓ [Store File Uploaded] 게이트웨이 매핑 완료: ${resolvedAttachmentUrl}`);
+        }
+      } catch (uploadErr: any) {
+        console.error('[Store File Upload Failure]:', uploadErr.message);
+      }
+    }
+
+    // 💡 사업자 증빙 신청 여부에 따른 분기 처리
+    if (isTaxRequested && businessNumber) {
+      // 1. 기존 거래처(crm_partners) 조회
+      const partnerRes = await queryTable('crm_partners', {
+        filters: { business_number: businessNumber }
+      });
+
+      let partnerId: string | number;
+      if (partnerRes.rows && partnerRes.rows.length > 0) {
+        partnerId = partnerRes.rows[0].id;
+      } else {
+        isNewPartner = true;
+
+        // 존재하지 않는 경우 신규 거래처 자동 가입 등록 (PENDING 상태로 가입)
+        await insertRows('crm_partners', [{
+          type: '매출처',
+          company_name: companyName || '임시 거래처',
+          business_number: businessNumber,
+          representative: representativeName || '',
+          phone: customerPhone,
+          email: taxEmail || '',
+          manager_name: customerName,
+          manager_phone: customerPhone,
+          manager_email: taxEmail || '',
+          vip_level: 'PENDING', // 💡 승인 대기 상태 표기
+          memo: '[승인대기] 스토어 발주서 주문 자동 가입',
+          created_at: nowStr
+        }]);
+
+        // 새로 생성된 거래처 ID 재확인
+        const newPartnerRes = await queryTable('crm_partners', {
+          filters: { business_number: businessNumber }
+        });
+        partnerId = newPartnerRes.rows?.[0]?.id || Date.now();
+
+        // 🚨 [방법 A]: 테넌트 최고 관리자(사장님)에게 실시간 문자(SMS/LMS) 즉시 전송
+        try {
+          const profileRes = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
+          let adminPhone = '';
+          if (profileRes.rows && profileRes.rows.length > 0) {
+            const parsed = JSON.parse(profileRes.rows[0].value);
+            adminPhone = parsed.phone || '';
+          }
+          
+          if (adminPhone) {
+            const formattedAdminPhone = adminPhone.replace(/[^0-9]/g, '');
+            const smsMessage = `[EGDESK B2B 신규 발주 접수] 미등록 신규 거래처에서 스토어 발주 주문이 접수되었습니다.\n- 상호명: ${companyName || '임시 거래처'}\n- 사업자번호: ${businessNumber}\n- 담당자: ${customerName} (${customerPhone})\n- 발주금액: ${totalPrice ? Number(totalPrice).toLocaleString() : '0'}원\n관리자 화면에서 거래처 승인을 진행해주세요.`;
+            
+            // Google Messages RPA 발송 연동
+            const smsResult = await gmAutomation.sendSMS(formattedAdminPhone, smsMessage);
+            
+            // DB message_logs에 이력 적재
+            const logId = Math.floor(Math.random() * 1000000);
+            await insertRows('message_logs', [{
+              id: logId,
+              customer_id: null,
+              phone: formattedAdminPhone,
+              message: smsMessage,
+              status: smsResult.success ? 'SUCCESS' : 'FAILED',
+              created_at: nowStr
+            }]);
+            console.log(`✓ [B2B 긴급 알림 문자 발송 완료] 사장님 번호: ${formattedAdminPhone}`);
+          }
+        } catch (smsErr: any) {
+          console.error('[B2B 긴급 알림 문자 발송 실패]:', smsErr.message);
+        }
+      }
+
+      // 2. 담당자(crm_partner_contacts) 조회 및 신규 등록
+      const contactRes = await queryTable('crm_partner_contacts', {
+        filters: { partner_id: String(partnerId), phone: customerPhone }
+      });
+
+      if (!contactRes.rows || contactRes.rows.length === 0) {
+        const allContacts = await queryTable('crm_partner_contacts', {
+          filters: { partner_id: String(partnerId) }
+        });
+        const isPrimary = (!allContacts.rows || allContacts.rows.length === 0) ? 1 : 0;
+
+        await insertRows('crm_partner_contacts', [{
+          partner_id: String(partnerId),
+          name: customerName,
+          phone: customerPhone,
+          email: taxEmail || '',
+          is_primary: isPrimary,
+          created_at: nowStr
+        }]);
+      }
+    } else {
+      // 💡 일반 개인 주문인 경우 (B2C)
+      // crm_customers 테이블에 해당 연락처로 등록된 기존 고객이 없는 경우 신규 등록
+      const customerRes = await queryTable('crm_customers', {
+        filters: { phone: customerPhone }
+      });
+
+      if (!customerRes.rows || customerRes.rows.length === 0) {
+        await insertRows('crm_customers', [{
+          name: customerName,
+          phone: customerPhone,
+          email: '',
+          address: shippingAddress || '',
+          shipping_address: shippingAddress || '',
+          point_balance: 0,
+          created_at: nowStr
+        }]);
+      }
+    }
+
     // 1. 주문 내역 (crm_orders) 생성
     await insertRows('crm_orders', [{
       id,
@@ -48,10 +199,10 @@ export async function POST(req: Request) {
       delivery_method: deliveryMethod || '택배배송',
       shipping_address: shippingAddress || '',
       tracking_number: '',
-      attachment_url: attachmentUrl || '',
+      attachment_url: resolvedAttachmentUrl,
       customer_memo: customerMemo || '',
       order_date: data.orderDate || new Date().toISOString().split('T')[0],
-      status: status || '결제대기'
+      status: isNewPartner ? '승인대기' : (status || '결제대기') // 💡 신규 B2B 주문 시 '승인대기' 처리
     }]);
 
     // 2. 거래 내역 (crm_transactions) 자동 연동 생성
@@ -63,7 +214,7 @@ export async function POST(req: Request) {
       product_name: productName,
       amount: totalPrice || '',
       order_date: data.orderDate || new Date().toISOString().split('T')[0],
-      status: status || '결제대기',
+      status: isNewPartner ? '승인대기' : (status || '결제대기'),
       order_id: id // 원천 주문 ID 기록
     }]);
 
@@ -92,7 +243,7 @@ export async function POST(req: Request) {
       주문일시: data.orderDate || new Date().toISOString().split('T')[0]
     });
 
-    return NextResponse.json({ success: true, id });
+    return NextResponse.json({ success: true, id, isNewPartner });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

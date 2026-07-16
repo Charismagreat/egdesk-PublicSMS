@@ -218,14 +218,14 @@ export default function RecordTableTab({
                                 setEditingRow(row);
                                 setIsRowModalOpen(true);
                               }}
-                              className="p-1 text-slate-450 hover:text-blue-655 hover:bg-slate-50 rounded border-none bg-transparent cursor-pointer transition-colors"
+                              className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-50 rounded border-none bg-transparent cursor-pointer transition-colors"
                               title="레코드 인라인 편집"
                             >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => handleDeleteRow(row)}
-                              className="p-1 text-slate-455 hover:text-rose-655 hover:bg-slate-50 rounded border-none bg-transparent cursor-pointer transition-colors"
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-slate-50 rounded border-none bg-transparent cursor-pointer transition-colors"
                               title={
                                 tableSchema.some((col) => col.name === "deleted_at")
                                   ? "휴지통으로 소프트 삭제"

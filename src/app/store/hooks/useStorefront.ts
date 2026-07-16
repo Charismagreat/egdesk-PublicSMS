@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/api';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { StoreProduct, OrderForm, AppliedCoupon, VoiceStep } from "../types";
 
 export function useStorefront() {
@@ -15,7 +15,12 @@ export function useStorefront() {
     quantity: 1,
     deliveryMethod: '배송',
     shippingAddress: '',
-    customerMemo: ''
+    customerMemo: '',
+    isTaxRequested: false,
+    businessNumber: '',
+    companyName: '',
+    representativeName: '',
+    taxEmail: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -43,6 +48,20 @@ export function useStorefront() {
   // Cart State
   const [cart, setCart] = useState<{ product: StoreProduct; quantity: number }[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCartLoaded, setIsCartLoaded] = useState(false);
+  
+  // Category Filtering State
+  const [selectedCategory, setSelectedCategory] = useState('전체');
+
+  // New B2B Partner Order Gratitude Flag
+  const [isNewPartnerOrder, setIsNewPartnerOrder] = useState(false);
+
+  // 📂 B2B OCR & File Attachment States
+  const [attachmentBase64, setAttachmentBase64] = useState('');
+  const [attachmentFilename, setAttachmentFilename] = useState('');
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
+  const [ocrParsedTotalAmount, setOcrParsedTotalAmount] = useState<number | null>(null);
+  const [ocrParsedTotalQty, setOcrParsedTotalQty] = useState<number | null>(null);
 
   // Voice Wizard State
   const [voiceStep, setVoiceStep] = useState<VoiceStep>('IDLE');
@@ -213,33 +232,39 @@ export function useStorefront() {
         }
       } catch (e) {
         console.error('Failed to load cart from localStorage:', e);
+      } finally {
+        setIsCartLoaded(true);
       }
     }
   }, []);
 
-  const saveCartToStorage = (newCart: { product: StoreProduct; quantity: number }[]) => {
+  // 🛒 장바구니 상태 변경 시 로컬스토리지 동기화 및 전역 이벤트 발생
+  useEffect(() => {
+    if (!isCartLoaded) return;
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('egdesk_store_cart', JSON.stringify(newCart));
+        if (cart.length === 0) {
+          localStorage.removeItem('egdesk_store_cart');
+        } else {
+          localStorage.setItem('egdesk_store_cart', JSON.stringify(cart));
+        }
         window.dispatchEvent(new Event('cart-updated'));
       } catch (e) {
         console.error('Failed to save cart to localStorage:', e);
       }
     }
-  };
+  }, [cart, isCartLoaded]);
 
   const addToCart = (product: StoreProduct, qty: number) => {
     setCart(prev => {
       const idx = prev.findIndex(item => item.product.id === product.id);
-      let newCart;
       if (idx > -1) {
-        newCart = [...prev];
+        const newCart = [...prev];
         newCart[idx] = { ...newCart[idx], quantity: newCart[idx].quantity + qty };
+        return newCart;
       } else {
-        newCart = [...prev, { product, quantity: qty }];
+        return [...prev, { product, quantity: qty }];
       }
-      saveCartToStorage(newCart);
-      return newCart;
     });
     alert(`🛒 장바구니에 [${product.name}] 상품 ${qty}개가 담겼습니다.`);
     closeModal();
@@ -247,29 +272,19 @@ export function useStorefront() {
 
   const updateCartQuantity = (productId: string, newQty: number) => {
     if (newQty < 1) return;
-    setCart(prev => {
-      const newCart = prev.map(item => 
+    setCart(prev => 
+      prev.map(item => 
         item.product.id === productId ? { ...item, quantity: newQty } : item
-      );
-      saveCartToStorage(newCart);
-      return newCart;
-    });
+      )
+    );
   };
 
   const removeFromCart = (productId: string) => {
-    setCart(prev => {
-      const newCart = prev.filter(item => item.product.id !== productId);
-      saveCartToStorage(newCart);
-      return newCart;
-    });
+    setCart(prev => prev.filter(item => item.product.id !== productId));
   };
 
   const clearCart = () => {
     setCart([]);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('egdesk_store_cart');
-      window.dispatchEvent(new Event('cart-updated'));
-    }
   };
 
   const submitCartOrder = async (
@@ -310,6 +325,9 @@ export function useStorefront() {
     if (cartForm.customerMemo) {
       detailedMemo += `\n[고객 메모]: ${cartForm.customerMemo}`;
     }
+    if (cartForm.isTaxRequested) {
+      detailedMemo += `\n\n[사업자 세금계산서 신청]\n- 상호명: ${cartForm.companyName || '-'}\n- 사업자번호: ${cartForm.businessNumber || '-'}\n- 대표자명: ${cartForm.representativeName || '-'}\n- 이메일: ${cartForm.taxEmail || '-'}`;
+    }
     if (cartAppliedCoupon) {
       detailedMemo += `\n[쿠폰사용: ${cartAppliedCoupon.code} (-${couponDiscount.toLocaleString()}원 할인)]`;
     }
@@ -330,7 +348,14 @@ export function useStorefront() {
           deliveryMethod: cartForm.deliveryMethod,
           shippingAddress: cartForm.shippingAddress,
           customerMemo: detailedMemo.trim(),
-          status: '결제대기'
+          status: '결제대기',
+          isTaxRequested: cartForm.isTaxRequested,
+          businessNumber: cartForm.businessNumber,
+          companyName: cartForm.companyName,
+          representativeName: cartForm.representativeName,
+          taxEmail: cartForm.taxEmail,
+          attachmentBase64,
+          attachmentFilename
         })
       });
       const json = await res.json();
@@ -348,6 +373,7 @@ export function useStorefront() {
         }
 
         clearCart();
+        setIsNewPartnerOrder(!!json.isNewPartner);
         setOrderSuccess(true);
       } else {
         alert("주문 접수 중 오류가 발생했습니다.");
@@ -497,10 +523,161 @@ export function useStorefront() {
     setPointError('');
     setPointInfo('');
     setOrderSuccess(false);
+    setIsNewPartnerOrder(false);
+    setAttachmentBase64('');
+    setAttachmentFilename('');
+    setOcrParsedTotalAmount(null);
+    setOcrParsedTotalQty(null);
+    setIsOcrLoading(false);
   };
 
   const closeModal = () => {
     setSelectedProduct(null);
+    setIsNewPartnerOrder(false);
+    setAttachmentBase64('');
+    setAttachmentFilename('');
+    setOcrParsedTotalAmount(null);
+    setOcrParsedTotalQty(null);
+    setIsOcrLoading(false);
+  };
+
+  const handleOcrUpload = async (file: File) => {
+    if (!file) return;
+    setIsOcrLoading(true);
+    setAttachmentFilename(file.name);
+
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(file);
+      const base64Str = await base64Promise;
+      setAttachmentBase64(base64Str);
+
+      // OCR 분석 API 호출 (기존 수주서 OCR 재사용)
+      const res = await apiFetch('/api/estimates/ocr-sales-order?action=analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64Str,
+          filename: file.name,
+          mimeType: file.type
+        })
+      });
+      
+      const data = await res.json();
+      if (data.success && data.parsed) {
+        const parsed = data.parsed;
+
+        // 1. 사업자 세금계산서 신청 및 기본 고객 정보 가입 바인딩
+        const newForm = {
+          customerName: parsed.partner_manager || '',
+          customerPhone: parsed.partner_phone || '',
+          quantity: 1,
+          deliveryMethod: '배송',
+          shippingAddress: parsed.address || '',
+          customerMemo: `[B2B AI 발주서 자동 매칭 주문]\n- 발주번호: ${parsed.document_number || '없음'}\n- 발주일자: ${parsed.document_date || '없음'}`,
+          isTaxRequested: true,
+          businessNumber: parsed.business_number || '',
+          companyName: parsed.partner_name || '임시 B2B 거래처',
+          representativeName: parsed.representative || '',
+          taxEmail: parsed.email || ''
+        };
+
+        // 2. 수량 매칭 및 단품 / 장바구니 모달 자동 팝업 분기
+        let totalAmount = 0;
+        let totalQty = 0;
+
+        if (parsed.items && Array.isArray(parsed.items) && parsed.items.length > 0) {
+          totalQty = parsed.items.reduce((acc: number, item: any) => acc + (Number(item.quantity) || 0), 0);
+          totalAmount = parsed.items.reduce((acc: number, item: any) => acc + ((Number(item.quantity) || 0) * (Number(item.unit_price) || 0)), 0);
+
+          if (parsed.items.length === 1) {
+            // 💡 단일 품목인 경우 -> 단품 주문 모달 자동 팝업
+            const firstItem = parsed.items[0];
+            const firstItemName = String(firstItem.product_name || '').replace(/\s/g, '').toLowerCase();
+            
+            // 상점 상품 목록에서 최적 매치 찾기
+            const matchedProduct = products.find(p => {
+              const nameClean = String(p.name).replace(/\s/g, '').toLowerCase();
+              return nameClean.includes(firstItemName) || firstItemName.includes(nameClean);
+            }) || products[0]; // 없으면 첫번째 상품 폴백
+
+            if (matchedProduct) {
+              const parsedQty = Number(firstItem.quantity) || 1;
+              newForm.quantity = parsedQty;
+              newForm.deliveryMethod = matchedProduct.available_methods ? matchedProduct.available_methods.split(',')[0] : '배송';
+              
+              // 폼 세팅 및 단품 모달 오픈
+              setForm(newForm);
+              setSelectedProduct(matchedProduct);
+            }
+          } else {
+            // 💡 복수 품목인 경우 -> 장바구니 맵핑 후 장바구니 모달 자동 팝업
+            const newCartItems: { product: StoreProduct; quantity: number }[] = [];
+            
+            for (const item of parsed.items) {
+              const itemNameClean = String(item.product_name || '').replace(/\s/g, '').toLowerCase();
+              const matchedProd = products.find(p => {
+                const nameClean = String(p.name).replace(/\s/g, '').toLowerCase();
+                return nameClean.includes(itemNameClean) || itemNameClean.includes(nameClean);
+              });
+              
+              if (matchedProd) {
+                newCartItems.push({
+                  product: matchedProd,
+                  quantity: Number(item.quantity) || 1
+                });
+              }
+            }
+            
+            // 장바구니를 파싱 상품들로 갈아끼우기 (사용자 확인 가능하도록 장바구니 갱신)
+            if (newCartItems.length > 0) {
+              setCart(newCartItems);
+              setForm(newForm);
+              setIsCartOpen(true);
+            } else {
+              alert("발주서 내 품목들이 상점 상품 목록과 매칭되지 않습니다.");
+            }
+          }
+        } else {
+          alert("발주서 내에서 품목 목록을 찾지 못했습니다.");
+        }
+
+        // 실물 합계와 수량 보관 (이중 가드 실물 수치 대조용)
+        setOcrParsedTotalAmount(totalAmount || Number(parsed.total_amount) || null);
+        setOcrParsedTotalQty(totalQty || null);
+
+        // 기존 거래처 중복 체크 API 호출하여 정보 자동완성 트리거 보정
+        if (parsed.business_number && parsed.business_number.replace(/[^0-9]/g, '').length === 10) {
+          try {
+            const bizCheckRes = await apiFetch(`/api/partners?action=check-biz&bizNo=${parsed.business_number.replace(/[^0-9]/g, '')}`);
+            const bizCheck = await bizCheckRes.json();
+            if (bizCheck.success && bizCheck.partner) {
+              const p = bizCheck.partner;
+              setForm(prev => ({
+                ...prev,
+                companyName: p.company_name || prev.companyName,
+                representativeName: p.representative || prev.representativeName,
+                taxEmail: p.email || prev.taxEmail,
+                customerName: p.manager_name || prev.customerName,
+                customerPhone: p.manager_phone || prev.customerPhone
+              }));
+            }
+          } catch (e) {
+            console.error('OCR 파싱 후 사업자번호 조회 실시간 확인 실패:', e);
+          }
+        }
+      } else {
+        alert("발주서 분석에 실패했습니다. 올바른 문서 형식인지 확인해 주세요.");
+      }
+    } catch (err: any) {
+      alert("발주서 해독 중 오류가 발생했습니다: " + err.message);
+    } finally {
+      setIsOcrLoading(false);
+    }
   };
 
   const getNumericPrice = (priceStr: string) => {
@@ -535,6 +712,9 @@ export function useStorefront() {
     
     // Add coupon and point info to memo
     let memo = form.customerMemo || '';
+    if (form.isTaxRequested) {
+      memo += `\n\n[사업자 세금계산서 신청]\n- 상호명: ${form.companyName || '-'}\n- 사업자번호: ${form.businessNumber || '-'}\n- 대표자명: ${form.representativeName || '-'}\n- 이메일: ${form.taxEmail || '-'}`;
+    }
     if (appliedCoupon && !isTbd) {
       memo += `\n[쿠폰사용: ${appliedCoupon.code} (-${discountAmount.toLocaleString()}원 할인)]`;
     }
@@ -556,6 +736,13 @@ export function useStorefront() {
           shippingAddress: form.shippingAddress,
           customerMemo: memo.trim(),
           status,
+          isTaxRequested: form.isTaxRequested,
+          businessNumber: form.businessNumber,
+          companyName: form.companyName,
+          representativeName: form.representativeName,
+          taxEmail: form.taxEmail,
+          attachmentBase64,
+          attachmentFilename
         })
       });
       const json = await res.json();
@@ -573,6 +760,7 @@ export function useStorefront() {
           }).catch(err => console.error('주문 성공 후 포인트 실차감 요청 실패:', err));
         }
 
+        setIsNewPartnerOrder(!!json.isNewPartner);
         setOrderSuccess(true);
       } else {
         alert("주문 접수 중 오류가 발생했습니다.");
@@ -623,16 +811,35 @@ export function useStorefront() {
     }
   };
 
-  const filteredProducts = products.filter((p: StoreProduct) => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // 🏢 menu_category 기준 고유 카테고리 목록 추출 ('미분류'는 비어있을 때 폴백 및 맨 뒤 정렬)
+  const categories = useMemo(() => {
+    const rawCats = Array.from(new Set(products.map(p => p.menu_category || '미분류')));
+    const filteredCats = rawCats.filter(c => c !== '미분류');
+    const hasUnclassified = rawCats.includes('미분류');
+    return ['전체', ...filteredCats, ...(hasUnclassified ? ['미분류'] : [])];
+  }, [products]);
+
+  const filteredProducts = products.filter((p: StoreProduct) => {
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+    if (selectedCategory === '전체') {
+      return matchesSearch;
+    } else if (selectedCategory === '미분류') {
+      return matchesSearch && !p.menu_category;
+    } else {
+      return matchesSearch && p.menu_category === selectedCategory;
+    }
+  });
 
   return {
     products,
     searchTerm,
     setSearchTerm,
     loading,
+    selectedCategory,
+    setSelectedCategory,
+    categories,
     selectedProduct,
     setSelectedProduct,
     form,
@@ -692,5 +899,13 @@ export function useStorefront() {
     removeFromCart,
     clearCart,
     submitCartOrder,
+    isNewPartnerOrder,
+    setIsNewPartnerOrder,
+    attachmentBase64,
+    attachmentFilename,
+    isOcrLoading,
+    ocrParsedTotalAmount,
+    ocrParsedTotalQty,
+    handleOcrUpload,
   };
 }
