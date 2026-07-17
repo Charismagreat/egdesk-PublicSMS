@@ -108,6 +108,7 @@ export async function POST(request: Request) {
 
       // 품목 신규 삽입 실행
       const insertData = {
+        tenant_id: tenantId,
         type,
         name,
         category,

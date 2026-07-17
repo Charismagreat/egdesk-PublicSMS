@@ -19,12 +19,11 @@ import { EGDESK_CONFIG } from './egdesk.config';
  * Next.js basePath does NOT apply to raw fetch() — prepend manually in production.
  */
 export function getEgdeskBasePath(): string {
-  const defaultFallback = '/t/mcp-server-fxkud1/p/egdesk-PublicSMS';
   if (typeof window === 'undefined') {
     return (
       (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_BASE_PATH) ||
       (typeof process !== 'undefined' && process.env?.EGDESK_BASE_PATH) ||
-      defaultFallback
+      ''
     );
   }
 
@@ -37,7 +36,7 @@ export function getEgdeskBasePath(): string {
   if (parts[0] === 't' && parts.length >= 4 && parts[2] === 'p') {
     return `/${parts.slice(0, 4).join('/')}`;
   }
-  return defaultFallback;
+  return '';
 }
 
 /**
