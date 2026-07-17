@@ -7,7 +7,7 @@ import {
   ClipboardList, CreditCard, CalendarDays, Truck, Send, 
   PackageSearch, Package, UserCog, Zap, Ticket, Landmark, Globe, Briefcase, HelpCircle,
   ArrowRightLeft, Handshake, Sparkles, Coins, Database, Compass,
-  ChevronUp, ChevronDown, Check, Save, ShieldAlert, GripVertical, Shield, CheckSquare, Wrench, Award, Scale, Key, Mic, Bot
+  ChevronUp, ChevronDown, Check, Save, ShieldAlert, GripVertical, Shield, CheckSquare, Wrench, Award, Scale, Key, Mic, Bot, ExternalLink
 } from "lucide-react";
 
 import { MENU_METADATA_MAP, CATEGORY_MAP } from '@/lib/menu-metadata';
@@ -351,10 +351,19 @@ export default function MenuSettingsCard() {
                     <div className={`p-2 rounded-lg bg-indigo-50/80 shrink-0 ${meta.color}`}>
                       <Icon className="w-4 h-4" />
                     </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-slate-800 truncate">{meta.label}</span>
+                    <a
+                      href={item.menu_href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex flex-col min-w-0 hover:underline cursor-pointer group/link text-left"
+                      title="새 탭에서 페이지 열기"
+                    >
+                      <span className="text-xs font-bold text-slate-800 truncate group-hover/link:text-indigo-650 transition-colors flex items-center gap-1">
+                        {meta.label}
+                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover/link:text-indigo-500 opacity-0 group-hover/link:opacity-100 transition-all shrink-0" />
+                      </span>
                       <span className="text-[10px] text-indigo-650/70 tracking-tight mt-0.5 truncate">{item.menu_href}</span>
-                    </div>
+                    </a>
                   </div>
 
                   {/* 정렬 제어 및 활성 토글 제어 단추 */}
