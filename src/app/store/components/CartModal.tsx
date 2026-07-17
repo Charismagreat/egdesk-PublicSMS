@@ -18,7 +18,7 @@ interface CartModalProps {
     cartAppliedPoints: number,
     cartPointCustomerId: number | null,
     cartAppliedCoupon: AppliedCoupon | null
-  ) => Promise<void>;
+  ) => Promise<any>;
   getNumericPrice: (priceStr: string) => number;
   pointEarningRate: number;
   isNewPartnerOrder?: boolean;
@@ -61,6 +61,7 @@ export function CartModal({
   });
 
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [successOrderId, setSuccessOrderId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 💳 계좌 정보 동적 로딩 상태
@@ -316,8 +317,11 @@ export function CartModal({
     
     setIsSubmitting(true);
     try {
-      await submitCartOrder(e, form, appliedPoints, pointCustomerId, appliedCoupon);
-      setOrderSuccess(true);
+      const orderId = await submitCartOrder(e, form, appliedPoints, pointCustomerId, appliedCoupon);
+      if (orderId) {
+        setSuccessOrderId(orderId);
+        setOrderSuccess(true);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -327,6 +331,7 @@ export function CartModal({
 
   const handleModalClose = () => {
     setOrderSuccess(false);
+    setSuccessOrderId(null);
     setPointBalance(null);
     setAppliedPoints(0);
     setUsePointsInput("");
@@ -378,9 +383,20 @@ export function CartModal({
                     담당자 검토 후 거래처 승인 및 주문 확정 안내 문자가 영업일 내 즉시 발송됩니다.
                   </p>
                   
+                  
+                  {successOrderId && (
+                    <button 
+                      type="button"
+                      onClick={() => window.open(`/store/print-order?id=${successOrderId}`, '_blank', 'width=800,height=900')}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-md active:scale-95 border-none cursor-pointer w-full max-w-xs flex items-center justify-center gap-2 mb-3"
+                    >
+                      🖨️ 주문 확인증 출력
+                    </button>
+                  )}
+
                   <button 
                     onClick={handleModalClose} 
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-md active:scale-95 border-none cursor-pointer w-full max-w-xs"
+                    className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-3.5 px-8 rounded-xl transition-all shadow-sm active:scale-95 border-none cursor-pointer w-full max-w-xs"
                   >
                     스토어로 돌아가기
                   </button>
@@ -407,9 +423,19 @@ export function CartModal({
                     </div>
                   </div>
 
+                  {successOrderId && (
+                    <button 
+                      type="button"
+                      onClick={() => window.open(`/store/print-order?id=${successOrderId}`, '_blank', 'width=800,height=900')}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-md active:scale-95 border-none cursor-pointer w-full max-w-xs flex items-center justify-center gap-2 mb-3"
+                    >
+                      🖨️ 주문 확인증 출력
+                    </button>
+                  )}
+
                   <button 
                     onClick={handleModalClose} 
-                    className="bg-slate-900 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-slate-800 transition-colors w-full border-none cursor-pointer"
+                    className="bg-slate-900 text-white font-bold py-3.5 px-8 rounded-xl hover:bg-slate-800 transition-colors w-full border-none cursor-pointer max-w-xs"
                   >
                     스토어로 돌아가기
                   </button>

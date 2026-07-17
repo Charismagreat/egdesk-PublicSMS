@@ -24,6 +24,7 @@ export function useStorefront() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [successOrderId, setSuccessOrderId] = useState<string | null>(null);
 
   // Coupon State
   const [couponCode, setCouponCode] = useState('');
@@ -374,9 +375,12 @@ export function useStorefront() {
 
         clearCart();
         setIsNewPartnerOrder(!!json.isNewPartner);
+        setSuccessOrderId(json.id);
         setOrderSuccess(true);
+        return json.id;
       } else {
         alert("주문 접수 중 오류가 발생했습니다.");
+        return null;
       }
     } catch (err) {
       alert("네트워크 오류가 발생했습니다.");
@@ -523,6 +527,7 @@ export function useStorefront() {
     setPointError('');
     setPointInfo('');
     setOrderSuccess(false);
+    setSuccessOrderId(null);
     setIsNewPartnerOrder(false);
     setAttachmentBase64('');
     setAttachmentFilename('');
@@ -533,6 +538,7 @@ export function useStorefront() {
 
   const closeModal = () => {
     setSelectedProduct(null);
+    setSuccessOrderId(null);
     setIsNewPartnerOrder(false);
     setAttachmentBase64('');
     setAttachmentFilename('');
@@ -761,6 +767,7 @@ export function useStorefront() {
         }
 
         setIsNewPartnerOrder(!!json.isNewPartner);
+        setSuccessOrderId(json.id);
         setOrderSuccess(true);
       } else {
         alert("주문 접수 중 오류가 발생했습니다.");
@@ -901,6 +908,8 @@ export function useStorefront() {
     submitCartOrder,
     isNewPartnerOrder,
     setIsNewPartnerOrder,
+    successOrderId,
+    setSuccessOrderId,
     attachmentBase64,
     attachmentFilename,
     isOcrLoading,

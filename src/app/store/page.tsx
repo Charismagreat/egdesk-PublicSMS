@@ -74,6 +74,7 @@ export default function StorefrontPage() {
     setSelectedCategory,
     categories,
     isNewPartnerOrder,
+    successOrderId,
     attachmentFilename,
     isOcrLoading,
     ocrParsedTotalAmount,
@@ -177,6 +178,7 @@ export default function StorefrontPage() {
         getNumericPrice={getNumericPrice}
         onAddToCart={addToCart}
         isNewPartnerOrder={isNewPartnerOrder}
+        successOrderId={successOrderId}
         attachmentFilename={attachmentFilename}
         isOcrLoading={isOcrLoading}
         ocrParsedTotalAmount={ocrParsedTotalAmount}

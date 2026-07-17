@@ -43,6 +43,7 @@ interface OrderModalProps {
   getNumericPrice: (priceStr: string) => number;
   onAddToCart: (product: StoreProduct, qty: number) => void;
   isNewPartnerOrder?: boolean;
+  successOrderId?: string | null;
   attachmentFilename?: string;
   isOcrLoading?: boolean;
   ocrParsedTotalAmount?: number | null;
@@ -90,6 +91,7 @@ export function OrderModal({
   submitOrder,
   getNumericPrice,
   isNewPartnerOrder = false,
+  successOrderId = null,
   attachmentFilename = '',
   isOcrLoading = false,
   ocrParsedTotalAmount = null,
@@ -224,9 +226,20 @@ export function OrderModal({
                     담당자 검토 후 거래처 승인 및 주문 확정 안내 문자가 영업일 내 즉시 발송됩니다.
                   </p>
                   
+                  
+                  {successOrderId && (
+                    <button 
+                      type="button"
+                      onClick={() => window.open(`/store/print-order?id=${successOrderId}`, '_blank', 'width=800,height=900')}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-md active:scale-95 border-none cursor-pointer w-full max-w-xs flex items-center justify-center gap-2 mb-3"
+                    >
+                      🖨️ 주문 확인증 출력
+                    </button>
+                  )}
+
                   <button 
                     onClick={closeModal} 
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-md active:scale-95 border-none cursor-pointer w-full max-w-xs"
+                    className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-3.5 px-8 rounded-xl transition-all shadow-sm active:scale-95 border-none cursor-pointer w-full max-w-xs"
                   >
                     확인
                   </button>
@@ -252,9 +265,19 @@ export function OrderModal({
                     </div>
                   </div>
 
+                  {successOrderId && (
+                    <button 
+                      type="button"
+                      onClick={() => window.open(`/store/print-order?id=${successOrderId}`, '_blank', 'width=800,height=900')}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-md active:scale-95 border-none cursor-pointer w-full max-w-xs flex items-center justify-center gap-2 mb-3"
+                    >
+                      🖨️ 주문 확인증 출력
+                    </button>
+                  )}
+
                   <button 
                     onClick={closeModal} 
-                    className="bg-slate-900 text-white font-bold py-3 px-8 rounded-xl hover:bg-slate-800 transition-colors w-full border-none cursor-pointer"
+                    className="bg-slate-900 text-white font-bold py-3 px-8 rounded-xl hover:bg-slate-800 transition-colors w-full border-none cursor-pointer max-w-xs"
                   >
                     확인
                   </button>

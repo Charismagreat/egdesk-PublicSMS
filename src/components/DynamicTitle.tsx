@@ -12,6 +12,10 @@ function DynamicTitleHandler() {
     if (pathname === "/estimates/print-pdf") {
       return;
     }
+    if (pathname === "/store/print-order") {
+      document.title = "주문 확인서 인쇄";
+      return;
+    }
     let title = "EGDESK SMS"; // 기본값
 
     // 정적 경로와 메뉴명 매핑
