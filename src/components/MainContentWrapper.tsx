@@ -31,7 +31,8 @@ export default function MainContentWrapper({ children }: { children: React.React
     pathname.startsWith('/my-db') ||
     pathname.startsWith('/finance-management') ||
     pathname.startsWith('/employees') ||
-    pathname.startsWith('/hr/attendance')
+    pathname.startsWith('/hr/attendance') ||
+    pathname.startsWith('/governance')
   ) {
     return <>{children}</>;
   }

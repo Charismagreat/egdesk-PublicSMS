@@ -84,6 +84,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, deletedItems: allDeleted });
     }
 
+    if (action === 'get_toggle') {
+      const toggleRes = await queryTable('system_settings', { filters: { key: 'easybot_action_ocr_confirm_enabled' } });
+      const toggleVal = toggleRes.rows && toggleRes.rows.length > 0 ? toggleRes.rows[0].value : '1';
+      const enabled = toggleVal !== '0' && toggleVal !== 'false' && toggleVal !== false;
+      return NextResponse.json({ success: true, enabled });
+    }
+
     return NextResponse.json(
       { success: false, error: '유효하지 않은 action 파라미터입니다.' },
       { status: 400 }
@@ -265,6 +272,21 @@ export async function POST(request: Request) {
         success: true,
         message: '실시간 AI 결재 심사 이력이 성공적으로 초기화되었습니다.'
       });
+    }
+
+    if (action === 'set_toggle') {
+      const { enabled } = body;
+      const value = enabled ? '1' : '0';
+      
+      // 기존 글로벌 레코드 삭제 및 삽입
+      await deleteRows('system_settings', { filters: { key: 'easybot_action_ocr_confirm_enabled' } });
+      await insertRows('system_settings', [{
+        key: 'easybot_action_ocr_confirm_enabled',
+        value,
+        tenant_id: 'default',
+        _version: 1
+      }]);
+      return NextResponse.json({ success: true });
     }
 
     return NextResponse.json(

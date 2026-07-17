@@ -459,6 +459,20 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
           <span>대시보드</span>
         </Link>
 
+        {userRole === "SUPER_ADMIN" && (
+          <Link
+            href="/governance"
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+              isActive("/governance")
+                ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
+                : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
+            }`}
+          >
+            <ShieldAlert className={`w-5 h-5 shrink-0 ${isActive("/governance") ? "text-white" : "text-rose-555"}`} />
+            <span>AI 컨트롤타워</span>
+          </Link>
+        )}
+
         {(userRole === "SUPER_ADMIN" || userRole === "SUB_OPERATOR") && (
           <Link
             href="/my-db"
