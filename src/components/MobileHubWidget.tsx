@@ -418,8 +418,14 @@ export default function MobileHubWidget() {
                 key={channel.id} 
                 className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4 flex flex-col justify-between hover:bg-slate-800/80 hover:border-slate-650 transition-all duration-300 group shadow-sm hover:shadow-md animate-fade-in text-left"
               >
-                {/* 상단: 아이콘 + 제목 + 뱃지 */}
-                <div className="space-y-3">
+                {/* 상단: 아이콘 + 제목 + 뱃지 (클릭 시 새 탭에서 열기) */}
+                <a
+                  href={channel.path}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="space-y-3 cursor-pointer group/link hover:no-underline block"
+                  title="새 탭에서 모바일 페이지 열기"
+                >
                   <div className="flex items-center justify-between">
                     <div className={`p-2.5 rounded-xl bg-gradient-to-br ${channel.themeColor.split(' ').slice(0, 2).join(' ')} text-white shadow-md shrink-0 group-hover:scale-105 transition-transform`}>
                       <Icon className="w-4.5 h-4.5" />
@@ -430,14 +436,15 @@ export default function MobileHubWidget() {
                   </div>
                   
                   <div className="space-y-1">
-                    <h3 className="text-sm font-extrabold text-white tracking-tight group-hover:text-blue-400 transition-colors">
+                    <h3 className="text-sm font-extrabold text-white tracking-tight group-hover:text-blue-400 group-hover/link:text-blue-400 transition-colors flex items-center gap-1.5">
                       {channel.name}
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-500 opacity-0 group-hover/link:opacity-100 transition-all shrink-0" />
                     </h3>
-                    <p className="text-slate-400 text-[11px] leading-relaxed line-clamp-2 min-h-[32px] font-medium">
+                    <p className="text-slate-400 text-[11px] leading-relaxed line-clamp-2 min-h-[32px] font-medium group-hover/link:text-slate-300 transition-colors">
                       {channel.description}
                     </p>
                   </div>
-                </div>
+                </a>
 
                 {/* 하단: 액션 버튼 그룹 */}
                 <div className="grid grid-cols-3 gap-1.5 mt-4 pt-3 border-t border-slate-800/60">
