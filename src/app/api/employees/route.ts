@@ -182,15 +182,16 @@ export async function DELETE(req: Request) {
 
     // 3. 소프트 삭제(Soft Delete) 갱신 실행
     const dateStr = new Date().toISOString();
-    const esc = (str: string) => (str || '').replace(/'/g, "''");
     
-    let deleteQuery = `UPDATE crm_operators SET deleted_at = '${esc(dateStr)}', deleted_by = '${esc(operatorName)}' WHERE id = ${Number(id)}`;
-    
+    const updateFilters: any = { id: String(id) };
     if (loggedUsername !== 'admin') {
-      deleteQuery += ` AND tenant_id = '${esc(tenantId)}'`;
+      updateFilters.tenant_id = tenantId;
     }
 
-    await executeSQL(deleteQuery);
+    await updateRows('crm_operators', {
+      deleted_at: dateStr,
+      deleted_by: operatorName
+    }, { filters: updateFilters });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -248,25 +249,25 @@ export async function PUT(req: Request) {
       return NextResponse.json({ success: false, error: '매장 내에 이미 존재하는 사원번호입니다.' }, { status: 400 });
     }
 
-    const esc = (str: string) => (str || '').replace(/'/g, "''");
-    const finalPhone = phone !== undefined ? (phone || '').trim() : currentOp.phone;
-    const finalDept = department !== undefined ? (department || '').trim() : currentOp.department;
-    const finalRole = newRole || currentOp.role;
+    const updates: any = {
+      name,
+      role: newRole || currentOp.role,
+      employee_number: finalEmpNumber,
+      phone: phone !== undefined ? (phone || '').trim() : currentOp.phone,
+      department: department !== undefined ? (department || '').trim() : currentOp.department
+    };
 
-    let query = `UPDATE crm_operators SET name = '${esc(name)}', role = '${esc(finalRole)}', employee_number = '${esc(finalEmpNumber)}', phone = '${esc(finalPhone)}', department = '${esc(finalDept)}'`;
-
+    // 비밀번호 변경 입력 시 해싱
     if (password && password.trim() !== '') {
-      const password_hash = await bcrypt.hash(password, 10);
-      query += `, password_hash = '${esc(password_hash)}'`;
+      updates.password_hash = await bcrypt.hash(password, 10);
     }
 
-    query += ` WHERE id = ${Number(id)}`;
-
+    const updateFilters: any = { id: String(id) };
     if (loggedUsername !== 'admin') {
-      query += ` AND tenant_id = '${esc(tenantId)}'`;
+      updateFilters.tenant_id = tenantId;
     }
 
-    await executeSQL(query);
+    await updateRows('crm_operators', updates, { filters: updateFilters });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
