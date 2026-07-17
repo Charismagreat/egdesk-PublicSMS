@@ -97,6 +97,7 @@ function PrintOrderContent() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+        <title>주문확인서 인쇄 준비중</title>
         <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
         <p className="text-slate-600 font-bold text-sm">주문서를 생성하는 중입니다...</p>
       </div>
@@ -106,6 +107,7 @@ function PrintOrderContent() {
   if (error || !order) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6">
+        <title>주문확인서 인쇄 오류</title>
         <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md w-full text-center shadow-sm">
           <X className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-black text-slate-800 mb-2">오류 발생</h3>
@@ -130,6 +132,9 @@ function PrintOrderContent() {
 
   return (
     <div className="min-h-screen bg-slate-100 py-8 px-4 sm:px-6 lg:px-8 print:bg-white print:py-0 print:px-0">
+      {order && (
+        <title>{`주문확인서_${order.customerName ? order.customerName.replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s_-]/g, "").trim() : "고객"}_${order.id}`}</title>
+      )}
       {/* no-print 상단 제어 바 */}
       <div className="max-w-3xl mx-auto mb-6 flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs no-print">
         <div className="flex items-center gap-2">
