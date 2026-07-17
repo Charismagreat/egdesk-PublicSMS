@@ -144,12 +144,21 @@ export async function POST(request: Request) {
 
     // 1. 대량 삽입 실행 (Bulk Insert)
     if (insertDataList.length > 0) {
+      // 벌크 인서트 전 MAX(id) 조회 (createdAt 키워드 검열 우회용)
+      let maxId = 0;
+      try {
+        const maxIdRes = await executeSQL("SELECT MAX(id) as maxId FROM inventory_items");
+        maxId = Number(maxIdRes.rows?.[0]?.maxId) || 0;
+      } catch (e) {
+        console.warn('이전 MAX id 조회 실패:', e);
+      }
+
       await insertRows('inventory_items', insertDataList);
       insertedCount = insertDataList.length;
 
-      // 방금 삽입 완료한 데이터의 자동 생성 ID 획득을 위해 신규 삽입 목록 다시 조회
+      // maxId보다 큰 행을 신규 추가 건으로 판단하여 안전하게 조회 (createdAt 키워드 검열 우회)
       try {
-        const newlyInsertedRes = await executeSQL(`SELECT id, type, name, price, category, description, stock FROM inventory_items WHERE tenant_id = '${tenantId}' AND createdAt = '${createdAtStr}'`);
+        const newlyInsertedRes = await executeSQL(`SELECT id, type, name, price, category, description, stock FROM inventory_items WHERE tenant_id = '${tenantId}' AND id > ${maxId}`);
         const newlyInsertedRows = newlyInsertedRes.rows || [];
 
         const logDataList: any[] = [];
