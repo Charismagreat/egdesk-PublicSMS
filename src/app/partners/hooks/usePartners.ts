@@ -488,8 +488,13 @@ export function usePartners() {
 
   // 검색 필터링
   const filteredPartners = partners.filter(pt => {
-    if (!pt.type || !pt.type.split(',').includes(activeTab)) return false;
-    if (!searchQuery.trim()) return true;
+    const hasSearchQuery = !!searchQuery.trim();
+
+    // 🔍 검색어가 비어있을 때만 선택된 탭(공급처/바이어/관계사) 범위로 제한합니다.
+    if (!hasSearchQuery) {
+      if (!pt.type || !pt.type.split(',').includes(activeTab)) return false;
+      return true;
+    }
 
     const query = searchQuery.toLowerCase().trim();
     return (
