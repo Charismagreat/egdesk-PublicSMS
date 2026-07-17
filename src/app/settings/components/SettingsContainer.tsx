@@ -13,6 +13,7 @@ import PointSettingsCard from "../../PointSettingsCard";
 import MenuSettingsCard from "../MenuSettingsCard";
 import FeedbackManagementCard from "../FeedbackManagementCard";
 import MobileHubWidget from "@/components/MobileHubWidget";
+import EmployeeManagementTabContent from "./EmployeeManagementTabContent";
 
 // AI 비서 설정 컴포넌트 및 훅 임포트
 import { useAiSettings } from "@/app/ai-settings/hooks/useAiSettings";
@@ -139,6 +140,7 @@ export function SettingsContainer() {
           <>
             {isAdmin && <DatabaseInitCard />}
             <CompanySettingsCard />
+            <EmployeeManagementTabContent />
           </>
         )}
 
