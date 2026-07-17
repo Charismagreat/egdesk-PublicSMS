@@ -164,9 +164,9 @@ export function SettingsContainer() {
 
         {activeTab === "ui" && (
           <>
+            <MenuSettingsCard />
             {/* 📱 모바일 채널 허브 위젯 (설정 탭으로 이식) */}
             <MobileHubWidget />
-            <MenuSettingsCard />
             <FeedbackManagementCard />
           </>
         )}
