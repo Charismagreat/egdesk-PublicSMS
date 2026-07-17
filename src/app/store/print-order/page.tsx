@@ -41,6 +41,11 @@ function PrintOrderContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 1. 마운트 즉시 기본 인쇄 타이틀로 초기화
+  useEffect(() => {
+    document.title = "주문확인서_인쇄";
+  }, []);
+
   useEffect(() => {
     if (!id) {
       setError("주문 번호가 누락되었습니다.");
@@ -54,7 +59,11 @@ function PrintOrderContent() {
         const orderRes = await apiFetch(`/api/orders/detail?id=${id}`);
         const orderData = await orderRes.json();
         if (orderData.success && orderData.order) {
-          setOrder(orderData.order);
+          const ord = orderData.order;
+          // 즉시 타이틀을 설정하여 브라우저 스레드에 선반영
+          const cleanName = ord.customerName ? ord.customerName.replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s_-]/g, "").trim() : "고객";
+          document.title = `주문확인서_${cleanName}_${ord.id}`;
+          setOrder(ord);
         } else {
           setError(orderData.error || "주문 내역을 찾을 수 없습니다.");
         }
@@ -77,14 +86,10 @@ function PrintOrderContent() {
 
   useEffect(() => {
     if (!loading && order) {
-      // PDF 파일명 자동 제안을 위해 document.title 동적 설정 (특수문자 제거 가드)
-      const cleanName = order.customerName ? order.customerName.replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s_-]/g, "").trim() : "고객";
-      document.title = `주문확인서_${cleanName}_${order.id}`;
-
-      // 로딩 완료 후 0.5초 대기 후 인쇄 팝업 자동 구동
+      // 탭 타이틀이 OS 및 브라우저 그래픽 스레드에 완벽히 동기화되도록 1초 딜레이 제공
       const timer = setTimeout(() => {
         window.print();
-      }, 500);
+      }, 1000);
       return () => clearTimeout(timer);
     }
   }, [loading, order]);
