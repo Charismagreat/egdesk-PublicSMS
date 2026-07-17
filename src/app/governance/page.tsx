@@ -305,63 +305,6 @@ export default function GovernanceDashboard() {
             <span>{error}</span>
           </div>
         )}
-
-        {/* 🎨 AI 컨트롤타워 개념 및 운영 원칙 가이드 카드 */}
-        <div className="bg-gradient-to-r from-slate-50 to-indigo-50/30 border border-slate-200/80 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row gap-6 items-start md:items-center relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-2.5 h-full bg-gradient-to-b from-indigo-500 to-rose-500"></div>
-          <div className="space-y-2 flex-1 pl-3">
-            <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse shrink-0" />
-              <span>이지데스크 AI 자율 처리 vs 관리자 수동 개입 거버넌스 원칙</span>
-            </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              본 프로젝트 내에서는 수많은 거래처 명함, 영수증, 사업자등록증, 견적서 등 실물 문서와 이미지 업로드가 실시간으로 이루어지며, 여러 대장에서 생성/수정/삭제 등의 트랜잭션이 활발하게 일어납니다. 
-              <strong> AI 컨트롤타워</strong>는 이 모든 업무 흐름을 무대후에서 실시간 감시하면서, AI가 스스로 판단하여 처리할 <strong>자율 대행 영역</strong>과 기업 안전 내규에 의거해 <strong>관리자의 직접 개입(수동 최종 승인)이 필요한 영역</strong>을 명확하게 판별 및 관제하는 기업 컨트롤타워 센터입니다.
-            </p>
-            <div className="flex flex-wrap gap-4 pt-1.5">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                <span>AI 자율 대행: 이미지 오토필, 자동 이적/갱신, 포인트 적재</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                <span>관리자 수동 개입: RAG 삭제 가드 위반, 리스크 거래 보류 심사</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 1구역: 이미지 OCR 자율 대행 가드 스위치 */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-2 h-full bg-rose-500"></div>
-          <div className="space-y-1 pl-2">
-            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-yellow-500 shrink-0" />
-              <span>이미지 OCR 자율 대행 통제 (AI 가드라인)</span>
-            </h2>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              비활성화(OFF) 시, 사용자가 업로드한 실물 문서 이미지(재무제표, 명함, 사업자증 등)의 AI 인식을 통한 데이터베이스 최종 승인 및 적재(확정)가 원천 방어 가드됩니다.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className={`text-xs font-black px-2.5 py-1 rounded-lg ${ocrEnabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-              {ocrEnabled ? "가동 활성화 (RUNNING)" : "보안 가드 가동 (BLOCKED)"}
-            </span>
-            <button
-              onClick={handleToggleOcr}
-              disabled={isLoading || isProcessing}
-              className="border-none bg-transparent cursor-pointer transition-all hover:scale-105 shrink-0"
-              title={ocrEnabled ? "비활성화" : "활성화"}
-            >
-              {ocrEnabled ? (
-                <ToggleRight className="w-14 h-8 text-rose-500" />
-              ) : (
-                <ToggleLeft className="w-14 h-8 text-slate-400" />
-              )}
-            </button>
-          </div>
-        </div>
-
         {/* 2구역: 세련된 탭 컨트롤러 */}
         <div className="flex gap-2 border-b border-slate-200 pb-px">
           <button
