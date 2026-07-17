@@ -77,6 +77,10 @@ function PrintOrderContent() {
 
   useEffect(() => {
     if (!loading && order) {
+      // PDF 파일명 자동 제안을 위해 document.title 동적 설정 (특수문자 제거 가드)
+      const cleanName = order.customerName ? order.customerName.replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s_-]/g, "").trim() : "고객";
+      document.title = `주문확인서_${cleanName}_${order.id}`;
+
       // 로딩 완료 후 0.5초 대기 후 인쇄 팝업 자동 구동
       const timer = setTimeout(() => {
         window.print();

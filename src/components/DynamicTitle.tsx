@@ -9,11 +9,7 @@ function DynamicTitleHandler() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    if (pathname === "/estimates/print-pdf") {
-      return;
-    }
-    if (pathname === "/store/print-order") {
-      document.title = "주문 확인서 인쇄";
+    if (pathname === "/estimates/print-pdf" || pathname === "/store/print-order") {
       return;
     }
     let title = "EGDESK SMS"; // 기본값
