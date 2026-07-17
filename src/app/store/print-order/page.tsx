@@ -117,7 +117,11 @@ function PrintOrderContent() {
   }
 
   const finalPrice = Number(order.totalPrice);
-  const displayPrice = isNaN(finalPrice) ? order.totalPrice : `${finalPrice.toLocaleString()}원`;
+  const quantity = Number(order.quantity) || 1;
+  const unitPrice = !isNaN(finalPrice) ? Math.round(finalPrice / quantity) : 0;
+
+  const displayUnitPrice = !isNaN(finalPrice) ? `${unitPrice.toLocaleString()}원` : order.totalPrice;
+  const displayPrice = !isNaN(finalPrice) ? `${finalPrice.toLocaleString()}원` : order.totalPrice;
 
   return (
     <div className="min-h-screen bg-slate-100 py-8 px-4 sm:px-6 lg:px-8 print:bg-white print:py-0 print:px-0">
@@ -225,6 +229,7 @@ function PrintOrderContent() {
               <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                 <tr>
                   <th className="p-4">상품명</th>
+                  <th className="p-4 text-right w-28">단가</th>
                   <th className="p-4 text-center w-24">수량</th>
                   <th className="p-4 text-right w-32">총 금액</th>
                 </tr>
@@ -232,6 +237,7 @@ function PrintOrderContent() {
               <tbody className="divide-y divide-slate-100">
                 <tr>
                   <td className="p-4 font-bold text-slate-800">{order.productName}</td>
+                  <td className="p-4 text-right font-semibold text-slate-700">{displayUnitPrice}</td>
                   <td className="p-4 text-center font-semibold text-slate-700">{order.quantity}</td>
                   <td className="p-4 text-right font-bold text-slate-900">{displayPrice}</td>
                 </tr>
@@ -251,7 +257,7 @@ function PrintOrderContent() {
             </div>
           </div>
           <div className="text-right w-full sm:w-auto">
-            <span className="text-xs font-bold text-slate-400 block mb-1">최종 결제 금액</span>
+            <span className="text-xs font-bold text-slate-400 block mb-1">최종 결제 금액 (부가세 포함)</span>
             <span className="text-2xl font-black text-slate-800">{displayPrice}</span>
           </div>
         </div>
