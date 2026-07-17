@@ -16,7 +16,7 @@ function DynamicTitleHandler() {
 
     // 정적 경로와 메뉴명 매핑
     const staticTitles: Record<string, string> = {
-      "/": "모바일 채널",
+      "/": "대시보드",
       "/sms": "무료 문자 발송 AI",
       "/message-logs": "발송 내역 조회",
       "/automation": "자동 발송 설정",

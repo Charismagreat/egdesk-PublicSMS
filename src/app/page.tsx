@@ -1,8 +1,6 @@
-import { Users, MessageSquare, CheckCircle, Clock, AlertTriangle, Home as HomeIcon } from "lucide-react";
+import { Users, MessageSquare, CheckCircle, Clock, AlertTriangle, LayoutDashboard } from "lucide-react";
 import { queryTable } from "@/../egdesk-helpers";
 import AiCopilotWidget from "@/components/AiCopilotWidget";
-import MobileHubWidget from "@/components/MobileHubWidget";
-
 
 // Next.js 캐싱 비활성화 (항상 최신 데이터 유지)
 export const dynamic = 'force-dynamic';
@@ -67,10 +65,10 @@ export default async function Home() {
       <div className="absolute top-0 right-10 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
+        <div className="text-left">
           <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2.5">
-            <HomeIcon className="w-8 h-8 text-blue-500" />
-            <span>모바일 채널</span>
+            <LayoutDashboard className="w-8 h-8 text-blue-500" />
+            <span>대시보드</span>
           </h1>
           <p className="text-slate-500 mt-2 text-sm font-semibold">
             Gemini AI 비서와 연동하여 실시간 마케팅, 고객 관리 및 비즈니스 자동화 현황을 모니터링합니다.
@@ -81,13 +79,10 @@ export default async function Home() {
       {/* AI 자율 마케팅 파트너 어시스턴트 위젯 */}
       {copilotEnabled && <AiCopilotWidget />}
 
-      {/* 📱 모바일 채널 허브 위젯 (링크 복사, QR 생성, SMS 발송) */}
-      <MobileHubWidget />
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="text-left">
               <p className="text-sm text-slate-500 mb-1">총 등록 고객</p>
               <h3 className="text-3xl font-bold text-slate-800">{totalCustomers.toLocaleString()}</h3>
             </div>
@@ -99,7 +94,7 @@ export default async function Home() {
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="text-left">
               <p className="text-sm text-slate-500 mb-1">총 발송 내역</p>
               <h3 className="text-3xl font-bold text-slate-800">{totalLogs.toLocaleString()}</h3>
             </div>
@@ -111,7 +106,7 @@ export default async function Home() {
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="text-left">
               <p className="text-sm text-slate-500 mb-1">최근 발송 성공률</p>
               <h3 className="text-3xl font-bold text-slate-800">{successRate}%</h3>
             </div>
@@ -123,7 +118,7 @@ export default async function Home() {
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="text-left">
               <p className="text-sm text-slate-500 mb-1">최근 발송</p>
               <h3 className="text-sm font-bold text-slate-800 break-words">{latestLogTime}</h3>
             </div>
@@ -143,7 +138,7 @@ export default async function Home() {
             ) : (
               recentCustomers.map((customer) => (
                 <div key={customer.id} className="flex items-center justify-between border-b border-slate-50 pb-3">
-                  <div>
+                  <div className="text-left">
                     <p className="font-semibold text-slate-800">{customer.name}</p>
                     <p className="text-sm text-slate-500">{customer.phone}</p>
                   </div>
@@ -171,7 +166,7 @@ export default async function Home() {
                       <AlertTriangle className="w-5 h-5 text-red-600" />
                     )}
                   </div>
-                  <div className="flex-1 overflow-hidden">
+                  <div className="flex-1 overflow-hidden text-left">
                     <p className="text-sm text-slate-800 truncate">{log.message}</p>
                     <p className="text-xs text-slate-500">{log.phone_number} • {new Date(log.created_at).toLocaleString()}</p>
                   </div>

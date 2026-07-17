@@ -3,7 +3,7 @@ import {
   Home, Users, MessageSquare, Settings, ShoppingCart, 
   ClipboardList, CreditCard, CalendarDays, Truck, Send, 
   PackageSearch, Package, UserCog, Zap, Ticket, Landmark, Globe, Briefcase, HelpCircle,
-  ArrowRightLeft, Handshake, Sparkles, Coins, Database, Compass, Shield, CheckSquare, Wrench, ShieldAlert, Award, Scale, Key, Mic, Bot, Mail
+  ArrowRightLeft, Handshake, Sparkles, Coins, Database, Compass, Shield, CheckSquare, Wrench, ShieldAlert, Award, Scale, Key, Mic, Bot, Mail, LayoutDashboard
 } from "lucide-react";
 
 // 커스텀 인스타그램 아이콘 SVG
@@ -65,7 +65,7 @@ export interface MenuMetadata {
 // 💡 마스터 메뉴 명세 리스트 (SSOT)
 export const MENU_METADATA_LIST: MenuMetadata[] = [
   // 1. 마케팅/채널/소통 (대고객 접점 및 채널)
-  { href: "/", label: "모바일 채널", icon: Home, color: "text-blue-550", category: 1 },
+  { href: "/", label: "대시보드", icon: LayoutDashboard, color: "text-blue-550", category: 1 },
   { href: "/sms", label: "무료 문자 발송 AI", icon: MessageSquare, color: "text-purple-550", category: 1 },
   { href: "/message-logs", label: "발송 내역 조회", icon: Send, color: "text-purple-550", category: 1 },
   { href: "/automation", label: "자동 발송 설정", icon: Zap, color: "text-yellow-600", category: 1 },
