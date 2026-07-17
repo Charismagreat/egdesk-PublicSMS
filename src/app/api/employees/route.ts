@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, updateRows } from '../../../../egdesk-helpers';
+import { queryTable, insertRows, updateRows, executeSQL } from '../../../../egdesk-helpers';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
@@ -182,16 +182,15 @@ export async function DELETE(req: Request) {
 
     // 3. 소프트 삭제(Soft Delete) 갱신 실행
     const dateStr = new Date().toISOString();
+    const esc = (str: string) => (str || '').replace(/'/g, "''");
     
-    const updateFilters: any = { id };
+    let deleteQuery = `UPDATE crm_operators SET deleted_at = '${esc(dateStr)}', deleted_by = '${esc(operatorName)}' WHERE id = ${Number(id)}`;
+    
     if (loggedUsername !== 'admin') {
-      updateFilters.tenant_id = tenantId;
+      deleteQuery += ` AND tenant_id = '${esc(tenantId)}'`;
     }
 
-    await updateRows('crm_operators', {
-      deleted_at: dateStr,
-      deleted_by: operatorName
-    }, { filters: updateFilters });
+    await executeSQL(deleteQuery);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -249,25 +248,25 @@ export async function PUT(req: Request) {
       return NextResponse.json({ success: false, error: '매장 내에 이미 존재하는 사원번호입니다.' }, { status: 400 });
     }
 
-    const updates: any = {
-      name,
-      role: newRole || currentOp.role,
-      employee_number: finalEmpNumber,
-      phone: phone !== undefined ? (phone || '').trim() : currentOp.phone,
-      department: department !== undefined ? (department || '').trim() : currentOp.department
-    };
+    const esc = (str: string) => (str || '').replace(/'/g, "''");
+    const finalPhone = phone !== undefined ? (phone || '').trim() : currentOp.phone;
+    const finalDept = department !== undefined ? (department || '').trim() : currentOp.department;
+    const finalRole = newRole || currentOp.role;
 
-    // 비밀번호 변경 입력 시 해싱
+    let query = `UPDATE crm_operators SET name = '${esc(name)}', role = '${esc(finalRole)}', employee_number = '${esc(finalEmpNumber)}', phone = '${esc(finalPhone)}', department = '${esc(finalDept)}'`;
+
     if (password && password.trim() !== '') {
-      updates.password_hash = await bcrypt.hash(password, 10);
+      const password_hash = await bcrypt.hash(password, 10);
+      query += `, password_hash = '${esc(password_hash)}'`;
     }
 
-    const updateFilters: any = { id };
+    query += ` WHERE id = ${Number(id)}`;
+
     if (loggedUsername !== 'admin') {
-      updateFilters.tenant_id = tenantId;
+      query += ` AND tenant_id = '${esc(tenantId)}'`;
     }
 
-    await updateRows('crm_operators', updates, { filters: updateFilters });
+    await executeSQL(query);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
