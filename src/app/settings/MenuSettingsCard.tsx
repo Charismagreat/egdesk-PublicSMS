@@ -324,7 +324,7 @@ export default function MenuSettingsCard() {
           </div>
         ) : (
           /* 메뉴 아이템 편집 리스트 영역 (밝은 백그라운드와 연한 보더 적용) */
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[480px] overflow-y-auto pr-2.5 scrollbar-thin">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {menuItems.map((item, idx) => {
               const meta = MENU_METADATA_MAP[item.menu_href] || { label: item.menu_href, icon: HelpCircle, color: "text-slate-550" };
               const Icon = meta.icon;
@@ -389,7 +389,7 @@ export default function MenuSettingsCard() {
                         className="sr-only peer"
                         id={`toggle-${item.menu_href}`}
                       />
-                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-650"></div>
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
                     </label>
                   </div>
                 </div>

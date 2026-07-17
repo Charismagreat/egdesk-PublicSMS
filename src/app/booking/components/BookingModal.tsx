@@ -1,6 +1,7 @@
 import React from "react";
 import { X, CalendarDays, Check, Clock } from "lucide-react";
 import { BookingProduct, BookingForm, AppliedCoupon } from "../types";
+import { apiFetch } from "@/lib/api";
 
 interface BookingModalProps {
   selectedService: BookingProduct | null;
@@ -44,7 +45,7 @@ export function BookingModal({
   React.useEffect(() => {
     async function loadBankInfo() {
       try {
-        const res = await fetch('/api/settings?key=my_company_profile');
+        const res = await apiFetch('/api/settings?key=my_company_profile');
         const data = await res.json();
         if (data.success && data.value) {
           const parsed = JSON.parse(data.value);

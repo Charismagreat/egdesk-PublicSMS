@@ -1057,7 +1057,7 @@ export default function InboundHub({
             </button>
             <button
               onClick={handleLocalBulkExportWebView}
-              className="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
             >
               🖥️ 웹에서 보기
             </button>

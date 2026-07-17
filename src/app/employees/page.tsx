@@ -418,7 +418,7 @@ export default function EmployeeManagementPage() {
                   onClick={() => setCurrentPage(p)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-black border transition-all cursor-pointer ${
                     currentPage === p
-                      ? "bg-indigo-650 text-white border-indigo-650 shadow-xs"
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
                       : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                   }`}
                 >
@@ -577,7 +577,7 @@ export default function EmployeeManagementPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center justify-center gap-1 px-5 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-xs font-black border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition-colors"
+                  className="flex items-center justify-center gap-1 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition-colors"
                 >
                   <Check className="w-3.5 h-3.5 text-white" />
                   {isSubmitting ? "저장 중..." : "저장 완료"}

@@ -506,7 +506,7 @@ export default function MobileBusinessCardPage() {
               </button>
               <Link
                 href="/settings"
-                className="flex-1 py-2 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center"
+                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center"
               >
                 설정 페이지로 이동
               </Link>

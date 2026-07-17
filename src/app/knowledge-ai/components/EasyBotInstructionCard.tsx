@@ -747,7 +747,7 @@ export function EasyBotInstructionCard({ currentRole }: EasyBotInstructionCardPr
                       type="button"
                       onClick={handleSuggestTaskTemplate}
                       disabled={isSuggestingTemplate || !editingRule.title}
-                      className="px-2 py-0.5 bg-indigo-650 hover:bg-indigo-700 disabled:opacity-40 text-white border-none text-[8.5px] font-bold rounded flex items-center gap-0.5 cursor-pointer transition-all shadow animate-pulse"
+                      className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white border-none text-[8.5px] font-bold rounded flex items-center gap-0.5 cursor-pointer transition-all shadow animate-pulse"
                     >
                       <Sparkles className="w-2.5 h-2.5" />
                       {isSuggestingTemplate ? "추천 중..." : "AI 작성 추천 ✨"}

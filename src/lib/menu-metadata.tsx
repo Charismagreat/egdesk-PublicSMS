@@ -115,7 +115,6 @@ export const MENU_METADATA_LIST: MenuMetadata[] = [
   { href: "/rnd-management", label: "연구소 관리 AI", icon: Award, color: "text-amber-550", category: 4 },
   { href: "/meeting-minutes", label: "회의 기록 AI", icon: Mic, color: "text-purple-550", category: 4 },
   { href: "/ai-briefing", label: "AI 브리핑", icon: Sparkles, color: "text-indigo-550", category: 4 },
-  { href: "/ai-settings", label: "AI 비서 설정", icon: Bot, color: "text-indigo-400", category: 4 },
   
   // 기타 스냅태스크 (2번에 적절히 노출)
   { href: "/snaptasks", label: "AI 스냅태스크", icon: Sparkles, color: "text-indigo-600", category: 2 }

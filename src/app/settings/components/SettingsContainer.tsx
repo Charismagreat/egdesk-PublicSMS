@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
-import { Bot, ArrowRight } from "lucide-react";
+import { Building, Mail, Cpu, LayoutGrid, Coins } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import DatabaseInitCard from "../DatabaseInitCard";
 import CompanySettingsCard from "../CompanySettingsCard";
 import SmtpSettingsCard from "../SmtpSettingsCard";
@@ -13,9 +13,68 @@ import PointSettingsCard from "../../PointSettingsCard";
 import MenuSettingsCard from "../MenuSettingsCard";
 import FeedbackManagementCard from "../FeedbackManagementCard";
 
-// 설정 페이지의 여러 설정 카드들을 레이아웃에 맞춰 배치하는 컨테이너 컴포넌트
+// AI 비서 설정 컴포넌트 및 훅 임포트
+import { useAiSettings } from "@/app/ai-settings/hooks/useAiSettings";
+import { AiSettingsForm } from "@/app/ai-settings/components/AiSettingsForm";
+import { AiSettingsMonitor } from "@/app/ai-settings/components/AiSettingsMonitor";
+
+type TabType = "basic" | "communication" | "ai" | "point" | "ui";
+
+// 지연 마운팅(Lazy Activation)을 위한 AI 라우팅 설정 탭 전용 컴포넌트
+function AiSettingsTabContent() {
+  const settings = useAiSettings();
+  return (
+    <div className="space-y-6">
+      <AiSettingsForm
+        aiModel={settings.aiModel}
+        setAiModel={settings.setAiModel}
+        omnichannelEnabled={settings.omnichannelEnabled}
+        setOmnichannelEnabled={settings.setOmnichannelEnabled}
+        copilotWidgetEnabled={settings.copilotWidgetEnabled}
+        setCopilotWidgetEnabled={settings.setCopilotWidgetEnabled}
+        aiProvider={settings.aiProvider}
+        setAiProvider={settings.setAiProvider}
+        localLlmUrl={settings.localLlmUrl}
+        setLocalLlmUrl={settings.setLocalLlmUrl}
+        localLlmModel={settings.localLlmModel}
+        setLocalLlmModel={settings.setLocalLlmModel}
+        availableModels={settings.availableModels}
+        isLoadingModels={settings.isLoadingModels}
+        fetchLlmModels={settings.fetchLlmModels}
+        isTesting={settings.isTesting}
+        testStatus={settings.testStatus}
+        testError={settings.testError}
+        isSaved={settings.isSaved}
+        handleTestConnection={settings.handleTestConnection}
+        handleSave={settings.handleSave}
+      />
+      <AiSettingsMonitor
+        range={settings.range}
+        setRange={settings.setRange}
+        summary={settings.summary}
+        purposes={settings.purposes}
+        models={settings.models}
+        recentLogs={settings.recentLogs}
+        page={settings.page}
+        setPage={settings.setPage}
+        limit={settings.limit}
+        setLimit={settings.setLimit}
+        pagination={settings.pagination}
+        loading={settings.loading}
+        error={settings.error}
+        isTableCollapsed={settings.isTableCollapsed}
+        handleToggleTableCollapse={settings.handleToggleTableCollapse}
+      />
+    </div>
+  );
+}
+
 export function SettingsContainer() {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [activeTab, setActiveTab, isRestored] = usePersistedState<TabType>(
+    "egdesk_settings_active_tab",
+    "basic"
+  );
 
   useEffect(() => {
     async function checkAdmin() {
@@ -32,57 +91,83 @@ export function SettingsContainer() {
     checkAdmin();
   }, []);
 
-  return (
-    <div className="space-y-6">
-      {/* 플랫폼 최고관리자(admin)인 경우에만 데이터베이스 초기화 카드 노출 */}
-      {isAdmin && <DatabaseInitCard />}
-      
-      {/* 회사 설정 카드 */}
-      <CompanySettingsCard />
-      
-      {/* 발송 메일 SMTP 설정 카드 */}
-      <SmtpSettingsCard />
+  // SSR 하이드레이션 및 상태 복구 대기 가드
+  if (!isRestored) {
+    return (
+      <div className="w-full py-20 flex justify-center items-center">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
-      {/* 팩스 발신 설정 카드 */}
-      <FaxSettingsCard />
-      
-      {/* AI 설정 및 모니터링 독립 페이지 바로가기 카드 */}
-      <div className="bg-white border border-slate-200/80 rounded-3xl shadow-sm p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all hover:shadow-md">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-            <Bot className="w-6 h-6 animate-pulse" />
-          </div>
-          <div className="text-left">
-            <h3 className="text-base font-extrabold text-slate-800">
-              AI 비서 및 하이브리드 라우팅 설정
-            </h3>
-            <p className="text-xs text-slate-450 mt-1 leading-relaxed">
-              구글 Gemini 클라우드 및 로컬 LLM(Ollama) 분기 작동 방식을 지능적으로 구성하고, 실시간 API 토큰 사용량 감사 대시보드를 제공하는 독립 전용 페이지로 이동합니다.
-            </p>
-          </div>
-        </div>
-        <div className="shrink-0 w-full md:w-auto">
-          <Link
-            href="/ai-settings"
-            className="flex items-center justify-center gap-1.5 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold transition-all w-full shadow-xs hover:shadow active:scale-95 duration-150"
-          >
-            설정 대시보드로 이동
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
+  const tabs = [
+    { id: "basic", label: "본사 & 플랫폼 설정", icon: Building },
+    { id: "communication", label: "메일 & 팩스 연동", icon: Mail },
+    { id: "ai", label: "AI 라우팅 설정", icon: Cpu },
+    { id: "point", label: "포인트 정책 설정", icon: Coins },
+    { id: "ui", label: "메뉴 & 피드백 관리", icon: LayoutGrid },
+  ];
+
+  return (
+    <div className="space-y-6 text-left">
+      {/* 🎨 세련된 대형 탭 스위처 */}
+      <div className="bg-slate-100/80 p-1.5 rounded-2xl flex flex-wrap md:flex-nowrap gap-1 border border-slate-200/50">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as TabType)}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold transition-all border-0 cursor-pointer ${
+                isActive
+                  ? "bg-white text-indigo-600 shadow-sm animate-fade-in"
+                  : "text-slate-500 hover:bg-slate-200/60 hover:text-slate-800"
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${isActive ? "text-indigo-600" : "text-slate-400"}`} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* 견적/발주 AI 할인 및 템플릿 커스텀 설정 카드 */}
-      <EstimateSettingsCard />
-      
-      {/* 포인트 설정 카드 */}
-      <PointSettingsCard />
-      
-      {/* 메뉴 설정 카드 */}
-      <MenuSettingsCard />
-      
-      {/* 피드백 관리 카드 */}
-      <FeedbackManagementCard />
+      {/* 탭 콘텐츠 영역 */}
+      <div className="space-y-6 animate-fade-in">
+        {activeTab === "basic" && (
+          <>
+            {isAdmin && <DatabaseInitCard />}
+            <CompanySettingsCard />
+          </>
+        )}
+
+        {activeTab === "communication" && (
+          <>
+            <SmtpSettingsCard />
+            <FaxSettingsCard />
+          </>
+        )}
+
+        {activeTab === "ai" && (
+          <>
+            <AiSettingsTabContent />
+            <EstimateSettingsCard />
+          </>
+        )}
+
+        {activeTab === "point" && (
+          <>
+            <PointSettingsCard />
+          </>
+        )}
+
+        {activeTab === "ui" && (
+          <>
+            <MenuSettingsCard />
+            <FeedbackManagementCard />
+          </>
+        )}
+      </div>
     </div>
   );
 }

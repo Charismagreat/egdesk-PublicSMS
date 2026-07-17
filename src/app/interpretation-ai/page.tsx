@@ -616,7 +616,7 @@ export default function LiveInterpretationPage() {
                   <span className="text-[9px] text-slate-600 font-extrabold px-1">{isHost ? `임직원 (${log.time})` : `바이어 (${log.time})`}</span>
                   <div className={`max-w-[85%] rounded-2xl px-4 py-3 border shadow-md relative leading-relaxed text-xs font-bold text-left ${
                     isHost 
-                      ? 'bg-indigo-650/10 border-indigo-500/20 text-white rounded-tr-none' 
+                      ? 'bg-indigo-600 border-indigo-500/20 text-white rounded-tr-none' 
                       : 'bg-slate-900 border-slate-800 text-slate-200 rounded-tl-none'
                   }`}>
                     <p className="text-[10px] text-slate-500 mb-1 font-mono">Original: {log.original}</p>
@@ -955,7 +955,7 @@ export default function LiveInterpretationPage() {
                 href={selectedHistorySession.session.file_path}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 py-3.5 rounded-2xl bg-indigo-650 hover:bg-indigo-750 text-white font-black text-xs text-center transition shadow-md shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-1.5"
+                className="flex-1 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs text-center transition shadow-md shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Share2 className="w-4 h-4" />
                 전체 텍스트 스크립트 파일 열기

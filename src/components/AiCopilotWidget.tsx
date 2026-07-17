@@ -450,7 +450,7 @@ export default function AiCopilotWidget() {
                       </button>
                       <button 
                         onClick={() => setOmniChannel("newsletter")}
-                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all ${omniChannel === "newsletter" ? "bg-indigo-650 text-white shadow" : "text-slate-500 hover:text-slate-800"}`}
+                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all ${omniChannel === "newsletter" ? "bg-indigo-600 text-white shadow" : "text-slate-500 hover:text-slate-800"}`}
                       >
                         <Send className="w-3 h-3 mr-1" />
                         이메일

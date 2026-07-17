@@ -951,7 +951,7 @@ export default function PurchaseOrderOcrModal({
             className={`flex-1 py-3 text-white font-extrabold text-xs rounded-xl disabled:opacity-40 transition cursor-pointer flex items-center justify-center gap-1.5 ${
               forceBypass 
                 ? "bg-amber-600 hover:bg-amber-700" 
-                : "bg-indigo-650 hover:bg-indigo-700"
+                : "bg-indigo-600 hover:bg-indigo-700"
             }`}
           >
             <Database className="w-3.5 h-3.5" />

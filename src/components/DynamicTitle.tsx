@@ -2,6 +2,7 @@
 
 import { useEffect, Suspense } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
 function DynamicTitleHandler() {
   const pathname = usePathname();
@@ -85,7 +86,7 @@ function DynamicTitleHandler() {
     } else if (pathname.startsWith("/store")) {
       title = "EGDESK SHOP";
       // 🏢 테넌트 설정의 회사명과 브라우저 탭 타이틀 실시간 동기화
-      fetch('/api/settings?key=my_company_profile')
+      apiFetch('/api/settings?key=my_company_profile')
         .then(res => res.json())
         .then(data => {
           if (data.success && data.value) {

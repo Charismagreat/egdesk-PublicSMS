@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Check } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 interface OrderSuccessScreenProps {
   tableId: string | string[] | undefined;
@@ -18,7 +19,7 @@ export function OrderSuccessScreen({ tableId, onClose }: OrderSuccessScreenProps
   React.useEffect(() => {
     async function loadBankInfo() {
       try {
-        const res = await fetch('/api/settings?key=my_company_profile');
+        const res = await apiFetch('/api/settings?key=my_company_profile');
         const data = await res.json();
         if (data.success && data.value) {
           const parsed = JSON.parse(data.value);

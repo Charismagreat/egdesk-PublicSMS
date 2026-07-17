@@ -1337,7 +1337,7 @@ function WebViewContent() {
                 onClick={() => setActiveMemo(null)}
                 className={`px-4 py-2 text-xs font-black rounded-xl transition-all cursor-pointer ${
                   isDarkMode 
-                    ? "bg-indigo-650 hover:bg-indigo-600 text-white" 
+                    ? "bg-indigo-600 hover:bg-indigo-700 text-white" 
                     : "bg-indigo-500 hover:bg-indigo-600 text-white"
                 }`}
               >

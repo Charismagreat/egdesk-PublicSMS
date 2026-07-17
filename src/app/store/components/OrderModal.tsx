@@ -1,6 +1,7 @@
 import React from "react";
 import { X, ShoppingBag, Store, Package, MapPin, Truck, Coins, UploadCloud, Loader2 } from "lucide-react";
 import { StoreProduct, OrderForm, AppliedCoupon } from "../types";
+import { apiFetch } from "@/lib/api";
 
 interface OrderModalProps {
   selectedProduct: StoreProduct | null;
@@ -116,7 +117,7 @@ export function OrderModal({
   React.useEffect(() => {
     async function loadBankInfo() {
       try {
-        const res = await fetch('/api/settings?key=my_company_profile');
+        const res = await apiFetch('/api/settings?key=my_company_profile');
         const data = await res.json();
         if (data.success && data.value) {
           const parsed = JSON.parse(data.value);
