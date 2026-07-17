@@ -568,7 +568,7 @@ export default function EmployeeManagementTabContent() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center justify-center gap-1 px-4.5 py-2 bg-indigo-650 hover:bg-indigo-755 text-white rounded-xl text-xs font-black border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition-colors"
+                  className="flex items-center justify-center gap-1 px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition-colors"
                 >
                   <Check className="w-3.5 h-3.5 text-white" />
                   {isSubmitting ? "저장 중..." : "저장 완료"}
