@@ -205,6 +205,21 @@ export async function POST(req: Request) {
       status: isNewPartner ? '승인대기' : (status || '결제대기') // 💡 신규 B2B 주문 시 '승인대기' 처리
     }]);
 
+    // 1-2. 수주 내역 (crm_sales_orders, 받은 발주서 관리 대장 연동) 자동 생성
+    await insertRows('crm_sales_orders', [{
+      id: 'SO-' + id,
+      estimate_id: 'STORE',
+      client_order_no: id,
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      customer_manager: customerName,
+      status: isNewPartner ? 'REGISTERED' : 'CONFIRMED',
+      total_amount: Number(totalPrice) || 0,
+      order_date: data.orderDate || new Date().toISOString().split('T')[0],
+      created_at: nowStr,
+      tenant_id: tenantId
+    }]);
+
     // 2. 거래 내역 (crm_transactions) 자동 연동 생성
     await insertRows('crm_transactions', [{
       id: 'TX_' + id + '_' + Math.random().toString().slice(2, 6),
