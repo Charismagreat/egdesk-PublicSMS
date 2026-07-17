@@ -31,6 +31,7 @@ export default function EmployeeManagementTabContent() {
   const [formRole, setFormRole] = useState("EMPLOYEE");
   const [formEmpNumber, setFormEmpNumber] = useState("");
   const [formPhone, setFormPhone] = useState("");
+  const [formDepartment, setFormDepartment] = useState("");
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -96,6 +97,7 @@ export default function EmployeeManagementTabContent() {
     setFormRole("EMPLOYEE");
     setFormEmpNumber("");
     setFormPhone("");
+    setFormDepartment("");
     setFormError("");
     setIsModalOpen(true);
   };
@@ -108,6 +110,7 @@ export default function EmployeeManagementTabContent() {
     setFormRole(emp.role);
     setFormEmpNumber(emp.employee_number || "");
     setFormPhone(emp.phone || "");
+    setFormDepartment(emp.department || "");
     setFormError("");
     setIsModalOpen(true);
   };
@@ -127,6 +130,7 @@ export default function EmployeeManagementTabContent() {
       newRole: formRole,
       employee_number: formEmpNumber.trim(),
       phone: formPhone.trim(),
+      department: formDepartment.trim(),
     };
 
     if (isEdit) {
@@ -205,7 +209,8 @@ export default function EmployeeManagementTabContent() {
       emp.name.toLowerCase().includes(term) ||
       emp.username.toLowerCase().includes(term) ||
       (emp.employee_number || "").toLowerCase().includes(term) ||
-      (emp.phone || "").includes(term)
+      (emp.phone || "").includes(term) ||
+      (emp.department || "").toLowerCase().includes(term)
     );
   });
 
@@ -316,6 +321,7 @@ export default function EmployeeManagementTabContent() {
                     <th className="py-3.5 px-4">성명</th>
                     <th className="py-3.5 px-4">아이디</th>
                     <th className="py-3.5 px-4 w-32">권한 등급</th>
+                    <th className="py-3.5 px-4 w-32">부서</th>
                     <th className="py-3.5 px-4">전화번호</th>
                     <th className="py-3.5 px-4 w-40">등록일</th>
                     <th className="py-3.5 px-4 text-right w-28">관리</th>
@@ -357,6 +363,7 @@ export default function EmployeeManagementTabContent() {
                             </span>
                           )}
                         </td>
+                        <td className="py-3.5 px-4 font-semibold text-slate-700">{emp.department || "-"}</td>
                         <td className="py-3.5 px-4 font-mono text-slate-600 font-semibold">{emp.phone || "-"}</td>
                         <td className="py-3.5 px-4 text-slate-400 text-[10px] font-semibold">
                           {emp.created_at ? new Date(emp.created_at).toLocaleString() : "-"}
@@ -519,6 +526,18 @@ export default function EmployeeManagementTabContent() {
                   placeholder="실명 입력"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                />
+              </div>
+
+              {/* 부서명 입력 */}
+              <div>
+                <label className="block text-xs font-extrabold text-slate-600 mb-1.5">부서명</label>
+                <input
+                  type="text"
+                  placeholder="예: 영업부, 개발팀 등"
+                  value={formDepartment}
+                  onChange={(e) => setFormDepartment(e.target.value)}
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                 />
               </div>

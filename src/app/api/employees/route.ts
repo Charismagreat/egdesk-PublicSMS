@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
-    const { username, password, name, newRole, employee_number, phone } = await req.json();
+    const { username, password, name, newRole, employee_number, phone, department } = await req.json();
 
     if (!username || !password || !name) {
       return NextResponse.json({ success: false, error: '모든 필드를 입력해주세요.' }, { status: 400 });
@@ -110,6 +110,7 @@ export async function POST(req: Request) {
       role: newRole || 'EMPLOYEE',
       employee_number: finalEmpNumber,
       phone: (phone || '').trim(),
+      department: (department || '').trim(),
       created_at: dateStr,
       tenant_id: tenantId
     }]);
@@ -206,7 +207,7 @@ export async function PUT(req: Request) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
-    const { id, password, name, newRole, employee_number, phone } = await req.json();
+    const { id, password, name, newRole, employee_number, phone, department } = await req.json();
 
     if (!id || !name) {
       return NextResponse.json({ success: false, error: '필수 항목(id, 이름)이 누락되었습니다.' }, { status: 400 });
@@ -252,7 +253,8 @@ export async function PUT(req: Request) {
       name,
       role: newRole || currentOp.role,
       employee_number: finalEmpNumber,
-      phone: phone !== undefined ? (phone || '').trim() : currentOp.phone
+      phone: phone !== undefined ? (phone || '').trim() : currentOp.phone,
+      department: department !== undefined ? (department || '').trim() : currentOp.department
     };
 
     // 비밀번호 변경 입력 시 해싱

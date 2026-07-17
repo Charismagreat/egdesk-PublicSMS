@@ -172,6 +172,7 @@ export const COLUMN_DEFINITIONS = {
     { name: 'role', type: 'TEXT', notNull: true },
     { name: 'employee_number', type: 'TEXT' },
     { name: 'phone', type: 'TEXT' },
+    { name: 'department', type: 'TEXT' },
     { name: 'my_card_image_url', type: 'TEXT' },
     { name: 'created_at', type: 'TEXT' },
     { name: 'uuid', type: 'TEXT' },
