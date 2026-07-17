@@ -39,18 +39,22 @@ export async function GET(request: Request) {
       console.warn('[Self-Healing Warning] Failed to run tenant migration in inventory:', patchErr.message);
     }
 
-    // In-app migration: 기존의 자재/제품/material/product 명칭을 표준 명칭으로 보정
+    // In-app migration: 기존의 자재/제품/material/product 명칭을 표준 명칭으로 보정 (while 루프 반복 분할 보정)
     try {
-      const migMatRes = await executeSQL(`SELECT id FROM inventory_items WHERE type IN ('자재', 'material', '원자재') AND tenant_id = '${tenantId}' LIMIT 1000`);
-      const migMatRows = migMatRes.rows || [];
-      if (migMatRows.length > 0) {
+      while (true) {
+        const migMatRes = await executeSQL(`SELECT id FROM inventory_items WHERE type IN ('자재', 'material', '원자재') AND tenant_id = '${tenantId}' LIMIT 1000`);
+        const migMatRows = migMatRes.rows || [];
+        if (migMatRows.length === 0) break;
         await updateRows('inventory_items', { type: '원부자재' }, { ids: migMatRows.map((r: any) => Number(r.id)) });
+        if (migMatRows.length < 1000) break;
       }
 
-      const migProdRes = await executeSQL(`SELECT id FROM inventory_items WHERE type IN ('제품', 'product') AND tenant_id = '${tenantId}' LIMIT 1000`);
-      const migProdRows = migProdRes.rows || [];
-      if (migProdRows.length > 0) {
+      while (true) {
+        const migProdRes = await executeSQL(`SELECT id FROM inventory_items WHERE type IN ('제품', 'product') AND tenant_id = '${tenantId}' LIMIT 1000`);
+        const migProdRows = migProdRes.rows || [];
+        if (migProdRows.length === 0) break;
         await updateRows('inventory_items', { type: '완제품' }, { ids: migProdRows.map((r: any) => Number(r.id)) });
+        if (migProdRows.length < 1000) break;
       }
     } catch (migErr) {
       console.warn('[Migration Warning] Failed to run type normalization:', migErr);
