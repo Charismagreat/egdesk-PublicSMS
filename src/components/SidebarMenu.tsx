@@ -9,7 +9,7 @@ import {
   ClipboardList, CreditCard, CalendarDays, Truck, Send, 
   PackageSearch, Package, UserCog, Zap, Ticket, Landmark, Globe, Briefcase, HelpCircle,
   ArrowRightLeft, Handshake, Sparkles, Coins, Database, Compass, Shield, CheckSquare, Wrench, ShieldAlert, Award, Scale, Key, Mail, Eye, EyeOff,
-  GripVertical, Activity, Smartphone, Mic, Bot
+  GripVertical, Activity, Smartphone, Mic, Bot, LayoutDashboard
 } from "lucide-react";
 
 import { MENU_STATIC_MAP } from '@/lib/menu-metadata';
@@ -446,6 +446,18 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
             <span>회원 관리</span>
           </Link>
         )}
+
+        <Link
+          href="/"
+          className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+            isActive("/")
+              ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
+              : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
+          }`}
+        >
+          <LayoutDashboard className={`w-5 h-5 shrink-0 ${isActive("/") ? "text-white" : "text-blue-550"}`} />
+          <span>대시보드</span>
+        </Link>
 
         {(userRole === "SUPER_ADMIN" || userRole === "SUB_OPERATOR") && (
           <Link
