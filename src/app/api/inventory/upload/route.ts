@@ -41,6 +41,10 @@ export async function POST(request: Request) {
     let updatedCount = 0;
     const createdAtStr = new Date().toISOString();
 
+    const insertDataList: any[] = [];
+    const updateDataList: any[] = [];
+    const tempInsertMap = new Map<string, any>();
+
     for (const item of items) {
       const name = item.name ? String(item.name).trim() : '';
       const type = item.type === 'product' ? 'product' : 'material';
@@ -79,81 +83,112 @@ export async function POST(request: Request) {
       const existingId = !isInvalidBarcode ? barcodeMap.get(cleanBarcode) : undefined;
       
       if (existingId) {
-        // ⚡ 이미 존재하는 바코드가 기입된 품목인 경우, 엑셀에 명시된 원래의 정보(단위, 스펙, 단가 등)로 일괄 덮어쓰기 업데이트!
-        const updatePayload = {
+        // ⚡ 이미 존재하는 바코드가 기입된 품목인 경우, 업데이트 리스트로 분리
+        updateDataList.push({
+          id: existingId,
+          payload: {
+            price,
+            partner,
+            location,
+            spec,
+            unitType,
+            unitValue,
+            boxContains,
+            description,
+            tags: item.tags?.trim() || (type === 'product' ? '판매중' : '사용중')
+          },
+          rawItem: {
+            id: existingId,
+            type,
+            name,
+            price,
+            category,
+            description
+          }
+        });
+        updatedCount++;
+      } else {
+        // ⚡ 신규 삽입 대상 품목 생성
+        const insertPayload = {
+          tenant_id: tenantId,
+          type,
+          name,
+          category,
           price,
           partner,
+          stock,
+          safeStock,
           location,
           spec,
           unitType,
           unitValue,
           boxContains,
           description,
-          tags: item.tags?.trim() || (type === 'product' ? '판매중' : '사용중')
-        };
-        await updateRows('inventory_items', updatePayload, { ids: [existingId] });
-
-        // 완제품 상품 동기화
-        await syncInventoryToProduct({
-          id: existingId,
-          type,
-          name,
-          category,
-          ...updatePayload
-        }, 'UPDATE');
-
-        updatedCount++;
-        continue;
-      }
-
-      // 품목 신규 삽입 실행
-      const insertData = {
-        tenant_id: tenantId,
-        type,
-        name,
-        category,
-        price,
-        partner,
-        stock,
-        safeStock,
-        location,
-        spec,
-        unitType,
-        unitValue,
-        boxContains,
-        description,
-        tags: item.tags?.trim() || (type === 'product' ? '판매중' : '사용중'),
-        barcode: item.barcode?.trim() || '',
-        createdAt: createdAtStr
-      };
-
-      await insertRows('inventory_items', [insertData]);
-      insertedCount++;
-
-      // 방금 등록된 ID 획득
-      const maxIdRes = await executeSQL('SELECT MAX(id) as maxId FROM inventory_items');
-      const insertedId = maxIdRes.rows?.[0]?.maxId || 0;
-
-      // 완제품 상품 동기화
-      await syncInventoryToProduct({
-        id: insertedId,
-        ...insertData
-      }, 'INSERT');
-
-      // 최초 재고가 0보다 큰 경우, 변동 로그 함께 생성
-      if (stock > 0) {
-        const logData = {
-          itemId: insertedId,
-          itemName: name,
-          itemType: type,
-          changeType: 'in',
-          quantity: stock,
-          price,
-          operator: '시스템 (일괄 등록)',
-          note: '최초 기초 재고 등록',
+          tags: item.tags?.trim() || (type === 'product' ? '판매중' : '사용중'),
+          barcode: isInvalidBarcode ? '' : cleanBarcode,
           createdAt: createdAtStr
         };
-        await insertRows('inventory_logs', [logData]);
+
+        if (!isInvalidBarcode && tempInsertMap.has(cleanBarcode)) {
+          // 엑셀 파일 내 자체 중복이 존재하는 경우 -> 이전 객체를 최종 엑셀 정보로 덮어씀 (메모리상 병합)
+          const existingRef = tempInsertMap.get(cleanBarcode);
+          Object.assign(existingRef, insertPayload);
+        } else {
+          insertDataList.push(insertPayload);
+          if (!isInvalidBarcode) {
+            tempInsertMap.set(cleanBarcode, insertPayload);
+          }
+        }
+      }
+    }
+
+    // 1. 대량 삽입 실행 (Bulk Insert)
+    if (insertDataList.length > 0) {
+      await insertRows('inventory_items', insertDataList);
+      insertedCount = insertDataList.length;
+
+      // 방금 삽입 완료한 데이터의 자동 생성 ID 획득을 위해 신규 삽입 목록 다시 조회
+      try {
+        const newlyInsertedRes = await executeSQL(`SELECT id, type, name, price, category, description, stock FROM inventory_items WHERE tenant_id = '${tenantId}' AND createdAt = '${createdAtStr}'`);
+        const newlyInsertedRows = newlyInsertedRes.rows || [];
+
+        const logDataList: any[] = [];
+        for (const row of newlyInsertedRows) {
+          const insertedId = Number(row.id);
+          
+          // 완제품 상품 동기화 실행
+          await syncInventoryToProduct(row, 'INSERT');
+
+          // 최초 재고가 0보다 큰 경우, 변동 로그 리스트에 추가
+          if (Number(row.stock) > 0) {
+            logDataList.push({
+              itemId: insertedId,
+              itemName: row.name,
+              itemType: row.type,
+              changeType: 'in',
+              quantity: Number(row.stock),
+              price: Number(row.price) || 0,
+              operator: '시스템 (일괄 등록)',
+              note: '최초 기초 재고 등록',
+              createdAt: createdAtStr
+            });
+          }
+        }
+
+        // 변동 로그 대량 삽입
+        if (logDataList.length > 0) {
+          await insertRows('inventory_logs', logDataList);
+        }
+      } catch (syncErr) {
+        console.error('신규 일괄 삽입 품목의 동기화 및 로그 등록 오류:', syncErr);
+      }
+    }
+
+    // 2. 대량 업데이트 실행
+    if (updateDataList.length > 0) {
+      for (const itemToUpdate of updateDataList) {
+        await updateRows('inventory_items', itemToUpdate.payload, { ids: [itemToUpdate.id] });
+        await syncInventoryToProduct(itemToUpdate.rawItem, 'UPDATE');
       }
     }
 
