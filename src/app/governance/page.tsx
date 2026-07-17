@@ -5,18 +5,18 @@ import React, { useState, useEffect, useCallback } from "react";
 import { 
   ShieldAlert, Activity, CheckCircle2, AlertTriangle, 
   RotateCcw, RefreshCw, Trash2, ArrowRightLeft, ShieldCheck, 
-  HelpCircle, Sparkles, User, Clock, ToggleLeft, ToggleRight
+  Sparkles, User, Clock, ToggleLeft, ToggleRight, ListTodo,
+  ExternalLink, FileText, ChevronRight, X, Loader2, CheckSquare, Square
 } from "lucide-react";
 
-interface GovernanceLog {
+interface ControlEvent {
   id: string;
-  doc_type: string;
-  doc_id: string;
-  doc_title: string;
-  status: 'PENDING_APPROVAL' | 'FORCE_APPROVED' | 'RESTORED';
-  reason: string;
-  operator: string;
+  type: 'STORE_ORDER' | 'RAG_HOLD' | 'LOW_STOCK';
+  title: string;
+  subtitle: string;
+  status: 'WAITING' | 'RESOLVED';
   created_at: string;
+  data: any;
 }
 
 interface DeletedItem {
@@ -29,14 +29,27 @@ interface DeletedItem {
   deleted_by: string;
 }
 
+interface ActionRecommendation {
+  code: string;
+  label: string;
+  description: string;
+}
+
 export default function GovernanceDashboard() {
-  const [logs, setLogs] = useState<GovernanceLog[]>([]);
+  const [events, setEvents] = useState<ControlEvent[]>([]);
   const [deletedItems, setDeletedItems] = useState<DeletedItem[]>([]);
   const [ocrEnabled, setOcrEnabled] = useState<boolean>(true);
+  
+  const [activeTab, setActiveTab] = useState<'WAITING' | 'RESOLVED' | 'RESTORE'>('WAITING');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  // 모달 제어 상태
+  const [selectedEvent, setSelectedEvent] = useState<ControlEvent | null>(null);
+  const [selectedActions, setSelectedActions] = useState<string[]>([]);
+  const [actionReports, setActionReports] = useState<{ action: string; success: boolean; detail: string }[] | null>(null);
+  const [isExecuting, setIsExecuting] = useState<boolean>(false);
 
   // 1. 전체 데이터 로드
   const loadData = useCallback(async () => {
@@ -50,11 +63,11 @@ export default function GovernanceDashboard() {
         setOcrEnabled(toggleData.enabled);
       }
 
-      // 1.2. 감사 로그 조회
-      const logsRes = await apiFetch("/api/governance?action=logs");
-      const logsData = await logsRes.json();
-      if (logsData.success) {
-        setLogs(logsData.logs || []);
+      // 1.2. 통합 관제 피드 조회
+      const eventsRes = await apiFetch("/api/governance?action=events");
+      const eventsData = await eventsRes.json();
+      if (eventsData.success) {
+        setEvents(eventsData.events || []);
       }
 
       // 1.3. 소프트 삭제 건 조회
@@ -98,38 +111,32 @@ export default function GovernanceDashboard() {
     }
   };
 
-  // 3. 결재 보류 건 최고관리자 강제 삭제 승인
-  const handleForceDelete = async (log: GovernanceLog) => {
-    if (!window.confirm(`⚠️ 정말로 해당 ${log.doc_type === 'estimate' ? '견적서' : log.doc_type === 'purchase_order' ? '발주서' : '수주서'} [${log.doc_id}]의 삭제를 강제 승인하시겠습니까?\n이 작업은 되돌릴 수 없으며 대장에서 완전히 삭제 처리됩니다.`)) {
+  // 3. 감사 로그 전체 초기화
+  const handleClearLogs = async () => {
+    if (!window.confirm("⚠️ 정말로 누적된 실시간 AI 결재 심사 이력(감사 로그)을 전체 초기화하시겠습니까?\n이 작업은 감사 데이터를 비우는 영구적 작업이며, 복구할 수 없습니다.")) {
       return;
     }
-    
+
     setIsProcessing(true);
     try {
-      const res = await apiFetch("/api/governance?action=force_delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          logId: log.id,
-          docType: log.doc_type,
-          docId: log.doc_id
-        })
+      const res = await apiFetch("/api/governance?action=clear_logs", {
+        method: "POST"
       });
       const data = await res.json();
       if (data.success) {
-        alert("성공적으로 강제 삭제 승인되었습니다.");
+        alert("감사 로그 데이터가 성공적으로 초기화되었습니다.");
         loadData();
       } else {
-        alert("강제 삭제 처리에 실패했습니다: " + data.error);
+        alert("초기화 실패: " + data.error);
       }
     } catch (err) {
-      alert("강제 삭제 처리 중 오류가 발생했습니다.");
+      alert("초기화 중 오류가 발생했습니다.");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // 4. 소프트 삭제된 대장 데이터 복원
+  // 4. 소프트 삭제 복원
   const handleRestore = async (item: DeletedItem) => {
     if (!window.confirm(`정말로 해당 ${item.doc_type === 'estimate' ? '견적서' : item.doc_type === 'purchase_order' ? '발주서' : '수주서'} [${item.id}]를 대장으로 성공적으로 복원하시겠습니까?`)) {
       return;
@@ -159,30 +166,102 @@ export default function GovernanceDashboard() {
     }
   };
 
-  // 5. 감사 이력 전체 초기화
-  const handleClearLogs = async () => {
-    if (!window.confirm("⚠️ 정말로 누적된 실시간 AI 결재 심사 이력(감사 로그)을 전체 초기화하시겠습니까?\n이 작업은 감사 데이터를 비우는 영구적 작업이며, 복구할 수 없습니다.")) {
+  // 5. 모달 제어 및 추천 액션 목록 획득
+  const getRecommendedActions = (type: 'STORE_ORDER' | 'RAG_HOLD' | 'LOW_STOCK'): ActionRecommendation[] => {
+    switch (type) {
+      case 'STORE_ORDER':
+        return [
+          { code: 'check_inventory', label: '해당 상품의 실시간 재고 파악', description: '물류 재고 원장과 대조하여 요청 수량이 정상적으로 확보되어 출고가 가능한지 검증합니다.' },
+          { code: 'sync_sales_order', label: '수주 대장(crm_sales_orders) 자동 연동 적재', description: 'B2B 주문 건에 대해 즉각적인 받은 발주 관리 대장(수주서)을 연동 작성합니다.' },
+          { code: 'create_delivery', label: '배송 대장(crm_deliveries) 출고대기 자율 등록', description: '배송을 위해 출고준비 상태로 물류 라우팅 테이블에 주입합니다.' },
+          { code: 'send_sms_alert', label: '재고 고갈 우려 시 물류 직원 긴급 알림 문자 발송', description: '출고 담당 직원 번호로 자율 대행 경고 문자를 즉시 전송합니다.' },
+          { code: 'notify_operator', label: '조치 이력 영구 감사 아카이빙', description: '최고관리자의 개입 이력을 통제 감사록에 상세 기록합니다.' }
+        ];
+      case 'RAG_HOLD':
+        return [
+          { code: 'force_delete', label: 'RAG 삭제 가드 임시 우회 및 강제 삭제 최종 승인', description: '보안 내규 상 제한 조치된 문서 삭제 건을 최고관리자 최종 권한으로 소프트 삭제 처리합니다.' },
+          { code: 'notify_operator', label: '최초 조작 신청 임직원에게 처리 통보', description: '강제 승인 결과를 시스템 알림 피드로 피드백합니다.' },
+          { code: 'notify_operator', label: '조치 이력 영구 감사 아카이빙', description: '최고관리자의 개입 이력을 통제 감사록에 상세 기록합니다.' }
+        ];
+      case 'LOW_STOCK':
+        return [
+          { code: 'sms_low_stock', label: '창고 및 자재 조달 담당 직원 긴급 경고 문자 발송', description: '안전재고가 고갈되어 위험 상태임을 구매 담당자에게 문자 전송합니다.' },
+          { code: 'notify_operator', label: '조치 이력 영구 감사 아카이빙', description: '최고관리자의 개입 이력을 통제 감사록에 상세 기록합니다.' }
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const handleOpenDetail = (evt: ControlEvent) => {
+    setSelectedEvent(evt);
+    setActionReports(null);
+    const defaults = getRecommendedActions(evt.type).map(a => a.code);
+    setSelectedActions(defaults); // 기본값 전체 선택
+  };
+
+  const handleCloseDetail = () => {
+    setSelectedEvent(null);
+    setActionReports(null);
+    setSelectedActions([]);
+  };
+
+  const toggleActionSelection = (code: string) => {
+    if (selectedActions.includes(code)) {
+      setSelectedActions(prev => prev.filter(c => c !== code));
+    } else {
+      setSelectedActions(prev => [...prev, code]);
+    }
+  };
+
+  // 6. AI 추천 자율 대행 액션 실행 전송
+  const handleExecuteActions = async () => {
+    if (!selectedEvent) return;
+    if (selectedActions.length === 0) {
+      alert("최소 하나 이상의 자율 대행 작업을 선택해 주세요.");
       return;
     }
 
-    setIsProcessing(true);
+    setIsExecuting(true);
+    setActionReports(null);
+
     try {
-      const res = await apiFetch("/api/governance?action=clear_logs", {
-        method: "POST"
+      const payload: any = {
+        eventId: selectedEvent.id,
+        eventType: selectedEvent.type,
+        actions: selectedActions,
+        originalData: selectedEvent.data
+      };
+
+      if (selectedEvent.type === 'RAG_HOLD') {
+        payload.docId = selectedEvent.data.doc_id;
+        payload.docType = selectedEvent.data.doc_type;
+      }
+
+      const res = await apiFetch("/api/governance?action=execute_actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
+      
       if (data.success) {
-        alert("감사 로그 데이터가 성공적으로 초기화되었습니다.");
-        loadData();
+        setActionReports(data.reports || []);
       } else {
-        alert("초기화 실패: " + data.error);
+        alert("작업 수행에 실패했습니다: " + data.error);
       }
     } catch (err) {
-      alert("초기화 중 오류가 발생했습니다.");
+      alert("작업 처리 중 통신 에러가 발생했습니다.");
     } finally {
-      setIsProcessing(false);
+      setIsExecuting(false);
     }
   };
+
+  // 해결되지 않은 대기 피드와 완료 피드 분기
+  const filteredEvents = events.filter(e => {
+    if (activeTab === 'RESTORE') return false;
+    return e.status === activeTab;
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 md:px-8 font-sans text-left">
@@ -196,7 +275,7 @@ export default function GovernanceDashboard() {
               <span>AI 컨트롤타워 관제 센터</span>
             </h1>
             <p className="text-slate-500 mt-2 text-sm pl-10">
-              사내 비즈니스 트랜잭션의 AI 자율 대행 가드, RAG 보류 수동 결재 및 소프트 삭제 원장 복원을 통합 제어합니다.
+              실시간 비즈니스 이벤트 피드를 모니터링하고, AI 추천 조치 시나리오를 자율 실행하여 사내 거버넌스를 완벽 제어합니다.
             </p>
           </div>
           <div className="flex items-center gap-2 pl-10 md:pl-0">
@@ -218,6 +297,14 @@ export default function GovernanceDashboard() {
             </button>
           </div>
         </div>
+
+        {/* 에러 표시 배너 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl flex items-center gap-3 animate-fade-in text-sm font-semibold">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {/* 🎨 AI 컨트롤타워 개념 및 운영 원칙 가이드 카드 */}
         <div className="bg-gradient-to-r from-slate-50 to-indigo-50/30 border border-slate-200/80 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row gap-6 items-start md:items-center relative overflow-hidden">
@@ -243,14 +330,6 @@ export default function GovernanceDashboard() {
             </div>
           </div>
         </div>
-
-        {/* 에러 표시 배너 */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl flex items-center gap-3 animate-fade-in text-sm font-semibold">
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
 
         {/* 1구역: 이미지 OCR 자율 대행 가드 스위치 */}
         <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
@@ -283,193 +362,359 @@ export default function GovernanceDashboard() {
           </div>
         </div>
 
-        {/* 2구역: 2컬럼 메인 관제 보드 */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          
-          {/* 좌측: AI 결재 심사 보류 대장 */}
-          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs flex flex-col min-h-[450px]">
-            <div className="border-b border-slate-100 pb-4 mb-4 flex justify-between items-center">
-              <div>
-                <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
-                  <Activity className="w-4 h-4 text-rose-500" />
-                  <span>AI 결재 심사 감사록</span>
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-1"> RAG에 의해 자동 보류되어 관리자 결재를 대기 중인 트랜잭션 감사 정보</p>
-              </div>
-              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full shrink-0">
-                총 {logs.length}건
-              </span>
-            </div>
+        {/* 2구역: 세련된 탭 컨트롤러 */}
+        <div className="flex gap-2 border-b border-slate-200 pb-px">
+          <button
+            onClick={() => setActiveTab('WAITING')}
+            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all cursor-pointer ${
+              activeTab === 'WAITING' 
+                ? 'border-indigo-650 text-indigo-650 font-black' 
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            미해결 건 ({events.filter(e => e.status === 'WAITING').length})
+          </button>
+          <button
+            onClick={() => setActiveTab('RESOLVED')}
+            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all cursor-pointer ${
+              activeTab === 'RESOLVED' 
+                ? 'border-indigo-650 text-indigo-650 font-black' 
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            해결 완료 건 ({events.filter(e => e.status === 'RESOLVED').length})
+          </button>
+          <button
+            onClick={() => setActiveTab('RESTORE')}
+            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all cursor-pointer ${
+              activeTab === 'RESTORE' 
+                ? 'border-indigo-650 text-indigo-650 font-black' 
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            삭제 데이터 복원 ({deletedItems.length})
+          </button>
+        </div>
 
-            {isLoading ? (
-              <div className="flex-1 flex flex-col justify-center items-center py-12">
-                <div className="w-7 h-7 border-3 border-rose-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <span className="text-xs text-slate-400 font-bold">감사록 로딩 중...</span>
-              </div>
-            ) : logs.length === 0 ? (
-              <div className="flex-1 flex flex-col justify-center items-center py-12 text-center text-slate-400">
-                <ShieldCheck className="w-12 h-12 text-slate-300 mb-3" />
-                <span className="text-xs font-bold">보류되거나 누적된 결재 심사 이력이 없습니다.</span>
+        {/* 3구역: 메인 콘텐츠 리스트 게시판 */}
+        <div className="space-y-4 min-h-[400px]">
+          {isLoading ? (
+            <div className="py-24 flex flex-col justify-center items-center">
+              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
+              <span className="text-xs text-slate-400 font-bold">실시간 비즈니스 이벤트 로드 중...</span>
+            </div>
+          ) : activeTab === 'RESTORE' ? (
+            // 💡 삭제 데이터 복원 대장
+            deletedItems.length === 0 ? (
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 shadow-xs">
+                <ShieldCheck className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                <span className="text-xs font-bold block">소프트 삭제되어 격리 보관 중인 대장 원장이 없습니다.</span>
               </div>
             ) : (
-              <div className="flex-1 overflow-x-auto">
-                <table className="w-full text-xs text-left text-slate-600 whitespace-nowrap">
-                  <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
-                    <tr>
-                      <th className="p-3">문서 정보</th>
-                      <th className="p-3 text-center">결재 판정</th>
-                      <th className="p-3">검증 이력 / 세부 내역</th>
-                      <th className="p-3">조작자</th>
-                      <th className="p-3 text-right">관리</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {logs.map((log) => {
-                      const isPending = log.status === 'PENDING_APPROVAL';
-                      return (
-                        <tr key={log.id} className="hover:bg-slate-50/50">
-                          <td className="p-3">
-                            <div className="font-bold text-slate-800">{log.doc_title}</div>
-                            <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
-                              <span className="uppercase font-extrabold text-[9px] bg-slate-100 px-1 rounded-sm text-slate-600">
-                                {log.doc_type}
-                              </span>
-                              <span>•</span>
-                              <span>ID: {log.doc_id}</span>
-                            </div>
-                          </td>
-                          <td className="p-3 text-center">
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              log.status === 'PENDING_APPROVAL' 
-                                ? 'bg-amber-50 text-amber-700 border border-amber-250/30' 
-                                : log.status === 'FORCE_APPROVED' 
-                                  ? 'bg-rose-50 text-rose-700 border border-rose-250/30'
-                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-250/30'
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {deletedItems.map((item) => (
+                  <div key={`${item.doc_type}_${item.id}`} className="bg-white border border-slate-200/85 hover:border-slate-300 rounded-3xl p-5 shadow-xs flex justify-between items-center transition-all hover:shadow-md">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                          item.doc_type === 'estimate' ? 'bg-indigo-50 text-indigo-700' : item.doc_type === 'purchase_order' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+                        }`}>
+                          {item.doc_type === 'estimate' ? '견적' : item.doc_type === 'purchase_order' ? '발주' : '수주'}
+                        </span>
+                        <span className="font-bold text-slate-800">{item.id}</span>
+                      </div>
+                      <div className="text-xs font-bold text-slate-600">
+                        거래처: {item.customer_name || item.partner_name || "미지정"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        금액: {item.total_amount ? `${item.total_amount.toLocaleString()}원` : "0원"}
+                      </div>
+                      <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <span>삭제자: {item.deleted_by}</span>
+                        <span>•</span>
+                        <span>삭제일시: {item.deleted_at}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRestore(item)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs border-none cursor-pointer flex items-center gap-1 transition-colors shadow-xs"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>원장 복원</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : (
+            // 💡 실시간 관제 이벤트 피드 게시판
+            filteredEvents.length === 0 ? (
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 shadow-xs">
+                <ShieldCheck className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                <span className="text-xs font-bold block">조회가 활성화된 관제 알림이 비어 있습니다.</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredEvents.map((evt) => {
+                  return (
+                    <div 
+                      key={evt.id}
+                      onClick={() => handleOpenDetail(evt)}
+                      className="bg-white border border-slate-200/85 hover:border-indigo-200 hover:bg-indigo-50/10 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all hover:shadow-md cursor-pointer group"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className={`p-3 rounded-2xl shrink-0 ${
+                          evt.type === 'STORE_ORDER' 
+                            ? 'bg-blue-50 text-blue-650' 
+                            : evt.type === 'RAG_HOLD' 
+                              ? 'bg-rose-50 text-rose-600' 
+                              : 'bg-amber-50 text-amber-600'
+                        }`}>
+                          {evt.type === 'STORE_ORDER' && <FileText className="w-6 h-6" />}
+                          {evt.type === 'RAG_HOLD' && <ShieldAlert className="w-6 h-6 animate-pulse" />}
+                          {evt.type === 'LOW_STOCK' && <AlertTriangle className="w-6 h-6" />}
+                        </div>
+                        <div className="space-y-1 text-left">
+                          <div className="flex items-center flex-wrap gap-2">
+                            <span className="text-sm font-black text-slate-800">{evt.title}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                              evt.type === 'STORE_ORDER' 
+                                ? 'bg-blue-50 text-blue-700' 
+                                : evt.type === 'RAG_HOLD' 
+                                  ? 'bg-rose-50 text-rose-700' 
+                                  : 'bg-amber-50 text-amber-700'
                             }`}>
-                              {log.status === 'PENDING_APPROVAL' ? '승인대기(RAG 보류)' : log.status === 'FORCE_APPROVED' ? '강제승인' : '복원됨'}
+                              {evt.type === 'STORE_ORDER' ? '스토어 주문' : evt.type === 'RAG_HOLD' ? 'AI 결재 보류' : '재고 부족 경보'}
                             </span>
-                          </td>
-                          <td className="p-3 max-w-xs truncate" title={log.reason}>
-                            <span className="text-[11px] text-slate-500 font-semibold">{log.reason}</span>
-                          </td>
-                          <td className="p-3 text-slate-500 font-semibold">
-                            <div className="flex items-center gap-1">
-                              <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              <span>{log.operator || "system"}</span>
-                            </div>
-                          </td>
-                          <td className="p-3 text-right">
-                            {isPending && (
-                              <button
-                                onClick={() => handleForceDelete(log)}
-                                className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-2.5 py-1 rounded-lg text-[10px] border-none cursor-pointer flex items-center gap-1.5 transition-colors ml-auto"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                <span>강제 삭제 승인</span>
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+                          </div>
+                          <p className="text-xs text-slate-500 font-semibold">{evt.subtitle}</p>
+                          <div className="text-[10px] text-slate-400 flex items-center gap-1.5 pt-1">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{evt.created_at}</span>
+                          </div>
+                        </div>
+                      </div>
 
-          {/* 우측: 소프트 삭제된 대장 데이터 복원 대장 */}
-          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs flex flex-col min-h-[450px]">
-            <div className="border-b border-slate-100 pb-4 mb-4 flex justify-between items-center">
-              <div>
-                <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
-                  <ArrowRightLeft className="w-4 h-4 text-emerald-500" />
-                  <span>소프트 삭제 원장 복원 센터</span>
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-1">대장에서 삭제 처리되어 보관 중인 견적서, 발주서, 수주서 데이터 관리</p>
+                      <div className="flex items-center gap-2 self-stretch md:self-auto justify-end">
+                        <span className="text-[11px] text-indigo-650 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                          <span>검토 및 다음 조치 수행</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full shrink-0">
-                총 {deletedItems.length}건
-              </span>
-            </div>
-
-            {isLoading ? (
-              <div className="flex-1 flex flex-col justify-center items-center py-12">
-                <div className="w-7 h-7 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <span className="text-xs text-slate-400 font-bold">삭제 원장 로딩 중...</span>
-              </div>
-            ) : deletedItems.length === 0 ? (
-              <div className="flex-1 flex flex-col justify-center items-center py-12 text-center text-slate-400">
-                <ShieldCheck className="w-12 h-12 text-slate-300 mb-3" />
-                <span className="text-xs font-bold">소프트 삭제 상태로 격리 보관 중인 원장 문서가 없습니다.</span>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-x-auto">
-                <table className="w-full text-xs text-left text-slate-600 whitespace-nowrap">
-                  <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
-                    <tr>
-                      <th className="p-3">문서 종류 / 번호</th>
-                      <th className="p-3">거래처 명</th>
-                      <th className="p-3 text-right">금액</th>
-                      <th className="p-3">삭제자 / 일시</th>
-                      <th className="p-3 text-right">복원</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {deletedItems.map((item) => {
-                      return (
-                        <tr key={`${item.doc_type}_${item.id}`} className="hover:bg-slate-50/50">
-                          <td className="p-3">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`inline-block px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase ${
-                                item.doc_type === 'estimate' 
-                                  ? 'bg-indigo-50 text-indigo-700' 
-                                  : item.doc_type === 'purchase_order' 
-                                    ? 'bg-amber-50 text-amber-700'
-                                    : 'bg-emerald-50 text-emerald-700'
-                              }`}>
-                                {item.doc_type === 'estimate' ? '견적' : item.doc_type === 'purchase' ? '발주' : '수주'}
-                              </span>
-                              <span className="font-bold text-slate-800">{item.id}</span>
-                            </div>
-                          </td>
-                          <td className="p-3 font-semibold text-slate-700">
-                            {item.customer_name || item.partner_name || "미지정"}
-                          </td>
-                          <td className="p-3 text-right font-bold text-slate-800">
-                            {item.total_amount ? `${item.total_amount.toLocaleString()}원` : "0원"}
-                          </td>
-                          <td className="p-3">
-                            <div className="font-semibold text-slate-500 flex items-center gap-1">
-                              <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              <span>{item.deleted_by || "system"}</span>
-                            </div>
-                            <div className="text-[9px] text-slate-400 mt-0.5 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span>{item.deleted_at}</span>
-                            </div>
-                          </td>
-                          <td className="p-3 text-right">
-                            <button
-                              onClick={() => handleRestore(item)}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded-lg text-[10px] border-none cursor-pointer flex items-center gap-1 transition-colors ml-auto shadow-xs"
-                            >
-                              <RotateCcw className="w-3 h-3" />
-                              <span>복원하기</span>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
+            )
+          )}
         </div>
 
       </div>
+
+      {/* 4구역: 자율 대행 조치 상세 팝업 모달 */}
+      {selectedEvent && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 animate-scale-in text-left">
+            
+            {/* 모달 헤더 */}
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-rose-500 animate-pulse" />
+                <h3 className="text-base font-black text-slate-800">AI 관제 원장 상세 검토</h3>
+              </div>
+              <button 
+                onClick={handleCloseDetail}
+                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors border-none bg-transparent cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 이벤트 속성 상세 테이블 */}
+            <div className="bg-slate-50/60 border border-slate-100 rounded-2xl p-4 space-y-3">
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">이벤트 데이터 명세</h4>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                <div>
+                  <span className="text-slate-400 font-semibold block">이벤트 ID</span>
+                  <span className="font-mono font-bold text-slate-800">{selectedEvent.id}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold block">발생 유형</span>
+                  <span className="font-bold text-slate-850">{selectedEvent.type}</span>
+                </div>
+                {selectedEvent.type === 'STORE_ORDER' && (
+                  <>
+                    <div className="col-span-2 border-t border-slate-100 my-1"></div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">주문 고객</span>
+                      <span className="font-bold text-slate-800">{selectedEvent.data.customer_name} ({selectedEvent.data.customer_phone})</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">주문 품목</span>
+                      <span className="font-bold text-slate-800">{selectedEvent.data.product_name} ({selectedEvent.data.quantity}개)</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">최종 결제 금액</span>
+                      <span className="font-bold text-slate-800">{Number(selectedEvent.data.total_price || 0).toLocaleString()}원</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">배송지 주소</span>
+                      <span className="font-bold text-slate-800 leading-relaxed">{selectedEvent.data.shipping_address || '직접 수령'}</span>
+                    </div>
+                    {selectedEvent.data.customer_memo && (
+                      <div className="col-span-2">
+                        <span className="text-slate-400 font-semibold block">고객 메모</span>
+                        <span className="font-semibold text-slate-700 whitespace-pre-wrap">{selectedEvent.data.customer_memo}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                {selectedEvent.type === 'RAG_HOLD' && (
+                  <>
+                    <div className="col-span-2 border-t border-slate-100 my-1"></div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">보류 문서 유형</span>
+                      <span className="font-bold text-slate-800 uppercase">{selectedEvent.data.doc_type}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">보류 대상 문서 ID</span>
+                      <span className="font-bold text-slate-800">{selectedEvent.data.doc_id}</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-slate-400 font-semibold block">AI 보류 사유 / 사내 내규 지침</span>
+                      <span className="font-semibold text-rose-600 bg-rose-50/50 p-2 rounded-lg block mt-1 leading-relaxed border border-rose-100">
+                        {selectedEvent.data.reason}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">신청 작업자</span>
+                      <span className="font-bold text-slate-800">{selectedEvent.data.operator || 'system'}</span>
+                    </div>
+                  </>
+                )}
+                {selectedEvent.type === 'LOW_STOCK' && (
+                  <>
+                    <div className="col-span-2 border-t border-slate-100 my-1"></div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">상품 코드</span>
+                      <span className="font-mono font-bold text-slate-800">{selectedEvent.data.barcode || `INV-${selectedEvent.data.id}`}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">상품 명</span>
+                      <span className="font-bold text-slate-850">{selectedEvent.data.name || selectedEvent.data.itemName}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">현재고 / 안전재고 한도</span>
+                      <span className="font-bold text-rose-600">{selectedEvent.data.quantity}개 / {selectedEvent.data.safety_stock || selectedEvent.data.safetyStock}개</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* AI 추천 자율 대행 액션 리스트 */}
+            {!actionReports && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-1.5">
+                  <ListTodo className="w-4 h-4 text-indigo-650" />
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">AI 추천 다음 작업 시나리오</h4>
+                </div>
+                <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-white">
+                  {getRecommendedActions(selectedEvent.type).map((act) => {
+                    const isSelected = selectedActions.includes(act.code);
+                    return (
+                      <div 
+                        key={act.code}
+                        onClick={() => toggleActionSelection(act.code)}
+                        className="p-4 flex gap-3 hover:bg-slate-50 cursor-pointer transition-colors text-left"
+                      >
+                        <div className="pt-0.5 shrink-0">
+                          {isSelected ? (
+                            <CheckSquare className="w-5 h-5 text-indigo-600" />
+                          ) : (
+                            <Square className="w-5 h-5 text-slate-300" />
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-xs font-bold text-slate-800 block">{act.label}</span>
+                          <span className="text-[11px] text-slate-400 font-medium leading-relaxed block">{act.description}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 작업 수행 결과 리포트 출력 */}
+            {actionReports && (
+              <div className="space-y-3 animate-fade-in">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">AI 자율 대행 수행 보고서</h4>
+                </div>
+                <div className="border border-slate-200 rounded-2xl divide-y divide-slate-100 bg-white overflow-hidden text-left">
+                  {actionReports.map((rep, idx) => (
+                    <div key={idx} className="p-4 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${rep.success ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`}></span>
+                        <span className="text-xs font-black text-slate-850 uppercase">{rep.action}</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-sm ${rep.success ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                          {rep.success ? "성공" : "실패"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-650 font-semibold pl-4 leading-relaxed">{rep.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 모달 푸터 버튼 */}
+            <div className="flex gap-3 justify-end pt-4 border-t border-slate-100">
+              <button
+                onClick={handleCloseDetail}
+                className="bg-white hover:bg-slate-50 text-slate-700 font-bold px-5 py-3 rounded-xl border border-slate-200 shadow-xs text-xs transition-colors cursor-pointer"
+              >
+                {actionReports ? "닫기 및 리프레시" : "검토 보류"}
+              </button>
+              
+              {!actionReports ? (
+                <button
+                  onClick={handleExecuteActions}
+                  disabled={isExecuting || selectedActions.length === 0}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold px-6 py-3 rounded-xl shadow-xs text-xs border-none cursor-pointer flex items-center gap-2 transition-all"
+                >
+                  {isExecuting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>AI 자율 대행 처리 중...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 animate-pulse" />
+                      <span>선택한 자율 작업 실행 ⚡</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    handleCloseDetail();
+                    loadData();
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl shadow-xs text-xs border-none cursor-pointer flex items-center gap-1.5 transition-all"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>최종 관제 완료 및 리스트업 갱신</span>
+                </button>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
