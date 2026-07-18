@@ -2870,7 +2870,7 @@ export default function MobileHubPage() {
                                         📎 {fileItem.content_text?.replace('[상신 첨부] ', '') || '첨부 파일'}
                                       </span>
                                       <button
-                                        onClick={() => window.open(`/api/shared/files?fileId=${fileItem.id}&tableName=crm_snaptask_items`, '_blank')}
+                                        onClick={() => window.open(`/api/shared/files?tableName=crm_snaptask_items&rowId=${fileItem.id}&columnName=file_url`, '_blank')}
                                         className="bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-lg text-[9px] border-none transition cursor-pointer active:scale-95 shadow-3xs"
                                       >
                                         파일 열기
@@ -2886,7 +2886,7 @@ export default function MobileHubPage() {
                                     📎 {item.content_text?.replace('[상신 첨부] ', '') || '첨부 파일'}
                                   </span>
                                   <button
-                                    onClick={() => window.open(`/api/shared/files?fileId=${item.id}&tableName=crm_snaptask_items`, '_blank')}
+                                    onClick={() => window.open(`/api/shared/files?tableName=crm_snaptask_items&rowId=${item.id}&columnName=file_url`, '_blank')}
                                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-lg text-[9px] border-none transition cursor-pointer active:scale-95 shadow-3xs"
                                   >
                                     파일 열기
