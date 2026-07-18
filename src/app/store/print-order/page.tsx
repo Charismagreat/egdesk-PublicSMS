@@ -287,14 +287,14 @@ function PrintOrderContent() {
         @media print {
           @page {
             size: A4 portrait;
-            margin: 15mm;
+            margin: 0; /* 💡 머리글/바닥글 인쇄를 강제 차단하기 위해 여백 영역을 0으로 설정 */
           }
           .no-print {
             display: none !important;
           }
           body {
             background-color: white !important;
-            padding: 0 !important;
+            padding: 15mm !important; /* 💡 가장자리 잘림 방지용 안전 여백 확보 */
             margin: 0 !important;
           }
         }
