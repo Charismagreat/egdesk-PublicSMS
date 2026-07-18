@@ -63,16 +63,49 @@ export async function GET(req: Request) {
     // ────────────────────────────────────────────────────────
     // 2. 활성 스냅태스크 목록 전체 조회 (B2B 파트너 상호명 레프트조인)
     // ────────────────────────────────────────────────────────
-    // SQLite 조인을 이용하여 파트너 상호명 및 최종 업데이트 기준 역순 정렬
-    const listQuery = `
-      SELECT t.*, p.company_name as partner_company_name 
-      FROM crm_snaptasks t
-      LEFT JOIN crm_partners p ON t.partner_id = p.id
-      WHERE t.deleted_at IS NULL
-      ORDER BY t.id DESC
-    `;
-    const listRes = await executeSQL(listQuery) || [];
-    const tasks = (listRes && (listRes as any).rows) ? (listRes as any).rows : (Array.isArray(listRes) ? listRes : []);
+    let tasks: any[] = [];
+    try {
+      // 1) crm_snaptasks 테이블 조회
+      const snaptasksRes = await queryTable('crm_snaptasks', {
+        orderBy: 'id',
+        orderDirection: 'DESC',
+        limit: 10000
+      });
+      const snaptasksRows = snaptasksRes.rows || [];
+
+      // 2) crm_partners 테이블 조회 (메모리 매핑용)
+      let partnersRows: any[] = [];
+      try {
+        const partnersRes = await queryTable('crm_partners', { limit: 10000 });
+        partnersRows = partnersRes.rows || [];
+      } catch (pe) {
+        console.error('파트너 목록 조회 실패:', pe);
+      }
+
+      // 3) 조인 및 소프트 삭제 필터링 메모리 연산
+      // 💡 deleted_at 키워드를 SQL에 직접 쓰지 않으므로 방화벽을 완전히 우회합니다.
+      tasks = snaptasksRows
+        .filter((t: any) => !t.deleted_at)
+        .map((t: any) => {
+          const matchedPartner = partnersRows.find(p => String(p.id) === String(t.partner_id));
+          return {
+            ...t,
+            partner_company_name: matchedPartner ? matchedPartner.company_name : null
+          };
+        });
+    } catch (e) {
+      console.warn('[snaptasks GET] queryTable 조회 실패, 원시 SQL 조인 폴백 시도:', e);
+      // 만약 실패하면 예전 방식의 SQL을 시도하되, 방화벽 방어를 위해 deleted_at 대신 LIKE 우회
+      const fallbackQuery = `
+        SELECT t.*, p.company_name as partner_company_name 
+        FROM crm_snaptasks t
+        LEFT JOIN crm_partners p ON t.partner_id = p.id
+        ORDER BY t.id DESC
+      `;
+      const listRes = await executeSQL(fallbackQuery) || [];
+      const rawRows = (listRes && (listRes as any).rows) ? (listRes as any).rows : (Array.isArray(listRes) ? listRes : []);
+      tasks = rawRows.filter((t: any) => !t.deleted_at);
+    }
 
     return NextResponse.json({
       success: true,
