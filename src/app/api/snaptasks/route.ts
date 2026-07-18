@@ -23,14 +23,22 @@ export async function GET(req: Request) {
       const task = taskRes.rows[0];
 
       // 타임라인 상세 이력 마이닝
-      const itemsQuery = `SELECT * FROM crm_snaptask_items WHERE task_id = '${taskId}' AND deleted_at IS NULL ORDER BY created_at ASC`;
-      const itemsRes = await executeSQL(itemsQuery) || [];
-      const items = (itemsRes && (itemsRes as any).rows) ? (itemsRes as any).rows : (Array.isArray(itemsRes) ? itemsRes : []);
+      const itemsRes = await queryTable('crm_snaptask_items', {
+        filters: { task_id: taskId },
+        orderBy: 'created_at',
+        orderDirection: 'ASC',
+        limit: 10000
+      });
+      const items = (itemsRes.rows || []).filter((item: any) => !item.deleted_at);
 
       // 자율 조치 감사 로그 마이닝
-      const actionsQuery = `SELECT * FROM crm_snaptask_actions WHERE task_id = '${taskId}' AND deleted_at IS NULL ORDER BY created_at ASC`;
-      const actionsRes = await executeSQL(actionsQuery) || [];
-      const actions = (actionsRes && (actionsRes as any).rows) ? (actionsRes as any).rows : (Array.isArray(actionsRes) ? actionsRes : []);
+      const actionsRes = await queryTable('crm_snaptask_actions', {
+        filters: { task_id: taskId },
+        orderBy: 'created_at',
+        orderDirection: 'ASC',
+        limit: 10000
+      });
+      const actions = (actionsRes.rows || []).filter((act: any) => !act.deleted_at);
 
       // 연동된 B2B 파트너 및 다중 담당자 명함첩 조회
       let partner = null;
@@ -42,9 +50,19 @@ export async function GET(req: Request) {
             partner = partnerRes.rows[0];
           }
 
-          const contactsQuery = `SELECT * FROM crm_partner_contacts WHERE partner_id = '${task.partner_id}' AND deleted_at IS NULL ORDER BY is_primary DESC, name ASC`;
-          const contactsRes = await executeSQL(contactsQuery) || [];
-          partnerContacts = (contactsRes && (contactsRes as any).rows) ? (contactsRes as any).rows : (Array.isArray(contactsRes) ? contactsRes : []);
+          const contactsRes = await queryTable('crm_partner_contacts', {
+            filters: { partner_id: task.partner_id },
+            limit: 10000
+          });
+          partnerContacts = (contactsRes.rows || [])
+            .filter((c: any) => !c.deleted_at)
+            .sort((a: any, b: any) => {
+              const primaryA = a.is_primary === true || a.is_primary === 1 || String(a.is_primary).toLowerCase() === 'true' ? 1 : 0;
+              const primaryB = b.is_primary === true || b.is_primary === 1 || String(b.is_primary).toLowerCase() === 'true' ? 1 : 0;
+              const primaryDiff = primaryB - primaryA;
+              if (primaryDiff !== 0) return primaryDiff;
+              return (a.name || '').localeCompare(b.name || '');
+            });
         } catch (e) {
           console.error('Failed to fetch partner or contacts details:', e);
         }
