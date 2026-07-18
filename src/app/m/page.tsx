@@ -812,28 +812,43 @@ export default function MobileHubPage() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (fileList && fileList.length > 0) {
+      alert(`[사진 감지] 총 ${fileList.length}개의 파일을 읽는 중입니다.`);
       const loadPromises = Array.from(fileList).map(file => {
-        return new Promise<PhotoAttached>((resolve) => {
+        return new Promise<PhotoAttached>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => {
-            resolve({
-              name: file.name,
-              size: `${(file.size / 1024).toFixed(1)} KB`,
-              preview: reader.result as string,
-              file: file
-            });
+            if (typeof reader.result === 'string') {
+              resolve({
+                name: file.name,
+                size: `${(file.size / 1024).toFixed(1)} KB`,
+                preview: reader.result,
+                file: file
+              });
+            } else {
+              reject(new Error("변환된 텍스트가 올바르지 않습니다."));
+            }
           };
-          reader.readAsDataURL(file);
+          reader.onerror = () => reject(reader.error || new Error("파일 읽기 에러 발생"));
+          try {
+            reader.readAsDataURL(file);
+          } catch (err) {
+            reject(err);
+          }
         });
       });
 
-      Promise.all(loadPromises).then(newPhotos => {
-        setSelectedPhotos(prev => [...prev, ...newPhotos]);
-        if (!isRequestModalOpen) {
-          setRequestModalTab('request');
-        }
-        setIsRequestModalOpen(true);
-      });
+      Promise.all(loadPromises)
+        .then(newPhotos => {
+          setSelectedPhotos(prev => [...prev, ...newPhotos]);
+          alert(`[사진 첨부 완료] ${newPhotos.length}개의 사진이 임시 등록되었습니다.`);
+          if (!isRequestModalOpen) {
+            setRequestModalTab('request');
+          }
+          setIsRequestModalOpen(true);
+        })
+        .catch(err => {
+          alert(`[사진 변환 실패] 파일을 읽는 도중 오류가 발생했습니다: ${err.message}`);
+        });
     }
   };
 
@@ -852,6 +867,7 @@ export default function MobileHubPage() {
         file: file
       }));
       setSelectedFiles(prev => [...prev, ...newFiles]);
+      alert(`[문서 첨부 완료] ${newFiles.length}개의 파일이 임시 등록되었습니다.`);
       if (!isRequestModalOpen) {
         setRequestModalTab('request');
       }
