@@ -622,7 +622,8 @@ export default function MobileHubPage() {
       setVoiceText("");
       setIsRequestModalOpen(false);
 
-      // 💡 [화면 강제 포커싱] 등록된 해당 폴더 탭으로 화면을 즉각 이동시킵니다!
+      // 💡 [화면 강제 포커싱] 1) 메인 탭을 '태스크 폴더'로 전환하고, 2) 선택된 폴더 탭으로 즉각 이동시킵니다!
+      setActiveSubTab('folder');
       setActiveMobileFolderId(uploadModalFolderId);
       fetchMobileFolderItems(uploadModalFolderId);
       alert("태스크 폴더에 자료가 성공적으로 등록되었습니다!");
