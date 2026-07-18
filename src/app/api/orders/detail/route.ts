@@ -20,6 +20,26 @@ export async function GET(req: Request) {
 
     if (orderRes.rows && orderRes.rows.length > 0) {
       const order = orderRes.rows[0];
+
+      // 💡 유효품목코드 역매칭 및 추출
+      let validItemCode = 'INV-UNASSIGNED';
+      try {
+        const productRes = await queryTable('products', { filters: { name: order.product_name } });
+        if (productRes.rows && productRes.rows.length > 0) {
+          const prod = productRes.rows[0];
+          if (prod.inventory_item_id) {
+            const invRes = await queryTable('inventory_items', { filters: { id: prod.inventory_item_id } });
+            if (invRes.rows && invRes.rows.length > 0) {
+              validItemCode = invRes.rows[0].barcode ? String(invRes.rows[0].barcode).trim() : `INV-${prod.inventory_item_id}`;
+            } else {
+              validItemCode = `INV-${prod.inventory_item_id}`;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('주문 상세 조회 중 유효품목코드 매핑 실패:', err);
+      }
+
       return NextResponse.json({
         success: true,
         order: {
@@ -35,7 +55,8 @@ export async function GET(req: Request) {
           trackingNumber: order.tracking_number || '',
           customerMemo: order.customer_memo || '',
           orderDate: order.order_date,
-          status: order.status
+          status: order.status,
+          validItemCode: validItemCode
         }
       });
     }
@@ -47,6 +68,26 @@ export async function GET(req: Request) {
 
     if (reservationRes.rows && reservationRes.rows.length > 0) {
       const resv = reservationRes.rows[0];
+
+      // 💡 예약 상품 유효품목코드 역매칭 및 추출
+      let validItemCode = 'INV-UNASSIGNED';
+      try {
+        const productRes = await queryTable('products', { filters: { name: resv.service_name } });
+        if (productRes.rows && productRes.rows.length > 0) {
+          const prod = productRes.rows[0];
+          if (prod.inventory_item_id) {
+            const invRes = await queryTable('inventory_items', { filters: { id: prod.inventory_item_id } });
+            if (invRes.rows && invRes.rows.length > 0) {
+              validItemCode = invRes.rows[0].barcode ? String(invRes.rows[0].barcode).trim() : `INV-${prod.inventory_item_id}`;
+            } else {
+              validItemCode = `INV-${prod.inventory_item_id}`;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('예약 상세 조회 중 유효품목코드 매핑 실패:', err);
+      }
+
       return NextResponse.json({
         success: true,
         order: {
@@ -62,7 +103,8 @@ export async function GET(req: Request) {
           trackingNumber: '',
           customerMemo: '예약 현황 관리',
           orderDate: resv.reservation_date,
-          status: resv.status
+          status: resv.status,
+          validItemCode: validItemCode
         }
       });
     }

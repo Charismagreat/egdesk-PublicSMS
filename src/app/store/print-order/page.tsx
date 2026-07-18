@@ -19,6 +19,7 @@ interface OrderDetail {
   customerMemo: string;
   orderDate: string;
   status: string;
+  validItemCode?: string; // 💡 자사 재고 기준 유효품목코드 (바코드 / 폴백코드)
 }
 
 interface CompanyProfile {
@@ -246,7 +247,14 @@ function PrintOrderContent() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 <tr>
-                  <td className="p-4 font-bold text-slate-800">{order.productName}</td>
+                  <td className="p-4">
+                    <div className="font-bold text-slate-800">{order.productName}</div>
+                    {order.validItemCode && (
+                      <div className="text-[10px] text-indigo-600 font-bold font-mono mt-1 print:text-indigo-800">
+                        [유효품목코드: {order.validItemCode}]
+                      </div>
+                    )}
+                  </td>
                   <td className="p-4 text-right font-semibold text-slate-700">{displayUnitPrice}</td>
                   <td className="p-4 text-center font-semibold text-slate-700">{order.quantity}</td>
                   <td className="p-4 text-right font-bold text-slate-900">{displayPrice}</td>
