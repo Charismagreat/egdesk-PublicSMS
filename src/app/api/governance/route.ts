@@ -839,9 +839,21 @@ export async function POST(request: Request) {
         console.error('Failed to clear crm_audit_logs:', err);
       }
 
+      // 스토어 주문(crm_orders) 데이터도 함께 비우기
+      try {
+        const ordersRes = await queryTable('crm_orders', { limit: 10000 });
+        const ordersRows = ordersRes.rows || [];
+        if (ordersRows.length > 0) {
+          const ids = ordersRows.map((r: any) => Number(r.id) || r.id);
+          await deleteRows('crm_orders', { ids });
+        }
+      } catch (err) {
+        console.error('Failed to clear crm_orders:', err);
+      }
+
       return NextResponse.json({
         success: true,
-        message: '실시간 AI 결재 심사 및 전사 통합 감사 로그가 성공적으로 초기화되었습니다.'
+        message: '실시간 AI 결재 심사, 전사 통합 감사 로그 및 스토어 주문 목록이 성공적으로 초기화되었습니다.'
       });
     }
 
