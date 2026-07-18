@@ -658,9 +658,17 @@ export default function GovernanceDashboard() {
                             </span>
                           </div>
                           <p className="text-xs text-slate-500 font-semibold">{evt.subtitle}</p>
-                          <div className="text-[10px] text-slate-400 flex items-center gap-1.5 pt-1">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{evt.created_at}</span>
+                          <div className="text-[10px] text-slate-400 flex items-center flex-wrap gap-2.5 pt-1">
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{evt.created_at}</span>
+                            </div>
+                            {evt.type === 'TASK_CANCEL_REQUEST' && (
+                              <div className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold border border-indigo-100/50">
+                                <User className="w-3 h-3 text-indigo-600" />
+                                <span>상신자: {evt.data.operator || '임직원'}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
