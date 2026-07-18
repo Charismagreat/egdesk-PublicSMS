@@ -2,11 +2,13 @@
 
 import { apiFetch } from "@/lib/api";
 import React, { useState, useEffect, useCallback } from "react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import { 
   ShieldAlert, Activity, CheckCircle2, AlertTriangle, 
   RotateCcw, RefreshCw, Trash2, ArrowRightLeft, ShieldCheck, 
   Sparkles, User, Clock, ToggleLeft, ToggleRight, ListTodo,
-  ExternalLink, FileText, ChevronRight, X, Loader2, CheckSquare, Square
+  ExternalLink, FileText, ChevronRight, X, Loader2, CheckSquare, Square,
+  Search, SlidersHorizontal, UserCheck, Cpu, Database
 } from "lucide-react";
 
 interface ControlEvent {
@@ -39,8 +41,14 @@ export default function GovernanceDashboard() {
   const [events, setEvents] = useState<ControlEvent[]>([]);
   const [deletedItems, setDeletedItems] = useState<DeletedItem[]>([]);
   const [ocrEnabled, setOcrEnabled] = useState<boolean>(true);
-  
-  const [activeTab, setActiveTab] = useState<'WAITING' | 'RESOLVED' | 'RESTORE'>('WAITING');
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+
+  // 1. 상태 영속화 (sessionStorage) 연동 적용
+  const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<'WAITING' | 'RESOLVED' | 'RESTORE' | 'AUDIT'>('egdesk_governance_activeTab', 'WAITING');
+  const [auditSourceFilter, setAuditSourceFilter, isSourceRestored] = usePersistedState<'ALL' | 'AI' | 'MANUAL'>('egdesk_gov_audit_source', 'ALL');
+  const [auditDomainFilter, setAuditDomainFilter, isDomainRestored] = usePersistedState<string>('egdesk_gov_audit_domain', 'ALL');
+  const [auditSearchQuery, setAuditSearchQuery, isSearchRestored] = usePersistedState<string>('egdesk_gov_audit_search', '');
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -50,31 +58,39 @@ export default function GovernanceDashboard() {
   const [selectedActions, setSelectedActions] = useState<string[]>([]);
   const [actionReports, setActionReports] = useState<{ action: string; success: boolean; detail: string }[] | null>(null);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
+  const [selectedAudit, setSelectedAudit] = useState<any | null>(null);
 
-  // 1. 전체 데이터 로드
+  // 2. 전체 데이터 로드
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // 1.1. 토글 상태 조회
+      // 2.1. 토글 상태 조회
       const toggleRes = await apiFetch("/api/governance?action=get_toggle");
       const toggleData = await toggleRes.json();
       if (toggleData.success) {
         setOcrEnabled(toggleData.enabled);
       }
 
-      // 1.2. 통합 관제 피드 조회
+      // 2.2. 통합 관제 피드 조회
       const eventsRes = await apiFetch("/api/governance?action=events");
       const eventsData = await eventsRes.json();
       if (eventsData.success) {
         setEvents(eventsData.events || []);
       }
 
-      // 1.3. 소프트 삭제 건 조회
+      // 2.3. 소프트 삭제 건 조회
       const deletedRes = await apiFetch("/api/governance?action=deleted_items");
       const deletedData = await deletedRes.json();
       if (deletedData.success) {
         setDeletedItems(deletedData.deletedItems || []);
+      }
+
+      // 2.4. 전사 통합 감사 로그 조회
+      const auditRes = await apiFetch("/api/governance?action=audit_logs");
+      const auditData = await auditRes.json();
+      if (auditData.success) {
+        setAuditLogs(auditData.auditLogs || []);
       }
     } catch (err: any) {
       console.error("Governance data fetch error:", err);
@@ -84,11 +100,15 @@ export default function GovernanceDashboard() {
     }
   }, []);
 
+  // 3. 브라우저 저장소 복원 전 이중 페칭(Hydration Guard) 방지 가드 적용
   useEffect(() => {
+    if (!isActiveTabRestored || !isSourceRestored || !isDomainRestored || !isSearchRestored) {
+      return; // Early return guard
+    }
     loadData();
-  }, [loadData]);
+  }, [loadData, isActiveTabRestored, isSourceRestored, isDomainRestored, isSearchRestored]);
 
-  // 2. OCR 자율 대행 토글 변경
+  // 4. OCR 자율 대행 토글 변경
   const handleToggleOcr = async () => {
     setIsProcessing(true);
     const nextVal = !ocrEnabled;
@@ -111,9 +131,9 @@ export default function GovernanceDashboard() {
     }
   };
 
-  // 3. 감사 로그 전체 초기화
+  // 5. 감사 로그 전체 초기화
   const handleClearLogs = async () => {
-    if (!window.confirm("⚠️ 정말로 누적된 실시간 AI 결재 심사 이력(감사 로그)을 전체 초기화하시겠습니까?\n이 작업은 감사 데이터를 비우는 영구적 작업이며, 복구할 수 없습니다.")) {
+    if (!window.confirm("⚠️ 정말로 누적된 실시간 AI 결재 심사 이력 및 전사 통합 감사 로그를 전체 초기화하시겠습니까?\n이 작업은 감사 데이터를 비우는 영구적 작업이며, 복구할 수 없습니다.")) {
       return;
     }
 
@@ -124,7 +144,7 @@ export default function GovernanceDashboard() {
       });
       const data = await res.json();
       if (data.success) {
-        alert("감사 로그 데이터가 성공적으로 초기화되었습니다.");
+        alert("감사 로그 및 이벤트 내역이 성공적으로 초기화되었습니다.");
         loadData();
       } else {
         alert("초기화 실패: " + data.error);
@@ -136,7 +156,7 @@ export default function GovernanceDashboard() {
     }
   };
 
-  // 4. 소프트 삭제 복원
+  // 6. 소프트 삭제 복원
   const handleRestore = async (item: DeletedItem) => {
     if (!window.confirm(`정말로 해당 ${item.doc_type === 'estimate' ? '견적서' : item.doc_type === 'purchase_order' ? '발주서' : '수주서'} [${item.id}]를 대장으로 성공적으로 복원하시겠습니까?`)) {
       return;
@@ -166,7 +186,7 @@ export default function GovernanceDashboard() {
     }
   };
 
-  // 5. 모달 제어 및 추천 액션 목록 획득
+  // 7. 모달 제어 및 추천 액션 목록 획득
   const getRecommendedActions = (type: 'STORE_ORDER' | 'RAG_HOLD' | 'LOW_STOCK'): ActionRecommendation[] => {
     switch (type) {
       case 'STORE_ORDER':
@@ -214,7 +234,7 @@ export default function GovernanceDashboard() {
     }
   };
 
-  // 6. AI 추천 자율 대행 액션 실행 전송
+  // 8. AI 추천 자율 대행 액션 실행 전송
   const handleExecuteActions = async () => {
     if (!selectedEvent) return;
     if (selectedActions.length === 0) {
@@ -259,9 +279,60 @@ export default function GovernanceDashboard() {
 
   // 해결되지 않은 대기 피드와 완료 피드 분기
   const filteredEvents = events.filter(e => {
-    if (activeTab === 'RESTORE') return false;
+    if (activeTab === 'RESTORE' || activeTab === 'AUDIT') return false;
     return e.status === activeTab;
   });
+
+  // 통합 감사 로그 실시간 필터링
+  const filteredAuditLogs = auditLogs.filter(log => {
+    // 1) 조작 주체 필터 (전체/AI/MANUAL)
+    if (auditSourceFilter !== 'ALL' && log.source !== auditSourceFilter) return false;
+    
+    // 2) 도메인 분야 필터
+    if (auditDomainFilter !== 'ALL') {
+      if (auditDomainFilter === 'ESTIMATE' && !['crm_estimates', 'crm_purchase_orders', 'crm_sales_orders'].includes(log.doc_type)) return false;
+      if (auditDomainFilter === 'EXPENSE' && log.doc_type !== 'crm_expenses') return false;
+      if (auditDomainFilter === 'INVENTORY' && !['products', 'inventory_items'].includes(log.doc_type)) return false;
+      if (auditDomainFilter === 'CUSTOMER' && !['crm_customers', 'crm_operators'].includes(log.doc_type)) return false;
+    }
+
+    // 3) 글로벌 검색어 필터링
+    if (auditSearchQuery.trim() !== '') {
+      const q = auditSearchQuery.toLowerCase();
+      const matchTitle = (log.doc_title || '').toLowerCase().includes(q);
+      const matchOp = (log.operator || '').toLowerCase().includes(q);
+      const matchType = (log.doc_type || '').toLowerCase().includes(q);
+      const matchId = (log.doc_id || '').toLowerCase().includes(q);
+      if (!matchTitle && !matchOp && !matchType && !matchId) return false;
+    }
+
+    return true;
+  });
+
+  // Diff 헬퍼 함수: Before & After 값 대조하여 변경 필드 추출
+  const getDiffFields = (before: any, after: any) => {
+    const diffs: { field: string; beforeVal: string; afterVal: string }[] = [];
+    const keys = Array.from(new Set([...Object.keys(before || {}), ...Object.keys(after || {})]));
+    
+    // 무시할 메타 성격 필드
+    const ignoreKeys = ['updated_at', 'created_at', 'updated_by', 'deleted_at', 'deleted_by', 'restored_at', 'restored_by', 'uuid'];
+
+    for (const key of keys) {
+      if (ignoreKeys.includes(key)) continue;
+      const bVal = before ? before[key] : undefined;
+      const aVal = after ? after[key] : undefined;
+      
+      // 값이 스트링화 대조 시 다르면 기록
+      if (JSON.stringify(bVal) !== JSON.stringify(aVal)) {
+        diffs.push({
+          field: key,
+          beforeVal: bVal === undefined || bVal === null ? '(없음)' : typeof bVal === 'object' ? JSON.stringify(bVal) : String(bVal),
+          afterVal: aVal === undefined || aVal === null ? '(삭제됨)' : typeof aVal === 'object' ? JSON.stringify(aVal) : String(aVal)
+        });
+      }
+    }
+    return diffs;
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 md:px-8 font-sans text-left">
@@ -275,7 +346,7 @@ export default function GovernanceDashboard() {
               <span>AI 컨트롤타워 관제 센터</span>
             </h1>
             <p className="text-slate-500 mt-2 text-sm pl-10">
-              실시간 비즈니스 이벤트 피드를 모니터링하고, AI 추천 조치 시나리오를 자율 실행하여 사내 거버넌스를 완벽 제어합니다.
+              실시간 비즈니스 이벤트 피드를 모니터링하고, AI 추천 조치 시나리오를 자율 실행하며 전사 통합 감사 로그를 모니터링합니다.
             </p>
           </div>
           <div className="flex items-center gap-2 pl-10 md:pl-0">
@@ -305,11 +376,12 @@ export default function GovernanceDashboard() {
             <span>{error}</span>
           </div>
         )}
+
         {/* 2구역: 세련된 탭 컨트롤러 */}
-        <div className="flex gap-2 border-b border-slate-200 pb-px">
+        <div className="flex gap-2 border-b border-slate-200 pb-px overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveTab('WAITING')}
-            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all cursor-pointer ${
+            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'WAITING' 
                 ? 'border-indigo-650 text-indigo-650 font-black' 
                 : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -319,7 +391,7 @@ export default function GovernanceDashboard() {
           </button>
           <button
             onClick={() => setActiveTab('RESOLVED')}
-            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all cursor-pointer ${
+            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'RESOLVED' 
                 ? 'border-indigo-650 text-indigo-650 font-black' 
                 : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -329,13 +401,23 @@ export default function GovernanceDashboard() {
           </button>
           <button
             onClick={() => setActiveTab('RESTORE')}
-            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all cursor-pointer ${
+            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'RESTORE' 
                 ? 'border-indigo-650 text-indigo-650 font-black' 
                 : 'border-transparent text-slate-400 hover:text-slate-600'
             }`}
           >
-            삭제 데이터 복원 ({deletedItems.length})
+            소프트 삭제 복원 ({deletedItems.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('AUDIT')}
+            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
+              activeTab === 'AUDIT' 
+                ? 'border-indigo-650 text-indigo-650 font-black' 
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            통합 감사 대장 ({filteredAuditLogs.length})
           </button>
         </div>
 
@@ -344,10 +426,10 @@ export default function GovernanceDashboard() {
           {isLoading ? (
             <div className="py-24 flex flex-col justify-center items-center">
               <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
-              <span className="text-xs text-slate-400 font-bold">실시간 비즈니스 이벤트 로드 중...</span>
+              <span className="text-xs text-slate-400 font-bold">실시간 비즈니스 데이터 로드 중...</span>
             </div>
           ) : activeTab === 'RESTORE' ? (
-            // 💡 삭제 데이터 복원 대장
+            // 💡 소프트 삭제 복원 대장
             deletedItems.length === 0 ? (
               <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 shadow-xs">
                 <ShieldCheck className="w-12 h-12 mx-auto text-slate-300 mb-3" />
@@ -389,6 +471,140 @@ export default function GovernanceDashboard() {
                 ))}
               </div>
             )
+          ) : activeTab === 'AUDIT' ? (
+            // 💡 통합 감사 대장 탭 UI
+            <div className="space-y-4">
+              {/* 필터바 영역 */}
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
+                <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-600">
+                  <div className="flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-4 h-4 text-slate-400" />
+                    <span>작업 분류 필터</span>
+                  </div>
+                  
+                  {/* 조작 주체 구분 필터 */}
+                  <div className="bg-slate-100 p-0.5 rounded-lg flex">
+                    <button 
+                      onClick={() => setAuditSourceFilter('ALL')}
+                      className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${auditSourceFilter === 'ALL' ? 'bg-white text-indigo-650 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      전체보기
+                    </button>
+                    <button 
+                      onClick={() => setAuditSourceFilter('AI')}
+                      className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer ${auditSourceFilter === 'AI' ? 'bg-white text-indigo-650 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      <Cpu className="w-3.5 h-3.5 text-indigo-600" />
+                      🤖 AI 자율
+                    </button>
+                    <button 
+                      onClick={() => setAuditSourceFilter('MANUAL')}
+                      className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer ${auditSourceFilter === 'MANUAL' ? 'bg-white text-indigo-650 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      👤 임직원 수동
+                    </button>
+                  </div>
+
+                  {/* 도메인 구분 필터 */}
+                  <select 
+                    value={auditDomainFilter}
+                    onChange={(e) => setAuditDomainFilter(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold outline-none cursor-pointer"
+                  >
+                    <option value="ALL">모든 업무 대장</option>
+                    <option value="ESTIMATE">B2B 견적/발주/수주</option>
+                    <option value="EXPENSE">지출경비 대장</option>
+                    <option value="INVENTORY">자재/제품 재고</option>
+                    <option value="CUSTOMER">고객/사원 정보</option>
+                  </select>
+                </div>
+
+                {/* 검색 필터 */}
+                <div className="relative max-w-xs w-full">
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="text"
+                    placeholder="조작자, 내용, 문서 번호 검색..."
+                    value={auditSearchQuery}
+                    onChange={(e) => setAuditSearchQuery(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-colors"
+                  />
+                  {auditSearchQuery && (
+                    <button 
+                      onClick={() => setAuditSearchQuery('')}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 border-none bg-transparent cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 감사 피드 리스트 */}
+              {filteredAuditLogs.length === 0 ? (
+                <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 shadow-xs">
+                  <Database className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                  <span className="text-xs font-bold block">필터 조건에 부합하는 감사 내역이 존재하지 않습니다.</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredAuditLogs.map((log) => {
+                    const isAi = log.source === 'AI';
+                    return (
+                      <div 
+                        key={log.id}
+                        onClick={() => setSelectedAudit(log)}
+                        className="bg-white border border-slate-200/85 hover:border-indigo-200 hover:bg-indigo-50/10 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all hover:shadow-md cursor-pointer group text-left"
+                      >
+                        <div className="flex items-start gap-4">
+                          {/* 조작 주체 아이콘 */}
+                          <div className={`p-3 rounded-2xl shrink-0 ${isAi ? 'bg-indigo-50 text-indigo-650' : 'bg-slate-100 text-slate-650'}`}>
+                            {isAi ? <Cpu className="w-6 h-6 animate-pulse" /> : <User className="w-6 h-6" />}
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <div className="flex items-center flex-wrap gap-2">
+                              <span className="text-sm font-black text-slate-800">{log.doc_title}</span>
+                              
+                              {/* 구분 배지 */}
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${isAi ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                                {isAi ? '🤖 AI 자율 대행' : '👤 임직원 조작'}
+                              </span>
+
+                              {/* 액션 타입 배지 */}
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                                log.action_type === 'INSERT' ? 'bg-emerald-50 text-emerald-800' : log.action_type === 'DELETE' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-800'
+                              }`}>
+                                {log.action_type === 'INSERT' ? '등록' : log.action_type === 'DELETE' ? '삭제' : '수정'}
+                              </span>
+                            </div>
+
+                            <div className="text-xs text-slate-500 font-semibold flex items-center gap-2">
+                              <span>조작자: <span className="text-slate-700 font-bold">{log.operator}</span></span>
+                              <span>•</span>
+                              <span>테이블: <span className="font-mono text-indigo-600">{log.doc_type}</span></span>
+                            </div>
+
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1.5 pt-1">
+                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{log.created_at}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-stretch md:self-auto justify-end">
+                          <span className="text-[11px] text-indigo-650 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                            <span>상세 변경 데이터 비교(Diff)</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           ) : (
             // 💡 실시간 관제 이벤트 피드 게시판
             filteredEvents.length === 0 ? (
@@ -515,24 +731,49 @@ export default function GovernanceDashboard() {
                 {selectedEvent.type === 'RAG_HOLD' && (
                   <>
                     <div className="col-span-2 border-t border-slate-100 my-1"></div>
-                    <div>
-                      <span className="text-slate-400 font-semibold block">보류 문서 유형</span>
-                      <span className="font-bold text-slate-800 uppercase">{selectedEvent.data.doc_type}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 font-semibold block">보류 대상 문서 ID</span>
-                      <span className="font-bold text-slate-800">{selectedEvent.data.doc_id}</span>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-slate-400 font-semibold block">AI 보류 사유 / 사내 내규 지침</span>
-                      <span className="font-semibold text-rose-600 bg-rose-50/50 p-2 rounded-lg block mt-1 leading-relaxed border border-rose-100">
-                        {selectedEvent.data.reason}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 font-semibold block">신청 작업자</span>
-                      <span className="font-bold text-slate-800">{selectedEvent.data.operator || 'system'}</span>
-                    </div>
+                    {selectedEvent.data.doc_type === 'mobile_request' ? (
+                      <>
+                        <div>
+                          <span className="text-slate-400 font-semibold block">요청 종류</span>
+                          <span className="font-bold text-indigo-600 uppercase">모바일 현장 작업 요청</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-semibold block">요청 식별 번호</span>
+                          <span className="font-bold text-slate-800">{selectedEvent.data.doc_id}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-slate-400 font-semibold block">현장 요청 사항 (음성 변환)</span>
+                          <span className="font-semibold text-indigo-950 bg-indigo-50/50 p-3 rounded-2xl block mt-1 leading-relaxed border border-indigo-100/60 whitespace-pre-wrap">
+                            {selectedEvent.data.reason}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-semibold block">요청 임직원</span>
+                          <span className="font-bold text-slate-800">{selectedEvent.data.operator || '임직원'}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <span className="text-slate-400 font-semibold block">보류 문서 유형</span>
+                          <span className="font-bold text-slate-800 uppercase">{selectedEvent.data.doc_type}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-semibold block">보류 대상 문서 ID</span>
+                          <span className="font-bold text-slate-800">{selectedEvent.data.doc_id}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-slate-400 font-semibold block">AI 보류 사유 / 사내 내규 지침</span>
+                          <span className="font-semibold text-rose-600 bg-rose-50/50 p-2 rounded-lg block mt-1 leading-relaxed border border-rose-100">
+                            {selectedEvent.data.reason}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-semibold block">신청 작업자</span>
+                          <span className="font-bold text-slate-800">{selectedEvent.data.operator || 'system'}</span>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
                 {selectedEvent.type === 'LOW_STOCK' && (
@@ -544,7 +785,7 @@ export default function GovernanceDashboard() {
                     </div>
                     <div>
                       <span className="text-slate-400 font-semibold block">상품 명</span>
-                      <span className="font-bold text-slate-850">{selectedEvent.data.name || selectedEvent.data.itemName}</span>
+                      <span className="font-bold text-slate-855">{selectedEvent.data.name || selectedEvent.data.itemName}</span>
                     </div>
                     <div>
                       <span className="text-slate-400 font-semibold block">현재고 / 안전재고 한도</span>
@@ -657,6 +898,120 @@ export default function GovernanceDashboard() {
           </div>
         </div>
       )}
+
+      {/* 5구역: 통합 작업 감사 상세 Diff 대조 모달 */}
+      {selectedAudit && (() => {
+        let beforeObj = null;
+        let afterObj = null;
+        try {
+          const detail = JSON.parse(selectedAudit.detail_json || "{}");
+          beforeObj = detail.before;
+          afterObj = detail.after;
+        } catch (e) {
+          console.warn("Failed to parse detail_json in audit modal");
+        }
+
+        const diffFields = getDiffFields(beforeObj, afterObj);
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 animate-scale-in text-left">
+              
+              {/* 모달 헤더 */}
+              <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-2">
+                  <Database className="w-5 h-5 text-indigo-600" />
+                  <h3 className="text-base font-black text-slate-800">통합 작업 감사 데이터 비교(Diff)</h3>
+                </div>
+                <button 
+                  onClick={() => setSelectedAudit(null)}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors border-none bg-transparent cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 기본 요약 내역 */}
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-slate-400 font-semibold block">감사로그 ID</span>
+                    <span className="font-mono font-bold text-slate-800">{selectedAudit.id}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold block">일시 (KST)</span>
+                    <span className="font-bold text-slate-800">{selectedAudit.created_at}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold block">조작 주체</span>
+                    <span className="font-bold text-slate-800">
+                      {selectedAudit.source === 'AI' ? '🤖 AI 자율 대행' : `👤 임직원 (${selectedAudit.operator})`}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold block">작업 종류</span>
+                    <span className="font-bold text-slate-800 uppercase">{selectedAudit.action_type}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold block">관련 대장(Table)</span>
+                    <span className="font-mono font-bold text-indigo-600">{selectedAudit.doc_type}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold block">관련 문서 번호(ID)</span>
+                    <span className="font-bold text-slate-800">{selectedAudit.doc_id || '(없음)'}</span>
+                  </div>
+                </div>
+                <div className="border-t border-slate-200/60 pt-2">
+                  <span className="text-slate-400 font-semibold block">변경 요약</span>
+                  <p className="font-bold text-slate-800 text-sm mt-0.5">{selectedAudit.doc_title}</p>
+                </div>
+              </div>
+
+              {/* 변경 필드 대조 테이블 */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">변경 필드 값 대조 (Diff)</h4>
+                {diffFields.length === 0 ? (
+                  <div className="border border-slate-200/80 rounded-2xl p-6 text-center text-xs font-bold text-slate-400">
+                    값의 변동 사항이 없거나 단순 메타데이터 변경 건입니다.
+                  </div>
+                ) : (
+                  <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-white shadow-xs max-h-[300px] overflow-y-auto">
+                    <table className="w-full border-collapse text-xs text-left">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-black">
+                          <th className="p-3">필드명 (Field)</th>
+                          <th className="p-3">변경 전 (Before)</th>
+                          <th className="p-3">변경 후 (After)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-bold">
+                        {diffFields.map((df) => (
+                          <tr key={df.field} className="hover:bg-slate-50">
+                            <td className="p-3 font-mono text-indigo-650">{df.field}</td>
+                            <td className="p-3 text-rose-600/90 line-through whitespace-pre-wrap">{df.beforeVal}</td>
+                            <td className="p-3 text-emerald-700 bg-emerald-50/20 whitespace-pre-wrap">{df.afterVal}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* 모달 푸터 */}
+              <div className="flex justify-end pt-4 border-t border-slate-100">
+                <button
+                  onClick={() => setSelectedAudit(null)}
+                  className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-6 py-3 rounded-xl shadow-xs text-xs border-none cursor-pointer transition-colors"
+                >
+                  확인 완료
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

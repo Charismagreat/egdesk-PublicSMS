@@ -33,7 +33,7 @@ export default async function Sidebar() {
 
   // 일반 직원(EMPLOYEE)은 PC 대시보드 진입을 차단하고 모바일 지원금 신청 페이지로 즉시 리다이렉트
   if (userRole === 'EMPLOYEE') {
-    redirect('/m/grant-management');
+    redirect('/m');
   }
 
   // 🛡️ DB로부터 사이드바 메인/서브 타이틀 로드 (디폴트값 가드)

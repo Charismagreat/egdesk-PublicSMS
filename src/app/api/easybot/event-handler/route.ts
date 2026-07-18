@@ -2,6 +2,8 @@ export const maxDuration = 300; // 로컬 AI 대용량 연산 지연 대기 허�
 import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows, executeSQL, getGeminiApiKey, AI_KEY_NAMES } from '../../../../../egdesk-helpers';
+import { cookies } from 'next/headers';
+import { decodeJwt } from 'jose';
 
 // 시스템 설정에서 Google API Key 및 모델 조회
 async function getAiConfig() {
@@ -168,6 +170,85 @@ export async function POST(req: Request) {
 
     if (!table || !action || !data) {
       return NextResponse.json({ success: false, error: '유효하지 않은 이벤트 스키마입니다.' }, { status: 400 });
+    }
+
+    // 🛡️ 실시간 전사 통합 감사 로그 적재 (crm_audit_logs)
+    // 무한 루프(자체 로깅 이벤트가 다시 유입되는 것) 방지 가드
+    if (table !== 'crm_audit_logs' && table !== 'ai_token_usage_logs') {
+      try {
+        let operatorUsername = 'MANUAL_USER';
+        let source = 'MANUAL';
+
+        // 쿠키 세션으로부터 조작자 식별
+        try {
+          const cookieStore = await cookies();
+          const token = cookieStore.get('auth_token')?.value;
+          if (token) {
+            const payload = decodeJwt(token);
+            operatorUsername = (payload.username || payload.name || 'MANUAL_USER') as string;
+          }
+        } catch (e) {
+          // 세션이 없는 비로그인 시연 상태 등
+        }
+
+        // 데이터 내부 필드를 통한 조작자 보정
+        let finalOperator = operatorUsername;
+        if (data.updated_by) finalOperator = data.updated_by;
+        else if (data.created_by) finalOperator = data.created_by;
+        else if (data.operator) finalOperator = data.operator;
+
+        // 이지봇 자율 대행 또는 백필인 경우 AI 소스로 분류
+        if (
+          finalOperator.toLowerCase().includes('easybot') || 
+          finalOperator === 'system_backfill' || 
+          finalOperator === 'system'
+        ) {
+          source = 'AI';
+          if (finalOperator === 'system_backfill' || finalOperator === 'system') {
+            finalOperator = 'SYSTEM';
+          } else {
+            finalOperator = 'AI_EASYBOT';
+          }
+        }
+
+        // 직관적인 한글 요약 타이틀 빌드
+        let docTitle = `대장 변경 건 감지`;
+        if (table === 'crm_estimates') {
+          docTitle = `${data.customer_name || '거래처'} 대상 견적서 ${action === 'insert' ? '신규 등록' : action === 'update' ? '정보 갱신' : '삭제'}`;
+        } else if (table === 'crm_purchase_orders') {
+          docTitle = `${data.partner_name || '협력사'} 대상 발주서 ${action === 'insert' ? '신규 등록' : action === 'update' ? '정보 갱신' : '삭제'}`;
+        } else if (table === 'crm_sales_orders') {
+          docTitle = `${data.customer_name || '거래처'} 대상 수주서 ${action === 'insert' ? '신규 등록' : action === 'update' ? '정보 갱신' : '삭제'}`;
+        } else if (table === 'crm_expenses') {
+          docTitle = `${data.payee || data.merchant || '가맹점'} 지출 결의 건 ${action === 'insert' ? '신규 청구' : action === 'update' ? '상태 변경' : '삭제'} (${Number(data.amount || 0).toLocaleString()}원)`;
+        } else if (table === 'products') {
+          docTitle = `재고 완제품 [${data.name || '미지정'}] ${action === 'insert' ? '품목 등록' : action === 'update' ? '단가/정보 갱신' : '삭제'}`;
+        } else if (table === 'inventory_items') {
+          docTitle = `자재 품목 [${data.name || '미지정'}] ${action === 'insert' ? '품목 등록' : action === 'update' ? '수량/정보 갱신' : '삭제'} (현재고: ${data.quantity || 0}개)`;
+        } else if (table === 'crm_customers') {
+          docTitle = `단골 고객 [${data.name || '미지정'}] ${action === 'insert' ? '신규 등록' : action === 'update' ? '정보 갱신' : '삭제'}`;
+        } else if (table === 'crm_operators') {
+          docTitle = `임직원 계정 [${data.name || '미지정'}] ${action === 'insert' ? '인사 등록' : action === 'update' ? '인적사항 변경' : '삭제'}`;
+        }
+
+        const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+        const auditLogId = `AUD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+        await insertRows('crm_audit_logs', [{
+          id: auditLogId,
+          operator: finalOperator,
+          source: source,
+          action_type: action.toUpperCase(),
+          doc_type: table,
+          doc_id: String(data.id || data.so_number || data.expense_id || ''),
+          doc_title: docTitle,
+          detail_json: JSON.stringify({ before: previousData || null, after: data || null }),
+          created_at: nowStr
+        }]);
+        console.log(`[통합 감사 로그 자동 수집] 성공. ID: ${auditLogId}, Title: ${docTitle}`);
+      } catch (auditErr: any) {
+        console.error('⚠️ [통합 감사 로그 자동 수집] 실패:', auditErr.message);
+      }
     }
 
     const { apiKey, model } = await getAiConfig();

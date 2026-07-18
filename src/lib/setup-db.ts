@@ -137,6 +137,36 @@ export async function setupDatabase() {
     await safeCreateTable(tableMeta.displayName, columns as unknown as any[], options);
   }
 
+  // 💡 [신규] 태스크 폴더 테이블 2종 생성
+  await safeCreateTable('태스크 폴더', [
+    { name: 'id', type: 'INTEGER', notNull: true },
+    { name: 'name', type: 'TEXT', notNull: true },
+    { name: 'description', type: 'TEXT' },
+    { name: 'created_by', type: 'TEXT' },
+    { name: 'created_at', type: 'TEXT' }
+  ], { tableName: 'crm_task_folders', uniqueKeyColumns: ['id'] });
+
+  await safeCreateTable('태스크 폴더 수집자료', [
+    { name: 'id', type: 'INTEGER', notNull: true },
+    { name: 'folder_id', type: 'INTEGER', notNull: true },
+    { name: 'type', type: 'TEXT' },
+    { name: 'tags', type: 'TEXT' },
+    { name: 'title', type: 'TEXT', notNull: true },
+    { name: 'content', type: 'TEXT' },
+    { name: 'file_name', type: 'TEXT' },
+    { name: 'file_size', type: 'TEXT' },
+    { name: 'file_url', type: 'TEXT' },
+    { name: 'created_at', type: 'TEXT' }
+  ], { tableName: 'crm_task_folder_items', uniqueKeyColumns: ['id'] });
+
+  // 효성전기 영업 데모 데이터 삭제 조치 (예시 제거)
+  try {
+    await deleteRows('crm_task_folder_items', { filters: { folder_id: '1' } });
+    await deleteRows('crm_task_folders', { ids: [1] });
+  } catch (err: any) {
+    console.warn('Cleanup of legacy seed data skipped:', err.message);
+  }
+
   // 54. 수입 통관 실제 레퍼런스 데이터 시딩 (ERP 검증용 1건)
   try {
     const masterCheck = await queryTable('import_master', { limit: 1 });
@@ -428,6 +458,27 @@ export async function setupDatabase() {
     }
   } catch (err: any) {
     console.error('⚠️ 기존 완제품 상품 백필 중 에러:', err.message);
+  }
+
+  // 58. 전사 통합 작업 감사 로그 테이블 (crm_audit_logs) 신설
+  try {
+    await safeCreateTable('전사 통합 작업 감사 로그', [
+      { name: 'id', type: 'TEXT', notNull: true },
+      { name: 'operator', type: 'TEXT', notNull: true },
+      { name: 'source', type: 'TEXT', notNull: true },
+      { name: 'action_type', type: 'TEXT', notNull: true },
+      { name: 'doc_type', type: 'TEXT', notNull: true },
+      { name: 'doc_id', type: 'TEXT' },
+      { name: 'doc_title', type: 'TEXT', notNull: true },
+      { name: 'detail_json', type: 'TEXT' }
+    ], {
+      tableName: 'crm_audit_logs',
+      uniqueKeyColumns: ['id'],
+      duplicateAction: 'skip'
+    });
+    console.log('✓ 전사 통합 작업 감사 로그 테이블 신설 완료.');
+  } catch (err: any) {
+    console.error('⚠️ 전사 통합 감사 로그 테이블 생성 에러:', err.message);
   }
 
   console.log('Database setup complete.');

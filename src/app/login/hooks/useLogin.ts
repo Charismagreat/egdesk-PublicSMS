@@ -34,7 +34,7 @@ export function useLogin(): UseLoginResult {
 
       // 로그인 성공 시 역할(Role)에 맞춰 리다이렉트 지점 분기 설정
       if (data.user?.role === 'EMPLOYEE') {
-        router.push("/m/grant-management");
+        router.push("/m");
       } else {
         router.push("/");
       }

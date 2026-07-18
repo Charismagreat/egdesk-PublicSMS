@@ -69,3 +69,18 @@ EGDesk MCP/API runs at http://localhost:8080.
 
 See `.agents/rules/egdesk-dev-context.md` for full details.
 <!-- END:egdesk-dev-context -->
+
+<!-- BEGIN:nextjs-turbopack-middleware-rules -->
+## Next.js 16+ (Turbopack) 미들웨어 캐싱 및 에러 조치 규칙
+
+1. **임의의 `middleware.ts` 생성 금지**:
+   - Next.js 16+ 환경에서 Edge 런타임 오류로 `Could not parse module '[project]/src/middleware.ts', file not found` 가 발생하는 경우, **절대로 `src/middleware.ts` 파일을 임의로 신규 생성하지 마십시오.**
+   - 이 에러는 Turbopack 컴파일 캐시 꼬임에 기인하는 것으로, 파일이 없음에도 과거 엣지 번들 참조가 남아 발생합니다.
+2. **Turbopack 캐시 강제 소거 해결 원칙**:
+   - `file not found` 관련 미들웨어 로드 오류 시, 개발 서버를 종료하고 `.next` 캐시 폴더를 강제 삭제한 뒤 개발 서버를 리스타트하여 그래프를 재컴파일하도록 안내하십시오.
+     - PowerShell: `Remove-Item -Recurse -Force .next`
+     - 명령어: `npm run dev`
+3. **이지데스크 `proxy.ts` 존중 및 통신 복구**:
+   - 이지데스크 플러그인은 Next.js 16+에서 `proxy.ts` 를 통해 CORS 우회 및 프록시 처리를 독자 수행하도록 설정됩니다. 
+   - 이 설정을 해치지 않도록 미들웨어 파일 생성을 철저히 지양해야 합니다.
+<!-- END:nextjs-turbopack-middleware-rules -->

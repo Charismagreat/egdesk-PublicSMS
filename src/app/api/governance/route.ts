@@ -160,6 +160,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, enabled });
     }
 
+    if (action === 'audit_logs') {
+      try {
+        const res = await queryTable('crm_audit_logs', { limit: 10000 });
+        const auditLogs = res.rows || [];
+        auditLogs.sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+        return NextResponse.json({ success: true, auditLogs });
+      } catch (err: any) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
     return NextResponse.json(
       { success: false, error: '유효하지 않은 action 파라미터입니다.' },
       { status: 400 }
@@ -183,16 +194,35 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
-    const adminUser = await verifySuperAdmin();
-    if (!adminUser) {
-      return NextResponse.json(
-        { success: false, error: '🔒 권한이 없습니다. 최고관리자만 조작할 수 있습니다.' },
-        { status: 403 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
+
+    const adminUser = await verifySuperAdmin();
+    
+    // 모바일에서의 현장 요청 생성인 경우, 최고관리자가 아니더라도 세션이 있으면 허용
+    if (action !== 'create_mobile_request') {
+      if (!adminUser) {
+        return NextResponse.json(
+          { success: false, error: '🔒 권한이 없습니다. 최고관리자만 조작할 수 있습니다.' },
+          { status: 403 }
+        );
+      }
+    }
+
+    let currentUser = adminUser || 'guest';
+    if (!adminUser && action === 'create_mobile_request') {
+      try {
+        const cookieStore = await cookies();
+        const token = cookieStore.get('auth_token')?.value;
+        if (token) {
+          const payload = decodeJwt(token);
+          currentUser = (payload.name || payload.username || 'guest') as string;
+        }
+      } catch (e) {
+        currentUser = 'guest';
+      }
+    }
+
     let body: any = {};
     try {
       const text = await request.text();
@@ -204,6 +234,37 @@ export async function POST(request: Request) {
     }
 
     const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+
+    // [신규] 임직원 모바일 현장 작업 요청 접수
+    if (action === 'create_mobile_request') {
+      const { title, reason, voiceText } = body;
+      
+      if (!title || !title.trim()) {
+        return NextResponse.json({ success: false, error: '요청 제목이 누락되었습니다.' }, { status: 400 });
+      }
+
+      const reqId = `mobile_req_${Date.now()}`;
+      
+      await insertRows('crm_governance_logs', [{
+        id: reqId,
+        doc_type: 'mobile_request',
+        doc_id: `REQ-${Date.now()}`,
+        doc_title: title,
+        status: 'PENDING_APPROVAL',
+        reason: reason || '모바일 현장 수동 접수 요청 건',
+        operator: currentUser,
+        created_at: nowStr,
+        uuid: reqId,
+        updated_at: nowStr,
+        updated_by: currentUser
+      }]);
+
+      return NextResponse.json({
+        success: true,
+        message: '현장 작업 요청이 성공적으로 접수되어 AI 컨트롤타워에 상신되었습니다.',
+        reqId
+      });
+    }
 
     // 1. AI 추천 다음 작업 자율 대행 실행
     if (action === 'execute_actions') {
@@ -533,9 +594,21 @@ export async function POST(request: Request) {
         await deleteRows('crm_governance_logs', { ids });
       }
 
+      // 전사 통합 감사 로그도 함께 비우기
+      try {
+        const auditRes = await queryTable('crm_audit_logs', { limit: 10000 });
+        const auditRows = auditRes.rows || [];
+        if (auditRows.length > 0) {
+          const ids = auditRows.map((r: any) => r.id);
+          await deleteRows('crm_audit_logs', { ids });
+        }
+      } catch (err) {
+        console.error('Failed to clear crm_audit_logs:', err);
+      }
+
       return NextResponse.json({
         success: true,
-        message: '실시간 AI 결재 심사 이력이 성공적으로 초기화되었습니다.'
+        message: '실시간 AI 결재 심사 및 전사 통합 감사 로그가 성공적으로 초기화되었습니다.'
       });
     }
 

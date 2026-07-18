@@ -3,7 +3,7 @@ import {
   Home, Users, MessageSquare, Settings, ShoppingCart, 
   ClipboardList, CreditCard, CalendarDays, Truck, Send, 
   PackageSearch, Package, UserCog, Zap, Ticket, Landmark, Globe, Briefcase, HelpCircle,
-  ArrowRightLeft, Handshake, Sparkles, Coins, Database, Compass, Shield, CheckSquare, Wrench, ShieldAlert, Award, Scale, Key, Mic, Bot, Mail, LayoutDashboard
+  ArrowRightLeft, Handshake, Sparkles, Coins, Database, Compass, Shield, CheckSquare, Wrench, ShieldAlert, Award, Scale, Key, Mic, Bot, Mail, LayoutDashboard, FolderOpen
 } from "lucide-react";
 
 // 커스텀 인스타그램 아이콘 SVG
@@ -79,7 +79,8 @@ export const MENU_METADATA_LIST: MenuMetadata[] = [
   { href: "/transactions", label: "거래 관리 AI", icon: ShoppingCart, color: "text-orange-555", category: 2 },
   { href: "/orders", label: "주문 관리 AI", icon: ClipboardList, color: "text-blue-550", category: 2 },
   { href: "/payments", label: "결제 관리 AI", icon: CreditCard, color: "text-emerald-600", category: 2 },
-  { href: "/estimates", label: "견적/발주/수주 AI", icon: ArrowRightLeft, color: "text-indigo-550", category: 2 },
+  { href: "/estimates", label: "견적/발주/수주 AI", icon: ArrowRightLeft, color: "text-indigo-555", category: 2 },
+  { href: "/task-folders", label: "태스크 폴더 관리 AI", icon: FolderOpen, color: "text-indigo-600", category: 2 },
   { href: "/coupons", label: "쿠폰 관리 AI", icon: Ticket, color: "text-rose-555", category: 2 },
   { href: "/credit-risk", label: "채권 관리 AI", icon: CreditCard, color: "text-rose-555", category: 2 },
   { href: "/mail-management-ai", label: "메일 관리 AI", icon: Mail, color: "text-cyan-400", category: 2 },

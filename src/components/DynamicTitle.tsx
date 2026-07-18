@@ -60,7 +60,13 @@ function DynamicTitleHandler() {
       "/my-db": "MY DB",
       "/employees": "직원 관리 대장",
       "/hr/attendance": "근태 관리 AI",
-      "/governance": "AI 컨트롤타워"
+      "/governance": "AI 컨트롤타워",
+      "/task-folders": "태스크 폴더 관리 AI",
+      "/m": "임직원 모바일 포털",
+      "/m/snaptasks": "현장/업무 스마트 스냅",
+      "/m/order-capture": "현장 주문 캡처",
+      "/m/estimate-request": "모바일 스마트 견적 요청",
+      "/m/recruitment": "구직자 모바일 접수"
     };
 
     // 동적 경로 및 특수 조건 분기
