@@ -2672,6 +2672,7 @@ export default function MobileHubPage() {
 
                 const isImage = name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
                 const isVideo = name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm');
+                const isPdf = name.endsWith('.pdf');
 
                 if (isImage) {
                   return (
@@ -2693,6 +2694,16 @@ export default function MobileHubPage() {
                       src={getFileServingUrl(activeViewerItem)} 
                       controls 
                       className="max-w-full max-h-[45vh] rounded-xl shadow-2xs"
+                    />
+                  );
+                }
+
+                if (isPdf) {
+                  return (
+                    <iframe 
+                      src={getFileServingUrl(activeViewerItem)} 
+                      className="w-full h-[45vh] rounded-xl border-none shadow-2xs bg-white"
+                      title={activeViewerItem.file_name}
                     />
                   );
                 }
