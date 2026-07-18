@@ -622,9 +622,9 @@ export default function MobileHubPage() {
       setVoiceText("");
       setIsRequestModalOpen(false);
 
-      if (activeMobileFolderId === uploadModalFolderId) {
-        fetchMobileFolderItems(activeMobileFolderId);
-      }
+      // 💡 [화면 강제 포커싱] 등록된 해당 폴더 탭으로 화면을 즉각 이동시킵니다!
+      setActiveMobileFolderId(uploadModalFolderId);
+      fetchMobileFolderItems(uploadModalFolderId);
       alert("태스크 폴더에 자료가 성공적으로 등록되었습니다!");
     } catch (err: any) {
       alert("자료 등록 실패: " + err.message);

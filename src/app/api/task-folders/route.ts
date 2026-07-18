@@ -23,12 +23,22 @@ export async function GET(req: Request) {
         return NextResponse.json({ success: false, error: 'folderId가 필요합니다.' }, { status: 400 });
       }
 
-      // deleted_at IS NULL 규칙 적용
+      // deleted_at IS NULL 규칙 및 최신순 정렬 적용
       const res = await queryTable('crm_task_folder_items', {
-        orderBy: 'created_at DESC'
+        orderBy: 'created_at',
+        orderDirection: 'DESC'
       });
       const rows = res.rows || [];
       const activeRows = rows.filter((r: any) => !r.deleted_at && String(r.folder_id) === String(folderId));
+      
+      // 최신순 정렬 재확보 (자바스크립트 수준의 이중 가드)
+      activeRows.sort((a: any, b: any) => {
+        const timeA = new Date(a.created_at).getTime() || 0;
+        const timeB = new Date(b.created_at).getTime() || 0;
+        if (timeB !== timeA) return timeB - timeA;
+        return (parseInt(b.id) || 0) - (parseInt(a.id) || 0);
+      });
+
       return NextResponse.json({ success: true, items: activeRows });
     }
 
