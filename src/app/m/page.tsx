@@ -795,6 +795,76 @@ export default function MobileHubPage() {
     setAttendanceStatus("done");
   };
 
+  // 실시간 근무 시간 연산 헬퍼 (출근 중)
+  const getElapsedWorkTime = () => {
+    if (!clockInTime) return "00:00:00";
+    try {
+      const match = clockInTime.match(/(\d+):(\d+)/);
+      if (!match) return "00:00:00";
+      
+      let hrs = parseInt(match[1], 10);
+      const mins = parseInt(match[2], 10);
+      
+      if (clockInTime.includes("오후") && hrs < 12) {
+        hrs += 12;
+      }
+      if (clockInTime.includes("오전") && hrs === 12) {
+        hrs = 0;
+      }
+      
+      const now = new Date();
+      const inDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hrs, mins, 0);
+      
+      let diffMs = now.getTime() - inDate.getTime();
+      if (diffMs < 0) diffMs = 0;
+      
+      const totalSec = Math.floor(diffMs / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    } catch (e) {
+      return "00:00:00";
+    }
+  };
+
+  // 최종 소요 근무 시간 연산 헬퍼 (퇴근 후)
+  const getFinalWorkTime = () => {
+    if (!clockInTime || !clockOutTime) return "00:00";
+    try {
+      const matchIn = clockInTime.match(/(\d+):(\d+)/);
+      const matchOut = clockOutTime.match(/(\d+):(\d+)/);
+      if (!matchIn || !matchOut) return "00:00";
+      
+      let hrsIn = parseInt(matchIn[1], 10);
+      const minsIn = parseInt(matchIn[2], 10);
+      if (clockInTime.includes("오후") && hrsIn < 12) hrsIn += 12;
+      if (clockInTime.includes("오전") && hrsIn === 12) hrsIn = 0;
+      
+      let hrsOut = parseInt(matchOut[1], 10);
+      const minsOut = parseInt(matchOut[2], 10);
+      if (clockOutTime.includes("오후") && hrsOut < 12) hrsOut += 12;
+      if (clockOutTime.includes("오전") && hrsOut === 12) hrsOut = 0;
+      
+      const now = new Date();
+      const inDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hrsIn, minsIn, 0);
+      const outDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hrsOut, minsOut, 0);
+      
+      let diffMs = outDate.getTime() - inDate.getTime();
+      if (diffMs < 0) diffMs = 0;
+      
+      const totalMins = Math.floor(diffMs / (1000 * 60));
+      const h = Math.floor(totalMins / 60);
+      const m = totalMins % 60;
+      
+      if (h === 0) return `${m}분`;
+      return `${h}시간 ${m}분`;
+    } catch (e) {
+      return "00:00";
+    }
+  };
+
   // 진행 중인 일(할 일) 분류
   const activeTasks = tasks.filter(t => t.status === "ACTIVE" || t.status === "PENDING");
   
@@ -1224,9 +1294,10 @@ export default function MobileHubPage() {
             )}
             {attendanceStatus === "working" && (
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1.5 rounded-lg">
-                {session.role === 'SUPER_ADMIN' ? '최고관리자' : session.role === 'EMPLOYEE' ? '일반직원' : '부운영자'}
-              </span>
+                <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 font-mono shadow-3xs">
+                  <Clock className="w-3.5 h-3.5 text-indigo-600 animate-pulse shrink-0" />
+                  <span>근무 {getElapsedWorkTime()}</span>
+                </span>
                 <button 
                   onClick={handleClockOut}
                   className="px-4 py-2.5 bg-slate-800 text-white text-xs font-black rounded-xl shadow-xs hover:bg-slate-900 active:scale-95 transition-all cursor-pointer border-none"
@@ -1236,9 +1307,9 @@ export default function MobileHubPage() {
               </div>
             )}
             {attendanceStatus === "done" && (
-              <div className="bg-emerald-50 text-emerald-800 border border-emerald-100 text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-1">
+              <div className="bg-emerald-50 text-emerald-800 border border-emerald-100 text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-1 shadow-3xs">
                 <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>근무 완료 ({clockInTime}~{clockOutTime})</span>
+                <span>근무 완료 ({clockInTime}~{clockOutTime}, 총 {getFinalWorkTime()})</span>
               </div>
             )}
           </div>
