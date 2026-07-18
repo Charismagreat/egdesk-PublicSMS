@@ -368,7 +368,7 @@ export default function MobileHubPage() {
   // 다른 태스크 폴더로 수집 자료 이동 실행
   const handleMoveFileFolder = async (itemId: number, targetFolderId: number) => {
     try {
-      const res = await fetch('/api/task-folders', {
+      const res = await fetch('/api/task-folders?action=update_item', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

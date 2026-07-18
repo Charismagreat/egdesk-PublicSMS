@@ -40,7 +40,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const { searchParams } = new URL(req.url);
-  const action = searchParams.get('action');
+  let action = searchParams.get('action');
   const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
 
   try {
@@ -130,6 +130,9 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    if (!action && body && body.action) {
+      action = body.action;
+    }
 
     if (action === 'create_folder') {
       const { name, description } = body;
