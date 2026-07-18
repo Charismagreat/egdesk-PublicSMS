@@ -285,6 +285,10 @@ function PrintOrderContent() {
       {/* 인쇄 전용 CSS 스타일 주입 */}
       <style jsx global>{`
         @media print {
+          @page {
+            size: A4 portrait;
+            margin: 15mm;
+          }
           .no-print {
             display: none !important;
           }
