@@ -518,14 +518,19 @@ export default function MobileHubPage() {
                  try {
                    const restoredFile = dataURLtoFile(photoItem.preview, photoItem.name);
                    fd.append('file', restoredFile);
-                 } catch (err) {
+                 } catch (err: any) {
                    console.error("DataURL restore error:", err);
+                   alert(`이미지 복원 실패: ${err.message}`);
+                   return;
                  }
                } else {
                  const blobRes = await fetch(photoItem.preview);
                  if (blobRes.ok) {
                    const blob = await blobRes.blob();
                    fd.append('file', new File([blob], photoItem.name, { type: blob.type }));
+                 } else {
+                   alert(`서버에서 이미지('${photoItem.name}')를 내려받지 못했습니다.`);
+                   return;
                  }
                }
              } else {
@@ -538,17 +543,29 @@ export default function MobileHubPage() {
                    try {
                      const restoredFile = dataURLtoFile(previewUrl, fileItem.name);
                      fd.append('file', restoredFile);
-                   } catch (err) {
+                   } catch (err: any) {
                      console.error("DataURL file restore error:", err);
+                     alert(`파일 복원 실패: ${err.message}`);
+                     return;
                    }
                  } else {
                    const blobRes = await fetch(previewUrl);
                    if (blobRes.ok) {
                      const blob = await blobRes.blob();
                      fd.append('file', new File([blob], fileItem.name, { type: blob.type }));
+                   } else {
+                     alert(`서버에서 파일('${fileItem.name}')을 내려받지 못했습니다.`);
+                     return;
                    }
                  }
                }
+             }
+
+             // 💡 [전송 안전 가드] 실물 파일이 실제로 폼 데이터에 담겼는지 최종 검증
+             const appendedFile = fd.get('file');
+             if (!appendedFile || (appendedFile instanceof File && appendedFile.size === 0)) {
+               alert(`첨부파일 '${item.name}'의 실물 데이터가 전송 폼에 누락되었습니다.`);
+               return; // 전송 차단!
              }
 
             res = await fetch("/api/task-folders?action=create_item", {
