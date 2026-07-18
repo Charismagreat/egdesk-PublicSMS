@@ -2837,9 +2837,9 @@ export default function MobileHubPage() {
                     <div className="space-y-2.5 max-h-[30vh] overflow-y-auto pr-1">
                       {(() => {
                         const mainItem = taskTimeline.find(item => item.content_text?.includes('[요청 사유]'));
-                        const attachments = taskTimeline.filter(item => item.file_url && item.content_text?.includes('[상신 첨부]'));
+                        const attachments = taskTimeline.filter(item => item.content_text?.includes('[상신 첨부]'));
                         const displayTimeline = taskTimeline.filter(item => {
-                          if (item.content_text?.includes('[상신 첨부]') && item.file_url) {
+                          if (item.content_text?.includes('[상신 첨부]')) {
                             return false;
                           }
                           return true;
