@@ -257,14 +257,18 @@ export async function POST(req: Request) {
     }
     */
 
-    // 본사 프로필 로드 (기본값 주식회사 원컨덕터트레이딩/2428700357)
-    let myCompanyProfile = { companyName: '주식회사 원컨덕터트레이딩', businessNumber: '2428700357' };
+    // 본사 프로필 로드 (하드코딩 제거, DB 설정 조회로만 가동하며 없으면 검증을 우회합니다)
+    let myCompanyProfile = { companyName: '', businessNumber: '' };
+    let hasMyCompanyProfile = false;
     try {
       const myCompanySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
       if (myCompanySetting && myCompanySetting.rows && myCompanySetting.rows.length > 0) {
         const parsed = JSON.parse(myCompanySetting.rows[0].value);
         if (parsed.companyName) myCompanyProfile.companyName = parsed.companyName;
         if (parsed.businessNumber) myCompanyProfile.businessNumber = parsed.businessNumber;
+        if (myCompanyProfile.companyName && myCompanyProfile.businessNumber) {
+          hasMyCompanyProfile = true;
+        }
       }
     } catch (e) {
       console.error('본사 프로필 조회 실패:', e);
@@ -667,7 +671,9 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
       bypassCheckRes = await queryTable('system_settings', { filters: { key: 'bypass_ocr_receiver_check' } });
     }
     const bypassCheck = bypassCheckRes.rows && bypassCheckRes.rows.length > 0 ? bypassCheckRes.rows[0].value : '0';
-    const receiverMatched = (bypassCheck === '1') ? true : (isSupplierMyCompany || isBuyerMyCompany);
+    
+    // 💡 [본사설정 부재 시 바이패스] 본사 프로필 설정이 없으면 무조건 검증을 바이패스(우회) 처리합니다.
+    const receiverMatched = (bypassCheck === '1' || !hasMyCompanyProfile) ? true : (isSupplierMyCompany || isBuyerMyCompany);
     return NextResponse.json({
       success: true,
       receiver_matched: receiverMatched,
