@@ -110,10 +110,10 @@ export async function POST(req: Request) {
         try {
           const uploadRes = await uploadFile('crm_task_folder_items', rowId, 'file_url', fileName, fileBuffer.toString('base64'));
           if (uploadRes && uploadRes.success) {
-            const gatewayUrl = `/api/shared/files?tableName=crm_task_folder_items&rowId=${rowId}&columnName=file_url`;
-            // 💡 [원격 보존] uploadFile이 안전하게 기입한 스토리지 원본 매핑을 보존하기 위해 updateRows 덮어쓰기를 비활성화합니다.
-            // await updateRows('crm_task_folder_items', { file_url: gatewayUrl }, { filters: { id: String(rowId) } });
-            newItem.file_url = gatewayUrl;
+            // 💡 [진짜 파일 ID 업데이트] downloadFile이 스토리지에서 바이너리를 안전히 역추적하도록 파일 ID를 기록합니다.
+            const storageFileId = uploadRes.fileId || `file_${rowId}_${fileName}`;
+            await updateRows('crm_task_folder_items', { file_url: storageFileId }, { filters: { id: String(rowId) } });
+            newItem.file_url = storageFileId;
           } else {
             console.error("uploadFile returned failed status:", uploadRes);
             return NextResponse.json({ success: false, error: `파일 업로드 스토리지 보관 실패: ${uploadRes?.error || '알 수 없는 오류'}` }, { status: 500 });
