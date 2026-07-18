@@ -701,6 +701,9 @@ export default function MobileHubPage() {
   useEffect(() => {
     const fetchSession = async () => {
       try {
+        // 💡 [DB 자가치유 가드] 모바일 진입 시 테이블 유실 방지를 위한 백그라운드 셋업 강제 기동
+        fetch(getProxiedUrl("/api/setup")).catch(err => console.error("Self-heal setup error:", err));
+
         const res = await fetch("/api/auth/me");
         const data = await res.json();
         if (data.success) {
