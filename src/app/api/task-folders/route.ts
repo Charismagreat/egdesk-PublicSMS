@@ -70,8 +70,14 @@ export async function POST(req: Request) {
         fileBuffer = Buffer.from(await file.arrayBuffer());
       }
 
+      // 💡 [ID 명시적 매핑] SQLite 자동생성 키 누락 우회: 직접 Max ID + 1 산출
+      const itemsRes = await queryTable('crm_task_folder_items', {});
+      const items = itemsRes.rows || [];
+      const nextId = items.length > 0 ? Math.max(...items.map((c: any) => parseInt(c.id) || 0)) + 1 : 1;
+
       // 1. 우선 crm_task_folder_items 행 추가 (임시 file_url = '')
       const res = await insertRows('crm_task_folder_items', [{
+        id: nextId,
         folder_id: Number(folderId),
         tags: (tags as string) || '',
         title: title as string,
@@ -86,8 +92,18 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: res.error }, { status: 500 });
       }
 
-      const newItem = res.rows?.[0];
-      const rowId = newItem?.id;
+      const rowId = nextId;
+      const newItem = {
+        id: nextId,
+        folder_id: Number(folderId),
+        tags: (tags as string) || '',
+        title: title as string,
+        content: (content as string) || '',
+        file_name: fileName,
+        file_size: fileSize,
+        file_url: '',
+        created_at: nowStr
+      };
 
       // 2. 파일 스토리지 업로드 처리
       if (fileBuffer && rowId) {
@@ -95,7 +111,7 @@ export async function POST(req: Request) {
           const uploadRes = await uploadFile('crm_task_folder_items', rowId, 'file_url', fileName, fileBuffer.toString('base64'));
           if (uploadRes && uploadRes.success) {
             const gatewayUrl = `/api/shared/files?tableName=crm_task_folder_items&rowId=${rowId}&columnName=file_url`;
-            await updateRows('crm_task_folder_items', { file_url: gatewayUrl }, { filters: { id: rowId } });
+            await updateRows('crm_task_folder_items', { file_url: gatewayUrl }, { filters: { id: String(rowId) } });
             newItem.file_url = gatewayUrl;
           } else {
             console.error("uploadFile returned failed status:", uploadRes);
@@ -138,7 +154,12 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: '필수 필드가 누락되었습니다.' }, { status: 400 });
       }
 
+      const itemsRes = await queryTable('crm_task_folder_items', {});
+      const items = itemsRes.rows || [];
+      const nextId = items.length > 0 ? Math.max(...items.map((c: any) => parseInt(c.id) || 0)) + 1 : 1;
+
       const res = await insertRows('crm_task_folder_items', [{
+        id: nextId,
         folder_id: Number(folderId),
         tags: tags || '',
         title,
@@ -150,7 +171,20 @@ export async function POST(req: Request) {
       }]);
 
       if (res.success) {
-        return NextResponse.json({ success: true, item: res.rows?.[0] });
+        return NextResponse.json({ 
+          success: true, 
+          item: {
+            id: nextId,
+            folder_id: Number(folderId),
+            tags: tags || '',
+            title,
+            content: content || '',
+            file_name: fileName || '',
+            file_size: fileSize || '',
+            file_url: fileUrl || '',
+            created_at: nowStr
+          }
+        });
       } else {
         return NextResponse.json({ success: false, error: res.error }, { status: 500 });
       }
