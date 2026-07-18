@@ -67,20 +67,32 @@ export async function GET(request: Request) {
       const events: any[] = [];
       const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
 
-      // 1.1. crm_governance_logs (결재 보류 건)
+      // 1.1. crm_governance_logs (결재 보류 건 및 모바일 취소 요청 건)
       try {
         const govRes = await queryTable('crm_governance_logs', { limit: 500 });
         const logs = govRes.rows || [];
         logs.forEach((log: any) => {
-          events.push({
-            id: `rag_hold_${log.id}`,
-            type: 'RAG_HOLD',
-            title: `AI 결재 보류: ${log.doc_title || '보류 건'}`,
-            subtitle: `${log.doc_type === 'estimate' ? '견적서' : log.doc_type === 'purchase_order' ? '발주서' : '수주서'} 삭제 시도 보류 건`,
-            status: log.status === 'PENDING_APPROVAL' ? 'WAITING' : 'RESOLVED',
-            created_at: log.created_at || nowStr,
-            data: log
-          });
+          if (log.doc_type === 'TASK_CANCEL_REQUEST') {
+            events.push({
+              id: `cancel_req_${log.id}`,
+              type: 'TASK_CANCEL_REQUEST',
+              title: `업무 취소 승인 요청: ${log.doc_title || '취소 요청 건'}`,
+              subtitle: `요청자: ${log.operator || '임직원'} / 업무 ID: ${log.doc_id || '-'}`,
+              status: log.status === 'PENDING_APPROVAL' ? 'WAITING' : 'RESOLVED',
+              created_at: log.created_at || nowStr,
+              data: log
+            });
+          } else {
+            events.push({
+              id: `rag_hold_${log.id}`,
+              type: 'RAG_HOLD',
+              title: `AI 결재 보류: ${log.doc_title || '보류 건'}`,
+              subtitle: `${log.doc_type === 'estimate' ? '견적서' : log.doc_type === 'purchase_order' ? '발주서' : '수주서'} 삭제 시도 보류 건`,
+              status: log.status === 'PENDING_APPROVAL' ? 'WAITING' : 'RESOLVED',
+              created_at: log.created_at || nowStr,
+              data: log
+            });
+          }
         });
       } catch (e) {
         console.error('Failed to load governance logs for events:', e);
@@ -346,6 +358,68 @@ export async function POST(request: Request) {
       });
     }
 
+    // [신규] 임직원 모바일 현장 작업 취소 요청 상신
+    if (action === 'create_cancel_request') {
+      const { taskId, reason } = body;
+      
+      if (!taskId || !reason || !reason.trim()) {
+        return NextResponse.json({ success: false, error: '취소할 대상 태스크 ID와 사유가 필요합니다.' }, { status: 400 });
+      }
+
+      // 태스크 존재 여부 확인
+      const taskRes = await queryTable('crm_snaptasks', { filters: { id: taskId } });
+      if (!taskRes.rows || taskRes.rows.length === 0) {
+        return NextResponse.json({ success: false, error: '존재하지 않는 스냅태스크입니다.' }, { status: 404 });
+      }
+      const task = taskRes.rows[0];
+
+      const reqId = `cancel_req_${Date.now()}`;
+      
+      // 1. 거버넌스 승인 요청 로그 인서트
+      await insertRows('crm_governance_logs', [{
+        id: reqId,
+        doc_type: 'TASK_CANCEL_REQUEST',
+        doc_id: taskId,
+        doc_title: task.title,
+        status: 'PENDING_APPROVAL',
+        reason: reason.trim(),
+        operator: currentUser,
+        created_at: nowStr,
+        uuid: reqId,
+        updated_at: nowStr,
+        updated_by: currentUser
+      }]);
+
+      // 2. 메인 스냅태스크의 상태를 PENDING_APPROVAL(취소 승인 대기)로 업데이트
+      await updateRows('crm_snaptasks', {
+        status: 'PENDING_APPROVAL',
+        updated_at: nowStr,
+        updated_by: currentUser
+      }, { filters: { id: taskId } });
+
+      // 3. 스냅태스크 타임라인에 취소 사유 로그 추가 기입
+      const itemUuid = `STI-${Date.now()}-cancel-req`;
+      await insertRows('crm_snaptask_items', [{
+        id: Date.now(),
+        task_id: taskId,
+        content_text: `[취소 요청 사유]\n${reason.trim()}`,
+        file_url: null,
+        file_type: 'TEXT',
+        ai_analysis: JSON.stringify({ message: "Mobile task cancel requested" }),
+        created_at: nowStr,
+        tenant_id: task.tenant_id || 'default',
+        uuid: itemUuid,
+        updated_at: nowStr,
+        updated_by: currentUser
+      }]);
+
+      return NextResponse.json({
+        success: true,
+        message: '해당 업무에 대한 취소 요청이 컨트롤타워에 상신되었습니다.',
+        reqId
+      });
+    }
+
     // 1. AI 추천 다음 작업 자율 대행 실행
     if (action === 'execute_actions') {
       const { eventId, eventType, actions, docId, docType, originalData } = body;
@@ -529,6 +603,74 @@ export async function POST(request: Request) {
               action: act,
               success: true,
               detail: `[감사 통제 피드백] 최고관리자의 자율 대행 결정 이력 감사를 시스템 감사 대장에 영구 기록 완료했습니다.`
+            });
+          }
+
+          else if (act === 'approve_task_cancel') {
+            const taskId = originalData?.doc_id || originalData?.id || '';
+            // crm_snaptasks 테이블에서 소프트 삭제 처리
+            await updateRows('crm_snaptasks', {
+              deleted_at: nowStr,
+              deleted_by: adminUser
+            }, { filters: { id: taskId } });
+
+            // crm_snaptask_items (파일 및 내용) 도 일괄 소프트 삭제 처리
+            await updateRows('crm_snaptask_items', {
+              deleted_at: nowStr,
+              deleted_by: adminUser
+            }, { filters: { task_id: taskId } });
+
+            // 거버넌스 로그 상태를 승인 완료로 갱신
+            if (eventId) {
+              const logRawId = eventId.replace('cancel_req_', '');
+              await updateRows('crm_governance_logs', {
+                status: 'APPROVED',
+                reason: `최고관리자(${adminUser})에 의해 업무 취소 최종 승인 및 소프트 삭제 완료.`
+              }, { filters: { id: logRawId } });
+            }
+
+            actionReports.push({
+              action: act,
+              success: true,
+              detail: `[취소 승인 완료] 태스크 ID [${taskId}] 및 첨부 파일 내역을 모두 최종 취소(소프트 삭제) 완료했습니다.`
+            });
+          }
+
+          else if (act === 'reject_task_cancel') {
+            const taskId = originalData?.doc_id || originalData?.id || '';
+            // crm_snaptasks 테이블의 상태를 ACTIVE 로 복구 원복
+            await updateRows('crm_snaptasks', {
+              status: 'ACTIVE',
+              updated_at: nowStr,
+              updated_by: adminUser
+            }, { filters: { id: taskId } });
+
+            // crm_snaptask_items 에 반려 로그 추가 기입
+            await insertRows('crm_snaptask_items', [{
+              id: Date.now(),
+              task_id: taskId,
+              content_text: `[시스템 알림] 최고관리자(${adminUser})가 업무 취소 요청을 반려하여 정상 재개되었습니다.`,
+              file_type: 'TEXT',
+              created_at: nowStr,
+              tenant_id: originalData?.tenant_id || 'default',
+              uuid: `STI-${Date.now()}-reject`,
+              updated_at: nowStr,
+              updated_by: adminUser
+            }]);
+
+            // 거버넌스 로그 상태를 반려(기각)로 갱신
+            if (eventId) {
+              const logRawId = eventId.replace('cancel_req_', '');
+              await updateRows('crm_governance_logs', {
+                status: 'REJECTED',
+                reason: `최고관리자(${adminUser})에 의해 취소 요청 기각 및 반려됨.`
+              }, { filters: { id: logRawId } });
+            }
+
+            actionReports.push({
+              action: act,
+              success: true,
+              detail: `[취소 요청 반려] 취소 요청을 반려하고 태스크 ID [${taskId}]를 정상 진행(ACTIVE) 상태로 원복했습니다.`
             });
           }
         } catch (actErr: any) {

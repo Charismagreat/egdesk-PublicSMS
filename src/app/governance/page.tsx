@@ -13,7 +13,7 @@ import {
 
 interface ControlEvent {
   id: string;
-  type: 'STORE_ORDER' | 'RAG_HOLD' | 'LOW_STOCK';
+  type: 'STORE_ORDER' | 'RAG_HOLD' | 'LOW_STOCK' | 'TASK_CANCEL_REQUEST';
   title: string;
   subtitle: string;
   status: 'WAITING' | 'RESOLVED';
@@ -187,7 +187,7 @@ export default function GovernanceDashboard() {
   };
 
   // 7. 모달 제어 및 추천 액션 목록 획득
-  const getRecommendedActions = (type: 'STORE_ORDER' | 'RAG_HOLD' | 'LOW_STOCK'): ActionRecommendation[] => {
+  const getRecommendedActions = (type: 'STORE_ORDER' | 'RAG_HOLD' | 'LOW_STOCK' | 'TASK_CANCEL_REQUEST'): ActionRecommendation[] => {
     switch (type) {
       case 'STORE_ORDER':
         return [
@@ -206,6 +206,12 @@ export default function GovernanceDashboard() {
       case 'LOW_STOCK':
         return [
           { code: 'sms_low_stock', label: '창고 및 자재 조달 담당 직원 긴급 경고 문자 발송', description: '안전재고가 고갈되어 위험 상태임을 구매 담당자에게 문자 전송합니다.' },
+          { code: 'notify_operator', label: '조치 이력 영구 감사 아카이빙', description: '최고관리자의 개입 이력을 통제 감사록에 상세 기록합니다.' }
+        ];
+      case 'TASK_CANCEL_REQUEST':
+        return [
+          { code: 'approve_task_cancel', label: '업무 취소(소프트 삭제) 최종 승인', description: '요청된 취소 사유를 최종 승인하여 스냅태스크 및 연관 이력을 대장에서 소프트 삭제 처리합니다.' },
+          { code: 'reject_task_cancel', label: '취소 요청 반려 및 정상 재개', description: '취소 사유를 기각하고 해당 스냅태스크를 다시 정상 진행(ACTIVE) 상태로 원복합니다.' },
           { code: 'notify_operator', label: '조치 이력 영구 감사 아카이빙', description: '최고관리자의 개입 이력을 통제 감사록에 상세 기록합니다.' }
         ];
       default:
@@ -627,10 +633,13 @@ export default function GovernanceDashboard() {
                             ? 'bg-blue-50 text-blue-650' 
                             : evt.type === 'RAG_HOLD' 
                               ? 'bg-rose-50 text-rose-600' 
-                              : 'bg-amber-50 text-amber-600'
+                              : evt.type === 'TASK_CANCEL_REQUEST'
+                                ? 'bg-indigo-50 text-indigo-600'
+                                : 'bg-amber-50 text-amber-600'
                         }`}>
                           {evt.type === 'STORE_ORDER' && <FileText className="w-6 h-6" />}
                           {evt.type === 'RAG_HOLD' && <ShieldAlert className="w-6 h-6 animate-pulse" />}
+                          {evt.type === 'TASK_CANCEL_REQUEST' && <Trash2 className="w-6 h-6" />}
                           {evt.type === 'LOW_STOCK' && <AlertTriangle className="w-6 h-6" />}
                         </div>
                         <div className="space-y-1 text-left">
@@ -641,9 +650,11 @@ export default function GovernanceDashboard() {
                                 ? 'bg-blue-50 text-blue-700' 
                                 : evt.type === 'RAG_HOLD' 
                                   ? 'bg-rose-50 text-rose-700' 
-                                  : 'bg-amber-50 text-amber-700'
+                                  : evt.type === 'TASK_CANCEL_REQUEST'
+                                    ? 'bg-indigo-50 text-indigo-700'
+                                    : 'bg-amber-50 text-amber-700'
                             }`}>
-                              {evt.type === 'STORE_ORDER' ? '스토어 주문' : evt.type === 'RAG_HOLD' ? 'AI 결재 보류' : '재고 부족 경보'}
+                              {evt.type === 'STORE_ORDER' ? '스토어 주문' : evt.type === 'RAG_HOLD' ? 'AI 결재 보류' : evt.type === 'TASK_CANCEL_REQUEST' ? '업무 취소 요청' : '재고 부족 경보'}
                             </span>
                           </div>
                           <p className="text-xs text-slate-500 font-semibold">{evt.subtitle}</p>
@@ -774,6 +785,25 @@ export default function GovernanceDashboard() {
                         </div>
                       </>
                     )}
+                  </>
+                )}
+                {selectedEvent.type === 'TASK_CANCEL_REQUEST' && (
+                  <>
+                    <div className="col-span-2 border-t border-slate-100 my-1"></div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">상신 취소 요청자</span>
+                      <span className="font-bold text-slate-800">{selectedEvent.data.operator || '임직원'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">대상 업무 ID</span>
+                      <span className="font-mono font-bold text-slate-800">{selectedEvent.data.doc_id || '-'}</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-slate-400 font-semibold block">취소 신청 사유</span>
+                      <span className="font-semibold text-indigo-950 bg-indigo-50/50 p-4 rounded-2xl block mt-1 leading-relaxed border border-indigo-100/60 whitespace-pre-wrap">
+                        {selectedEvent.data.reason || '사유가 입력되지 않았습니다.'}
+                      </span>
+                    </div>
                   </>
                 )}
                 {selectedEvent.type === 'LOW_STOCK' && (
