@@ -8,17 +8,21 @@ import { queryTable, insertRows, updateRows, deleteRows, executeSQL } from '../.
  * GET: 스냅태스크 목록 조회 또는 특정 태스크의 타임라인 마이닝
  */
 export async function GET(req: Request) {
-  // 사용자 세션의 테넌트 ID 추출
+  // 사용자 세션의 테넌트 ID 및 권한, 계정명 추출
   let userTenantId = 'default';
+  let userRole = 'EMPLOYEE';
+  let userName = 'guest-1';
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('auth_token')?.value;
     if (token) {
       const payload = decodeJwt(token);
       userTenantId = (payload.tenant_id as string) || 'default';
+      userRole = (payload.role as string) || 'EMPLOYEE';
+      userName = (payload.username as string) || 'guest-1';
     }
   } catch (e) {
-    console.error('Failed to parse tenant_id from auth_token in snaptasks API:', e);
+    console.error('Failed to parse JWT payload in snaptasks GET API:', e);
   }
 
   try {
@@ -118,7 +122,14 @@ export async function GET(req: Request) {
       // 3) 조인 및 소프트 삭제 필터링 메모리 연산 + 테넌트 격리 가드 추가
       // 💡 deleted_at 키워드를 SQL에 직접 쓰지 않으므로 방화벽을 완전히 우회합니다.
       tasks = snaptasksRows
-        .filter((t: any) => !t.deleted_at && String(t.tenant_id) === String(userTenantId))
+        .filter((t: any) => {
+          if (t.deleted_at) return false;
+          if (userRole === 'SUPER_ADMIN') {
+            return t.created_by === 'guest' || t.created_by === '최고관리자';
+          } else {
+            return t.created_by === userName;
+          }
+        })
         .map((t: any) => {
           const matchedPartner = partnersRows.find(p => String(p.id) === String(t.partner_id));
           return {
@@ -137,7 +148,14 @@ export async function GET(req: Request) {
       `;
       const listRes = await executeSQL(fallbackQuery) || [];
       const rawRows = (listRes && (listRes as any).rows) ? (listRes as any).rows : (Array.isArray(listRes) ? listRes : []);
-      tasks = rawRows.filter((t: any) => !t.deleted_at && String(t.tenant_id) === String(userTenantId));
+      tasks = rawRows.filter((t: any) => {
+        if (t.deleted_at) return false;
+        if (userRole === 'SUPER_ADMIN') {
+          return t.created_by === 'guest' || t.created_by === '최고관리자';
+        } else {
+          return t.created_by === userName;
+        }
+      });
     }
 
     return NextResponse.json({
@@ -155,6 +173,23 @@ export async function GET(req: Request) {
  * POST: 신규 스냅태스크 생성
  */
 export async function POST(req: Request) {
+  // 사용자 세션의 테넌트 ID 및 권한, 계정명 추출
+  let userTenantId = 'default';
+  let userRole = 'EMPLOYEE';
+  let userName = 'guest-1';
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    if (token) {
+      const payload = decodeJwt(token);
+      userTenantId = (payload.tenant_id as string) || 'default';
+      userRole = (payload.role as string) || 'EMPLOYEE';
+      userName = (payload.username as string) || 'guest-1';
+    }
+  } catch (e) {
+    console.error('Failed to parse JWT payload in POST snaptasks API:', e);
+  }
+
   try {
     const body = await req.json();
     const { title } = body;
@@ -172,7 +207,10 @@ export async function POST(req: Request) {
       status: 'ACTIVE',
       partner_id: null,
       created_at: nowStr,
-      updated_at: nowStr
+      updated_at: nowStr,
+      tenant_id: userTenantId,
+      created_by: userName,
+      uuid: taskId
     }]);
 
     // 첫 가이드성 AI 자율 생성 타임라인 첫발자국 자동 삽입
@@ -183,7 +221,9 @@ export async function POST(req: Request) {
       file_url: null,
       file_type: 'TEXT',
       ai_analysis: JSON.stringify({ message: "Task initialized" }),
-      created_at: nowStr
+      created_at: nowStr,
+      tenant_id: userTenantId,
+      created_by: userName
     }]);
 
     return NextResponse.json({
