@@ -76,6 +76,19 @@ export async function POST(req: Request) {
   let action = searchParams.get('action');
   const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
 
+  // 사용자 세션의 테넌트 ID 추출
+  let userTenantId = 'default';
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    if (token) {
+      const payload = decodeJwt(token);
+      userTenantId = (payload.tenant_id as string) || 'default';
+    }
+  } catch (e) {
+    console.error('Failed to parse tenant_id from auth_token in POST task-folders API:', e);
+  }
+
   try {
     // 💡 Multipart Form 업로드인 경우 (실물 파일 동시 업로드)
     if (req.headers.get('content-type')?.includes('multipart/form-data')) {
@@ -118,7 +131,9 @@ export async function POST(req: Request) {
         file_name: fileName,
         file_size: fileSize,
         file_url: '',
-        created_at: nowStr
+        created_at: nowStr,
+        tenant_id: userTenantId,
+        uuid: `STI-${nextId}-item`
       }]);
 
       if (!res.success) {
@@ -176,8 +191,10 @@ export async function POST(req: Request) {
       const res = await insertRows('crm_task_folders', [{
         name: name,
         description: description || '',
-        created_by: '현장 모바일',
-        created_at: nowStr
+        created_by: userTenantId === 'tenant-guest-id-2222' ? '임직원' : '최고관리자',
+        created_at: nowStr,
+        tenant_id: userTenantId,
+        uuid: `STF-${Date.now()}-folder`
       }]);
 
       if (res.success) {
@@ -206,7 +223,9 @@ export async function POST(req: Request) {
         file_name: fileName || '',
         file_size: fileSize || '',
         file_url: fileUrl || '',
-        created_at: nowStr
+        created_at: nowStr,
+        tenant_id: userTenantId,
+        uuid: `STI-${nextId}-item`
       }]);
 
       if (res.success) {
