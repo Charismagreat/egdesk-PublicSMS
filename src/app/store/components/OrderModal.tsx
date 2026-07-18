@@ -201,7 +201,14 @@ export function OrderModal({
                 </div>
               )}
             </div>
-            <h4 className="font-extrabold text-slate-800 text-2xl md:text-3xl mb-3">{selectedProduct.name}</h4>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <h4 className="font-extrabold text-slate-800 text-2xl md:text-3xl m-0">{selectedProduct.name}</h4>
+              {selectedProduct.valid_item_code && (
+                <span className="bg-indigo-50 text-indigo-700 text-[10px] font-black px-2.5 py-1 rounded-md border border-indigo-100/60 font-mono">
+                  유효품목코드: {selectedProduct.valid_item_code}
+                </span>
+              )}
+            </div>
             <p className="text-blue-600 font-black text-2xl mb-6">
               {selectedProduct.price === '상담후결정' ? '상담 후 결정' : (unitPrice > 0 ? `${unitPrice.toLocaleString()}원` : '가격 문의')}
             </p>

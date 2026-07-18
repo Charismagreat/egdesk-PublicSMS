@@ -44,15 +44,20 @@ export async function GET(req: Request) {
 
     try {
       let countQuery = `SELECT COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
-      let dataQuery = `SELECT * FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
+      let dataQuery = `
+        SELECT p.*, i.barcode as inventory_barcode 
+        FROM products p
+        LEFT JOIN inventory_items i ON p.inventory_item_id = i.id
+        WHERE p.tenant_id = '${tenantId}' AND p.status = '${status}'
+      `;
 
       if (search) {
-        const searchCond = ` AND (name LIKE '%${search}%' OR category LIKE '%${search}%' OR description LIKE '%${search}%')`;
+        const searchCond = ` AND (p.name LIKE '%${search}%' OR p.category LIKE '%${search}%' OR p.description LIKE '%${search}%')`;
         countQuery += searchCond;
         dataQuery += searchCond;
       }
 
-      dataQuery += ` ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`;
+      dataQuery += ` ORDER BY p.id DESC LIMIT ${limit} OFFSET ${offset}`;
 
       const countRes = await executeSQL(countQuery);
       filteredCount = countRes.rows?.[0]?.count || 0;
@@ -72,6 +77,15 @@ export async function GET(req: Request) {
       });
       let allRows = queryRes.rows || [];
       
+      // 재고 마스터 테이블 로드 (메모리 조인용)
+      let invItems: any[] = [];
+      try {
+        const invRes = await queryTable('inventory_items', { limit: 10000 });
+        invItems = invRes.rows || [];
+      } catch (invErr) {
+        console.error('폴백 중 재고 목록 로드 실패:', invErr);
+      }
+      
       // 메모리 기반 테넌트, 삭제, 상태 필터링
       allRows = allRows.filter((r: any) => !r.deleted_at && r.tenant_id === tenantId && (r.status || 'ACTIVE') === status);
       
@@ -85,24 +99,44 @@ export async function GET(req: Request) {
       }
       
       filteredCount = allRows.length;
-      rows = allRows.slice(offset, offset + limit);
+      const sliced = allRows.slice(offset, offset + limit);
+      
+      // 메모리 상에서 inventory_barcode 필드 바인딩 백필
+      rows = sliced.map((r: any) => {
+        const matched = invItems.find(i => String(i.id) === String(r.inventory_item_id));
+        return {
+          ...r,
+          inventory_barcode: matched ? matched.barcode : null
+        };
+      });
     }
 
-    const products = rows.map((r: any) => ({
-      id: r.id,
-      name: r.name,
-      price: r.price,
-      url: r.url,
-      category: r.category,
-      menu_category: r.menu_category || '',
-      description: r.description,
-      main_image_url: r.main_image_url,
-      detail_image_url: r.detail_image_url,
-      available_methods: r.available_methods || '',
-      is_coupon_excludable: Number(r.is_coupon_excludable) || 0,
-      status: r.status || 'ACTIVE',
-      inventory_item_id: r.inventory_item_id || null
-    }));
+    const products = rows.map((r: any) => {
+      // 💡 바코드가 있으면 바코드 우선 사용, 없으면 INV-{inventory_item_id} 폴백 코드 생성
+      let validItemCode = '';
+      if (r.inventory_item_id) {
+        validItemCode = r.inventory_barcode ? String(r.inventory_barcode).trim() : `INV-${r.inventory_item_id}`;
+      } else {
+        validItemCode = 'INV-UNASSIGNED';
+      }
+
+      return {
+        id: r.id,
+        name: r.name,
+        price: r.price,
+        url: r.url,
+        category: r.category,
+        menu_category: r.menu_category || '',
+        description: r.description,
+        main_image_url: r.main_image_url,
+        detail_image_url: r.detail_image_url,
+        available_methods: r.available_methods || '',
+        is_coupon_excludable: Number(r.is_coupon_excludable) || 0,
+        status: r.status || 'ACTIVE',
+        inventory_item_id: r.inventory_item_id || null,
+        valid_item_code: validItemCode
+      };
+    });
 
     // 2. 각 탭의 뱃지에 출력될 전체 활성/임시저장 상품 수 통계 산출 (에러 감지 시 폴백 적용)
     let activeCount = 0;

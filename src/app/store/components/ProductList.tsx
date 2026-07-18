@@ -126,11 +126,18 @@ export function ProductList({
                 )}
               </div>
               <div className="p-6 flex flex-col flex-grow">
-                {product.menu_category && (
-                  <span className="inline-block bg-slate-100 text-slate-600 text-[10px] font-extrabold px-2 py-0.5 rounded-md mb-2 w-fit">
-                    {product.menu_category}
-                  </span>
-                )}
+                <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                  {product.menu_category && (
+                    <span className="bg-slate-100 text-slate-600 text-[10px] font-extrabold px-2 py-0.5 rounded-md">
+                      {product.menu_category}
+                    </span>
+                  )}
+                  {product.valid_item_code && (
+                    <span className="bg-indigo-50 text-indigo-700 text-[9px] font-black px-2.5 py-0.5 rounded-md border border-indigo-100/60 font-mono">
+                      유효품목코드: {product.valid_item_code}
+                    </span>
+                  )}
+                </div>
                 <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-blue-600 transition-colors">{product.name}</h3>
                 <p className="text-slate-500 text-sm mb-4 line-clamp-2 flex-grow whitespace-pre-line">{product.description || '상세 설명이 없습니다.'}</p>
                 <div className="flex justify-between items-center mt-auto pt-4 border-t border-slate-50">

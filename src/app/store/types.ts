@@ -8,6 +8,7 @@ export interface StoreProduct {
   main_image_url?: string;
   detail_image_url?: string;
   available_methods?: string; // 콤마로 구분된 수령방식 (예: "배달,배송")
+  valid_item_code?: string; // 💡 자사 재고 기준 고유 품목코드 (바코드 또는 폴백코드)
 }
 
 export interface OrderForm {
