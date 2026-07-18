@@ -2835,39 +2835,68 @@ export default function MobileHubPage() {
                     <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">타임라인 이력 / 수집 자료</span>
                     
                     <div className="space-y-2.5 max-h-[30vh] overflow-y-auto pr-1">
-                      {taskTimeline.map((item, index) => {
-                        return (
-                          <div 
-                            key={item.id || index}
-                            className="bg-white border border-slate-150 rounded-2xl p-4.5 space-y-2 shadow-2xs"
-                          >
-                            <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold">
-                              <span>이력 #{index + 1}</span>
-                              <span>{item.created_at}</span>
-                            </div>
-                            
-                            {/* 내용 */}
-                            <p className="text-xs text-slate-700 font-medium whitespace-pre-wrap leading-relaxed">
-                              {item.content_text}
-                            </p>
+                      {(() => {
+                        const mainItem = taskTimeline.find(item => item.content_text?.includes('[요청 사유]'));
+                        const attachments = taskTimeline.filter(item => item.file_url && item.content_text?.includes('[상신 첨부]'));
+                        const displayTimeline = taskTimeline.filter(item => {
+                          if (item.content_text?.includes('[상신 첨부]') && item.file_url) {
+                            return false;
+                          }
+                          return true;
+                        });
 
-                            {/* 파일 링크 및 다운로드 */}
-                            {item.file_url && (
-                              <div className="pt-2 border-t border-slate-100 mt-2 flex justify-between items-center bg-slate-50/50 p-2 rounded-xl">
-                                <span className="text-[10px] font-bold text-slate-600 truncate max-w-[200px]">
-                                  📎 {item.content_text?.replace('[상신 첨부] ', '') || '첨부 파일'}
-                                </span>
-                                <button
-                                  onClick={() => window.open(`/api/shared/files?fileId=${item.id}&tableName=crm_snaptask_items`, '_blank')}
-                                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-lg text-[9px] border-none transition cursor-pointer active:scale-95 shadow-3xs"
-                                >
-                                  파일 열기/받기
-                                </button>
+                        return displayTimeline.map((item, index) => {
+                          const isMainCard = item.id === mainItem?.id;
+                          return (
+                            <div 
+                              key={item.id || index}
+                              className="bg-white border border-slate-150 rounded-2xl p-4.5 space-y-2 shadow-2xs"
+                            >
+                              <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold">
+                                <span>이력 #{index + 1}</span>
+                                <span>{item.created_at}</span>
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                              
+                              <p className="text-xs text-slate-700 font-medium whitespace-pre-wrap leading-relaxed">
+                                {item.content_text}
+                              </p>
+
+                              {isMainCard && attachments.length > 0 && (
+                                <div className="pt-2.5 border-t border-slate-100 mt-2 space-y-2">
+                                  <span className="text-[10px] font-black text-slate-450 block">첨부 파일 목록 ({attachments.length}건)</span>
+                                  {attachments.map((fileItem, fIdx) => (
+                                    <div key={fileItem.id || fIdx} className="flex justify-between items-center bg-slate-50 p-2 rounded-xl border border-slate-100">
+                                      <span className="text-[10px] font-bold text-slate-600 truncate max-w-[180px]">
+                                        📎 {fileItem.content_text?.replace('[상신 첨부] ', '') || '첨부 파일'}
+                                      </span>
+                                      <button
+                                        onClick={() => window.open(`/api/shared/files?fileId=${fileItem.id}&tableName=crm_snaptask_items`, '_blank')}
+                                        className="bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-lg text-[9px] border-none transition cursor-pointer active:scale-95 shadow-3xs"
+                                      >
+                                        파일 열기
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {!isMainCard && item.file_url && (
+                                <div className="pt-2 border-t border-slate-100 mt-2 flex justify-between items-center bg-slate-50 p-2 rounded-xl">
+                                  <span className="text-[10px] font-bold text-slate-600 truncate max-w-[200px]">
+                                    📎 {item.content_text?.replace('[상신 첨부] ', '') || '첨부 파일'}
+                                  </span>
+                                  <button
+                                    onClick={() => window.open(`/api/shared/files?fileId=${item.id}&tableName=crm_snaptask_items`, '_blank')}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-lg text-[9px] border-none transition cursor-pointer active:scale-95 shadow-3xs"
+                                  >
+                                    파일 열기
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        });
+                      })()}
                       {taskTimeline.length === 0 && (
                         <div className="text-center py-6 text-slate-400 text-xs font-bold bg-slate-50 rounded-2xl">
                           기록된 상세 이력이 없습니다.
