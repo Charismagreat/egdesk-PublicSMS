@@ -107,7 +107,7 @@ export default function MobileHubPage() {
   // 📁 모바일 태스크 폴더 관리 상태
   const [mobileFolders, setMobileFolders] = useState<TaskFolder[]>([]);
   const [mobileFoldersLoading, setMobileFoldersLoading] = useState(false);
-  const [activeMobileFolderId, setActiveMobileFolderId] = useState<string>("");
+  const [activeMobileFolderId, setActiveMobileFolderId] = usePersistedState<string>("activeMobileFolderId", "");
   const [mobileFolderItems, setMobileFolderItems] = useState<TaskFolderItem[]>([]);
   const [mobileItemsLoading, setMobileItemsLoading] = useState(false);
   const [isMobileFolderModalOpen, setIsMobileFolderModalOpen] = useState(false);
@@ -141,7 +141,11 @@ export default function MobileHubPage() {
       const res = await fetch("/api/task-folders?action=list");
       const data = await res.json();
       if (data.success) {
-        setMobileFolders(data.folders || []);
+        const folders = data.folders || [];
+        setMobileFolders(folders);
+        if (folders.length > 0 && !activeMobileFolderId) {
+          setActiveMobileFolderId(String(folders[0].id));
+        }
       }
     } catch (e) {
       console.error("Failed to fetch mobile folders:", e);
