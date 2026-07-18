@@ -2731,23 +2731,57 @@ export default function MobileHubPage() {
               })()}
             </div>
 
+            {/* 다른 폴더 선택 영역 */}
+            {isMoveFolderSelectorOpen && activeViewerItem.tableName !== 'crm_snaptask_items' && (
+              <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-3 space-y-2 animate-scale-in">
+                <span className="text-[9px] font-black text-slate-500 block">이동할 대상 태스크 폴더 선택:</span>
+                <div className="max-h-[140px] overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                  {mobileFolders
+                    .filter(f => String(f.id) !== activeMobileFolderId) // 현재 폴더 제외
+                    .map(f => (
+                      <div
+                        key={f.id}
+                        onClick={() => handleMoveFileFolder(activeViewerItem.id, f.id)}
+                        className="p-2 rounded-xl border border-slate-100 bg-white hover:border-indigo-200 text-slate-700 hover:text-indigo-900 text-[10px] font-extrabold flex items-center justify-between cursor-pointer transition active:scale-[0.985]"
+                      >
+                        <span className="truncate max-w-[180px]">📁 {f.name}</span>
+                        <ChevronRight className="w-3 h-3 text-slate-400" />
+                      </div>
+                    ))}
+                  {mobileFolders.filter(f => String(f.id) !== activeMobileFolderId).length === 0 && (
+                    <span className="text-[9px] text-slate-400 font-bold block py-2 text-center">이동 가능한 다른 폴더가 없습니다.</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* 조작 및 공유 버튼 */}
             <div className="flex gap-2 justify-end pt-3 border-t border-slate-100">
-              <button
-                onClick={() => {
-                  const url = getFileServingUrl(activeViewerItem);
-                  const link = document.createElement('a');
-                  link.href = url;
-                  link.download = activeViewerItem.file_name || 'download';
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                }}
-                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold px-3.5 py-2.5 rounded-xl text-[10px] border border-indigo-100/50 transition cursor-pointer flex items-center gap-1 active:scale-98"
-                title="파일 내려받기"
-              >
-                <span>📥 다운로드</span>
-              </button>
+              {activeViewerItem.tableName === 'crm_snaptask_items' ? (
+                <button
+                  onClick={() => {
+                    const url = getFileServingUrl(activeViewerItem);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = activeViewerItem.file_name || 'download';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold px-3.5 py-2.5 rounded-xl text-[10px] border border-indigo-100/50 transition cursor-pointer flex items-center gap-1 active:scale-98"
+                  title="파일 내려받기"
+                >
+                  <span>📥 다운로드</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsMoveFolderSelectorOpen(!isMoveFolderSelectorOpen)}
+                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold px-3.5 py-2.5 rounded-xl text-[10px] border border-indigo-100/50 transition cursor-pointer flex items-center gap-1 active:scale-98"
+                  title="다른 태스크 폴더로 이동"
+                >
+                  <span>📁 이동</span>
+                </button>
+              )}
               <button
                 onClick={() => handleShareFile(activeViewerItem)}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-3.5 py-2.5 rounded-xl text-[10px] border-none transition shadow-3xs cursor-pointer flex items-center gap-1.5 active:scale-98"
