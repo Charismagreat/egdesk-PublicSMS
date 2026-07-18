@@ -1,10 +1,25 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { decodeJwt } from 'jose';
 import { queryTable, insertRows, updateRows, deleteRows, uploadFile, executeSQL } from '../../../../egdesk-helpers';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action');
+
+  // 사용자 세션의 테넌트 ID 추출
+  let userTenantId = 'default';
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    if (token) {
+      const payload = decodeJwt(token);
+      userTenantId = (payload.tenant_id as string) || 'default';
+    }
+  } catch (e) {
+    console.error('Failed to parse tenant_id from auth_token in task-folders API:', e);
+  }
 
   try {
     if (action === 'list') {
@@ -13,7 +28,9 @@ export async function GET(req: Request) {
         orderBy: 'created_at DESC'
       });
       const rows = res.rows || [];
-      const activeRows = rows.filter((r: any) => !r.deleted_at);
+      
+      // 테넌트가 사용자의 테넌트 ID와 일치하는 것들만 필터링
+      const activeRows = rows.filter((r: any) => !r.deleted_at && String(r.tenant_id) === String(userTenantId));
       return NextResponse.json({ success: true, folders: activeRows });
     }
 
@@ -29,7 +46,13 @@ export async function GET(req: Request) {
         orderDirection: 'DESC'
       });
       const rows = res.rows || [];
-      const activeRows = rows.filter((r: any) => !r.deleted_at && String(r.folder_id) === String(folderId));
+      
+      // 테넌트 및 폴더 매칭 필터링
+      const activeRows = rows.filter((r: any) => 
+        !r.deleted_at && 
+        String(r.folder_id) === String(folderId) && 
+        String(r.tenant_id) === String(userTenantId)
+      );
       
       // 최신순 정렬 재확보 (자바스크립트 수준의 이중 가드)
       activeRows.sort((a: any, b: any) => {

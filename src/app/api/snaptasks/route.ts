@@ -1,11 +1,26 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { decodeJwt } from 'jose';
 import { queryTable, insertRows, updateRows, deleteRows, executeSQL } from '../../../../egdesk-helpers';
 
 /**
  * GET: 스냅태스크 목록 조회 또는 특정 태스크의 타임라인 마이닝
  */
 export async function GET(req: Request) {
+  // 사용자 세션의 테넌트 ID 추출
+  let userTenantId = 'default';
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    if (token) {
+      const payload = decodeJwt(token);
+      userTenantId = (payload.tenant_id as string) || 'default';
+    }
+  } catch (e) {
+    console.error('Failed to parse tenant_id from auth_token in snaptasks API:', e);
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const action = searchParams.get('action');
@@ -100,10 +115,10 @@ export async function GET(req: Request) {
         console.error('파트너 목록 조회 실패:', pe);
       }
 
-      // 3) 조인 및 소프트 삭제 필터링 메모리 연산
+      // 3) 조인 및 소프트 삭제 필터링 메모리 연산 + 테넌트 격리 가드 추가
       // 💡 deleted_at 키워드를 SQL에 직접 쓰지 않으므로 방화벽을 완전히 우회합니다.
       tasks = snaptasksRows
-        .filter((t: any) => !t.deleted_at)
+        .filter((t: any) => !t.deleted_at && String(t.tenant_id) === String(userTenantId))
         .map((t: any) => {
           const matchedPartner = partnersRows.find(p => String(p.id) === String(t.partner_id));
           return {
@@ -122,7 +137,7 @@ export async function GET(req: Request) {
       `;
       const listRes = await executeSQL(fallbackQuery) || [];
       const rawRows = (listRes && (listRes as any).rows) ? (listRes as any).rows : (Array.isArray(listRes) ? listRes : []);
-      tasks = rawRows.filter((t: any) => !t.deleted_at);
+      tasks = rawRows.filter((t: any) => !t.deleted_at && String(t.tenant_id) === String(userTenantId));
     }
 
     return NextResponse.json({
