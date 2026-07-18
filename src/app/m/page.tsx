@@ -2531,7 +2531,7 @@ export default function MobileHubPage() {
                       </span>
                     </div>
                     <button
-                      onClick={() => window.open(url, '_blank')}
+                      onClick={() => window.open(getFileServingUrl(activeViewerItem), '_blank')}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-4 py-2 rounded-xl text-[10px] border-none transition shadow-3xs cursor-pointer inline-flex items-center gap-1 active:scale-98"
                     >
                       <span>파일 내려받기 / 열기</span>
