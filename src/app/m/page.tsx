@@ -2894,7 +2894,7 @@ export default function MobileHubPage() {
                                             tableName: 'crm_snaptask_items'
                                           });
                                         }}
-                                        className="bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-lg text-[9px] border-none transition cursor-pointer active:scale-95 shadow-3xs"
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-lg text-[9px] border-none transition cursor-pointer active:scale-95 shadow-3xs"
                                       >
                                         파일 열기
                                       </button>
