@@ -341,9 +341,20 @@ export async function POST(request: Request) {
             updated_by: currentUser
           }]);
 
+          // 삽입된 레코드의 자동 생성된 진짜 id 조회
+          let realDbId = itemId;
+          try {
+            const insertedRes = await queryTable('crm_snaptask_items', { filters: { uuid: itemUuid } });
+            if (insertedRes.rows && insertedRes.rows.length > 0) {
+              realDbId = Number(insertedRes.rows[0].id) || itemId;
+            }
+          } catch (queryErr) {
+            console.error('Failed to query inserted snaptask item real id:', queryErr);
+          }
+
           // 실물 파일을 스토리지에 업로드하고 DB에 경로 바인딩
           try {
-            await uploadFile('crm_snaptask_items', itemId, 'file_url', file.name, file.base64);
+            await uploadFile('crm_snaptask_items', realDbId, 'file_url', file.name, file.base64);
           } catch (uploadErr: any) {
             console.error(`Failed to upload attachment file ${file.name}:`, uploadErr.message);
           }

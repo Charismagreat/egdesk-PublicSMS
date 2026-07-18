@@ -49,14 +49,15 @@ interface TaskFolder {
 
 interface TaskFolderItem {
   id: number;
-  folder_id: number;
-  type: string;
+  folder_id?: number;
+  type?: string;
   tags?: string;
   title: string;
-  content: string;
+  content?: string;
   file_name?: string;
   file_size?: string;
   file_url?: string;
+  tableName?: string;
 }
 
 export default function MobileHubPage() {
@@ -473,8 +474,9 @@ export default function MobileHubPage() {
       return getProxiedUrl(item.file_url);
     }
     
-    // 그렇지 않고 스토리지 원시 식별 데이터(예: file_123)라면, 동적으로 웹 게이트웨이 주소를 완성하고 프록시를 얹어서 반환!
-    const gatewayUrl = `/api/shared/files?tableName=crm_task_folder_items&rowId=${item.id}&columnName=file_url`;
+    // item.tableName 이 명시되어 있으면 사용하고 없으면 crm_task_folder_items 폴백
+    const tName = item.tableName || 'crm_task_folder_items';
+    const gatewayUrl = `/api/shared/files?tableName=${tName}&rowId=${item.id}&columnName=file_url`;
     return getProxiedUrl(gatewayUrl);
   };
 
@@ -2606,7 +2608,7 @@ export default function MobileHubPage() {
 
       {/* 📁 통합 파일 뷰어 및 공유 팝업 모달 */}
       {activeViewerItem && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex justify-center items-center z-50 p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex justify-center items-center z-[70] p-4 animate-fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-5 space-y-4 animate-scale-in text-left">
             <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
               <div className="flex items-center gap-1.5 text-slate-800 min-w-0">
@@ -2870,7 +2872,24 @@ export default function MobileHubPage() {
                                         📎 {fileItem.content_text?.replace('[상신 첨부] ', '') || '첨부 파일'}
                                       </span>
                                       <button
-                                        onClick={() => window.open(`/api/shared/files?tableName=crm_snaptask_items&rowId=${fileItem.id}&columnName=file_url`, '_blank')}
+                                        onClick={() => {
+                                          const fileName = fileItem.content_text?.replace('[상신 첨부] ', '') || '첨부 파일';
+                                          let realRowId = fileItem.id;
+                                          if (fileItem.uuid) {
+                                            const match = fileItem.uuid.match(/STI-(\d+)/);
+                                            if (match && match[1]) {
+                                              realRowId = Number(match[1]);
+                                            }
+                                          }
+                                          setActiveViewerItem({
+                                            id: realRowId,
+                                            file_url: fileItem.file_url || `/api/shared/files?tableName=crm_snaptask_items&rowId=${realRowId}&columnName=file_url`,
+                                            file_name: fileName,
+                                            file_size: '파일 첨부',
+                                            title: fileName,
+                                            tableName: 'crm_snaptask_items'
+                                          });
+                                        }}
                                         className="bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-lg text-[9px] border-none transition cursor-pointer active:scale-95 shadow-3xs"
                                       >
                                         파일 열기
@@ -2886,7 +2905,24 @@ export default function MobileHubPage() {
                                     📎 {item.content_text?.replace('[상신 첨부] ', '') || '첨부 파일'}
                                   </span>
                                   <button
-                                    onClick={() => window.open(`/api/shared/files?tableName=crm_snaptask_items&rowId=${item.id}&columnName=file_url`, '_blank')}
+                                    onClick={() => {
+                                      const fileName = item.content_text?.replace('[상신 첨부] ', '') || '첨부 파일';
+                                      let realRowId = item.id;
+                                      if (item.uuid) {
+                                        const match = item.uuid.match(/STI-(\d+)/);
+                                        if (match && match[1]) {
+                                          realRowId = Number(match[1]);
+                                        }
+                                      }
+                                      setActiveViewerItem({
+                                        id: realRowId,
+                                        file_url: item.file_url || `/api/shared/files?tableName=crm_snaptask_items&rowId=${realRowId}&columnName=file_url`,
+                                        file_name: fileName,
+                                        file_size: '파일 첨부',
+                                        title: fileName,
+                                        tableName: 'crm_snaptask_items'
+                                      });
+                                    }}
                                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-lg text-[9px] border-none transition cursor-pointer active:scale-95 shadow-3xs"
                                   >
                                     파일 열기
