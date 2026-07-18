@@ -8,17 +8,21 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action');
 
-  // 사용자 세션의 테넌트 ID 추출
+  // 사용자 세션의 테넌트 ID 및 권한, 계정명 추출
   let userTenantId = 'default';
+  let userRole = 'EMPLOYEE';
+  let userName = 'guest-1';
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('auth_token')?.value;
     if (token) {
       const payload = decodeJwt(token);
       userTenantId = (payload.tenant_id as string) || 'default';
+      userRole = (payload.role as string) || 'EMPLOYEE';
+      userName = (payload.username as string) || 'guest-1';
     }
   } catch (e) {
-    console.error('Failed to parse tenant_id from auth_token in task-folders API:', e);
+    console.error('Failed to parse JWT payload in task-folders API:', e);
   }
 
   try {
@@ -29,8 +33,18 @@ export async function GET(req: Request) {
       });
       const rows = res.rows || [];
       
-      // 테넌트가 사용자의 테넌트 ID와 일치하는 것들만 필터링
-      const activeRows = rows.filter((r: any) => !r.deleted_at && String(r.tenant_id) === String(userTenantId));
+      // 계정 수준 격리 필터링
+      const activeRows = rows.filter((r: any) => {
+        if (r.deleted_at) return false;
+        
+        if (userRole === 'SUPER_ADMIN') {
+          // 최고 관리자는 본인(guest)이 생성했거나 '최고관리자' 명의의 폴더만 조회
+          return r.created_by === 'guest' || r.created_by === '최고관리자';
+        } else {
+          // 일반 임직원은 본인(userName)이 생성했거나, 이전 생성값 '현장 모바일' 인 것만 조회
+          return r.created_by === userName || r.created_by === '현장 모바일';
+        }
+      });
       return NextResponse.json({ success: true, folders: activeRows });
     }
 
@@ -76,17 +90,21 @@ export async function POST(req: Request) {
   let action = searchParams.get('action');
   const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
 
-  // 사용자 세션의 테넌트 ID 추출
+  // 사용자 세션의 테넌트 ID 및 권한, 계정명 추출
   let userTenantId = 'default';
+  let userRole = 'EMPLOYEE';
+  let userName = 'guest-1';
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('auth_token')?.value;
     if (token) {
       const payload = decodeJwt(token);
       userTenantId = (payload.tenant_id as string) || 'default';
+      userRole = (payload.role as string) || 'EMPLOYEE';
+      userName = (payload.username as string) || 'guest-1';
     }
   } catch (e) {
-    console.error('Failed to parse tenant_id from auth_token in POST task-folders API:', e);
+    console.error('Failed to parse JWT payload in POST task-folders API:', e);
   }
 
   try {
@@ -133,7 +151,8 @@ export async function POST(req: Request) {
         file_url: '',
         created_at: nowStr,
         tenant_id: userTenantId,
-        uuid: `STI-${nextId}-item`
+        uuid: `STI-${nextId}-item`,
+        created_by: userName
       }]);
 
       if (!res.success) {
@@ -191,7 +210,7 @@ export async function POST(req: Request) {
       const res = await insertRows('crm_task_folders', [{
         name: name,
         description: description || '',
-        created_by: userTenantId === 'tenant-guest-id-2222' ? '임직원' : '최고관리자',
+        created_by: userName,
         created_at: nowStr,
         tenant_id: userTenantId,
         uuid: `STF-${Date.now()}-folder`
@@ -225,7 +244,8 @@ export async function POST(req: Request) {
         file_url: fileUrl || '',
         created_at: nowStr,
         tenant_id: userTenantId,
-        uuid: `STI-${nextId}-item`
+        uuid: `STI-${nextId}-item`,
+        created_by: userName
       }]);
 
       if (res.success) {
