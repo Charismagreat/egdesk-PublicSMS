@@ -1151,8 +1151,8 @@ export default function MobileHubPage() {
       } else {
         alert("상신에 실패했습니다: " + data.error);
       }
-    } catch (e) {
-      alert("서버 전송 중 에러가 발생했습니다.");
+    } catch (e: any) {
+      alert("서버 전송 중 에러가 발생했습니다: " + (e.message || "알 수 없는 오류"));
     } finally {
       setIsLoading(false);
     }

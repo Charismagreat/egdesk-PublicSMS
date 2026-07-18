@@ -15,6 +15,18 @@ import {
  * 최고관리자(SUPER_ADMIN) 권한 검증 헬퍼
  * 쿠키의 JWT 토큰을 복호화하여 역할을 확인합니다.
  */
+async function resolveTenantId(): Promise<string> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    if (!token) return 'default';
+    const payload = decodeJwt(token);
+    return (payload.tenant_id as string) || 'default';
+  } catch {
+    return 'default';
+  }
+}
+
 async function verifySuperAdmin(): Promise<string | null> {
   try {
     const cookieStore = await cookies();
@@ -262,6 +274,7 @@ export async function POST(request: Request) {
       }]);
 
       // 2. 메인 [할 일] (스냅태스크) 생성
+      const tenantId = await resolveTenantId();
       const taskId = `ST-${Date.now()}`;
       await insertRows('crm_snaptasks', [{
         id: taskId,
@@ -269,10 +282,14 @@ export async function POST(request: Request) {
         status: 'ACTIVE',
         partner_id: null,
         created_at: nowStr,
-        updated_at: nowStr
+        tenant_id: tenantId,
+        uuid: taskId,
+        updated_at: nowStr,
+        updated_by: currentUser
       }]);
 
       // 3. 스냅태스크 가이드 안내 및 요청 사유 텍스트 타임라인 삽입
+      const itemUuid1 = `STI-${Date.now()}-init`;
       await insertRows('crm_snaptask_items', [{
         id: Date.now(),
         task_id: taskId,
@@ -280,7 +297,11 @@ export async function POST(request: Request) {
         file_url: null,
         file_type: 'TEXT',
         ai_analysis: JSON.stringify({ message: "Mobile work request initiated" }),
-        created_at: nowStr
+        created_at: nowStr,
+        tenant_id: tenantId,
+        uuid: itemUuid1,
+        updated_at: nowStr,
+        updated_by: currentUser
       }]);
 
       // 4. 첨부 파일들을 스냅태스크의 실물 아이템으로 업로드 및 매핑 적재
@@ -291,6 +312,7 @@ export async function POST(request: Request) {
           const isImg = file.type?.startsWith('image/');
           const isVid = file.type?.startsWith('video/');
           const fType = isImg ? 'IMAGE' : (isVid ? 'VIDEO' : 'DOCUMENT');
+          const itemUuid = `STI-${Date.now()}-file-${i}`;
 
           // 우선 아이템 레코드 생성
           await insertRows('crm_snaptask_items', [{
@@ -300,7 +322,11 @@ export async function POST(request: Request) {
             file_url: '', // uploadFile 헬퍼에 의해 채워짐
             file_type: fType,
             ai_analysis: JSON.stringify({ message: "Mobile request attachment" }),
-            created_at: nowStr
+            created_at: nowStr,
+            tenant_id: tenantId,
+            uuid: itemUuid,
+            updated_at: nowStr,
+            updated_by: currentUser
           }]);
 
           // 실물 파일을 스토리지에 업로드하고 DB에 경로 바인딩
