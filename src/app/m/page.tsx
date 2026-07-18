@@ -2874,16 +2874,9 @@ export default function MobileHubPage() {
                                       <button
                                         onClick={() => {
                                           const fileName = fileItem.content_text?.replace('[상신 첨부] ', '') || '첨부 파일';
-                                          let realRowId = fileItem.id;
-                                          if (fileItem.uuid) {
-                                            const match = fileItem.uuid.match(/STI-(\d+)/);
-                                            if (match && match[1]) {
-                                              realRowId = Number(match[1]);
-                                            }
-                                          }
                                           setActiveViewerItem({
-                                            id: realRowId,
-                                            file_url: fileItem.file_url || `/api/shared/files?tableName=crm_snaptask_items&rowId=${realRowId}&columnName=file_url`,
+                                            id: fileItem.id,
+                                            file_url: fileItem.file_url || `/api/shared/files?tableName=crm_snaptask_items&rowId=${fileItem.id}&columnName=file_url`,
                                             file_name: fileName,
                                             file_size: '파일 첨부',
                                             title: fileName,
@@ -2907,16 +2900,9 @@ export default function MobileHubPage() {
                                   <button
                                     onClick={() => {
                                       const fileName = item.content_text?.replace('[상신 첨부] ', '') || '첨부 파일';
-                                      let realRowId = item.id;
-                                      if (item.uuid) {
-                                        const match = item.uuid.match(/STI-(\d+)/);
-                                        if (match && match[1]) {
-                                          realRowId = Number(match[1]);
-                                        }
-                                      }
                                       setActiveViewerItem({
-                                        id: realRowId,
-                                        file_url: item.file_url || `/api/shared/files?tableName=crm_snaptask_items&rowId=${realRowId}&columnName=file_url`,
+                                        id: item.id,
+                                        file_url: item.file_url || `/api/shared/files?tableName=crm_snaptask_items&rowId=${item.id}&columnName=file_url`,
                                         file_name: fileName,
                                         file_size: '파일 첨부',
                                         title: fileName,
