@@ -106,9 +106,11 @@ export async function POST(req: Request) {
       };
 
       // 2. 파일 스토리지 업로드 처리
-      if (fileBuffer && rowId) {
+      if (fileBuffer && rowId && file) {
         try {
-          const uploadRes = await uploadFile('crm_task_folder_items', rowId, 'file_url', fileName, fileBuffer.toString('base64'));
+          const fileMime = file.type || 'image/jpeg';
+          const dataUrl = `data:${fileMime};base64,${fileBuffer.toString('base64')}`;
+          const uploadRes = await uploadFile('crm_task_folder_items', rowId, 'file_url', fileName, dataUrl);
           if (uploadRes && uploadRes.success) {
             // 💡 [진짜 파일 ID 업데이트] downloadFile이 스토리지에서 바이너리를 안전히 역추적하도록 파일 ID를 기록합니다.
             const storageFileId = uploadRes.fileId || `file_${rowId}_${fileName}`;
