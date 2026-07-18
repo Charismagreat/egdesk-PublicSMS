@@ -436,6 +436,17 @@ export default function MobileHubPage() {
     }
   }, [isRequestModalOpen, requestModalTab, activeMobileFolderId, mobileFolders]);
 
+  // 💡 [이지데스크 프록시 경로 복원 헬퍼] 게이트웨이 경유 접속 시 이미지/파일 상대주소 차단 우회
+  const getProxiedUrl = (originalUrl: string): string => {
+    if (typeof window === 'undefined') return originalUrl;
+    const path = window.location.pathname;
+    const match = path.match(/^(\/t\/[^/]+\/p\/[^/]+)/);
+    if (match && match[1]) {
+      return `${match[1]}${originalUrl}`;
+    }
+    return originalUrl;
+  };
+
   // 💡 [Base64 로컬 디코딩 복원 헬퍼] Data URL로부터 안전하게 File 객체 복원
   const dataURLtoFile = (dataurl: string, filename: string): File => {
     const arr = dataurl.split(',');
@@ -2466,11 +2477,11 @@ export default function MobileHubPage() {
                 if (isImage) {
                   return (
                     <img 
-                      src={url} 
+                      src={getProxiedUrl(url)} 
                       className="max-w-full max-h-[45vh] object-contain rounded-xl shadow-2xs cursor-zoom-in"
                       alt={activeViewerItem.file_name}
                       onClick={() => {
-                        setPreviewImageUrl(url);
+                        setPreviewImageUrl(getProxiedUrl(url));
                         setActiveViewerItem(null);
                       }}
                     />
@@ -2480,7 +2491,7 @@ export default function MobileHubPage() {
                 if (isVideo) {
                   return (
                     <video 
-                      src={url} 
+                      src={getProxiedUrl(url)} 
                       controls 
                       className="max-w-full max-h-[45vh] rounded-xl shadow-2xs"
                     />
