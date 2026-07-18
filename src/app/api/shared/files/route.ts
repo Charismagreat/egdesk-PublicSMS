@@ -27,7 +27,7 @@ export async function GET(req: Request) {
       columnName
     });
 
-    if (!res || !res.success || !res.data) {
+    if (!res || !res.data) {
       return NextResponse.json(
         { success: false, error: res?.error || '스토리지에서 파일을 찾을 수 없습니다.' },
         { status: 404 }
@@ -49,8 +49,18 @@ export async function GET(req: Request) {
 
     // Base64 디코딩 및 바이너리 버퍼 변환
     let base64Data = res.data;
-    if (base64Data.includes(';base64,')) {
-      base64Data = base64Data.split(';base64,').pop() || '';
+    // 💡 [특수기호 유실 복원 가드] 이지데스크 스토리지 버킷이 반환하는 data URL 내 특수문자 누락/꼬임에 대응
+    const base64Marker = 'base64';
+    const markerIdx = base64Data.indexOf(base64Marker);
+    if (markerIdx !== -1) {
+      base64Data = base64Data.substring(markerIdx + base64Marker.length);
+      if (base64Data.startsWith(',') || base64Data.startsWith(';') || base64Data.startsWith('/')) {
+        // 단, base64 데이터의 진짜 첫 문자(/ 등)를 자르지 않기 위해 첫 글자가 특수기호인 경우에만 깎아냅니다.
+        const firstChar = base64Data.charAt(0);
+        if (firstChar === ',' || firstChar === ';') {
+          base64Data = base64Data.substring(1);
+        }
+      }
     }
     const fileBuffer = Buffer.from(base64Data, 'base64');
 
