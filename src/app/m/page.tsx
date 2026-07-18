@@ -334,7 +334,10 @@ export default function MobileHubPage() {
     if (!item.file_url) return;
     
     const shareText = `[EGDesk 현장 수집 자료] ${item.title}\n파일명: ${item.file_name || "메모"}`;
-    const shareUrl = `${window.location.origin}${item.file_url}`;
+    const servingUrl = getFileServingUrl(item);
+    const shareUrl = servingUrl.startsWith('http') 
+      ? servingUrl 
+      : `${window.location.origin}${servingUrl}`;
 
     if (navigator.share) {
       try {
@@ -445,6 +448,20 @@ export default function MobileHubPage() {
       return `${match[1]}${originalUrl}`;
     }
     return originalUrl;
+  };
+
+  // 💡 [동적 파일 게이트웨이 주소 매핑 헬퍼] 스토리지 원본 매핑을 게이트웨이 및 프록시 주소로 반환
+  const getFileServingUrl = (item: any): string => {
+    if (!item || !item.file_url) return "";
+    
+    // 이미 게이트웨이 웹 주소 형식(/api/shared/files...)으로 들어와 있다면 프록시만 붙여서 반환
+    if (item.file_url.startsWith('/api/shared/files')) {
+      return getProxiedUrl(item.file_url);
+    }
+    
+    // 그렇지 않고 스토리지 원시 식별 데이터(예: file_123)라면, 동적으로 웹 게이트웨이 주소를 완성하고 프록시를 얹어서 반환!
+    const gatewayUrl = `/api/shared/files?tableName=crm_task_folder_items&rowId=${item.id}&columnName=file_url`;
+    return getProxiedUrl(gatewayUrl);
   };
 
   // 💡 [Base64 로컬 디코딩 복원 헬퍼] Data URL로부터 안전하게 File 객체 복원
@@ -2477,11 +2494,11 @@ export default function MobileHubPage() {
                 if (isImage) {
                   return (
                     <img 
-                      src={getProxiedUrl(url)} 
+                      src={getFileServingUrl(activeViewerItem)} 
                       className="max-w-full max-h-[45vh] object-contain rounded-xl shadow-2xs cursor-zoom-in"
                       alt={activeViewerItem.file_name}
                       onClick={() => {
-                        setPreviewImageUrl(getProxiedUrl(url));
+                        setPreviewImageUrl(getFileServingUrl(activeViewerItem));
                         setActiveViewerItem(null);
                       }}
                     />
@@ -2491,7 +2508,7 @@ export default function MobileHubPage() {
                 if (isVideo) {
                   return (
                     <video 
-                      src={getProxiedUrl(url)} 
+                      src={getFileServingUrl(activeViewerItem)} 
                       controls 
                       className="max-w-full max-h-[45vh] rounded-xl shadow-2xs"
                     />

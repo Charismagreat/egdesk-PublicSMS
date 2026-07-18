@@ -111,7 +111,8 @@ export async function POST(req: Request) {
           const uploadRes = await uploadFile('crm_task_folder_items', rowId, 'file_url', fileName, fileBuffer.toString('base64'));
           if (uploadRes && uploadRes.success) {
             const gatewayUrl = `/api/shared/files?tableName=crm_task_folder_items&rowId=${rowId}&columnName=file_url`;
-            await updateRows('crm_task_folder_items', { file_url: gatewayUrl }, { filters: { id: String(rowId) } });
+            // 💡 [원격 보존] uploadFile이 안전하게 기입한 스토리지 원본 매핑을 보존하기 위해 updateRows 덮어쓰기를 비활성화합니다.
+            // await updateRows('crm_task_folder_items', { file_url: gatewayUrl }, { filters: { id: String(rowId) } });
             newItem.file_url = gatewayUrl;
           } else {
             console.error("uploadFile returned failed status:", uploadRes);
