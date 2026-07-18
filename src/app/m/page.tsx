@@ -847,7 +847,6 @@ export default function MobileHubPage() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (fileList && fileList.length > 0) {
-      alert(`[사진 감지] 총 ${fileList.length}개의 파일을 읽는 중입니다.`);
       const loadPromises = Array.from(fileList).map(file => {
         return new Promise<PhotoAttached>((resolve, reject) => {
           const reader = new FileReader();
@@ -875,7 +874,6 @@ export default function MobileHubPage() {
       Promise.all(loadPromises)
         .then(newPhotos => {
           setSelectedPhotos(prev => [...prev, ...newPhotos]);
-          alert(`[사진 첨부 완료] ${newPhotos.length}개의 사진이 임시 등록되었습니다.`);
           if (!isRequestModalOpen) {
             setRequestModalTab('request');
           }
@@ -902,7 +900,6 @@ export default function MobileHubPage() {
         file: file
       }));
       setSelectedFiles(prev => [...prev, ...newFiles]);
-      alert(`[문서 첨부 완료] ${newFiles.length}개의 파일이 임시 등록되었습니다.`);
       if (!isRequestModalOpen) {
         setRequestModalTab('request');
       }
