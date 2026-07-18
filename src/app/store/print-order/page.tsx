@@ -292,6 +292,10 @@ function PrintOrderContent() {
           .no-print {
             display: none !important;
           }
+          html, body {
+            height: 100% !important;
+            overflow: hidden !important; /* 💡 여백 누적으로 인한 빈 2페이지 자동 생성 원천 차단 */
+          }
           body {
             background-color: white !important;
             padding: 15mm !important; /* 💡 가장자리 잘림 방지용 안전 여백 확보 */
