@@ -1094,25 +1094,59 @@ export default function MobileHubPage() {
           selectedFiles.map((f, idx) => `  ${idx + 1}. ${f.name} (${f.size})`).join('\n') + '\n';
       }
 
+      // 첨부 파일들을 Base64 데이터로 로드
+      const filesToUpload: { name: string; base64: string; type: string }[] = [];
+
+      // 1. 사진 파일 취합 (이미 preview에 base64가 들어있음)
+      for (const photo of selectedPhotos) {
+        filesToUpload.push({
+          name: photo.name,
+          base64: photo.preview,
+          type: photo.file.type
+        });
+      }
+
+      // 2. 일반 문서 파일 Base64 변환
+      for (const fileObj of selectedFiles) {
+        const file = fileObj.file;
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("파일 변환 실패"));
+          reader.readAsDataURL(file);
+        });
+        filesToUpload.push({
+          name: file.name,
+          base64: base64,
+          type: file.type
+        });
+      }
+
       const res = await fetch("/api/governance?action=create_mobile_request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: titleText,
           reason: reasonDetail,
-          voiceText: voiceText
+          voiceText: voiceText,
+          files: filesToUpload
         })
       });
 
       const data = await res.json();
       if (data.success) {
-        alert("현장 작업 요청이 AI 컨트롤타워에 성공적으로 전달되었습니다.");
+        alert("현장 작업 요청이 AI 컨트롤타워에 성공적으로 전달되었으며 할 일(스냅태스크)이 생성되었습니다.");
+        
         // 모달 상태 초기화
         setIsRequestModalOpen(false);
         setSelectedPhotos([]);
         setSelectedFiles([]);
         setVoiceText("");
         setRequestTitle("");
+        
+        // 💡 [화면 리다이렉트 포커싱] 메인화면의 '할 일(todo)' 서브 탭으로 이동시킵니다.
+        setActiveSubTab('todo');
+        
         fetchTasks(); // 타임라인 리프레시
       } else {
         alert("상신에 실패했습니다: " + data.error);

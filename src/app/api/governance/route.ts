@@ -7,7 +7,8 @@ import {
   insertRows, 
   updateRows, 
   deleteRows,
-  executeSQL 
+  executeSQL,
+  uploadFile
 } from '../../../../egdesk-helpers';
 
 /**
@@ -237,7 +238,7 @@ export async function POST(request: Request) {
 
     // [신규] 임직원 모바일 현장 작업 요청 접수
     if (action === 'create_mobile_request') {
-      const { title, reason, voiceText } = body;
+      const { title, reason, voiceText, files = [] } = body;
       
       if (!title || !title.trim()) {
         return NextResponse.json({ success: false, error: '요청 제목이 누락되었습니다.' }, { status: 400 });
@@ -245,6 +246,7 @@ export async function POST(request: Request) {
 
       const reqId = `mobile_req_${Date.now()}`;
       
+      // 1. 거버넌스 승인 요청 로그 인서트
       await insertRows('crm_governance_logs', [{
         id: reqId,
         doc_type: 'mobile_request',
@@ -259,10 +261,62 @@ export async function POST(request: Request) {
         updated_by: currentUser
       }]);
 
+      // 2. 메인 [할 일] (스냅태스크) 생성
+      const taskId = `ST-${Date.now()}`;
+      await insertRows('crm_snaptasks', [{
+        id: taskId,
+        title: `[상신] ${title.trim()}`,
+        status: 'ACTIVE',
+        partner_id: null,
+        created_at: nowStr,
+        updated_at: nowStr
+      }]);
+
+      // 3. 스냅태스크 가이드 안내 및 요청 사유 텍스트 타임라인 삽입
+      await insertRows('crm_snaptask_items', [{
+        id: Date.now(),
+        task_id: taskId,
+        content_text: `[요청 사유]\n${reason || voiceText || '현장 수동 접수'}`,
+        file_url: null,
+        file_type: 'TEXT',
+        ai_analysis: JSON.stringify({ message: "Mobile work request initiated" }),
+        created_at: nowStr
+      }]);
+
+      // 4. 첨부 파일들을 스냅태스크의 실물 아이템으로 업로드 및 매핑 적재
+      if (files && Array.isArray(files)) {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const itemId = Date.now() + 100 + i;
+          const isImg = file.type?.startsWith('image/');
+          const isVid = file.type?.startsWith('video/');
+          const fType = isImg ? 'IMAGE' : (isVid ? 'VIDEO' : 'DOCUMENT');
+
+          // 우선 아이템 레코드 생성
+          await insertRows('crm_snaptask_items', [{
+            id: itemId,
+            task_id: taskId,
+            content_text: `[상신 첨부] ${file.name}`,
+            file_url: '', // uploadFile 헬퍼에 의해 채워짐
+            file_type: fType,
+            ai_analysis: JSON.stringify({ message: "Mobile request attachment" }),
+            created_at: nowStr
+          }]);
+
+          // 실물 파일을 스토리지에 업로드하고 DB에 경로 바인딩
+          try {
+            await uploadFile('crm_snaptask_items', itemId, 'file_url', file.name, file.base64);
+          } catch (uploadErr: any) {
+            console.error(`Failed to upload attachment file ${file.name}:`, uploadErr.message);
+          }
+        }
+      }
+
       return NextResponse.json({
         success: true,
-        message: '현장 작업 요청이 성공적으로 접수되어 AI 컨트롤타워에 상신되었습니다.',
-        reqId
+        message: '현장 작업 요청이 성공적으로 접수되어 AI 컨트롤타워에 상신되었으며, 할 일(스냅태스크)로 자동 등록되었습니다.',
+        reqId,
+        taskId
       });
     }
 
