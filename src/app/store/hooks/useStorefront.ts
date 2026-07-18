@@ -574,8 +574,8 @@ export function useStorefront() {
       });
       
       const data = await res.json();
-      if (data.success && data.parsed) {
-        const parsed = data.parsed;
+      if (data.success) {
+        const parsed = data;
 
         // 1. 사업자 세금계산서 신청 및 기본 고객 정보 가입 바인딩
         const newForm = {
