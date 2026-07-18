@@ -436,6 +436,19 @@ export default function MobileHubPage() {
     }
   }, [isRequestModalOpen, requestModalTab, activeMobileFolderId, mobileFolders]);
 
+  // 💡 [Base64 로컬 디코딩 복원 헬퍼] Data URL로부터 안전하게 File 객체 복원
+  const dataURLtoFile = (dataurl: string, filename: string): File => {
+    const arr = dataurl.split(',');
+    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mime });
+  };
+
   const handleUploadModalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadModalFolderId) {
@@ -497,25 +510,46 @@ export default function MobileHubPage() {
             fd.append('title', formattedTitle);
             fd.append('content', uploadModalContent);
 
-            if ((item as any).preview) {
-              const photoItem = item as PhotoAttached;
-              if (photoItem.file) {
-                fd.append('file', photoItem.file);
-              } else {
-                const blobRes = await fetch(photoItem.preview);
-                const blob = await blobRes.blob();
-                fd.append('file', new File([blob], photoItem.name, { type: blob.type }));
-              }
-            } else {
-              const fileItem = item as FileAttached;
-              if (fileItem.file) {
-                fd.append('file', fileItem.file);
-              } else if ((fileItem as any).preview) {
-                const blobRes = await fetch((fileItem as any).preview);
-                const blob = await blobRes.blob();
-                fd.append('file', new File([blob], fileItem.name, { type: blob.type }));
-              }
-            }
+             if ((item as any).preview) {
+               const photoItem = item as PhotoAttached;
+               if (photoItem.file) {
+                 fd.append('file', photoItem.file);
+               } else if (photoItem.preview.startsWith('data:')) {
+                 try {
+                   const restoredFile = dataURLtoFile(photoItem.preview, photoItem.name);
+                   fd.append('file', restoredFile);
+                 } catch (err) {
+                   console.error("DataURL restore error:", err);
+                 }
+               } else {
+                 const blobRes = await fetch(photoItem.preview);
+                 if (blobRes.ok) {
+                   const blob = await blobRes.blob();
+                   fd.append('file', new File([blob], photoItem.name, { type: blob.type }));
+                 }
+               }
+             } else {
+               const fileItem = item as FileAttached;
+               if (fileItem.file) {
+                 fd.append('file', fileItem.file);
+               } else if ((fileItem as any).preview) {
+                 const previewUrl = (fileItem as any).preview;
+                 if (previewUrl.startsWith('data:')) {
+                   try {
+                     const restoredFile = dataURLtoFile(previewUrl, fileItem.name);
+                     fd.append('file', restoredFile);
+                   } catch (err) {
+                     console.error("DataURL file restore error:", err);
+                   }
+                 } else {
+                   const blobRes = await fetch(previewUrl);
+                   if (blobRes.ok) {
+                     const blob = await blobRes.blob();
+                     fd.append('file', new File([blob], fileItem.name, { type: blob.type }));
+                   }
+                 }
+               }
+             }
 
             res = await fetch("/api/task-folders?action=create_item", {
               method: "POST",
