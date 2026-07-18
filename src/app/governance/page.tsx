@@ -804,11 +804,11 @@ export default function GovernanceDashboard() {
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">AI 추천 다음 작업 시나리오</h4>
                 </div>
                 <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-white">
-                  {getRecommendedActions(selectedEvent.type).map((act) => {
+                  {getRecommendedActions(selectedEvent.type).map((act, idx) => {
                     const isSelected = selectedActions.includes(act.code);
                     return (
                       <div 
-                        key={act.code}
+                        key={`${act.code}-${idx}`}
                         onClick={() => toggleActionSelection(act.code)}
                         className="p-4 flex gap-3 hover:bg-slate-50 cursor-pointer transition-colors text-left"
                       >
