@@ -155,6 +155,102 @@ export default function GovernanceDashboard() {
     }
   };
 
+  // 🤖 자율 실행 통제 규칙 관리 상태 및 함수
+  const [rules, setRules] = useState<any[]>([]);
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const [newRuleName, setNewRuleName] = useState("");
+  const [newRuleExpression, setNewRuleExpression] = useState("");
+
+  const fetchRules = async () => {
+    try {
+      setRulesLoading(true);
+      const res = await apiFetch("/api/governance?action=rules");
+      const data = await res.json();
+      if (data.success) {
+        setRules(data.rules || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch rules:", e);
+    } finally {
+      setRulesLoading(false);
+    }
+  };
+
+  const handleAddRule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRuleName.trim() || !newRuleExpression.trim()) {
+      alert("규칙 이름과 자연어 규칙 조건을 입력해 주세요.");
+      return;
+    }
+    try {
+      const res = await apiFetch("/api/governance?action=add_rule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ruleName: newRuleName,
+          expression: newRuleExpression
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewRuleName("");
+        setNewRuleExpression("");
+        fetchRules();
+        alert("성공적으로 자율 통제 규칙이 등록되었습니다.");
+      } else {
+        alert("규칙 등록 실패: " + data.error);
+      }
+    } catch (e) {
+      alert("서버 통신 실패");
+    }
+  };
+
+  const handleToggleRule = async (ruleId: number, currentActive: number) => {
+    try {
+      const res = await apiFetch("/api/governance?action=toggle_rule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ruleId,
+          isActive: currentActive === 1 ? false : true
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchRules();
+      } else {
+        alert("활성화 변경 실패: " + data.error);
+      }
+    } catch (e) {
+      alert("서버 통신 실패");
+    }
+  };
+
+  const handleDeleteRule = async (ruleId: number) => {
+    if (!window.confirm("정말로 이 자율 규칙을 삭제하시겠습니까?")) return;
+    try {
+      const res = await apiFetch("/api/governance?action=delete_rule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchRules();
+        alert("자율 규칙이 성공적으로 삭제되었습니다.");
+      } else {
+        alert("규칙 삭제 실패: " + data.error);
+      }
+    } catch (e) {
+      alert("서버 통신 실패");
+    }
+  };
+
+  // 컴포넌트 마운트 및 갱신 시 규칙 로드
+  useEffect(() => {
+    fetchRules();
+  }, []);
+
   // activeFolderId가 변경될 때 내부 아이템 조회
   useEffect(() => {
     if (activeFolderId) {
@@ -1085,6 +1181,146 @@ export default function GovernanceDashboard() {
               </div>
             )
           )}
+        </div>
+
+        {/* 🤖 5구역: AI 자율 실행 통제 규칙 제어 센터 */}
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm text-left space-y-6 mt-8">
+          <div className="flex items-center gap-2 pb-4 border-b border-slate-100">
+            <Cpu className="w-6 h-6 text-indigo-650 animate-pulse shrink-0" />
+            <div>
+              <h3 className="text-base font-black text-slate-800 tracking-tight">AI 자율 실행 통제 규칙 제어 센터</h3>
+              <p className="text-slate-500 text-xs mt-0.5 font-semibold">최고관리자의 의사결정 기록을 자율 규칙으로 변환하여, 임직원의 결재 상신 시 자동 승인을 대행합니다.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* 규칙 추가 폼 */}
+            <form onSubmit={handleAddRule} className="lg:col-span-5 bg-slate-50 border border-slate-200/50 rounded-2xl p-5 space-y-4">
+              <h4 className="text-xs font-black text-slate-700">🤖 신규 자율 실행 규칙 등록</h4>
+              
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400">규칙 이름</label>
+                <input 
+                  type="text" 
+                  placeholder="예: 김직원 소액 취소 자동 승인"
+                  value={newRuleName}
+                  onChange={(e) => setNewRuleName(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400">자연어 자동화 조건</label>
+                <textarea 
+                  rows={3}
+                  placeholder="예: 김직원이 취소 요청한 모든 건은 자동 승인한다.&#13;&#10;또는: 김직원이 올린 500만원 이하의 수입통관은 자동 승인한다."
+                  value={newRuleExpression}
+                  onChange={(e) => setNewRuleExpression(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-colors resize-none leading-relaxed"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-black py-2.5 px-4 rounded-xl transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>규칙 등록 및 기억하기</span>
+              </button>
+            </form>
+
+            {/* 규칙 목록 리스트 */}
+            <div className="lg:col-span-7 space-y-4">
+              <h4 className="text-xs font-black text-slate-700">📜 활성화된 자율 통제 규칙 목록 ({rules.length})</h4>
+
+              {rulesLoading ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400">
+                  <Loader2 className="w-5 h-5 animate-spin text-indigo-650" />
+                  <span className="text-xs font-bold">규칙 목록 로드 중...</span>
+                </div>
+              ) : rules.length === 0 ? (
+                <div className="py-12 text-center border border-dashed border-slate-200 rounded-2xl text-slate-400">
+                  <Cpu className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                  <span className="text-xs font-bold block">등록된 자율 통제 규칙이 없습니다. 최초의 규칙을 정의해 보세요!</span>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+                  {rules.map(rule => {
+                    let structured: any = {};
+                    try {
+                      structured = JSON.parse(rule.structured_rule || "{}");
+                    } catch {}
+
+                    return (
+                      <div 
+                        key={rule.id}
+                        className={`p-4 rounded-2xl border transition-all text-left flex justify-between items-start gap-4 ${
+                          rule.is_active === 1 
+                            ? "bg-indigo-50/10 border-indigo-100 hover:border-indigo-200" 
+                            : "bg-slate-50 border-slate-200 opacity-60"
+                        }`}
+                      >
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-black text-slate-800 truncate">{rule.rule_name}</span>
+                            <span className={`text-[8.5px] px-1.5 py-0.2 rounded font-black ${
+                              rule.is_active === 1 ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-slate-100 text-slate-500 border-slate-200"
+                            }`}>
+                              {rule.is_active === 1 ? "ON (가동중)" : "OFF (비활성)"}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+                            "{rule.rule_expression}"
+                          </p>
+
+                          {/* LLM 파싱 분석 태그 */}
+                          <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                            <span className="text-[8.5px] text-slate-400 font-bold">AI 규칙 인식:</span>
+                            <span className="text-[8.5px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-bold">
+                              대상: {structured.operator === 'ALL' ? '전체 직원' : (structured.operator || '전체 직원')}
+                            </span>
+                            <span className="text-[8.5px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-bold">
+                              서류: {structured.doc_type === 'import_customs' ? '수입통관' : (structured.doc_type === 'TASK_CANCEL_REQUEST' ? '업무 취소' : '전체')}
+                            </span>
+                            {structured.max_amount !== undefined && structured.max_amount !== null && (
+                              <span className="text-[8.5px] bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded font-black">
+                                한도: {(structured.max_amount).toLocaleString()} 원 이하
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                          {/* 토글 스위치 */}
+                          <button
+                            onClick={() => handleToggleRule(rule.id, rule.is_active)}
+                            className="bg-transparent border-none p-1 text-slate-400 hover:text-indigo-650 cursor-pointer transition-colors"
+                            title={rule.is_active === 1 ? "규칙 끄기" : "규칙 켜기"}
+                          >
+                            {rule.is_active === 1 ? (
+                              <ToggleRight className="w-7 h-7 text-indigo-600" />
+                            ) : (
+                              <ToggleLeft className="w-7 h-7 text-slate-400" />
+                            )}
+                          </button>
+
+                          {/* 삭제 단추 */}
+                          <button
+                            onClick={() => handleDeleteRule(rule.id)}
+                            className="bg-transparent border-none p-1 text-rose-500 hover:text-rose-600 cursor-pointer transition-colors"
+                            title="규칙 삭제"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
       </div>

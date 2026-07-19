@@ -159,6 +159,43 @@ export async function setupDatabase() {
     { name: 'created_at', type: 'TEXT' }
   ], { tableName: 'crm_task_folder_items', uniqueKeyColumns: ['id'] });
 
+  // 💡 [신규] 자율 실행 규칙 테이블 생성
+  await safeCreateTable('AI 자율 실행 통제 규칙', [
+    { name: 'id', type: 'INTEGER', notNull: true },
+    { name: 'rule_name', type: 'TEXT', notNull: true },
+    { name: 'rule_expression', type: 'TEXT', notNull: true },
+    { name: 'structured_rule', type: 'TEXT' },
+    { name: 'is_active', type: 'INTEGER', notNull: true },
+    { name: 'created_at', type: 'TEXT', notNull: true }
+  ], { tableName: 'crm_governance_rules', uniqueKeyColumns: ['id'] });
+
+  // 초기 시범 자율 규칙 시딩 (테넌트: tenant-guest-id-2222)
+  try {
+    const rulesCheck = await queryTable('crm_governance_rules', { limit: 1 });
+    if (!rulesCheck.rows || rulesCheck.rows.length === 0) {
+      console.log('➡️ AI 자율 실행 통제 규칙 시범 데이터 시딩을 시작합니다.');
+      const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+      await insertRows('crm_governance_rules', [{
+        id: 1,
+        rule_name: '김직원 소액 수입통관 자동 승인 규칙',
+        rule_expression: '김직원이 상신한 수입통관 중 500만원 이하의 건은 자동 승인 처리한다.',
+        structured_rule: JSON.stringify({
+          operator: '김직원',
+          doc_type: 'import_customs',
+          max_amount: 5000000
+        }),
+        is_active: 1,
+        created_at: nowStr,
+        tenant_id: 'tenant-guest-id-2222',
+        uuid: 'rule-1',
+        updated_at: nowStr,
+        updated_by: 'SUPER_ADMIN'
+      }]);
+    }
+  } catch (err: any) {
+    console.warn('Rules seed skipped:', err.message);
+  }
+
   // 효성전기 영업 데모 데이터 삭제 조치 (예시 제거)
   try {
     await deleteRows('crm_task_folder_items', { filters: { folder_id: '1' } });

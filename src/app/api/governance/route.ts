@@ -43,6 +43,169 @@ async function verifySuperAdmin(): Promise<string | null> {
 }
 
 /**
+ * 한국어 자연어 규칙 파서
+ * 최고관리자가 작성한 텍스트에서 타깃 작업자, 서류 타입, 금액 한도 등을 파싱하여 JSON 형태로 반환합니다.
+ */
+function parseNaturalLanguageRule(expression: string): any {
+  const text = expression.toLowerCase();
+  
+  // 1) 대상 작업자 추출
+  let operator = "ALL";
+  if (text.includes("김직원")) operator = "김직원";
+  else if (text.includes("최고관리자")) operator = "최고관리자";
+  
+  // 2) 대상 서류 타입 추출
+  let doc_type = "ALL";
+  if (text.includes("수입통관") || text.includes("수입 통관") || text.includes("import")) {
+    doc_type = "import_customs";
+  } else if (text.includes("취소") || text.includes("cancel")) {
+    doc_type = "TASK_CANCEL_REQUEST";
+  } else if (text.includes("수주") || text.includes("sales_order")) {
+    doc_type = "sales_order";
+  }
+  
+  // 3) 금액(max_amount) 추출 (만원, 원 매칭)
+  let max_amount: number | null = null;
+  const amountMatch = expression.match(/(\d+)\s*(만|백|천)?\s*원/);
+  if (amountMatch) {
+    let base = Number(amountMatch[1]);
+    const scale = amountMatch[2];
+    if (scale === '만') base *= 10000;
+    else if (scale === '천') base *= 1000;
+    else if (scale === '백') base *= 100;
+    max_amount = base;
+  }
+
+  return {
+    operator,
+    doc_type,
+    max_amount
+  };
+}
+
+/**
+ * 신규 상신 건(governance_log)에 대해 활성화된 자율 규칙들을 조회하여,
+ * 매칭되는 조건이 존재하면 즉각 자동 승인 및 대행 액션을 실행합니다.
+ */
+async function checkAndApplyAutoGovernanceRules(
+  logId: string, 
+  docType: string, 
+  operator: string, 
+  amount: number, 
+  title: string, 
+  reason: string,
+  tenantId: string
+): Promise<boolean> {
+  try {
+    // 💡 테넌트(SaaS 격리)별로 등록된 활성 규칙만 불러옵니다.
+    const rulesRes = await queryTable('crm_governance_rules', { 
+      filters: { is_active: '1', tenant_id: tenantId } 
+    });
+    const rules = rulesRes.rows || [];
+    const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+
+    for (const rule of rules) {
+      let structured: any = {};
+      try {
+        structured = JSON.parse(rule.structured_rule || '{}');
+      } catch {
+        continue;
+      }
+
+      // 조건 매칭 체크
+      // 1) 대상 작업자 매칭 (ALL이 아니면서 다를 경우 패스)
+      if (structured.operator && structured.operator !== 'ALL' && structured.operator !== operator) {
+        continue;
+      }
+      // 2) 대상 서류 타입 매칭 (ALL이 아니면서 다를 경우 패스)
+      if (structured.doc_type && structured.doc_type !== 'ALL' && structured.doc_type !== docType) {
+        continue;
+      }
+      // 3) 금액 한계 조건 체크 (max_amount가 지정되어 있고, 기준 금액보다 크다면 패스)
+      if (structured.max_amount !== undefined && structured.max_amount !== null) {
+        if (amount > Number(structured.max_amount)) {
+          continue;
+        }
+      }
+
+      // 💥 조건 만족! 자율 자동 승인 단행!
+      console.log(`[AI Rule Auto Match] 테넌트[${tenantId}] 규칙 '${rule.rule_name}' 적용, 자동 승인 처리.`);
+
+      // A. crm_governance_logs 상태 갱신
+      await updateRows('crm_governance_logs', {
+        status: 'RESOLVED',
+        reason: `[AI 자율 규칙 작동] '${rule.rule_name}' 규칙에 부합하여 최고관리자 승인 없이 자동 처리 완료.`
+      }, { filters: { id: logId } });
+
+      // B. 실제 액션 대행 실행 (문서 성격에 따른 분기)
+      if (docType === 'TASK_CANCEL_REQUEST') {
+        // (1) 스냅태스크 취소 요청인 경우 -> 즉각 취소 승인 (소프트 삭제 처리)
+        const logRes = await queryTable('crm_governance_logs', { filters: { id: logId } });
+        if (logRes.rows && logRes.rows.length > 0) {
+          const targetTaskId = logRes.rows[0].doc_id;
+          
+          // 태스크 및 하위 아이템 삭제
+          await updateRows('crm_snaptasks', {
+            deleted_at: nowStr,
+            deleted_by: 'AI_AGENT'
+          }, { filters: { id: targetTaskId } });
+
+          await updateRows('crm_snaptask_items', {
+            deleted_at: nowStr,
+            deleted_by: 'AI_AGENT'
+          }, { filters: { task_id: targetTaskId } });
+        }
+      } else if (docType === 'mobile_request' || docType === 'mobile_req') {
+        // (2) 모바일 신규 수주/견적 등록 요청인 경우 -> 활성 태스크 완료 처리
+        const logRes = await queryTable('crm_governance_logs', { filters: { id: logId } });
+        if (logRes.rows && logRes.rows.length > 0) {
+          const targetTitle = logRes.rows[0].doc_title || '';
+          
+          // crm_snaptasks 조회
+          const taskRes = await queryTable('crm_snaptasks', { filters: { title: `[상신] ${targetTitle}`, tenant_id: tenantId } });
+          if (taskRes.rows && taskRes.rows.length > 0) {
+            await updateRows('crm_snaptasks', {
+              status: 'COMPLETE',
+              updated_at: nowStr,
+              updated_by: 'AI_AGENT'
+            }, { filters: { id: taskRes.rows[0].id } });
+
+            // 타임라인 기입
+            await insertRows('crm_snaptask_items', [{
+              id: Date.now(),
+              task_id: taskRes.rows[0].id,
+              type: 'conversation',
+              title: '[AI 자율 승인 알림]',
+              content: `[AI 자율 통제국]: 자율 실행 조건 규칙 '${rule.rule_name}' 에 부합하여, 최고관리자 승인 대기 없이 자동 실행(수주/견적 등록 승인 완료)되었습니다.`,
+              created_at: nowStr,
+              uuid: `STI-${Date.now()}-auto-appr`
+            }]);
+          }
+        }
+      }
+
+      // C. 통합 감사 로그(Audit Log)에 기록 남기기
+      await insertRows('crm_gov_audit_logs', [{
+        id: `audit_auto_${Date.now()}`,
+        doc_title: `[자율 규칙 승인] ${title}`,
+        doc_type: docType,
+        action_type: 'UPDATE',
+        operator: 'AI_AGENT',
+        source: 'AI',
+        details: `최고관리자 정의 규칙 [${rule.rule_name}] 적용으로 자율 대행 결재가 자동 승인되어 처리 완료되었습니다.\n- 규칙 상세: ${rule.rule_expression}`,
+        created_at: nowStr,
+        tenant_id: tenantId
+      }]);
+
+      return true; // 매치되어 적용 완료
+    }
+  } catch (err) {
+    console.error("checkAndApplyAutoGovernanceRules error:", err);
+  }
+  return false;
+}
+
+/**
  * GET 핸들러
  * 1. action=events: 통합 관제 게시판 이벤트 피드 조회
  * 2. action=logs: RAG 결재 판정 감사 로그 조회
@@ -197,6 +360,20 @@ export async function GET(request: Request) {
         const auditLogs = res.rows || [];
         auditLogs.sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
         return NextResponse.json({ success: true, auditLogs });
+      } catch (err: any) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
+    if (action === 'rules') {
+      try {
+        const tenantId = await resolveTenantId();
+        const res = await queryTable('crm_governance_rules', { 
+          filters: { deleted_at: null, tenant_id: tenantId } 
+        });
+        const rules = res.rows || [];
+        rules.sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+        return NextResponse.json({ success: true, rules });
       } catch (err: any) {
         return NextResponse.json({ success: false, error: err.message }, { status: 500 });
       }
@@ -367,6 +544,19 @@ export async function POST(request: Request) {
         }
       }
 
+      // 5. 🤖 실시간 AI 자율 자동 결재 규칙 판별기 가동 (SaaS 격리 지원)
+      let parsedAmount = 0;
+      const amountMatch = title.match(/(\d+)\s*(만|백|천)?\s*원/);
+      if (amountMatch) {
+        let base = Number(amountMatch[1]);
+        const scale = amountMatch[2];
+        if (scale === '만') base *= 10000;
+        else if (scale === '천') base *= 1000;
+        else if (scale === '백') base *= 100;
+        parsedAmount = base;
+      }
+      await checkAndApplyAutoGovernanceRules(reqId, 'mobile_request', currentUser, parsedAmount, title, reason || '', tenantId);
+
       return NextResponse.json({
         success: true,
         message: '현장 작업 요청이 성공적으로 접수되어 AI 컨트롤타워에 상신되었으며, 할 일(스냅태스크)로 자동 등록되었습니다.',
@@ -429,6 +619,17 @@ export async function POST(request: Request) {
         updated_at: nowStr,
         updated_by: currentUser
       }]);
+
+      // 4. 🤖 실시간 AI 자율 자동 결재 규칙 판별기 가동 (SaaS 격리 지원)
+      await checkAndApplyAutoGovernanceRules(
+        reqId, 
+        'TASK_CANCEL_REQUEST', 
+        currentUser, 
+        0, 
+        task.title || '', 
+        reason.trim(), 
+        task.tenant_id || 'default'
+      );
 
       return NextResponse.json({
         success: true,
@@ -875,6 +1076,65 @@ export async function POST(request: Request) {
         _version: 1
       }]);
       return NextResponse.json({ success: true });
+    }
+
+    if (action === 'add_rule') {
+      const { ruleName, expression } = body;
+      if (!ruleName || !expression || !expression.trim()) {
+        return NextResponse.json({ success: false, error: '규칙 이름과 자연어 규칙 조건이 필요합니다.' }, { status: 400 });
+      }
+
+      const tenantId = await resolveTenantId();
+      const parsed = parseNaturalLanguageRule(expression);
+      const ruleId = Date.now();
+      const uuid = `rule_${ruleId}`;
+
+      await insertRows('crm_governance_rules', [{
+        id: ruleId,
+        rule_name: ruleName.trim(),
+        rule_expression: expression.trim(),
+        structured_rule: JSON.stringify(parsed),
+        is_active: 1,
+        created_at: nowStr,
+        tenant_id: tenantId,
+        uuid,
+        updated_at: nowStr,
+        updated_by: adminUser
+      }]);
+
+      return NextResponse.json({ success: true, message: '새로운 자율 통제 규칙이 등록되었습니다.' });
+    }
+
+    if (action === 'toggle_rule') {
+      const { ruleId, isActive } = body;
+      if (!ruleId) {
+        return NextResponse.json({ success: false, error: '규칙 ID가 누락되었습니다.' }, { status: 400 });
+      }
+
+      const tenantId = await resolveTenantId();
+      await updateRows('crm_governance_rules', {
+        is_active: isActive ? 1 : 0,
+        updated_at: nowStr,
+        updated_by: adminUser
+      }, { filters: { id: ruleId, tenant_id: tenantId } });
+
+      return NextResponse.json({ success: true, message: '규칙 활성화 상태가 변경되었습니다.' });
+    }
+
+    if (action === 'delete_rule') {
+      const { ruleId } = body;
+      if (!ruleId) {
+        return NextResponse.json({ success: false, error: '규칙 ID가 누락되었습니다.' }, { status: 400 });
+      }
+
+      const tenantId = await resolveTenantId();
+      // 소프트 삭제 처리
+      await updateRows('crm_governance_rules', {
+        deleted_at: nowStr,
+        deleted_by: adminUser
+      }, { filters: { id: ruleId, tenant_id: tenantId } });
+
+      return NextResponse.json({ success: true, message: '자율 규칙이 성공적으로 삭제되었습니다.' });
     }
 
     return NextResponse.json(
