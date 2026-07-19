@@ -663,12 +663,22 @@ export default function GovernanceDashboard() {
                               <Clock className="w-3.5 h-3.5 text-slate-400" />
                               <span>{evt.created_at}</span>
                             </div>
-                            {evt.type === 'TASK_CANCEL_REQUEST' && (
-                              <div className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold border border-indigo-100/50">
-                                <User className="w-3 h-3 text-indigo-600" />
-                                <span>상신자: {evt.data.operator || '임직원'}</span>
-                              </div>
-                            )}
+                            {(() => {
+                              const operator = 
+                                evt.data?.operator || 
+                                evt.data?.created_by || 
+                                evt.data?.updated_by ||
+                                (evt.type === 'STORE_ORDER' ? evt.data?.customer_name : null);
+                                
+                              if (!operator) return null;
+                              
+                              return (
+                                <div className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold border border-indigo-100/50">
+                                  <User className="w-3 h-3 text-indigo-600" />
+                                  <span>상신자: {operator}</span>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
