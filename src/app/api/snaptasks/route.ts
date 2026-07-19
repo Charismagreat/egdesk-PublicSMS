@@ -125,8 +125,8 @@ export async function GET(req: Request) {
         .filter((t: any) => {
           if (t.deleted_at) return false;
           if (userRole === 'SUPER_ADMIN') {
-            // 최고 관리자는 본인(guest)이 생성했거나 '최고관리자' 명의의 할 일만 조회
-            return t.created_by === 'guest' || t.created_by === '최고관리자';
+            // 최고 관리자는 모바일 포털에서도 모든 직원의 할 일/활동을 볼 수 있습니다.
+            return true;
           } else {
             // 일반 임직원은 최고 관리자 소유가 아닌 모든 할 일(본인 작성, 이지봇/자동생성 포함)을 조회
             return t.created_by !== 'guest' && t.created_by !== '최고관리자';
@@ -153,7 +153,7 @@ export async function GET(req: Request) {
       tasks = rawRows.filter((t: any) => {
         if (t.deleted_at) return false;
         if (userRole === 'SUPER_ADMIN') {
-          return t.created_by === 'guest' || t.created_by === '최고관리자';
+          return true;
         } else {
           return t.created_by !== 'guest' && t.created_by !== '최고관리자';
         }

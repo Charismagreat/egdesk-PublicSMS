@@ -38,8 +38,8 @@ export async function GET(req: Request) {
         if (r.deleted_at) return false;
         
         if (userRole === 'SUPER_ADMIN') {
-          // 최고 관리자는 본인(guest)이 생성했거나 '최고관리자' 명의의 폴더만 조회
-          return r.created_by === 'guest' || r.created_by === '최고관리자';
+          // 최고 관리자는 모바일 포털에서도 모든 직원의 폴더를 볼 수 있습니다.
+          return true;
         } else {
           // 일반 임직원은 최고 관리자 소유가 아닌 모든 폴더를 조회
           return r.created_by !== 'guest' && r.created_by !== '최고관리자';
