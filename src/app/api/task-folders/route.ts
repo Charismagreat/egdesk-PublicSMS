@@ -41,8 +41,8 @@ export async function GET(req: Request) {
           // 최고 관리자는 본인(guest)이 생성했거나 '최고관리자' 명의의 폴더만 조회
           return r.created_by === 'guest' || r.created_by === '최고관리자';
         } else {
-          // 일반 임직원은 본인(userName)이 생성했거나, 이전 생성값 '현장 모바일' 인 것만 조회
-          return r.created_by === userName || r.created_by === '현장 모바일';
+          // 일반 임직원은 최고 관리자 소유가 아닌 모든 폴더를 조회
+          return r.created_by !== 'guest' && r.created_by !== '최고관리자';
         }
       });
       return NextResponse.json({ success: true, folders: activeRows });
