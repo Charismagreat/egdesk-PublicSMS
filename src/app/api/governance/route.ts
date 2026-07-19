@@ -83,11 +83,17 @@ export async function GET(request: Request) {
               data: log
             });
           } else {
+            // 💡 김직원이 모바일에서 첨부파일(수주서 등)을 올려서 신규 등록 요청한 건인 경우
+            const isMobileReq = log.doc_type === 'mobile_request' || log.doc_type === 'mobile_req';
+            const subtitleText = isMobileReq
+              ? `[현장 상신] AI 분석 기반 신규 등록 요청 검토 건`
+              : `${log.doc_type === 'estimate' ? '견적서' : log.doc_type === 'purchase_order' ? '발주서' : '수주서'} 삭제 시도 보류 건`;
+
             events.push({
               id: `rag_hold_${log.id}`,
               type: 'RAG_HOLD',
               title: `AI 결재 보류: ${log.doc_title || '보류 건'}`,
-              subtitle: `${log.doc_type === 'estimate' ? '견적서' : log.doc_type === 'purchase_order' ? '발주서' : '수주서'} 삭제 시도 보류 건`,
+              subtitle: subtitleText,
               status: log.status === 'PENDING_APPROVAL' ? 'WAITING' : 'RESOLVED',
               created_at: log.created_at || nowStr,
               data: log
