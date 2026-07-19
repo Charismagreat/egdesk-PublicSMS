@@ -44,6 +44,22 @@ export default function TaskFoldersPage() {
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderDesc, setNewFolderDesc] = useState("");
 
+  // 최고관리자 전용 관제 및 필터 상태
+  const [session, setSession] = useState<any>(null);
+  const [selectedUserFilter, setSelectedUserFilter] = useState("ALL");
+
+  const fetchSession = async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      const data = await res.json();
+      if (data.success) {
+        setSession(data.payload);
+      }
+    } catch (e) {
+      console.error("Failed to fetch session:", e);
+    }
+  };
+
   // 수집자료 등록 폼 상태
   const [newItemTags, setNewItemTags] = useState("");
   const [newItemTitle, setNewItemTitle] = useState("");
@@ -90,6 +106,7 @@ export default function TaskFoldersPage() {
 
   // 초기 로드 및 영속화 복원 Guard
   useEffect(() => {
+    fetchSession();
     fetchFolders();
   }, []);
 
@@ -310,6 +327,25 @@ export default function TaskFoldersPage() {
 
   const selectedFolder = folders.find(f => String(f.id) === activeFolderId);
 
+  // 최고관리자 전용 직원 필터링 필터 적용
+  const filteredFolders = folders.filter(f => {
+    if (session?.role !== 'SUPER_ADMIN' || selectedUserFilter === 'ALL') {
+      return true;
+    }
+    const creator = f.created_by || '현장 모바일';
+    return creator === selectedUserFilter;
+  });
+
+  // 직원별 폴더 분포 통계 계산
+  const userStats = folders.reduce((acc: {[key: string]: number}, f) => {
+    const creator = f.created_by || '현장 모바일';
+    acc[creator] = (acc[creator] || 0) + 1;
+    return acc;
+  }, {});
+
+  // 유니크 직원 목록
+  const uniqueUsers = Object.keys(userStats);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-20 w-full px-4 md:px-8 py-8">
       
@@ -324,13 +360,65 @@ export default function TaskFoldersPage() {
         </p>
       </div>
 
-      {/* 2. 2컬럼 레이아웃 */}
+      {/* 2. 최고관리자 전용 직원별 태스크 폴더 통합 관제 대시보드 */}
+      {session?.role === 'SUPER_ADMIN' && (
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm mb-6 text-left space-y-5">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <h3 className="text-sm font-black text-slate-800 tracking-tight">실시간 전사 직원별 폴더 관제 현황판</h3>
+          </div>
+          
+          {/* 통계 칩스 */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-slate-50 border border-slate-200/50 rounded-2xl p-4 flex flex-col justify-center">
+              <span className="text-[10px] font-black text-slate-400">전체 생성 폴더</span>
+              <span className="text-xl font-black text-slate-800 mt-1">{folders.length} 개</span>
+            </div>
+            {uniqueUsers.map(user => (
+              <div key={user} className="bg-slate-50 border border-slate-200/50 rounded-2xl p-4 flex flex-col justify-center">
+                <span className="text-[10px] font-black text-indigo-500 truncate">{user} 폴더</span>
+                <span className="text-xl font-black text-slate-800 mt-1">{userStats[user]} 개</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 직원 필터 칩 바 */}
+          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-black text-slate-500 mr-2">직원별 관제 필터:</span>
+            <button
+              onClick={() => setSelectedUserFilter("ALL")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                selectedUserFilter === 'ALL'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
+              }`}
+            >
+              전체 직원 보기
+            </button>
+            {uniqueUsers.map(user => (
+              <button
+                key={user}
+                onClick={() => setSelectedUserFilter(user)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                  selectedUserFilter === user
+                    ? 'bg-indigo-650 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
+                }`}
+              >
+                {user} ({userStats[user]}개)
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 3. 2컬럼 레이아웃 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* A. 좌측 컬럼: 폴더 목록 관리 */}
         <div className="lg:col-span-4 bg-white border border-slate-200/80 rounded-3xl shadow-sm p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-black text-slate-800">폴더 목록 ({folders.length})</h2>
+            <h2 className="text-base font-black text-slate-800">폴더 목록 ({filteredFolders.length})</h2>
             <button
               onClick={() => setIsFolderModalOpen(true)}
               className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-3 py-2 rounded-xl flex items-center gap-1 cursor-pointer transition border-none shadow-xs"
@@ -345,14 +433,14 @@ export default function TaskFoldersPage() {
               <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
               <span className="text-xs font-bold">폴더 목록 로드 중...</span>
             </div>
-          ) : folders.length === 0 ? (
+          ) : filteredFolders.length === 0 ? (
             <div className="py-12 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl">
               <FolderOpen className="w-10 h-10 text-slate-200 mx-auto mb-2" />
-              <span className="text-xs font-bold block">생성된 태스크 폴더가 없습니다.</span>
+              <span className="text-xs font-bold block">조회 조건에 맞는 폴더가 없습니다.</span>
             </div>
           ) : (
             <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-              {folders.map(f => {
+              {filteredFolders.map(f => {
                 const isActive = String(f.id) === activeFolderId;
                 return (
                   <button
@@ -369,6 +457,18 @@ export default function TaskFoldersPage() {
                       <p className={`text-[11px] truncate ${isActive ? "text-slate-300" : "text-slate-450"}`}>
                         {f.description || "등록된 설명이 없습니다."}
                       </p>
+                      {/* 최고관리자인 경우 상신자(작성자) 표시 배지 추가 */}
+                      {session?.role === 'SUPER_ADMIN' && (
+                        <div className="pt-1 flex">
+                          <span className={`text-[8.5px] px-1.5 py-0.2 rounded font-black border ${
+                            isActive 
+                              ? 'bg-white/10 text-slate-200 border-white/20' 
+                              : 'bg-slate-100 text-slate-500 border-slate-200/60'
+                          }`}>
+                            상신자: {f.created_by || '현장 모바일'}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
