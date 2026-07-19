@@ -1452,6 +1452,14 @@ export default function MobileHubPage() {
                           <span className="font-mono text-indigo-600">{t.id}</span>
                           <span>•</span>
                           <span>{t.created_at}</span>
+                          {session?.role === 'SUPER_ADMIN' && (
+                            <>
+                              <span>•</span>
+                              <span className="bg-slate-100 text-slate-600 border border-slate-200/80 px-1.5 py-0.5 rounded text-[8px] font-black tracking-tight">
+                                상신자: {(t as any).created_by || (t as any).updated_by || '현장 모바일'}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                       <span className="text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-100/60 px-2 py-0.5 rounded-md shrink-0">
@@ -1520,6 +1528,14 @@ export default function MobileHubPage() {
                           <span className="font-mono">{t.id}</span>
                           <span>•</span>
                           <span>{t.created_at}</span>
+                          {session?.role === 'SUPER_ADMIN' && (
+                            <>
+                              <span>•</span>
+                              <span className="bg-slate-100 text-slate-600 border border-slate-200/80 px-1.5 py-0.5 rounded text-[8px] font-black tracking-tight">
+                                상신자: {(t as any).created_by || (t as any).updated_by || '현장 모바일'}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                       <span className="text-[9px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100/60 px-2 py-0.5 rounded-md shrink-0">
