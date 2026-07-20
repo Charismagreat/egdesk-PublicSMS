@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
 import { LogOut } from 'lucide-react';
 import SidebarMenu from './SidebarMenu';
+import SidebarHeader from './SidebarHeader';
 import { queryTable } from '@/../egdesk-helpers';
 import { redirect } from 'next/navigation';
 
@@ -70,20 +71,12 @@ export default async function Sidebar() {
           scrollbar-width: none !important;
         }
       `}} />
-      <div className="p-6 border-b border-slate-800 w-full min-w-0">
-        <h1 
-          className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400 truncate whitespace-nowrap"
-          title={sidebarMainTitle}
-        >
-          {sidebarMainTitle}
-        </h1>
-        <p 
-          className="text-sm text-slate-400 mt-1 truncate whitespace-nowrap"
-          title={sidebarSubTitle}
-        >
-          {sidebarSubTitle}
-        </p>
-      </div>
+      <SidebarHeader 
+        sidebarMainTitle={sidebarMainTitle} 
+        sidebarSubTitle={sidebarSubTitle} 
+        userRole={userRole} 
+        userUsername={userUsername} 
+      />
       
       <SidebarMenu userRole={userRole} userUsername={userUsername} />
 
