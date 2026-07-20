@@ -110,7 +110,10 @@ export default function SidebarHeader({
       type: "기본 관제"
     });
 
-    return [...staticItems, ...dynamicItems];
+    const merged = [...staticItems, ...dynamicItems];
+    // 💡 한국어 가나다 오름차순 사전 정렬 적용
+    merged.sort((a, b) => a.label.localeCompare(b.label, "ko"));
+    return merged;
   };
 
   // 초성 매칭 도우미
