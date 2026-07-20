@@ -11,8 +11,12 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function Home() {
-  // 1. 한국 표준시(KST) 기준 날짜 문자열 계산
-  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  // 1. 한국 표준시(KST) 기준 날짜 문자열 계산 (서버 타임존 오차 방지를 위해 UTC 변환 오프셋 적용)
+  const localDateObj = new Date();
+  const utcMillis = localDateObj.getTime() + (localDateObj.getTimezoneOffset() * 60 * 1000);
+  const kstMillis = utcMillis + (9 * 60 * 60 * 1000);
+  const now = new Date(kstMillis);
+  
   const currentYear = now.getFullYear();
   const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
   const currentDay = String(now.getDate()).padStart(2, '0');
