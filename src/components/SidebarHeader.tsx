@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  Search, LayoutDashboard, Settings, Database, ShieldAlert, Shield, X, Compass
+  Search, LayoutDashboard, Settings, Database, ShieldAlert, Shield, X, Compass, ExternalLink
 } from "lucide-react";
 import { MENU_METADATA_LIST } from "@/lib/menu-metadata";
 
@@ -243,20 +243,35 @@ export default function SidebarHeader({
                     <div
                       key={menu.href}
                       onClick={() => handleNavigate(menu.href)}
-                      className="group flex items-center space-x-2.5 p-2 rounded-xl bg-slate-950/30 border border-slate-800/60 hover:bg-indigo-600 hover:border-indigo-500 hover:text-white transition-all duration-150 cursor-pointer select-none min-w-0"
+                      className="group flex items-center justify-between p-2 rounded-xl bg-slate-950/30 border border-slate-800/60 hover:bg-indigo-600 hover:border-indigo-500 hover:text-white transition-all duration-150 cursor-pointer select-none min-w-0"
                       title={`${menu.label} (${menu.href})`}
                     >
-                      <div className="w-7 h-7 rounded-lg bg-slate-950/80 group-hover:bg-indigo-700/80 flex items-center justify-center transition-colors shrink-0">
-                        <MIcon className={`w-3.5 h-3.5 group-hover:text-white ${menu.color}`} />
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <div className="w-7 h-7 rounded-lg bg-slate-950/80 group-hover:bg-indigo-700/80 flex items-center justify-center transition-colors shrink-0">
+                          <MIcon className={`w-3.5 h-3.5 group-hover:text-white ${menu.color}`} />
+                        </div>
+                        <div className="flex flex-col min-w-0 leading-tight">
+                          <span className="text-[11px] font-black text-slate-200 group-hover:text-white transition-colors truncate">
+                            {menu.label}
+                          </span>
+                          <span className="text-[8px] text-slate-500 group-hover:text-indigo-200 transition-colors truncate">
+                            {menu.type}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex flex-col min-w-0 leading-tight">
-                        <span className="text-[11px] font-black text-slate-200 group-hover:text-white transition-colors truncate">
-                          {menu.label}
-                        </span>
-                        <span className="text-[8px] text-slate-500 group-hover:text-indigo-200 transition-colors truncate">
-                          {menu.type}
-                        </span>
-                      </div>
+                      {/* 💡 새 탭에서 열기 단추 */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.open(menu.href, "_blank");
+                        }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-indigo-700 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-1 z-10"
+                        title="새 탭에서 열기"
+                      >
+                        <ExternalLink className="w-3 h-3 text-white" />
+                      </button>
                     </div>
                   );
                 })
