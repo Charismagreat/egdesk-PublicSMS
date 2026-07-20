@@ -179,7 +179,15 @@ export default async function Home() {
 
     // 2.5. 재고 자산 및 평가방법 통계 집계 (실시간 DB 연동)
     try {
-      const valuationSetting = await queryTable('system_settings', { filters: { key: 'inventory_valuation_method' } }).catch(() => ({ rows: [] }));
+      // 💡 테넌트 복합 키 연동 적용
+      const { getTenantId } = require("@/lib/tenant");
+      const tenantId = await getTenantId() || 'default';
+      const cKey = `${tenantId}:inventory_valuation_method`;
+
+      let valuationSetting = await queryTable('system_settings', { filters: { key: cKey } }).catch(() => ({ rows: [] }));
+      if (!valuationSetting.rows || valuationSetting.rows.length === 0) {
+        valuationSetting = await queryTable('system_settings', { filters: { key: 'inventory_valuation_method' } }).catch(() => ({ rows: [] }));
+      }
       const valuationMethodVal = valuationSetting.rows && valuationSetting.rows.length > 0 ? valuationSetting.rows[0].value : 'moving_average';
       valuationMethodLabel = valuationMethodVal === 'fifo' ? '선입선출법 (FIFO)' : valuationMethodVal === 'lifo' ? '후입선출법 (LIFO)' : '이동평균법 (Moving Average)';
 

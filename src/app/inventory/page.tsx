@@ -68,6 +68,43 @@ export default function InventoryPage() {
   // 모든 세션 상태 복원이 완료되었는지 감시하는 플래그
   const isRestored = isActiveTabRestored && isSearchQueryRestored && isCurrentPageRestored && isItemsPerPageRestored && isSelectedTagsRestored && isValuationMethodRestored && isSortKeyRestored && isSortDirRestored && isSelectedCategoriesRestored;
 
+  // 💡 [DB 재고 평가방법 동적 동기화] 마운트 시 최초 DB 설정값 로드
+  useEffect(() => {
+    const fetchDbValuationMethod = async () => {
+      try {
+        const res = await fetch('/api/settings?key=inventory_valuation_method');
+        const json = await res.json();
+        if (json.success && json.value) {
+          setValuationMethod(json.value);
+        }
+      } catch (err) {
+        console.warn('Failed to load database valuation method:', err);
+      }
+    };
+    fetchDbValuationMethod();
+  }, []);
+
+  // 💡 [DB 재고 평가방법 동적 동기화] 평가법 변경 시 DB 설정 즉시 업데이트
+  useEffect(() => {
+    if (isRestored && valuationMethod) {
+      const saveDbValuationMethod = async () => {
+        try {
+          await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              key: 'inventory_valuation_method',
+              value: valuationMethod
+            })
+          });
+        } catch (err) {
+          console.warn('Failed to save database valuation method:', err);
+        }
+      };
+      saveDbValuationMethod();
+    }
+  }, [valuationMethod, isRestored]);
+
   // 검색어, 탭, 정렬, 카테고리 변경 시 페이지 번호 1페이지로 세팅
   useEffect(() => {
     if (isRestored) {
