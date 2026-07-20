@@ -892,11 +892,12 @@ export async function POST(request: Request) {
             await insertRows('crm_sales_orders', [{
               id: orderId,
               tenant_id: tenantId,
-              partner_name: '동양특수금속',
+              estimate_id: originalData?.doc_id || originalData?.id || '',
+              customer_name: '(주)동양특수금속',
               item_name: '특수합금강재',
               quantity: 120,
               total_amount: 10200000,
-              status: '수주등록',
+              status: 'REGISTERED',
               created_at: nowStr
             }]);
 
