@@ -197,7 +197,7 @@ export default function SidebarHeader({
           {/* 아웃포커스 클릭 시 닫기 가드 */}
           <div className="absolute inset-0" onClick={() => setIsOpen(false)}></div>
           
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-5 shadow-2xl space-y-4 relative z-10 flex flex-col max-h-[80vh] overflow-hidden">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl p-5 shadow-2xl space-y-4 relative z-10 flex flex-col max-h-[85vh] overflow-hidden">
             {/* 헤더 및 닫기 버튼 */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
               <div className="flex items-center space-x-2">
@@ -226,10 +226,10 @@ export default function SidebarHeader({
               />
             </div>
 
-            {/* 메뉴 리스트 */}
-            <div className="flex-1 overflow-y-auto pr-1 space-y-1.5 no-scrollbar">
+            {/* 메뉴 리스트 (5열 콤팩트 그리드로 스크롤 배제) */}
+            <div className="flex-1 overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 no-scrollbar">
               {filtered.length === 0 ? (
-                <div className="text-center py-8 text-slate-500 text-xs font-bold space-y-2">
+                <div className="col-span-full text-center py-8 text-slate-500 text-xs font-bold space-y-2">
                   <p>일치하는 메뉴가 발견되지 않았습니다 🔍</p>
                   <p className="text-[10px] text-slate-600 font-normal">정확한 메뉴명을 입력하거나 한글 초성 단축키를 사용해 보세요.</p>
                 </div>
@@ -240,25 +240,20 @@ export default function SidebarHeader({
                     <div
                       key={menu.href}
                       onClick={() => handleNavigate(menu.href)}
-                      className="group flex items-center justify-between p-3 rounded-2xl bg-slate-950/30 border border-slate-800/40 hover:bg-indigo-600 hover:border-indigo-500 hover:text-white transition-all duration-200 cursor-pointer select-none"
+                      className="group flex items-center space-x-2.5 p-2 rounded-xl bg-slate-950/30 border border-slate-800/60 hover:bg-indigo-600 hover:border-indigo-500 hover:text-white transition-all duration-150 cursor-pointer select-none min-w-0"
+                      title={`${menu.label} (${menu.href})`}
                     >
-                      <div className="flex items-center space-x-3 min-w-0">
-                        <div className="w-8 h-8 rounded-xl bg-slate-950/80 group-hover:bg-indigo-700/80 flex items-center justify-center transition-colors shrink-0">
-                          <MIcon className={`w-4 h-4 group-hover:text-white ${menu.color}`} />
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-xs font-black text-slate-200 group-hover:text-white transition-colors truncate">
-                            {menu.label}
-                          </span>
-                          <span className="text-[9px] text-slate-500 group-hover:text-indigo-200 transition-colors truncate">
-                            {menu.href}
-                          </span>
-                        </div>
+                      <div className="w-7 h-7 rounded-lg bg-slate-950/80 group-hover:bg-indigo-700/80 flex items-center justify-center transition-colors shrink-0">
+                        <MIcon className={`w-3.5 h-3.5 group-hover:text-white ${menu.color}`} />
                       </div>
-                      
-                      <span className="text-[9px] font-bold text-slate-500 group-hover:text-indigo-100 bg-slate-950/50 group-hover:bg-indigo-700/50 px-2 py-0.5 rounded-md transition-all shrink-0">
-                        {menu.type}
-                      </span>
+                      <div className="flex flex-col min-w-0 leading-tight">
+                        <span className="text-[11px] font-black text-slate-200 group-hover:text-white transition-colors truncate">
+                          {menu.label}
+                        </span>
+                        <span className="text-[8px] text-slate-500 group-hover:text-indigo-200 transition-colors truncate">
+                          {menu.type}
+                        </span>
+                      </div>
                     </div>
                   );
                 })
