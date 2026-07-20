@@ -391,7 +391,7 @@ export default async function Home() {
               </div>
 
               <div className="border-t border-slate-100 pt-2.5 flex justify-between items-center text-xs font-black text-slate-500">
-                <span>총원 등록 대기</span>
+                <span>총원</span>
                 <span className="text-slate-700">총 {totalOperators} 명</span>
               </div>
             </div>
