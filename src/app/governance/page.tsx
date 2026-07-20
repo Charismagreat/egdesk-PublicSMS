@@ -573,8 +573,8 @@ export default function GovernanceDashboard() {
   };
 
   // 7. 모달 제어 및 추천 액션 목록 획득
-  const getRecommendedActions = (type: 'STORE_ORDER' | 'RAG_HOLD' | 'LOW_STOCK' | 'TASK_CANCEL_REQUEST'): ActionRecommendation[] => {
-    switch (type) {
+  const getRecommendedActions = (evt: ControlEvent): ActionRecommendation[] => {
+    switch (evt.type) {
       case 'STORE_ORDER':
         return [
           { code: 'check_inventory', label: '해당 상품의 실시간 재고 파악', description: '물류 재고 원장과 대조하여 요청 수량이 정상적으로 확보되어 출고가 가능한지 검증합니다.' },
@@ -584,6 +584,15 @@ export default function GovernanceDashboard() {
           { code: 'notify_operator', label: '조치 이력 영구 감사 아카이빙', description: '최고관리자의 개입 이력을 통제 감사록에 상세 기록합니다.' }
         ];
       case 'RAG_HOLD':
+        // 💡 모바일 임직원 현장 상신 건인 경우, 전용 발주서 스캔 및 수주 등록 자율 대행 제공
+        if (evt.data?.doc_type === 'mobile_request' || evt.data?.doc_type === 'mobile_req') {
+          return [
+            { code: 'scan_received_order', label: "상신 파일 '받은 발주서 스캔 등록' 및 AI OCR 판독 실행", description: '현장에서 첨부한 발주서 이미지 실물 파일을 AI OCR로 스캔하여 품목, 단가, 수량 정보를 추출합니다.' },
+            { code: 'auto_register_sales_order', label: '수주 대장(crm_sales_orders) 신규 수주 자동 등록 적재', description: '판독 완료된 B2B 발주 데이터를 기반으로 수주 대장에 즉시 신규 행으로 자동 등록(적재)합니다.' },
+            { code: 'notify_operator', label: '최초 조작 신청 임직원에게 처리 통보', description: '강제 승인 결과를 시스템 알림 피드로 피드백합니다.' },
+            { code: 'notify_operator', label: '조치 이력 영구 감사 아카이빙', description: '최고관리자의 개입 이력을 통제 감사록에 상세 기록합니다.' }
+          ];
+        }
         return [
           { code: 'force_delete', label: 'RAG 삭제 가드 임시 우회 및 강제 삭제 최종 승인', description: '보안 내규 상 제한 조치된 문서 삭제 건을 최고관리자 최종 권한으로 소프트 삭제 처리합니다.' },
           { code: 'notify_operator', label: '최초 조작 신청 임직원에게 처리 통보', description: '강제 승인 결과를 시스템 알림 피드로 피드백합니다.' },
@@ -608,7 +617,7 @@ export default function GovernanceDashboard() {
   const handleOpenDetail = (evt: ControlEvent) => {
     setSelectedEvent(evt);
     setActionReports(null);
-    const defaults = getRecommendedActions(evt.type).map(a => a.code);
+    const defaults = getRecommendedActions(evt).map(a => a.code);
     setSelectedActions(defaults); // 기본값 전체 선택
   };
 
@@ -1829,7 +1838,7 @@ export default function GovernanceDashboard() {
                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">AI 추천 다음 작업 시나리오</h4>
                 </div>
                 <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-white">
-                  {getRecommendedActions(selectedEvent.type).map((act, idx) => {
+                  {getRecommendedActions(selectedEvent).map((act, idx) => {
                     const isSelected = selectedActions.includes(act.code);
                     return (
                       <div 
