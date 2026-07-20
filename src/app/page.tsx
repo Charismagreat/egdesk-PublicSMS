@@ -119,7 +119,7 @@ export default async function Home() {
     const operators = (operatorsRes.rows || []).filter((emp: any) => {
       if (emp.deleted_at) return false;
       if (emp.role === 'SYSTEM_ADMIN' || emp.username === 'admin') return false;
-      return emp.is_active === '1' || emp.is_active === 1;
+      return true; // 근태 관리 API와 일관성을 맞춰 is_active 가드를 제거
     });
     totalOperators = operators.length;
 
