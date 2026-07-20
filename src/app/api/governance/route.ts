@@ -777,81 +777,83 @@ export async function POST(request: Request) {
             }
           }
 
-          // 2. crm_snaptask_items 에서 파일명 기반 매핑 또는 최신 IMAGE 기반 조회 실행
-          const itemsRes = await queryTable('crm_snaptask_items', { 
-            filters: { file_type: 'IMAGE' },
-            orderBy: 'id',
-            orderDirection: 'DESC',
-            limit: 1000
-          });
-          const itemsRows = itemsRes.rows || [];
+          // 2. crm_snaptask_items 에서 원시 SQL로 모든 이미지 목록 조회 (tenant_id 격리 가드 우회)
+          const sqlRes = await executeSQL("SELECT * FROM crm_snaptask_items WHERE file_type = 'IMAGE' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1000");
+          const itemsRows = sqlRes.rows || sqlRes || [];
 
           let targetItem = null;
           if (matchedFilename && itemsRows.length > 0) {
-            targetItem = itemsRows.find(item => item.content_text?.includes(matchedFilename));
+            targetItem = itemsRows.find((item: any) => item.content_text?.includes(matchedFilename));
           }
           // 만약 파일명으로 매핑되지 않았다면, 가장 최근 등록된 이미지 항목을 폴백으로 설정
           if (!targetItem && itemsRows.length > 0) {
             targetItem = itemsRows[0];
           }
 
-          if (targetItem) {
-            const downloadRes = await downloadFile({
-              tableName: 'crm_snaptask_items',
-              rowId: Number(targetItem.id),
-              columnName: 'file_url'
-            });
-            
-            if (downloadRes.success && downloadRes.data) {
-              imageBase64 = downloadRes.data;
-              imageFilename = downloadRes.filename || targetItem.content_text?.replace('[상신 첨부] ', '') || imageFilename;
-              imageMime = downloadRes.mimeType || imageMime;
-            }
+          if (!targetItem) {
+            sharedOcrSuccess = false;
+            sharedOcrDetail = `[이미지 조회 실패] 스냅태스크 아이템 테이블(crm_snaptask_items)에서 첨부된 이미지 레코드를 찾을 수 없습니다. (조회된 이미지 수: ${itemsRows.length}건, 매칭 파일명: '${matchedFilename || '없음'}'). 수동 등록을 진행하거나 작업을 반려해 주세요.`;
+            return;
           }
 
-          if (imageBase64) {
-            const cookieStore = await cookies();
-            const allCookies = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
+          // 3. 파일 바이너리 다운로드
+          const downloadRes = await downloadFile({
+            tableName: 'crm_snaptask_items',
+            rowId: Number(targetItem.id),
+            columnName: 'file_url'
+          });
+          
+          if (!downloadRes.success || !downloadRes.data) {
+            sharedOcrSuccess = false;
+            sharedOcrDetail = `[바이너리 다운로드 실패] 스토리지로부터 이미지 파일('${targetItem.content_text}')의 실물 바이너리를 로드하는 데 실패했습니다. 에러: ${downloadRes.error || '바이너리 데이터 부재'}. 수동 등록 또는 반려 처리가 필요합니다.`;
+            return;
+          }
+
+          imageBase64 = downloadRes.data;
+          imageFilename = downloadRes.filename || targetItem.content_text?.replace('[상신 첨부] ', '') || imageFilename;
+          imageMime = downloadRes.mimeType || imageMime;
+
+          // 4. 로컬 OCR API 호출 및 분석
+          const cookieStore = await cookies();
+          const allCookies = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
+          
+          const response = await fetch('http://localhost:4000/api/estimates/ocr-sales-order', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cookie': allCookies
+            },
+            body: JSON.stringify({
+              imageBase64: `data:${imageMime};base64,${imageBase64}`,
+              filename: imageFilename,
+              mimeType: imageMime
+            })
+          });
+          
+          const ocrRes = await response.json();
+          if (ocrRes.success) {
+            sharedOcrSuccess = true;
+            sharedSoId = ocrRes.soId || '';
+            sharedEstimateId = ocrRes.estimateId || '';
             
-            const response = await fetch('http://localhost:4000/api/estimates/ocr-sales-order', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Cookie': allCookies
-              },
-              body: JSON.stringify({
-                imageBase64: `data:${imageMime};base64,${imageBase64}`,
-                filename: imageFilename,
-                mimeType: imageMime
-              })
-            });
-            
-            const ocrRes = await response.json();
-            if (ocrRes.success) {
-              sharedOcrSuccess = true;
-              sharedSoId = ocrRes.soId || '';
-              sharedEstimateId = ocrRes.estimateId || '';
-              
-              // 생성된 수주서 상세 정보를 조회하여 캐시 갱신
-              const soRes = await queryTable('crm_sales_orders', { filters: { id: sharedSoId } });
-              if (soRes.rows && soRes.rows.length > 0) {
-                const soRow = soRes.rows[0];
-                sharedPartnerName = soRow.customer_name || sharedPartnerName;
-                sharedItemName = soRow.item_name || sharedItemName;
-                sharedQty = Number(soRow.quantity) || sharedQty;
-                sharedAmount = Number(soRow.total_amount) || sharedAmount;
-              }
-              
-              sharedOcrDetail = `[실물 발주서 OCR 판독 완료] Gemini Vision OCR(2-Pass)을 통해 상신 이미지 '${imageFilename}' 분석 성공: 거래처(${sharedPartnerName}), 품목(${sharedItemName}), 수량(${sharedQty}개), 총액(${sharedAmount.toLocaleString()}원) 판독 및 검출 완료.`;
-            } else {
-              sharedOcrDetail = `[실물 OCR API 호출 실패] ${ocrRes.error || '알 수 없는 이유'}`;
+            const soRes = await queryTable('crm_sales_orders', { filters: { id: sharedSoId } });
+            if (soRes.rows && soRes.rows.length > 0) {
+              const soRow = soRes.rows[0];
+              sharedPartnerName = soRow.customer_name || sharedPartnerName;
+              sharedItemName = soRow.item_name || sharedItemName;
+              sharedQty = Number(soRow.quantity) || sharedQty;
+              sharedAmount = Number(soRow.total_amount) || sharedAmount;
             }
+            
+            sharedOcrDetail = `[실물 발주서 OCR 판독 완료] Gemini Vision OCR(2-Pass)을 통해 상신 이미지 '${imageFilename}' 분석 성공: 거래처(${sharedPartnerName}), 품목(${sharedItemName}), 수량(${sharedQty}개), 총액(${sharedAmount.toLocaleString()}원) 판독 및 검출 완료.`;
           } else {
-            sharedOcrDetail = `[파일 로드 실패] 상신 첨부 파일의 바이너리를 찾을 수 없어 기본 모의 판독(동양특수금속, 120개, 10,200,000원)을 실행합니다.`;
+            sharedOcrSuccess = false;
+            sharedOcrDetail = `[AI OCR 판독 API 실패] 실시간 Vision LLM OCR 판독 수행 중 오류가 발생했습니다: ${ocrRes.error || '응답 데이터 이상'}. 수동 등록 또는 반려 처리가 권장됩니다.`;
           }
         } catch (err: any) {
           console.error('Governance OCR scan error:', err.message);
-          sharedOcrDetail = `[AI OCR 판독 장애] OCR API 분석 중 오류가 발생했습니다: ${err.message}`;
+          sharedOcrSuccess = false;
+          sharedOcrDetail = `[AI OCR 판독 장애] OCR 파이프라인 수행 중 예외 에러가 발생했습니다: ${err.message}. 수동 등록 또는 반려를 진행해 주세요.`;
         }
       };
 
