@@ -819,17 +819,22 @@ export async function POST(request: Request) {
             downloadErrorMsg = downloadRes.error || '바이너리 데이터 부재';
           }
 
+          // 💡 [동적 Base URL 추출] 현재 구동 중인 정확한 도메인과 포트를 획득하여 Connection Refused 차단
+          const host = request.headers.get('host') || 'localhost:4000';
+          const protocol = request.url.startsWith('https') ? 'https' : 'http';
+          const baseUrl = `${protocol}://${host}`;
+
           // 💡 [게이트웨이 폴백 가드] downloadFile이 실패할 경우 본사 통합 파일 게이트웨이 API로 2차 연동 호출 시도
           if (!downloadSuccess) {
             try {
               const cookieStore = await cookies();
               const allCookies = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
               
-              let gatewayUrl = `http://localhost:4000/api/shared/files?tableName=crm_snaptask_items&rowId=${targetItem.id}&columnName=file_url`;
+              let gatewayUrl = `${baseUrl}/api/shared/files?tableName=crm_snaptask_items&rowId=${targetItem.id}&columnName=file_url`;
               if (targetItem.file_url && targetItem.file_url.includes('fileId=')) {
                 const match = targetItem.file_url.match(/fileId=([^&]+)/);
                 if (match) {
-                  gatewayUrl = `http://localhost:4000/api/shared/files?fileId=${match[1]}`;
+                  gatewayUrl = `${baseUrl}/api/shared/files?fileId=${match[1]}`;
                 }
               }
 
@@ -857,11 +862,11 @@ export async function POST(request: Request) {
 
           imageFilename = targetItem.content_text?.replace('[상신 첨부] ', '') || imageFilename;
 
-          // 4. 로컬 OCR API 호출 및 분석
+          // 4. 로컬 OCR API 호출 및 분석 (동적 baseUrl 적용)
           const cookieStore = await cookies();
           const allCookies = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
           
-          const response = await fetch('http://localhost:4000/api/estimates/ocr-sales-order', {
+          const response = await fetch(`${baseUrl}/api/estimates/ocr-sales-order`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

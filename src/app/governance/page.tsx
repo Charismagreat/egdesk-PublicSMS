@@ -1032,61 +1032,65 @@ export default function GovernanceDashboard() {
                           onClick={() => handleOpenDetail(evt as any)}
                           className="bg-white border border-slate-200/85 hover:border-indigo-200 hover:bg-indigo-50/10 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all hover:shadow-md cursor-pointer group"
                         >
-                          <div className="flex items-start gap-4">
-                            <div className={`p-3 rounded-2xl shrink-0 ${
-                              evt.type === 'STORE_ORDER' 
-                                ? 'bg-blue-50 text-blue-650' 
-                                : evt.type === 'RAG_HOLD' 
-                                  ? 'bg-rose-50 text-rose-600' 
-                                  : evt.type === 'TASK_CANCEL_REQUEST'
-                                    ? 'bg-indigo-50 text-indigo-600'
-                                    : 'bg-amber-50 text-amber-600'
-                            }`}>
-                              {evt.type === 'STORE_ORDER' && <FileText className="w-6 h-6" />}
-                              {evt.type === 'RAG_HOLD' && <ShieldAlert className="w-6 h-6 animate-pulse" />}
-                              {evt.type === 'TASK_CANCEL_REQUEST' && <Trash2 className="w-6 h-6" />}
-                              {evt.type === 'LOW_STOCK' && <AlertTriangle className="w-6 h-6" />}
-                            </div>
-                            <div className="space-y-1 text-left">
-                              <div className="flex items-center flex-wrap gap-2">
-                                <span className="text-sm font-black text-slate-800">{evt.title}</span>
-                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
-                                  evt.type === 'STORE_ORDER' 
-                                    ? 'bg-blue-50 text-blue-700' 
-                                    : evt.type === 'RAG_HOLD' 
-                                      ? 'bg-rose-50 text-rose-700' 
-                                      : evt.type === 'TASK_CANCEL_REQUEST'
-                                        ? 'bg-indigo-50 text-indigo-700'
-                                        : 'bg-amber-50 text-amber-700'
-                                }`}>
-                                  {evt.type === 'STORE_ORDER' ? '스토어 주문' : evt.type === 'RAG_HOLD' ? 'AI 결재 보류' : evt.type === 'TASK_CANCEL_REQUEST' ? '업무 취소 요청' : '재고 부족 경보'}
-                                </span>
-                                <span className="text-[9px] bg-rose-50 text-rose-700 px-1.5 py-0.2 rounded font-black border border-rose-100">
-                                  🚨 관제 알림
-                                </span>
+                          <div className="flex flex-col md:flex-row md:items-center justify-between w-full gap-4">
+                            <div className="flex items-center gap-4 min-w-0">
+                              <div className={`p-2.5 rounded-2xl shrink-0 ${
+                                evt.type === 'STORE_ORDER' 
+                                  ? 'bg-blue-50 text-blue-650' 
+                                  : evt.type === 'RAG_HOLD' 
+                                    ? 'bg-rose-50 text-rose-600' 
+                                    : evt.type === 'TASK_CANCEL_REQUEST'
+                                      ? 'bg-indigo-50 text-indigo-600'
+                                      : 'bg-amber-50 text-amber-600'
+                              }`}>
+                                {evt.type === 'STORE_ORDER' && <FileText className="w-5.5 h-5.5" />}
+                                {evt.type === 'RAG_HOLD' && <ShieldAlert className="w-5.5 h-5.5 animate-pulse" />}
+                                {evt.type === 'TASK_CANCEL_REQUEST' && <Trash2 className="w-5.5 h-5.5" />}
+                                {evt.type === 'LOW_STOCK' && <AlertTriangle className="w-5.5 h-5.5" />}
                               </div>
-                              <p className="text-xs text-slate-500 font-semibold">{evt.subtitle}</p>
-                              <div className="text-[10px] text-slate-400 flex items-center flex-wrap gap-2.5 pt-1">
-                                <div className="flex items-center gap-1">
-                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>{evt.created_at}</span>
+                              <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3.5 min-w-0 text-left">
+                                <div className="flex items-center flex-wrap gap-2 shrink-0">
+                                  <span className="text-sm font-black text-slate-800">{evt.title}</span>
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                                    evt.type === 'STORE_ORDER' 
+                                      ? 'bg-blue-50 text-blue-700' 
+                                      : evt.type === 'RAG_HOLD' 
+                                        ? 'bg-rose-50 text-rose-700' 
+                                        : evt.type === 'TASK_CANCEL_REQUEST'
+                                          ? 'bg-indigo-50 text-indigo-700'
+                                          : 'bg-amber-50 text-amber-700'
+                                  }`}>
+                                    {evt.type === 'STORE_ORDER' ? '스토어 주문' : evt.type === 'RAG_HOLD' ? 'AI 결재 보류' : evt.type === 'TASK_CANCEL_REQUEST' ? '업무 취소 요청' : '재고 부족 경보'}
+                                  </span>
+                                  <span className="text-[9px] bg-rose-50 text-rose-700 px-1.5 py-0.2 rounded font-black border border-rose-100 shrink-0">
+                                    🚨 관제 알림
+                                  </span>
                                 </div>
-                                {(() => {
-                                  const operator = 
-                                    evt.data?.operator || 
-                                    evt.data?.created_by || 
-                                    evt.data?.updated_by ||
-                                    (evt.type === 'STORE_ORDER' ? evt.data?.customer_name : null);
-                                    
-                                  if (!operator) return null;
+                                <span className="hidden md:inline text-slate-300 font-light">|</span>
+                                <p className="text-xs text-slate-500 font-semibold truncate max-w-[420px]">{evt.subtitle}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-[10px] text-slate-400 shrink-0 self-start md:self-auto pl-12 md:pl-0 md:mr-4">
+                              {(() => {
+                                const operator = 
+                                  evt.data?.operator || 
+                                  evt.data?.created_by || 
+                                  evt.data?.updated_by ||
+                                  (evt.type === 'STORE_ORDER' ? evt.data?.customer_name : null);
                                   
-                                  return (
-                                    <div className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold border border-indigo-100/50">
-                                      <User className="w-3 h-3 text-indigo-600" />
-                                      <span>상신자: {operator}</span>
-                                    </div>
-                                  );
-                                })()}
+                                if (!operator) return null;
+                                
+                                return (
+                                  <div className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold border border-indigo-100/50 shrink-0">
+                                    <User className="w-3 h-3 text-indigo-600" />
+                                    <span>상신자: {operator}</span>
+                                  </div>
+                                );
+                              })()}
+                              <div className="flex items-center gap-1 font-medium shrink-0">
+                                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                <span>{evt.created_at}</span>
                               </div>
                             </div>
                           </div>
