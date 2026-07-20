@@ -773,10 +773,10 @@ export async function POST(request: Request) {
 
       let sharedSoId = '';
       let sharedEstimateId = '';
-      let sharedPartnerName = '(주)동양특수금속';
-      let sharedItemName = '특수합금강재';
-      let sharedQty = 120;
-      let sharedAmount = 10200000;
+      let sharedPartnerName = '미지정 거래처';
+      let sharedItemName = '미지정 품목';
+      let sharedQty = 0;
+      let sharedAmount = 0;
       let sharedOcrRun = false;
       let sharedOcrSuccess = false;
       let sharedOcrDetail = '';
@@ -950,8 +950,11 @@ export async function POST(request: Request) {
             if (ocrRes.items && ocrRes.items.length > 0) {
               sharedItemName = ocrRes.items[0].product_name || sharedItemName;
             }
-            sharedQty = Number(ocrRes.originalTotalQuantity) || ocrRes.items?.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0) || sharedQty;
-            sharedAmount = Number(ocrRes.originalTotalAmount) || ocrRes.items?.reduce((sum: number, it: any) => sum + ((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)), 0) || sharedAmount;
+            const parsedQty = Number(ocrRes.originalTotalQuantity) || ocrRes.items?.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0) || 0;
+            sharedQty = parsedQty;
+
+            const parsedAmount = Number(ocrRes.originalTotalAmount) || ocrRes.items?.reduce((sum: number, it: any) => sum + ((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)), 0) || 0;
+            sharedAmount = parsedAmount;
 
             sharedOcrDetail = `[실물 발주서 OCR 판독 완료] Gemini Vision OCR(2-Pass)을 통해 상신 이미지 '${imageFilename}' 분석 성공: 거래처(${sharedPartnerName}), 품목(${sharedItemName}), 수량(${sharedQty}개), 총액(${sharedAmount.toLocaleString()}원) 판독 및 수주서(${sharedSoId}) 자동 적재 완료.`;
           } else {
