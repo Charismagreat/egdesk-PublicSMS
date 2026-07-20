@@ -108,19 +108,23 @@ export default async function Home() {
       }
     });
 
-    // 2.3. 임직원 근태 데이터 집계
+    // 2.3. 임직원 근태 데이터 집계 (자가치유 필터링 기법 도입)
     const operatorsRes = await queryTable('crm_operators', {
-      filters: { deleted_at: null },
       limit: 1000
     }).catch(() => ({ rows: [] }));
-    const operators = operatorsRes.rows || [];
+    const operators = (operatorsRes.rows || []).filter((emp: any) => {
+      if (emp.deleted_at) return false;
+      if (emp.role === 'SYSTEM_ADMIN' || emp.username === 'admin') return false;
+      return emp.is_active === '1' || emp.is_active === 1;
+    });
     totalOperators = operators.length;
 
     const attendanceRes = await queryTable('crm_attendance', {
-      filters: { work_date: todayStr },
       limit: 1000
     }).catch(() => ({ rows: [] }));
-    const todayAttendance = attendanceRes.rows || [];
+    const todayAttendance = (attendanceRes.rows || []).filter((a: any) => 
+      !a.deleted_at && (a.work_date || '').startsWith(todayStr)
+    );
 
     const rawClockIn = todayAttendance.filter((a: any) => a.status === '출근' || a.status === 'NORMAL').length;
     lateCount = todayAttendance.filter((a: any) => a.status === '지각' || a.status === 'LATE').length;
