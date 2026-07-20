@@ -777,9 +777,15 @@ export async function POST(request: Request) {
             }
           }
 
-          // 2. crm_snaptask_items 에서 원시 SQL로 모든 이미지 목록 조회 (tenant_id 격리 가드 우회)
-          const sqlRes = await executeSQL("SELECT * FROM crm_snaptask_items WHERE file_type = 'IMAGE' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1000");
-          const itemsRows = sqlRes.rows || sqlRes || [];
+          // 2. crm_snaptask_items 에서 egdesk-helpers의 queryTable API를 사용해 이미지 목록 조회 (규칙 준수 및 테넌트 필터 명시)
+          const tenantId = originalData?.tenant_id || originalData?.tenantId || await resolveTenantId() || 'default';
+          const itemsRes = await queryTable('crm_snaptask_items', { 
+            filters: { file_type: 'IMAGE', tenant_id: tenantId },
+            orderBy: 'id',
+            orderDirection: 'DESC',
+            limit: 1000
+          });
+          const itemsRows = itemsRes.rows || [];
 
           let targetItem = null;
           if (matchedFilename && itemsRows.length > 0) {
