@@ -11,7 +11,7 @@ import {
   Sparkles, User, Clock, ToggleLeft, ToggleRight, ListTodo,
   ExternalLink, FileText, ChevronRight, X, Loader2, CheckSquare, Square,
   Search, SlidersHorizontal, UserCheck, Cpu, Database, FolderOpen,
-  Camera, Receipt, MessageSquare, Send, Calendar, ArrowRight
+  Camera, Receipt, MessageSquare, Send, Calendar, ArrowRight, Paperclip
 } from "lucide-react";
 
 interface ControlEvent {
@@ -1765,6 +1765,20 @@ export default function GovernanceDashboard() {
                           <span className="font-semibold text-indigo-950 bg-indigo-50/50 p-3 rounded-2xl block mt-1 leading-relaxed border border-indigo-100/60 whitespace-pre-wrap">
                             {selectedEvent.data.reason}
                           </span>
+                          {/* 📎 [상신 첨부 파일 열기 버튼] */}
+                          {selectedEvent.data.file_url && (
+                            <div className="mt-2.5 flex items-center">
+                              <a
+                                href={selectedEvent.data.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 font-extrabold text-[11px] px-3.5 py-2.5 rounded-xl border border-indigo-100 transition-all shadow-3xs hover:shadow-xs decoration-none cursor-pointer"
+                              >
+                                <Paperclip className="w-3.5 h-3.5 text-indigo-650" />
+                                <span>상신 첨부 파일 열기: {selectedEvent.data.matched_filename || '동우일렉트릭.jpg'}</span>
+                              </a>
+                            </div>
+                          )}
                         </div>
                         <div>
                           <span className="text-slate-400 font-semibold block">요청 임직원</span>

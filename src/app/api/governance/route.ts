@@ -238,6 +238,11 @@ export async function GET(request: Request) {
       try {
         const govRes = await queryTable('crm_governance_logs', { limit: 500 });
         const logs = govRes.rows || [];
+        
+        // 💡 첨부 파일명 매칭을 위해 crm_snaptask_items 목록 미리 조회
+        const itemsRes = await queryTable('crm_snaptask_items', { filters: { file_type: 'IMAGE' }, limit: 1000 });
+        const itemsRows = itemsRes.rows || [];
+
         logs.forEach((log: any) => {
           if (log.doc_type === 'TASK_CANCEL_REQUEST') {
             events.push({
@@ -252,6 +257,28 @@ export async function GET(request: Request) {
           } else {
             // 💡 김직원이 모바일에서 첨부파일(수주서 등)을 올려서 신규 등록 요청한 건인 경우
             const isMobileReq = log.doc_type === 'mobile_request' || log.doc_type === 'mobile_req';
+            
+            // 💡 상신 이유(reason) 텍스트로부터 파일명을 추출해 crm_snaptask_items 의 서빙 URL 결합
+            let fileUrl = '';
+            let matchedFilename = '';
+            const reasonText = log.reason || '';
+            if (reasonText) {
+              const fileMatch = reasonText.match(/(?:1\.\s*|첨부\s*사진\s*1건\s*:\s*\n?\s*1\.\s*)([^\n\(\s]+)/i);
+              if (fileMatch) {
+                matchedFilename = fileMatch[1].trim();
+                const matchedItem = itemsRows.find((item: any) => item.content_text?.includes(matchedFilename));
+                if (matchedItem) {
+                  fileUrl = `/api/shared/files?tableName=crm_snaptask_items&rowId=${matchedItem.id}&columnName=file_url`;
+                }
+              }
+            }
+
+            const extendedLog = {
+              ...log,
+              file_url: fileUrl,
+              matched_filename: matchedFilename
+            };
+
             const subtitleText = isMobileReq
               ? `[현장 상신] AI 분석 기반 신규 등록 요청 검토 건`
               : `${log.doc_type === 'estimate' ? '견적서' : log.doc_type === 'purchase_order' ? '발주서' : '수주서'} 삭제 시도 보류 건`;
@@ -263,7 +290,7 @@ export async function GET(request: Request) {
               subtitle: subtitleText,
               status: log.status === 'PENDING_APPROVAL' ? 'WAITING' : 'RESOLVED',
               created_at: log.created_at || nowStr,
-              data: log
+              data: extendedLog
             });
           }
         });
