@@ -761,34 +761,51 @@ export async function POST(request: Request) {
         try {
           const logRawId = eventId.replace('event_rag_hold_', '').replace('rag_hold_', '');
           const logRes = await queryTable('crm_governance_logs', { filters: { id: logRawId } });
-          const logTitle = logRes.rows?.[0]?.doc_title || originalData?.doc_title || '';
+          const logRow = logRes.rows?.[0] || originalData;
+          const reasonText = logRow?.reason || '';
           
           let imageBase64 = '';
           let imageFilename = '동양특수금속-가로.jpg';
           let imageMime = 'image/jpeg';
-          
-          if (logTitle) {
-            const tenantId = originalData?.tenant_id || originalData?.tenantId || await resolveTenantId() || 'default';
-            const taskRes = await queryTable('crm_snaptasks', { filters: { title: `[상신] ${logTitle}`, tenant_id: tenantId } });
+
+          // 1. reason 문구 내 "1. 파일명.ext" 형태가 존재하는지 추출 시도
+          let matchedFilename = '';
+          if (reasonText) {
+            const fileMatch = reasonText.match(/(?:1\.\s*|첨부\s*사진\s*1건\s*:\s*\n?\s*1\.\s*)([^\n\(\s]+)/i);
+            if (fileMatch) {
+              matchedFilename = fileMatch[1].trim();
+            }
+          }
+
+          // 2. crm_snaptask_items 에서 파일명 기반 매핑 또는 최신 IMAGE 기반 조회 실행
+          const itemsRes = await queryTable('crm_snaptask_items', { 
+            filters: { file_type: 'IMAGE' },
+            orderBy: 'id',
+            orderDirection: 'DESC',
+            limit: 1000
+          });
+          const itemsRows = itemsRes.rows || [];
+
+          let targetItem = null;
+          if (matchedFilename && itemsRows.length > 0) {
+            targetItem = itemsRows.find(item => item.content_text?.includes(matchedFilename));
+          }
+          // 만약 파일명으로 매핑되지 않았다면, 가장 최근 등록된 이미지 항목을 폴백으로 설정
+          if (!targetItem && itemsRows.length > 0) {
+            targetItem = itemsRows[0];
+          }
+
+          if (targetItem) {
+            const downloadRes = await downloadFile({
+              tableName: 'crm_snaptask_items',
+              rowId: Number(targetItem.id),
+              columnName: 'file_url'
+            });
             
-            if (taskRes.rows && taskRes.rows.length > 0) {
-              const taskId = taskRes.rows[0].id;
-              const itemsRes = await queryTable('crm_snaptask_items', { filters: { task_id: taskId, file_type: 'IMAGE' } });
-              
-              if (itemsRes.rows && itemsRes.rows.length > 0) {
-                const targetItem = itemsRes.rows[0];
-                const downloadRes = await downloadFile({
-                  tableName: 'crm_snaptask_items',
-                  rowId: Number(targetItem.id),
-                  columnName: 'file_url'
-                });
-                
-                if (downloadRes.success && downloadRes.data) {
-                  imageBase64 = downloadRes.data;
-                  imageFilename = downloadRes.filename || imageFilename;
-                  imageMime = downloadRes.mimeType || imageMime;
-                }
-              }
+            if (downloadRes.success && downloadRes.data) {
+              imageBase64 = downloadRes.data;
+              imageFilename = downloadRes.filename || targetItem.content_text?.replace('[상신 첨부] ', '') || imageFilename;
+              imageMime = downloadRes.mimeType || imageMime;
             }
           }
 
