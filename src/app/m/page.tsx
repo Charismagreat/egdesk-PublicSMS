@@ -1008,13 +1008,16 @@ export default function MobileHubPage() {
   // KST 날짜 변환 헬퍼
   const getKstDate = (dateStr?: string) => {
     if (!dateStr) return new Date();
-    const cleanStr = dateStr.replace(" ", "T");
+    // 하이픈(-)을 슬래시(/)로 변경하여 브라우저 타임존 오차(UTC 변환 버그) 방지
+    const cleanStr = dateStr.replace(/-/g, "/");
     return new Date(cleanStr);
   };
 
   // 한 일 (완료) 기간별 필터링 연산
   const filteredCompletedTasks = completedTasksRaw.filter(t => {
-    const taskDate = getKstDate(t.created_at);
+    // 💡 완료된 업무는 최초 상신일(created_at)이 아닌, 실제 완료일(updated_at) 기준으로 필터링하는 것이 타당합니다.
+    const targetDateStr = t.updated_at || t.created_at;
+    const taskDate = getKstDate(targetDateStr);
     const now = new Date();
     
     // 날짜 비교를 위해 시, 분, 초를 0으로 세팅한 기준일 설정

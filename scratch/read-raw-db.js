@@ -14,8 +14,8 @@ const helpers = require('../egdesk-helpers.js');
 
 async function main() {
   try {
-    const sos = await helpers.executeSQL('SELECT id, estimate_id, tenant_id FROM crm_sales_orders');
-    console.log('--- raw crm_sales_orders ---');
+    const sos = await helpers.executeSQL('SELECT * FROM crm_snaptasks');
+    console.log('--- raw crm_snaptasks ---');
     console.log(JSON.stringify(sos, null, 2));
 
     const ests = await helpers.executeSQL('SELECT id, type, tenant_id FROM crm_estimates');
