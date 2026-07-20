@@ -8,7 +8,7 @@ import {
   Home, Users, MessageSquare, Settings, ShoppingCart, 
   ClipboardList, CreditCard, CalendarDays, Truck, Send, 
   PackageSearch, Package, UserCog, Zap, Ticket, Landmark, Globe, Briefcase, HelpCircle,
-  ArrowRightLeft, Handshake, Sparkles, Coins, Database, Compass, Shield, CheckSquare, Wrench, ShieldAlert, Award, Scale, Key, Mail, Eye, EyeOff,
+  ArrowRightLeft, Handshake, Sparkles, Coins, Database, Compass, Shield, CheckSquare, Wrench, ShieldAlert, Award, Scale, Key, Mail, Eye, EyeOff, ExternalLink,
   GripVertical, Activity, Smartphone, Mic, Bot, LayoutDashboard
 } from "lucide-react";
 
@@ -62,6 +62,13 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
   const [draggedOverIndex, setDraggedOverIndex] = useState<number | null>(null);
   const [pressTimer, setPressTimer] = useState<any>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  // 💡 새 탭에서 열기 클릭 이벤트 핸들러
+  const handleOpenNewTab = (e: React.MouseEvent, href: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.open(href, "_blank");
+  };
 
   // 활성화 메뉴 감지 도우미
   const isActive = (href: string) => {
@@ -377,15 +384,27 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
                 <Icon className={`w-5 h-5 shrink-0 transition-colors ${active ? "text-white" : item.color}`} />
                 <span className="truncate">{item.label}</span>
               </div>
-              {userRole === "SUPER_ADMIN" && (
+              <div className="flex items-center space-x-1.5 shrink-0 ml-2 z-10">
+                {/* 💡 새 탭에서 열기 숏컷 버튼 */}
                 <button
-                  onClick={(e) => hideMenu(item.href, e)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/50 rounded text-slate-400 hover:text-white shrink-0 ml-2 z-10 border-none bg-transparent cursor-pointer"
-                  title="메뉴 숨기기"
+                  type="button"
+                  onClick={(e) => handleOpenNewTab(e, item.href)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center"
+                  title="새 탭에서 열기"
                 >
-                  <EyeOff className="w-4 h-4" />
+                  <ExternalLink className="w-3.5 h-3.5" />
                 </button>
-              )}
+                {userRole === "SUPER_ADMIN" && (
+                  <button
+                    type="button"
+                    onClick={(e) => hideMenu(item.href, e)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center"
+                    title="메뉴 숨기기"
+                  >
+                    <EyeOff className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </Link>
           );
         })}
@@ -436,66 +455,121 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
         {userRole === "SUPER_ADMIN" && userUsername === "admin" && (
           <Link
             href="/admin/members"
-            className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+            className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
               isActive("/admin/members")
                 ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
             }`}
           >
-            <Shield className={`w-5 h-5 shrink-0 ${isActive("/admin/members") ? "text-white" : "text-slate-400"}`} />
-            <span>회원 관리</span>
+            <div className="flex items-center space-x-3 min-w-0">
+              <Shield className={`w-5 h-5 shrink-0 ${isActive("/admin/members") ? "text-white" : "text-slate-400"}`} />
+              <span>회원 관리</span>
+            </div>
+            {/* 💡 새 탭에서 열기 숏컷 버튼 */}
+            <button
+              type="button"
+              onClick={(e) => handleOpenNewTab(e, "/admin/members")}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
+              title="새 탭에서 열기"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
           </Link>
         )}
 
         <Link
           href="/"
-          className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+          className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
             isActive("/")
               ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
               : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
           }`}
         >
-          <LayoutDashboard className={`w-5 h-5 shrink-0 ${isActive("/") ? "text-white" : "text-blue-550"}`} />
-          <span>대시보드</span>
+          <div className="flex items-center space-x-3 min-w-0">
+            <LayoutDashboard className={`w-5 h-5 shrink-0 ${isActive("/") ? "text-white" : "text-blue-550"}`} />
+            <span>대시보드</span>
+          </div>
+          {/* 💡 새 탭에서 열기 숏컷 버튼 */}
+          <button
+            type="button"
+            onClick={(e) => handleOpenNewTab(e, "/")}
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
+            title="새 탭에서 열기"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
         </Link>
 
         {userRole === "SUPER_ADMIN" && (
           <Link
             href="/governance"
-            className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+            className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
               isActive("/governance")
                 ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
             }`}
           >
-            <ShieldAlert className={`w-5 h-5 shrink-0 ${isActive("/governance") ? "text-white" : "text-rose-555"}`} />
-            <span>AI 컨트롤타워</span>
+            <div className="flex items-center space-x-3 min-w-0">
+              <ShieldAlert className={`w-5 h-5 shrink-0 ${isActive("/governance") ? "text-white" : "text-rose-555"}`} />
+              <span>AI 컨트롤타워</span>
+            </div>
+            {/* 💡 새 탭에서 열기 숏컷 버튼 */}
+            <button
+              type="button"
+              onClick={(e) => handleOpenNewTab(e, "/governance")}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
+              title="새 탭에서 열기"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
           </Link>
         )}
 
         {(userRole === "SUPER_ADMIN" || userRole === "SUB_OPERATOR") && (
           <Link
             href="/my-db"
-            className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+            className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
               isActive("/my-db")
                 ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
             }`}
           >
-            <Database className={`w-5 h-5 shrink-0 ${isActive("/my-db") ? "text-white" : "text-slate-400"}`} />
-            <span>MY DB</span>
+            <div className="flex items-center space-x-3 min-w-0">
+              <Database className={`w-5 h-5 shrink-0 ${isActive("/my-db") ? "text-white" : "text-slate-400"}`} />
+              <span>MY DB</span>
+            </div>
+            {/* 💡 새 탭에서 열기 숏컷 버튼 */}
+            <button
+              type="button"
+              onClick={(e) => handleOpenNewTab(e, "/my-db")}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
+              title="새 탭에서 열기"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
           </Link>
         )}
         <Link
           href="/settings"
-          className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+          className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
             isActive("/settings")
               ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
               : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
           }`}
         >
-          <Settings className={`w-5 h-5 shrink-0 ${isActive("/settings") ? "text-white" : "text-slate-400"}`} />
-          <span>시스템 설정</span>
+          <div className="flex items-center space-x-3 min-w-0">
+            <Settings className={`w-5 h-5 shrink-0 ${isActive("/settings") ? "text-white" : "text-slate-400"}`} />
+            <span>시스템 설정</span>
+          </div>
+          {/* 💡 새 탭에서 열기 숏컷 버튼 */}
+          <button
+            type="button"
+            onClick={(e) => handleOpenNewTab(e, "/settings")}
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
+            title="새 탭에서 열기"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
         </Link>
       </div>
     </>
