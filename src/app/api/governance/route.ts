@@ -889,11 +889,11 @@ export async function POST(request: Request) {
 
           imageFilename = targetItem.content_text?.replace('[상신 첨부] ', '') || imageFilename;
 
-          // 4. 로컬 OCR API 호출 및 분석 (동적 baseUrl 적용)
+          // 4. 로컬 OCR API 호출 및 분석 (동적 baseUrl 적용 - 1단계: analyze 호출)
           const cookieStore = await cookies();
           const allCookies = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
           
-          const response = await fetch(`${baseUrl}/api/estimates/ocr-sales-order`, {
+          const analyzeResponse = await fetch(`${baseUrl}/api/estimates/ocr-sales-order?action=analyze`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -906,25 +906,57 @@ export async function POST(request: Request) {
             })
           });
           
-          const ocrRes = await response.json();
-          if (ocrRes.success) {
+          const ocrRes = await analyzeResponse.json();
+          if (!ocrRes.success) {
+            sharedOcrSuccess = false;
+            sharedOcrDetail = `[AI OCR 분석 실패] 실시간 Vision LLM 분석 수행 중 오류가 발생했습니다: ${ocrRes.error || '응답 데이터 이상'}. 수동 등록 또는 반려 처리가 권장됩니다.`;
+            return;
+          }
+
+          // 💡 [2단계: save 호출] 분석된 실물 발주서 데이터를 수주 대장에 실제 적재
+          const saveResponse = await fetch(`${baseUrl}/api/estimates/ocr-sales-order?action=save`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cookie': allCookies
+            },
+            body: JSON.stringify({
+              partner_name: ocrRes.partner_name,
+              partner_phone: ocrRes.partner_phone,
+              partner_manager: ocrRes.partner_manager,
+              items: ocrRes.items,
+              file_url: ocrRes.file_url,
+              business_number: ocrRes.business_number,
+              representative: ocrRes.representative,
+              address: ocrRes.address,
+              document_number: ocrRes.document_number,
+              document_date: ocrRes.document_date,
+              delivery_date: ocrRes.delivery_date,
+              document_memo: ocrRes.document_memo,
+              approvers: ocrRes.approvers,
+              force_bypass: true, // 최고관리자의 관제 조치 승인이므로 매칭 가드를 강제 패스시킵니다.
+              bypass_reason: '최고관리자 관제 센터 자율 조치 승인 대행'
+            })
+          });
+
+          const saveRes = await saveResponse.json();
+          if (saveRes.success) {
             sharedOcrSuccess = true;
-            sharedSoId = ocrRes.soId || '';
-            sharedEstimateId = ocrRes.estimateId || '';
+            sharedSoId = saveRes.soId || '';
+            sharedEstimateId = saveRes.estimateId || '';
             
-            const soRes = await queryTable('crm_sales_orders', { filters: { id: sharedSoId } });
-            if (soRes.rows && soRes.rows.length > 0) {
-              const soRow = soRes.rows[0];
-              sharedPartnerName = soRow.customer_name || sharedPartnerName;
-              sharedItemName = soRow.item_name || sharedItemName;
-              sharedQty = Number(soRow.quantity) || sharedQty;
-              sharedAmount = Number(soRow.total_amount) || sharedAmount;
+            // 실물 이미지로부터 Gemini가 판독해낸 실제 데이터 캐시 갱신
+            sharedPartnerName = ocrRes.partner_name || sharedPartnerName;
+            if (ocrRes.items && ocrRes.items.length > 0) {
+              sharedItemName = ocrRes.items[0].product_name || sharedItemName;
             }
-            
-            sharedOcrDetail = `[실물 발주서 OCR 판독 완료] Gemini Vision OCR(2-Pass)을 통해 상신 이미지 '${imageFilename}' 분석 성공: 거래처(${sharedPartnerName}), 품목(${sharedItemName}), 수량(${sharedQty}개), 총액(${sharedAmount.toLocaleString()}원) 판독 및 검출 완료.`;
+            sharedQty = Number(ocrRes.originalTotalQuantity) || ocrRes.items?.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0) || sharedQty;
+            sharedAmount = Number(ocrRes.originalTotalAmount) || ocrRes.items?.reduce((sum: number, it: any) => sum + ((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)), 0) || sharedAmount;
+
+            sharedOcrDetail = `[실물 발주서 OCR 판독 완료] Gemini Vision OCR(2-Pass)을 통해 상신 이미지 '${imageFilename}' 분석 성공: 거래처(${sharedPartnerName}), 품목(${sharedItemName}), 수량(${sharedQty}개), 총액(${sharedAmount.toLocaleString()}원) 판독 및 수주서(${sharedSoId}) 자동 적재 완료.`;
           } else {
             sharedOcrSuccess = false;
-            sharedOcrDetail = `[AI OCR 판독 API 실패] 실시간 Vision LLM OCR 판독 수행 중 오류가 발생했습니다: ${ocrRes.error || '응답 데이터 이상'}. 수동 등록 또는 반려 처리가 권장됩니다.`;
+            sharedOcrDetail = `[B2B 수주 적재 API 실패] 수주 대장 저장 중 오류가 발생했습니다: ${saveRes.error || '응답 데이터 이상'}. 수동 등록 또는 반려 처리가 권장됩니다.`;
           }
         } catch (err: any) {
           console.error('Governance OCR scan error:', err.message);
