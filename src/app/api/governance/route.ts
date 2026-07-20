@@ -975,8 +975,8 @@ export async function POST(request: Request) {
             await runRealOcrIfNeeded();
             actionReports.push({
               action: act,
-              success: sharedOcrSuccess || !sharedOcrRun,
-              detail: sharedOcrDetail || `[발주서 OCR 스캔 완료] 실물 발주서 이미지 '동양특수금속-가로.jpg' 분석 결과: 거래처(동양특수금속), 품목(특수합금강재), 수량(120개), 단가(85,000원), 공급가액(10,200,000원)을 성공적으로 판독 및 검출 완료했습니다.`
+              success: sharedOcrSuccess, // 💡 임의의 모의 성공 처리를 폐지하고 실제 OCR 판독의 성공 여부를 그대로 기입
+              detail: sharedOcrDetail || `[발주서 OCR 스캔 실패] 발주서 이미지 판독 분석을 완료하지 못했습니다.`
             });
           }
 
@@ -988,18 +988,12 @@ export async function POST(request: Request) {
             // 중복 적재하지 않고 공유된 ID를 사용합니다.
             let orderId = sharedSoId;
             if (!orderId) {
-              orderId = `SO-AUTO-${Date.now()}`;
-              await insertRows('crm_sales_orders', [{
-                id: orderId,
-                tenant_id: tenantId,
-                estimate_id: originalData?.doc_id || originalData?.id || '',
-                customer_name: sharedPartnerName,
-                item_name: sharedItemName,
-                quantity: sharedQty,
-                total_amount: sharedAmount,
-                status: 'REGISTERED',
-                created_at: nowStr
-              }]);
+              // 💡 오류 발생 시 임의 매핑/가짜 등록을 차단하고 최고관리자에게 수동 처리 및 반려 결정을 위한 예외를 던집니다.
+              if (sharedOcrRun && !sharedOcrSuccess) {
+                throw new Error(`[B2B 수주 자동 적재 중단] OCR 분석 결과가 없거나 실패하여 자동 등록을 수행할 수 없습니다. 사유: ${sharedOcrDetail}`);
+              }
+              // OCR이 전혀 기동되지 않았던 경우의 가드
+              throw new Error(`[B2B 수주 자동 적재 불가] 앞선 OCR 스캔 단계가 수행되지 않았거나 판독에 실패했습니다. 수동 스캔을 진행하시거나 작업을 반려해 주세요.`);
             }
 
             // 관련 crm_governance_logs 상태를 RESOLVED 처리
