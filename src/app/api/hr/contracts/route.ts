@@ -111,7 +111,8 @@ async function initContractsDatabase() {
         { name: 'deleted_at', type: 'TEXT' },
         { name: 'deleted_by', type: 'TEXT' },
         { name: 'restored_at', type: 'TEXT' },
-        { name: 'restored_by', type: 'TEXT' }
+        { name: 'restored_by', type: 'TEXT' },
+        { name: 'overtime_paid', type: 'INTEGER DEFAULT 0' }
       ];
 
       for (const col of newCols) {
@@ -139,7 +140,7 @@ async function verifyUserRole() {
     const name = payload.name as string || payload.username as string || 'Unknown';
     const username = payload.username as string || '';
     const tenantId = payload.tenant_id as string || 'default';
-    const isAuthorized = role === 'SUPER_ADMIN' || role === 'SUB_OPERATOR';
+    const isAuthorized = role === 'SYSTEM_ADMIN' || role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN' || role === 'SUB_OPERATOR';
     return { isAuthorized, role, name, username, tenantId };
   } catch (e) {
     return { isAuthorized: false, role: 'SUB_OPERATOR', name: 'Unknown', username: '', tenantId: 'default' };
@@ -164,7 +165,12 @@ export async function GET() {
     }
 
     const result = await queryTable('crm_operator_contract_settings', { filters: queryFilters });
-    const contractsList = (result.rows || []).filter((c: any) => !c.deleted_at);
+    const contractsList = (result.rows || []).filter((c: any) => {
+      if (c.deleted_at) return false;
+      // 최상위 시스템 운영자(admin, ID '1')의 계약 설정 정보는 대장 노출 대상에서 격리 배제
+      if (String(c.operator_id) === '1') return false;
+      return true;
+    });
 
     return NextResponse.json({
       success: true,
@@ -184,7 +190,8 @@ export async function POST(req: Request) {
     await initContractsDatabase();
 
     const { isAuthorized, tenantId, role: sessionRole } = await verifyUserRole();
-    if (!isAuthorized || (sessionRole !== 'SUPER_ADMIN' && sessionRole !== 'PRESIDENT')) {
+    const hasWritePermission = sessionRole === 'SYSTEM_ADMIN' || sessionRole === 'TENANT_ADMIN' || sessionRole === 'SUPER_ADMIN' || sessionRole === 'PRESIDENT';
+    if (!isAuthorized || !hasWritePermission) {
       return NextResponse.json({ success: false, error: '근로 계약 조건 변경 권한이 없습니다. 최고운영자 계정으로 서명 요청하세요.' }, { status: 403 });
     }
 
@@ -200,7 +207,8 @@ export async function POST(req: Request) {
       end_date,
       work_place,
       job_description,
-      paper_contract_file 
+      paper_contract_file,
+      overtime_paid
     } = await req.json();
 
     if (!operator_id) {
@@ -213,6 +221,7 @@ export async function POST(req: Request) {
       hourly_wage: parseFloat(hourly_wage || 10000),
       weekly_hours: parseFloat(weekly_hours || 40),
       allow_weekly_holiday_paid: parseInt(allow_weekly_holiday_paid !== undefined ? allow_weekly_holiday_paid : 1),
+      overtime_paid: parseInt(overtime_paid !== undefined ? overtime_paid : 0),
       work_days: work_days || '',
       contract_memo: contract_memo || '',
       tenant_id: tenantId,

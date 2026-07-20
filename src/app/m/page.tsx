@@ -710,6 +710,39 @@ export default function MobileHubPage() {
     }
   }, [activeMobileFolderId]);
 
+  // 근태 상태 동기화 헬퍼
+  const syncAttendanceStatus = async (username: string) => {
+    try {
+      const res = await fetch("/api/hr/attendance");
+      const data = await res.json();
+      if (data.success && data.employees) {
+        const myData = data.employees.find((emp: any) => emp.username === username);
+        if (myData) {
+          if (myData.clock_in) {
+            const [h, m] = myData.clock_in.split(":");
+            const hourNum = parseInt(h, 10);
+            const isPm = hourNum >= 12;
+            const dispHour = isPm ? (hourNum === 12 ? 12 : hourNum - 12) : (hourNum === 0 ? 12 : hourNum);
+            const ampm = isPm ? "오후" : "오전";
+            setClockInTime(`${ampm} ${String(dispHour).padStart(2, '0')}:${m}`);
+            setAttendanceStatus("working");
+          }
+          if (myData.clock_out) {
+            const [h, m] = myData.clock_out.split(":");
+            const hourNum = parseInt(h, 10);
+            const isPm = hourNum >= 12;
+            const dispHour = isPm ? (hourNum === 12 ? 12 : hourNum - 12) : (hourNum === 0 ? 12 : hourNum);
+            const ampm = isPm ? "오후" : "오전";
+            setClockOutTime(`${ampm} ${String(dispHour).padStart(2, '0')}:${m}`);
+            setAttendanceStatus("done");
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("근태 상태 동기화 실패:", e);
+    }
+  };
+
   // 세션 확인 및 검증
   useEffect(() => {
     const fetchSession = async () => {
@@ -721,6 +754,7 @@ export default function MobileHubPage() {
         const data = await res.json();
         if (data.success) {
           setSession(data);
+          syncAttendanceStatus(data.username);
         } else {
           router.replace("/login");
         }
@@ -795,16 +829,46 @@ export default function MobileHubPage() {
 
   if (!session) return null;
 
-  const handleClockIn = () => {
-    const now = new Date();
-    setClockInTime(now.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }));
-    setAttendanceStatus("working");
+  const handleClockIn = async () => {
+    try {
+      const res = await fetch("/api/hr/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "CLOCK_IN", memo: "모바일 포털 출근" })
+      });
+      const data = await res.json();
+      if (data.success) {
+        const now = new Date();
+        setClockInTime(now.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }));
+        setAttendanceStatus("working");
+        alert(data.message || "출근이 정상 처리되었습니다.");
+      } else {
+        alert("출근 등록 실패: " + data.error);
+      }
+    } catch (e) {
+      alert("서버 통신 실패");
+    }
   };
 
-  const handleClockOut = () => {
-    const now = new Date();
-    setClockOutTime(now.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }));
-    setAttendanceStatus("done");
+  const handleClockOut = async () => {
+    try {
+      const res = await fetch("/api/hr/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "CLOCK_OUT", memo: "모바일 포털 퇴근" })
+      });
+      const data = await res.json();
+      if (data.success) {
+        const now = new Date();
+        setClockOutTime(now.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }));
+        setAttendanceStatus("done");
+        alert(data.message || "퇴근이 정상 처리되었습니다.");
+      } else {
+        alert("퇴근 등록 실패: " + data.error);
+      }
+    } catch (e) {
+      alert("서버 통신 실패");
+    }
   };
 
   // 실시간 근무 시간 연산 헬퍼 (출근 중)
@@ -1383,6 +1447,23 @@ export default function MobileHubPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* 📋 일일 업무 보고 작성 단독 바로가기 단추 */}
+        <div 
+          onClick={() => router.push('/m/daily-report')}
+          className="bg-white border border-slate-200/80 hover:border-indigo-200 hover:bg-indigo-50/5 rounded-2xl shadow-xs p-3.5 mb-4 flex items-center justify-between cursor-pointer transition-all hover:shadow-sm"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-indigo-50 text-indigo-650 rounded-xl flex items-center justify-center shadow-3xs shrink-0">
+              <FileText className="w-4 h-4 text-indigo-600 animate-pulse" />
+            </div>
+            <div className="text-left space-y-0.5">
+              <span className="font-extrabold text-slate-800 text-xs block leading-tight">오늘의 일일 업무 보고서</span>
+              <span className="text-[9px] text-slate-405 font-bold block">AI 요약 기반으로 간편하게 오늘 일보를 상신하세요.</span>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
         </div>
 
         {/* 3. 할 일 vs 한 일 vs 태스크 폴더 메인 가로 탭 */}

@@ -66,7 +66,8 @@ function DynamicTitleHandler() {
       "/m/snaptasks": "현장/업무 스마트 스냅",
       "/m/order-capture": "현장 주문 캡처",
       "/m/estimate-request": "모바일 스마트 견적 요청",
-      "/m/recruitment": "구직자 모바일 접수"
+      "/m/recruitment": "구직자 모바일 접수",
+      "/m/daily-report": "일일 업무 보고서 작성"
     };
 
     // 동적 경로 및 특수 조건 분기

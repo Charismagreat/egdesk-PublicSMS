@@ -11,9 +11,13 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const yearMonth = searchParams.get('year_month') || new Date().toISOString().slice(0, 7); // 예: "2026-05"
 
-    // 1. 직원 마스터 및 계약 조건 로드
+    // 1. 직원 마스터 및 계약 조건 로드 (SYSTEM_ADMIN 배제 필터링)
     const employeesRes = await queryTable('crm_operators', { filters: { is_active: '1' } });
-    const employees = employeesRes.rows || [];
+    const employees = (employeesRes.rows || []).filter((emp: any) => {
+      if (emp.deleted_at) return false;
+      if (emp.role === 'SYSTEM_ADMIN' || emp.username === 'admin') return false;
+      return true;
+    });
 
     const contractsRes = await queryTable('crm_operator_contract_settings');
     const contracts = contractsRes.rows || [];
@@ -35,6 +39,7 @@ export async function GET(req: Request) {
         hourly_wage: 10000,
         weekly_hours: 40,
         allow_weekly_holiday_paid: 1,
+        overtime_paid: 0,
         work_days: '월,화,수,목,금',
         contract_memo: '미정'
       };
@@ -45,6 +50,25 @@ export async function GET(req: Request) {
       const totalLeaveDays = empAttList.filter((a: any) => a.status === 'LEAVE').length;
       
       const totalHours = empAttList.reduce((sum: number, cur: any) => sum + (parseFloat(cur.working_hours) || 0), 0);
+
+      // 💡 [신규] 개인별 연장근로 가산(1.5배) 연산 적용
+      let totalOvertimeHours = 0;
+      let totalBaseHours = 0;
+      const isOvertimeEligible = contract.overtime_paid === 1;
+
+      if (isOvertimeEligible) {
+        empAttList.forEach((a: any) => {
+          const wh = parseFloat(a.working_hours) || 0;
+          if (wh > 8.0) {
+            totalOvertimeHours += (wh - 8.0);
+            totalBaseHours += 8.0;
+          } else {
+            totalBaseHours += wh;
+          }
+        });
+      } else {
+        totalBaseHours = totalHours;
+      }
 
       // 주당 평균 실 근무시간 연산
       const avgWeeklyHours = totalHours / weeksInMonth;
@@ -61,11 +85,14 @@ export async function GET(req: Request) {
       // 당월 총 주휴수당 누계액
       const totalWeeklyHolidayPay = Math.round(weeklyHolidayPay * weeksInMonth);
 
-      // 기본급: 실 근무 누적 시간 * 시급
-      const baseSalary = Math.round(totalHours * contract.hourly_wage);
+      // 기본급: (일반 근무 누적 시간 * 시급)
+      const baseSalary = Math.round(totalBaseHours * contract.hourly_wage);
+
+      // 연장 수당: (초과 근무 누적 시간 * 시급 * 1.5)
+      const overtimePay = Math.round(totalOvertimeHours * contract.hourly_wage * 1.5);
 
       // 최종 정산 지급 총액
-      const totalSalary = baseSalary + totalWeeklyHolidayPay;
+      const totalSalary = baseSalary + totalWeeklyHolidayPay + overtimePay;
 
       return {
         operator_id: emp.id,
@@ -76,9 +103,12 @@ export async function GET(req: Request) {
         hourly_wage: contract.hourly_wage,
         weekly_hours: contract.weekly_hours,
         allow_weekly_holiday_paid: contract.allow_weekly_holiday_paid,
+        allow_overtime_paid: contract.overtime_paid || 0,
         total_work_days: totalWorkDays,
         total_leave_days: totalLeaveDays,
         total_hours: Math.round(totalHours * 10) / 10,
+        overtime_hours: Math.round(totalOvertimeHours * 10) / 10,
+        overtime_pay: overtimePay,
         avg_weekly_hours: Math.round(avgWeeklyHours * 10) / 10,
         is_holiday_paid_eligible: isEligibleForWeeklyHolidayPay,
         weekly_holiday_pay_unit: Math.round(weeklyHolidayPay),

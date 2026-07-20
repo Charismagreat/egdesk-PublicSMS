@@ -19,8 +19,8 @@ async function verifyUserRole() {
     const username = payload.username as string || '';
     const tenantId = payload.tenant_id as string || 'default';
     
-    // 최고관리자(SUPER_ADMIN) 및 부운영자(SUB_OPERATOR) 등급 허용
-    const isAuthorized = role === 'SUPER_ADMIN' || role === 'SUB_OPERATOR';
+    // SYSTEM_ADMIN, TENANT_ADMIN, SUPER_ADMIN 및 부운영자(SUB_OPERATOR) 등급 허용
+    const isAuthorized = role === 'SYSTEM_ADMIN' || role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN' || role === 'SUB_OPERATOR';
     
     return {
       isAuthorized,
@@ -50,8 +50,12 @@ export async function GET(req: Request) {
 
     const result = await queryTable('crm_operators', { filters: queryFilters });
     
-    // 2. 소프트 삭제(deleted_at)되지 않은 활성 임직원만 필터링
-    const activeOps = (result.rows || []).filter((op: any) => !op.deleted_at);
+    // 2. 소프트 삭제(deleted_at)되지 않은 활성 임직원 중 SYSTEM_ADMIN 제외 필터링
+    const activeOps = (result.rows || []).filter((op: any) => {
+      if (op.deleted_at) return false;
+      if (op.role === 'SYSTEM_ADMIN' || op.username === 'admin') return false;
+      return true;
+    });
 
     return NextResponse.json({ success: true, employees: activeOps });
   } catch (error: any) {
@@ -67,7 +71,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
-    const { username, password, name, newRole, employee_number, phone, department } = await req.json();
+    const { username, password, name, newRole, employee_number, phone, department, work_start_time, work_end_time } = await req.json();
 
     if (!username || !password || !name) {
       return NextResponse.json({ success: false, error: '모든 필드를 입력해주세요.' }, { status: 400 });
@@ -111,6 +115,8 @@ export async function POST(req: Request) {
       employee_number: finalEmpNumber,
       phone: (phone || '').trim(),
       department: (department || '').trim(),
+      work_start_time: work_start_time || '09:00:00',
+      work_end_time: work_end_time || '18:00:00',
       created_at: dateStr,
       tenant_id: tenantId
     }]);
@@ -207,7 +213,7 @@ export async function PUT(req: Request) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
-    const { id, password, name, newRole, employee_number, phone, department } = await req.json();
+    const { id, password, name, newRole, employee_number, phone, department, work_start_time, work_end_time } = await req.json();
 
     if (!id || !name) {
       return NextResponse.json({ success: false, error: '필수 항목(id, 이름)이 누락되었습니다.' }, { status: 400 });
@@ -254,7 +260,9 @@ export async function PUT(req: Request) {
       role: newRole || currentOp.role,
       employee_number: finalEmpNumber,
       phone: phone !== undefined ? (phone || '').trim() : currentOp.phone,
-      department: department !== undefined ? (department || '').trim() : currentOp.department
+      department: department !== undefined ? (department || '').trim() : currentOp.department,
+      work_start_time: work_start_time !== undefined ? work_start_time : currentOp.work_start_time,
+      work_end_time: work_end_time !== undefined ? work_end_time : currentOp.work_end_time
     };
 
     // 비밀번호 변경 입력 시 해싱

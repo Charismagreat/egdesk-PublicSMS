@@ -182,6 +182,8 @@ export const COLUMN_DEFINITIONS = {
     { name: 'deleted_by', type: 'TEXT' },
     { name: 'restored_at', type: 'TEXT' },
     { name: 'restored_by', type: 'TEXT' },
+    { name: 'work_start_time', type: 'TEXT', defaultValue: '09:00:00' },
+    { name: 'work_end_time', type: 'TEXT', defaultValue: '18:00:00' },
   ],
   crm_instagram_posts: [
     { name: 'id', type: 'INTEGER', notNull: true },

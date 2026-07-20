@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api";
 import React, { useState, useEffect, useCallback } from "react";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import Link from "next/link";
+import { onUserDataChanged } from "../../../egdesk-helpers";
 import { 
   ShieldAlert, Activity, CheckCircle2, AlertTriangle, 
   RotateCcw, RefreshCw, Trash2, ArrowRightLeft, ShieldCheck, 
@@ -46,10 +47,19 @@ export default function GovernanceDashboard() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
   // 1. 상태 영속화 (sessionStorage) 연동 적용
-  const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<'WAITING' | 'RESOLVED' | 'RESTORE' | 'AUDIT' | 'FOLDERS'>('egdesk_governance_activeTab', 'WAITING');
+  const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<'EVENTS' | 'RULES' | 'RESTORE' | 'FOLDERS' | 'REPORTS'>('egdesk_governance_activeTab', 'EVENTS');
+  const [subTab, setSubTab, isSubTabRestored] = usePersistedState<'ALL' | 'WAITING' | 'RESOLVED' | 'AUDIT'>('egdesk_governance_subTab', 'ALL');
   const [auditSourceFilter, setAuditSourceFilter, isSourceRestored] = usePersistedState<'ALL' | 'AI' | 'MANUAL'>('egdesk_gov_audit_source', 'ALL');
   const [auditDomainFilter, setAuditDomainFilter, isDomainRestored] = usePersistedState<string>('egdesk_gov_audit_domain', 'ALL');
   const [auditSearchQuery, setAuditSearchQuery, isSearchRestored] = usePersistedState<string>('egdesk_gov_audit_search', '');
+
+  // 📋 일일 업무 보고서 관제 전용 상태
+  const [reports, setReports] = useState<any[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<any | null>(null);
+  const [reportComment, setReportComment] = useState("");
+  const [aiComments, setAiComments] = useState<any[]>([]);
+  const [aiCommentsLoading, setAiCommentsLoading] = useState(false);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -161,6 +171,11 @@ export default function GovernanceDashboard() {
   const [newRuleName, setNewRuleName] = useState("");
   const [newRuleExpression, setNewRuleExpression] = useState("");
 
+  // 🤖 자율 규칙 자동 제안 모달 관련 상태
+  const [suggestRuleModalOpen, setSuggestRuleModalOpen] = useState(false);
+  const [suggestedRuleName, setSuggestedRuleName] = useState("");
+  const [suggestedRuleExpression, setSuggestedRuleExpression] = useState("");
+
   const fetchRules = async () => {
     try {
       setRulesLoading(true);
@@ -205,6 +220,71 @@ export default function GovernanceDashboard() {
     }
   };
 
+  // 완료된 관제 카드를 기반으로 자율 규칙을 자동 추천 및 팝업
+  const handleOpenSuggestRuleModal = (evt: any) => {
+    const operator = 
+      evt.data?.operator || 
+      evt.data?.created_by || 
+      evt.data?.updated_by ||
+      (evt.type === 'STORE_ORDER' ? evt.data?.customer_name : null) ||
+      '특정 임직원';
+
+    let ruleName = "";
+    let expression = "";
+
+    if (evt.type === 'STORE_ORDER') {
+      ruleName = `[자동화] ${evt.data?.customer_name || '주문고객'} 스토어 주문 자율 승인`;
+      expression = `${evt.data?.customer_name || '고객'}이 상신한 ${evt.data?.product_name || '상품'} 주문은 AI가 즉시 자율적으로 재고를 파악하여 결재 승인한다.`;
+    } else if (evt.type === 'RAG_HOLD') {
+      const docTypeKo = evt.data?.doc_type === 'estimate' ? '견적서' : evt.data?.doc_type === 'purchase_order' ? '발주서' : '수주서';
+      ruleName = `[자동화] ${operator}의 ${docTypeKo} RAG 보류 자율 승인`;
+      expression = `${operator}가 상신한 ${docTypeKo} RAG 결재 건은 AI가 자율적으로 분석하여 자동 승인 처리한다.`;
+    } else if (evt.type === 'TASK_CANCEL_REQUEST') {
+      ruleName = `[자동화] ${operator}의 업무 취소 요청 자율 처리`;
+      expression = `${operator}가 요청한 업무 취소 건은 최고관리자 승인 없이 AI가 자동 승인 처리한다.`;
+    } else {
+      ruleName = `[자동화] ${evt.title || '업무'} 건 자율 대행`;
+      expression = `${operator}가 상신한 모든 ${evt.title || '업무'} 관련 건은 AI 자율 대행으로 최고관리자 승인 없이 자동 처리한다.`;
+    }
+
+    setSuggestedRuleName(ruleName);
+    setSuggestedRuleExpression(expression);
+    setSuggestRuleModalOpen(true);
+  };
+
+  // 모달 확인 클릭 시 백엔드 API를 통해 자동 자율 규칙 등록 수행
+  const handleConfirmSuggestRule = async () => {
+    if (!suggestedRuleName.trim() || !suggestedRuleExpression.trim()) {
+      alert("규칙 이름과 표현식을 입력해 주세요.");
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      const res = await apiFetch("/api/governance?action=add_rule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ruleName: suggestedRuleName,
+          expression: suggestedRuleExpression
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSuggestRuleModalOpen(false);
+        setSuggestedRuleName("");
+        setSuggestedRuleExpression("");
+        fetchRules();
+        alert("성공적으로 자율 통제 규칙이 등록 및 기동되었습니다.");
+      } else {
+        alert("규칙 자동 등록 실패: " + data.error);
+      }
+    } catch (e) {
+      alert("서버 등록 중 오류가 발생했습니다.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleToggleRule = async (ruleId: number, currentActive: number) => {
     try {
       const res = await apiFetch("/api/governance?action=toggle_rule", {
@@ -246,6 +326,68 @@ export default function GovernanceDashboard() {
     }
   };
 
+  // 📋 직원 일일 업무 보고서 로드 함수
+  const fetchReports = async () => {
+    try {
+      setReportsLoading(true);
+      const res = await apiFetch("/api/governance?action=daily_reports");
+      const data = await res.json();
+      if (data.success) {
+        setReports(data.reports || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch daily reports:", e);
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  // 대표자 결재 처리 (승인/반려)
+  const handleDecideReport = async (reportId: number, status: 'APPROVED' | 'REJECTED') => {
+    setIsProcessing(true);
+    try {
+      const res = await apiFetch("/api/governance?action=approve_report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          report_id: reportId,
+          status,
+          comment: reportComment
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedReport(null);
+        setReportComment("");
+        setAiComments([]);
+        fetchReports();
+        alert(status === 'APPROVED' ? "보고서가 성공적으로 결재 승인되었습니다." : "보고서가 반려 처리되었습니다.");
+      } else {
+        alert("결재 처리 실패: " + data.error);
+      }
+    } catch (e) {
+      alert("서버 통신 실패");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // AI 코멘트 추천 받기
+  const handleGetAiComments = async (report: any) => {
+    try {
+      setAiCommentsLoading(true);
+      const res = await apiFetch(`/api/governance?action=suggest_comment&report_content=${encodeURIComponent(report.report_content)}&operator=${encodeURIComponent(report.operator)}`);
+      const data = await res.json();
+      if (data.success) {
+        setAiComments(data.suggestions || []);
+      }
+    } catch (e) {
+      console.error("Failed to suggest comments:", e);
+    } finally {
+      setAiCommentsLoading(false);
+    }
+  };
+
   // 컴포넌트 마운트 및 갱신 시 규칙 로드
   useEffect(() => {
     fetchRules();
@@ -262,6 +404,8 @@ export default function GovernanceDashboard() {
   useEffect(() => {
     if (activeTab === 'FOLDERS') {
       fetchFolders();
+    } else if (activeTab === 'REPORTS') {
+      fetchReports();
     }
   }, [activeTab]);
 
@@ -297,6 +441,13 @@ export default function GovernanceDashboard() {
       if (auditData.success) {
         setAuditLogs(auditData.auditLogs || []);
       }
+
+      // 2.5. 직원 일일 업무 보고서 조회
+      const reportsRes = await apiFetch("/api/governance?action=daily_reports");
+      const reportsData = await reportsRes.json();
+      if (reportsData.success) {
+        setReports(reportsData.reports || []);
+      }
     } catch (err: any) {
       console.error("Governance data fetch error:", err);
       setError("데이터를 로드하는 중 에러가 발생했습니다.");
@@ -307,11 +458,41 @@ export default function GovernanceDashboard() {
 
   // 3. 브라우저 저장소 복원 전 이중 페칭(Hydration Guard) 방지 가드 적용
   useEffect(() => {
-    if (!isActiveTabRestored || !isSourceRestored || !isDomainRestored || !isSearchRestored) {
+    if (!isActiveTabRestored || !isSubTabRestored || !isSourceRestored || !isDomainRestored || !isSearchRestored) {
       return; // Early return guard
     }
     loadData();
-  }, [loadData, isActiveTabRestored, isSourceRestored, isDomainRestored, isSearchRestored]);
+  }, [loadData, isActiveTabRestored, isSubTabRestored, isSourceRestored, isDomainRestored, isSearchRestored]);
+
+  // 3.1. 실시간 DB 변경 구독을 통한 관제 피드 자동 갱신 (화이트리스트 및 1.5초 디바운스 적용)
+  useEffect(() => {
+    let timerId: NodeJS.Timeout | null = null;
+    const whitelistTables = [
+      'crm_estimates', 'crm_purchase_orders', 'crm_sales_orders',
+      'crm_orders', 'inventory_items', 'products',
+      'crm_expenses', 'crm_audit_logs', 'crm_governance_logs'
+    ];
+
+    const handleDataMutation = (event: any) => {
+      // 1) 관제에 무의미한 환경설정이나 테이블 변경 등은 생략
+      if (event.tableName && !whitelistTables.includes(event.tableName)) {
+        return;
+      }
+
+      // 2) 디바운스 적용: 연속 변경 시 요청 묶기
+      if (timerId) clearTimeout(timerId);
+      timerId = setTimeout(() => {
+        loadData();
+      }, 1500);
+    };
+
+    const unsub = onUserDataChanged(handleDataMutation);
+
+    return () => {
+      unsub();
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [loadData]);
 
   // 4. OCR 자율 대행 토글 변경
   const handleToggleOcr = async () => {
@@ -488,37 +669,92 @@ export default function GovernanceDashboard() {
     }
   };
 
-  // 해결되지 않은 대기 피드와 완료 피드 분기
-  const filteredEvents = events.filter(e => {
-    if (activeTab === 'RESTORE' || activeTab === 'AUDIT') return false;
-    return e.status === activeTab;
-  });
+  // 🤖 대안 A: 통합 피드 매핑 및 정렬, 복합 필터링 로직
+  const mappedEvents = events.map(e => ({
+    id: `event_${e.id}`,
+    feedType: 'EVENT' as const,
+    type: e.type,
+    title: e.title,
+    subtitle: e.subtitle,
+    status: e.status,
+    created_at: e.created_at,
+    data: e.data,
+    timestamp: new Date(e.created_at.replace(/-/g, '/')).getTime()
+  }));
 
-  // 통합 감사 로그 실시간 필터링
-  const filteredAuditLogs = auditLogs.filter(log => {
-    // 1) 조작 주체 필터 (전체/AI/MANUAL)
-    if (auditSourceFilter !== 'ALL' && log.source !== auditSourceFilter) return false;
-    
-    // 2) 도메인 분야 필터
-    if (auditDomainFilter !== 'ALL') {
-      if (auditDomainFilter === 'ESTIMATE' && !['crm_estimates', 'crm_purchase_orders', 'crm_sales_orders'].includes(log.doc_type)) return false;
-      if (auditDomainFilter === 'EXPENSE' && log.doc_type !== 'crm_expenses') return false;
-      if (auditDomainFilter === 'INVENTORY' && !['products', 'inventory_items'].includes(log.doc_type)) return false;
-      if (auditDomainFilter === 'CUSTOMER' && !['crm_customers', 'crm_operators'].includes(log.doc_type)) return false;
-    }
+  const mappedAuditLogs = auditLogs.map(log => ({
+    id: `audit_${log.id}`,
+    feedType: 'AUDIT' as const,
+    type: 'AUDIT_LOG',
+    title: log.doc_title,
+    subtitle: `조작자: ${log.operator} / 테이블: ${log.doc_type}`,
+    status: log.status,
+    created_at: log.created_at,
+    data: log,
+    timestamp: new Date(log.created_at.replace(/-/g, '/')).getTime()
+  }));
 
-    // 3) 글로벌 검색어 필터링
-    if (auditSearchQuery.trim() !== '') {
-      const q = auditSearchQuery.toLowerCase();
-      const matchTitle = (log.doc_title || '').toLowerCase().includes(q);
-      const matchOp = (log.operator || '').toLowerCase().includes(q);
-      const matchType = (log.doc_type || '').toLowerCase().includes(q);
-      const matchId = (log.doc_id || '').toLowerCase().includes(q);
-      if (!matchTitle && !matchOp && !matchType && !matchId) return false;
-    }
+  const filteredFeed = [...mappedEvents, ...mappedAuditLogs]
+    .filter(item => {
+      // A. 서브 탭 필터링
+      if (subTab === 'WAITING') {
+        if (item.feedType !== 'EVENT' || item.status !== 'WAITING') return false;
+      } else if (subTab === 'RESOLVED') {
+        if (item.feedType !== 'EVENT' || item.status !== 'RESOLVED') return false;
+      } else if (subTab === 'AUDIT') {
+        if (item.feedType !== 'AUDIT') return false;
+      }
 
-    return true;
-  });
+      // B. 조작 주체 필터 (감사로그에 주로 작용하나, 일반 이벤트에도 대조 가능)
+      if (auditSourceFilter !== 'ALL') {
+        if (item.feedType === 'AUDIT') {
+          if (item.data?.source !== auditSourceFilter) return false;
+        } else {
+          const eventSource = item.data?.source || (item.type === 'STORE_ORDER' ? 'MANUAL' : 'AI');
+          if (eventSource !== auditSourceFilter) return false;
+        }
+      }
+
+      // C. 도메인 분야 필터
+      if (auditDomainFilter !== 'ALL') {
+        const docType = item.feedType === 'AUDIT' ? item.data?.doc_type : (item.data?.doc_type || item.type);
+        if (auditDomainFilter === 'ESTIMATE') {
+          if (!['crm_estimates', 'crm_purchase_orders', 'crm_sales_orders', 'STORE_ORDER', 'RAG_HOLD', 'TASK_CANCEL_REQUEST'].includes(docType)) return false;
+        } else if (auditDomainFilter === 'EXPENSE') {
+          if (docType !== 'crm_expenses') return false;
+        } else if (auditDomainFilter === 'INVENTORY') {
+          if (!['products', 'inventory_items', 'LOW_STOCK'].includes(docType)) return false;
+        } else if (auditDomainFilter === 'CUSTOMER') {
+          if (!['crm_customers', 'crm_operators'].includes(docType)) return false;
+        }
+      }
+
+      // D. 글로벌 검색어 필터링 (통합 검색 지원)
+      if (auditSearchQuery.trim() !== '') {
+        const q = auditSearchQuery.toLowerCase();
+        const matchTitle = (item.title || '').toLowerCase().includes(q);
+        const matchSubtitle = (item.subtitle || '').toLowerCase().includes(q);
+        
+        let matchExtra = false;
+        if (item.feedType === 'AUDIT') {
+          const log = item.data;
+          const matchOp = (log?.operator || '').toLowerCase().includes(q);
+          const matchType = (log?.doc_type || '').toLowerCase().includes(q);
+          const matchId = (log?.doc_id || '').toLowerCase().includes(q);
+          matchExtra = matchOp || matchType || matchId;
+        } else {
+          const evt = item.data;
+          const matchType = (item.type || '').toLowerCase().includes(q);
+          const matchOp = (evt?.operator || evt?.customer_name || '').toLowerCase().includes(q);
+          matchExtra = matchType || matchOp;
+        }
+
+        if (!matchTitle && !matchSubtitle && !matchExtra) return false;
+      }
+
+      return true;
+    })
+    .sort((a, b) => b.timestamp - a.timestamp);
 
   // Diff 헬퍼 함수: Before & After 값 대조하여 변경 필드 추출
   const getDiffFields = (before: any, after: any) => {
@@ -591,24 +827,24 @@ export default function GovernanceDashboard() {
         {/* 2구역: 세련된 탭 컨트롤러 */}
         <div className="flex gap-2 border-b border-slate-200 pb-px overflow-x-auto scrollbar-none">
           <button
-            onClick={() => setActiveTab('WAITING')}
+            onClick={() => setActiveTab('EVENTS')}
             className={`py-3 px-6 text-sm font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
-              activeTab === 'WAITING' 
+              activeTab === 'EVENTS' 
                 ? 'border-indigo-650 text-indigo-650 font-black' 
                 : 'border-transparent text-slate-400 hover:text-slate-600'
             }`}
           >
-            미해결 건 ({events.filter(e => e.status === 'WAITING').length})
+            관제 및 감사 피드 ({events.length + auditLogs.length})
           </button>
           <button
-            onClick={() => setActiveTab('RESOLVED')}
+            onClick={() => setActiveTab('RULES')}
             className={`py-3 px-6 text-sm font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
-              activeTab === 'RESOLVED' 
+              activeTab === 'RULES' 
                 ? 'border-indigo-650 text-indigo-650 font-black' 
                 : 'border-transparent text-slate-400 hover:text-slate-600'
             }`}
           >
-            해결 완료 건 ({events.filter(e => e.status === 'RESOLVED').length})
+            자율 규칙 제어 ({rules.length})
           </button>
           <button
             onClick={() => setActiveTab('RESTORE')}
@@ -621,16 +857,6 @@ export default function GovernanceDashboard() {
             소프트 삭제 복원 ({deletedItems.length})
           </button>
           <button
-            onClick={() => setActiveTab('AUDIT')}
-            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
-              activeTab === 'AUDIT' 
-                ? 'border-indigo-650 text-indigo-650 font-black' 
-                : 'border-transparent text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            통합 감사 대장 ({filteredAuditLogs.length})
-          </button>
-          <button
             onClick={() => setActiveTab('FOLDERS')}
             className={`py-3 px-6 text-sm font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
               activeTab === 'FOLDERS' 
@@ -640,6 +866,16 @@ export default function GovernanceDashboard() {
           >
             태스크 폴더 관제 ({folders.length})
           </button>
+          <button
+            onClick={() => setActiveTab('REPORTS')}
+            className={`py-3 px-6 text-sm font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
+              activeTab === 'REPORTS' 
+                ? 'border-indigo-650 text-indigo-650 font-black' 
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            일일 업무 보고서 ({reports.length})
+          </button>
         </div>
 
         {/* 3구역: 메인 콘텐츠 리스트 게시판 */}
@@ -648,6 +884,419 @@ export default function GovernanceDashboard() {
             <div className="py-24 flex flex-col justify-center items-center">
               <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
               <span className="text-xs text-slate-400 font-bold">실시간 비즈니스 데이터 로드 중...</span>
+            </div>
+          ) : activeTab === 'EVENTS' ? (
+            // 💡 대안 A: 통합 관제 및 감사 피드 탭 뷰 렌더링
+            <div className="space-y-4">
+              {/* 1. 세련된 서브 세그먼트 버튼 */}
+              <div className="bg-slate-100 p-1 rounded-2xl flex w-fit gap-1 text-xs font-black text-slate-500 border border-slate-200/50">
+                <button
+                  onClick={() => setSubTab('ALL')}
+                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                    subTab === 'ALL'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'hover:text-slate-800'
+                  }`}
+                >
+                  전체 피드 ({events.length + auditLogs.length})
+                </button>
+                <button
+                  onClick={() => setSubTab('WAITING')}
+                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                    subTab === 'WAITING'
+                      ? 'bg-white text-rose-600 shadow-xs'
+                      : 'hover:text-slate-800'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse" />
+                  관제 대상 ({events.filter(e => e.status === 'WAITING').length})
+                </button>
+                <button
+                  onClick={() => setSubTab('RESOLVED')}
+                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                    subTab === 'RESOLVED'
+                      ? 'bg-white text-emerald-600 shadow-xs'
+                      : 'hover:text-slate-800'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                  관제 완료 ({events.filter(e => e.status === 'RESOLVED').length})
+                </button>
+                <button
+                  onClick={() => setSubTab('AUDIT')}
+                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                    subTab === 'AUDIT'
+                      ? 'bg-white text-indigo-650 shadow-xs'
+                      : 'hover:text-slate-800'
+                  }`}
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  변경 감사록 ({auditLogs.length})
+                </button>
+              </div>
+
+              {/* 2. 필터바 영역 */}
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
+                <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-600">
+                  <div className="flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-4 h-4 text-slate-400" />
+                    <span>필터 상세 조건</span>
+                  </div>
+
+                  {(subTab === 'ALL' || subTab === 'AUDIT') && (
+                    <>
+                      {/* 조작 주체 구분 필터 */}
+                      <div className="bg-slate-100 p-0.5 rounded-lg flex">
+                        <button 
+                          onClick={() => setAuditSourceFilter('ALL')}
+                          className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${auditSourceFilter === 'ALL' ? 'bg-white text-indigo-650 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                          주체: 전체
+                        </button>
+                        <button 
+                          onClick={() => setAuditSourceFilter('AI')}
+                          className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer ${auditSourceFilter === 'AI' ? 'bg-white text-indigo-650 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                          <Cpu className="w-3.5 h-3.5 text-indigo-600" />
+                          🤖 AI 자율
+                        </button>
+                        <button 
+                          onClick={() => setAuditSourceFilter('MANUAL')}
+                          className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer ${auditSourceFilter === 'MANUAL' ? 'bg-white text-indigo-650 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                          <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          👤 임직원 수동
+                        </button>
+                      </div>
+
+                      {/* 도메인 구분 필터 */}
+                      <select 
+                        value={auditDomainFilter}
+                        onChange={(e) => setAuditDomainFilter(e.target.value)}
+                        className="bg-slate-50 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold outline-none cursor-pointer"
+                      >
+                        <option value="ALL">모든 업무 대장</option>
+                        <option value="ESTIMATE">B2B 견적/발주/수주</option>
+                        <option value="EXPENSE">지출경비 대장</option>
+                        <option value="INVENTORY">자재/제품 재고</option>
+                        <option value="CUSTOMER">고객/사원 정보</option>
+                      </select>
+                    </>
+                  )}
+                </div>
+
+                {/* 글로벌 검색 필터 */}
+                <div className="relative max-w-xs w-full">
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="text"
+                    placeholder="조작자, 사건 내용, 문서 ID 검색..."
+                    value={auditSearchQuery}
+                    onChange={(e) => setAuditSearchQuery(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-colors"
+                  />
+                  {auditSearchQuery && (
+                    <button 
+                      onClick={() => setAuditSearchQuery('')}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 border-none bg-transparent cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. 통합 피드 리스트 */}
+              {filteredFeed.length === 0 ? (
+                <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 shadow-xs">
+                  <Database className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                  <span className="text-xs font-bold block">조건에 부합하는 관제 및 감사 내역이 없습니다.</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredFeed.map((item) => {
+                    if (item.feedType === 'EVENT') {
+                      const evt = item;
+                      return (
+                        <div 
+                          key={evt.id}
+                          onClick={() => handleOpenDetail(evt as any)}
+                          className="bg-white border border-slate-200/85 hover:border-indigo-200 hover:bg-indigo-50/10 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all hover:shadow-md cursor-pointer group"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className={`p-3 rounded-2xl shrink-0 ${
+                              evt.type === 'STORE_ORDER' 
+                                ? 'bg-blue-50 text-blue-650' 
+                                : evt.type === 'RAG_HOLD' 
+                                  ? 'bg-rose-50 text-rose-600' 
+                                  : evt.type === 'TASK_CANCEL_REQUEST'
+                                    ? 'bg-indigo-50 text-indigo-600'
+                                    : 'bg-amber-50 text-amber-600'
+                            }`}>
+                              {evt.type === 'STORE_ORDER' && <FileText className="w-6 h-6" />}
+                              {evt.type === 'RAG_HOLD' && <ShieldAlert className="w-6 h-6 animate-pulse" />}
+                              {evt.type === 'TASK_CANCEL_REQUEST' && <Trash2 className="w-6 h-6" />}
+                              {evt.type === 'LOW_STOCK' && <AlertTriangle className="w-6 h-6" />}
+                            </div>
+                            <div className="space-y-1 text-left">
+                              <div className="flex items-center flex-wrap gap-2">
+                                <span className="text-sm font-black text-slate-800">{evt.title}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                                  evt.type === 'STORE_ORDER' 
+                                    ? 'bg-blue-50 text-blue-700' 
+                                    : evt.type === 'RAG_HOLD' 
+                                      ? 'bg-rose-50 text-rose-700' 
+                                      : evt.type === 'TASK_CANCEL_REQUEST'
+                                        ? 'bg-indigo-50 text-indigo-700'
+                                        : 'bg-amber-50 text-amber-700'
+                                }`}>
+                                  {evt.type === 'STORE_ORDER' ? '스토어 주문' : evt.type === 'RAG_HOLD' ? 'AI 결재 보류' : evt.type === 'TASK_CANCEL_REQUEST' ? '업무 취소 요청' : '재고 부족 경보'}
+                                </span>
+                                <span className="text-[9px] bg-rose-50 text-rose-700 px-1.5 py-0.2 rounded font-black border border-rose-100">
+                                  🚨 관제 알림
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-500 font-semibold">{evt.subtitle}</p>
+                              <div className="text-[10px] text-slate-400 flex items-center flex-wrap gap-2.5 pt-1">
+                                <div className="flex items-center gap-1">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>{evt.created_at}</span>
+                                </div>
+                                {(() => {
+                                  const operator = 
+                                    evt.data?.operator || 
+                                    evt.data?.created_by || 
+                                    evt.data?.updated_by ||
+                                    (evt.type === 'STORE_ORDER' ? evt.data?.customer_name : null);
+                                    
+                                  if (!operator) return null;
+                                  
+                                  return (
+                                    <div className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold border border-indigo-100/50">
+                                      <User className="w-3 h-3 text-indigo-600" />
+                                      <span>상신자: {operator}</span>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 self-stretch md:self-auto justify-end shrink-0">
+                            {evt.status === 'RESOLVED' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenSuggestRuleModal(evt as any);
+                                }}
+                                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] px-3 py-1.5 rounded-xl border border-indigo-100/50 transition-all flex items-center gap-1 cursor-pointer shrink-0 z-10"
+                                title="이 사건의 조치 과정을 다음부터 자율 규칙으로 실행하도록 즉시 기억"
+                              >
+                                <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                                <span>🤖 자율 규칙 등록</span>
+                              </button>
+                            )}
+                            <span className="text-[11px] text-indigo-650 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                              <span>검토 및 다음 조치 수행</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      const log = item.data;
+                      const isAi = log.source === 'AI';
+                      return (
+                        <div 
+                          key={item.id}
+                          onClick={() => setSelectedAudit(log)}
+                          className="bg-white border border-slate-200/85 hover:border-indigo-200 hover:bg-indigo-50/10 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all hover:shadow-md cursor-pointer group text-left"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className={`p-3 rounded-2xl shrink-0 ${isAi ? 'bg-indigo-50 text-indigo-650' : 'bg-slate-100 text-slate-650'}`}>
+                              {isAi ? <Cpu className="w-6 h-6 animate-pulse" /> : <User className="w-6 h-6" />}
+                            </div>
+                            
+                            <div className="space-y-1">
+                              <div className="flex items-center flex-wrap gap-2">
+                                <span className="text-sm font-black text-slate-800">{log.doc_title}</span>
+                                
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${isAi ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                                  {isAi ? '🤖 AI 자율 대행' : '👤 임직원 조작'}
+                                </span>
+
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                                  log.action_type === 'INSERT' ? 'bg-emerald-50 text-emerald-800' : log.action_type === 'DELETE' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-800'
+                                }`}>
+                                  {log.action_type === 'INSERT' ? '등록' : log.action_type === 'DELETE' ? '삭제' : '수정'}
+                                </span>
+                              </div>
+
+                              <div className="text-xs text-slate-500 font-semibold flex items-center gap-2">
+                                <span>조작자: <span className="text-slate-700 font-bold">{log.operator}</span></span>
+                                <span>•</span>
+                                <span>테이블: <span className="font-mono text-indigo-600">{log.doc_type}</span></span>
+                              </div>
+
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1.5 pt-1">
+                                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                <span>{log.created_at}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-stretch md:self-auto justify-end">
+                            <span className="text-[11px] text-indigo-650 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                              <span>상세 변경 데이터 비교(Diff)</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+                  })}
+                </div>
+              )}
+            </div>
+          ) : activeTab === 'RULES' ? (
+            // 🤖 AI 자율 실행 통제 규칙 제어 센터 탭 뷰 렌더링
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm text-left space-y-6">
+              <div className="flex items-center gap-2 pb-4 border-b border-slate-100">
+                <Cpu className="w-6 h-6 text-indigo-650 animate-pulse shrink-0" />
+                <div>
+                  <h3 className="text-base font-black text-slate-800 tracking-tight">AI 자율 실행 통제 규칙 제어 센터</h3>
+                  <p className="text-slate-500 text-xs mt-0.5 font-semibold">최고관리자의 의사결정 기록을 자율 규칙으로 변환하여, 임직원의 결재 상신 시 자동 승인을 대행합니다.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                {/* 규칙 추가 폼 */}
+                <form onSubmit={handleAddRule} className="lg:col-span-5 bg-slate-50 border border-slate-200/50 rounded-2xl p-5 space-y-4">
+                  <h4 className="text-xs font-black text-slate-700">🤖 신규 자율 실행 규칙 등록</h4>
+                  
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400">규칙 이름</label>
+                    <input 
+                      type="text" 
+                      placeholder="예: 김직원 소액 취소 자동 승인"
+                      value={newRuleName}
+                      onChange={(e) => setNewRuleName(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400">자연어 자동화 조건</label>
+                    <textarea 
+                      rows={3}
+                      placeholder="예: 김직원이 취소 요청한 모든 건은 자동 승인한다.&#13;&#10;또는: 김직원이 올린 500만원 이하의 수입통관은 자동 승인한다."
+                      value={newRuleExpression}
+                      onChange={(e) => setNewRuleExpression(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-colors resize-none leading-relaxed"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-black py-2.5 px-4 rounded-xl transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>규칙 등록 및 기억하기</span>
+                  </button>
+                </form>
+
+                {/* 규칙 목록 리스트 */}
+                <div className="lg:col-span-7 space-y-4">
+                  <h4 className="text-xs font-black text-slate-700">📜 활성화된 자율 통제 규칙 목록 ({rules.length})</h4>
+
+                  {rulesLoading ? (
+                    <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400">
+                      <Loader2 className="w-5 h-5 animate-spin text-indigo-650" />
+                      <span className="text-xs font-bold">규칙 목록 로드 중...</span>
+                    </div>
+                  ) : rules.length === 0 ? (
+                    <div className="py-12 text-center border border-dashed border-slate-200 rounded-2xl text-slate-400">
+                      <Cpu className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                      <span className="text-xs font-bold block">등록된 자율 통제 규칙이 없습니다. 최초의 규칙을 정의해 보세요!</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+                      {rules.map(rule => {
+                        let structured: any = {};
+                        try {
+                          structured = JSON.parse(rule.structured_rule || "{}");
+                        } catch {}
+
+                        return (
+                          <div 
+                            key={rule.id}
+                            className={`p-4 rounded-2xl border transition-all text-left flex justify-between items-start gap-4 ${
+                              rule.is_active === 1 
+                                ? "bg-indigo-50/10 border-indigo-100 hover:border-indigo-200" 
+                                : "bg-slate-50 border-slate-200 opacity-60"
+                            }`}
+                          >
+                            <div className="space-y-1.5 flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-black text-slate-800 truncate">{rule.rule_name}</span>
+                                <span className={`text-[8.5px] px-1.5 py-0.2 rounded font-black ${
+                                  rule.is_active === 1 ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-slate-100 text-slate-500 border-slate-200"
+                                }`}>
+                                  {rule.is_active === 1 ? "ON (가동중)" : "OFF (비활성)"}
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+                                "{rule.rule_expression}"
+                              </p>
+
+                              {/* LLM 파싱 분석 태그 */}
+                              <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                                <span className="text-[8.5px] text-slate-400 font-bold">AI 규칙 인식:</span>
+                                <span className="text-[8.5px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-bold">
+                                  대상: {structured.operator === 'ALL' ? '전체 직원' : (structured.operator || '전체 직원')}
+                                </span>
+                                <span className="text-[8.5px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-bold">
+                                  서류: {structured.doc_type === 'import_customs' ? '수입통관' : (structured.doc_type === 'TASK_CANCEL_REQUEST' ? '업무 취소' : '전체')}
+                                </span>
+                                {structured.max_amount !== undefined && structured.max_amount !== null && (
+                                  <span className="text-[8.5px] bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded font-black">
+                                    한도: {(structured.max_amount).toLocaleString()} 원 이하
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                              {/* 토글 스위치 */}
+                              <button
+                                onClick={() => handleToggleRule(rule.id, rule.is_active)}
+                                className="bg-transparent border-none p-1 text-slate-400 hover:text-indigo-650 cursor-pointer transition-colors"
+                                title={rule.is_active === 1 ? "규칙 끄기" : "규칙 켜기"}
+                              >
+                                {rule.is_active === 1 ? (
+                                  <ToggleRight className="w-7 h-7 text-indigo-600" />
+                                ) : (
+                                  <ToggleLeft className="w-7 h-7 text-slate-400" />
+                                )}
+                              </button>
+
+                              {/* 삭제 단추 */}
+                              <button
+                                onClick={() => handleDeleteRule(rule.id)}
+                                className="bg-transparent border-none p-1 text-rose-500 hover:text-rose-600 cursor-pointer transition-colors"
+                                title="규칙 삭제"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           ) : activeTab === 'FOLDERS' ? (
             // 💡 📂 태스크 폴더 관제 탭 뷰 렌더링
@@ -775,7 +1424,7 @@ export default function GovernanceDashboard() {
                           {filteredFolders.map(f => {
                             const isActive = String(f.id) === activeFolderId;
                             return (
-                              <button
+                              <div
                                 key={f.id}
                                 onClick={() => setActiveFolderId(String(f.id))}
                                 className={`w-full p-4 rounded-2xl text-left border transition-all cursor-pointer flex items-center justify-between group ${
@@ -811,7 +1460,7 @@ export default function GovernanceDashboard() {
                                   </button>
                                   <ArrowRight className={`w-4 h-4 transition-transform ${isActive ? "translate-x-1" : "opacity-40"}`} />
                                 </div>
-                              </button>
+                              </div>
                             );
                           })}
                         </div>
@@ -920,7 +1569,66 @@ export default function GovernanceDashboard() {
                 </div>
               );
             })()
-          ) : activeTab === 'RESTORE' ? (
+          ) : activeTab === 'REPORTS' ? (
+            // 💡 일일 업무 보고서 탭 뷰
+            <div className="space-y-4">
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
+                <div className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                  <ListTodo className="w-4 h-4 text-slate-400" />
+                  <span>김직원이 모바일에서 제출한 일일 보고서 결재 목록입니다.</span>
+                </div>
+              </div>
+
+              {reports.length === 0 ? (
+                <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 shadow-xs">
+                  <FileText className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                  <span className="text-xs font-bold block">제출된 임직원 일일 업무 보고서가 없습니다.</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {reports.map((report) => (
+                    <div 
+                      key={report.id}
+                      onClick={() => {
+                        setSelectedReport(report);
+                        handleGetAiComments(report);
+                      }}
+                      className="bg-white border border-slate-200/85 hover:border-indigo-200 hover:bg-indigo-50/10 rounded-3xl p-5 shadow-xs flex flex-col justify-between transition-all hover:shadow-md cursor-pointer text-left group"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black text-slate-800">{report.operator} 사원</span>
+                            <span className="text-xs text-slate-400 font-bold">{report.report_date} 일보</span>
+                          </div>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                            report.status === 'APPROVED' 
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                              : report.status === 'REJECTED'
+                                ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                : 'bg-amber-50 text-amber-700 border-amber-100 animate-pulse'
+                          }`}>
+                            {report.status === 'APPROVED' ? '결재 승인' : report.status === 'REJECTED' ? '반려' : '결재 대기'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-650 font-semibold line-clamp-3 leading-relaxed whitespace-pre-wrap">
+                          {report.report_content}
+                        </p>
+                      </div>
+                      
+                      <div className="border-t border-slate-100 pt-3 mt-3 flex justify-between items-center text-[10px] text-slate-400">
+                        <span>업데이트: {report.updated_at || report.created_at}</span>
+                        <span className="text-[11px] text-indigo-650 font-bold opacity-0 group-hover:opacity-100 transition-all flex items-center gap-0.5">
+                          <span>보고서 확인 및 결재하기</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
             // 💡 소프트 삭제 복원 대장
             deletedItems.length === 0 ? (
               <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 shadow-xs">
@@ -963,364 +1671,7 @@ export default function GovernanceDashboard() {
                 ))}
               </div>
             )
-          ) : activeTab === 'AUDIT' ? (
-            // 💡 통합 감사 대장 탭 UI
-            <div className="space-y-4">
-              {/* 필터바 영역 */}
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
-                <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-600">
-                  <div className="flex items-center gap-1.5">
-                    <SlidersHorizontal className="w-4 h-4 text-slate-400" />
-                    <span>작업 분류 필터</span>
-                  </div>
-                  
-                  {/* 조작 주체 구분 필터 */}
-                  <div className="bg-slate-100 p-0.5 rounded-lg flex">
-                    <button 
-                      onClick={() => setAuditSourceFilter('ALL')}
-                      className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${auditSourceFilter === 'ALL' ? 'bg-white text-indigo-650 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
-                    >
-                      전체보기
-                    </button>
-                    <button 
-                      onClick={() => setAuditSourceFilter('AI')}
-                      className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer ${auditSourceFilter === 'AI' ? 'bg-white text-indigo-650 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
-                    >
-                      <Cpu className="w-3.5 h-3.5 text-indigo-600" />
-                      🤖 AI 자율
-                    </button>
-                    <button 
-                      onClick={() => setAuditSourceFilter('MANUAL')}
-                      className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer ${auditSourceFilter === 'MANUAL' ? 'bg-white text-indigo-650 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
-                    >
-                      <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      👤 임직원 수동
-                    </button>
-                  </div>
-
-                  {/* 도메인 구분 필터 */}
-                  <select 
-                    value={auditDomainFilter}
-                    onChange={(e) => setAuditDomainFilter(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold outline-none cursor-pointer"
-                  >
-                    <option value="ALL">모든 업무 대장</option>
-                    <option value="ESTIMATE">B2B 견적/발주/수주</option>
-                    <option value="EXPENSE">지출경비 대장</option>
-                    <option value="INVENTORY">자재/제품 재고</option>
-                    <option value="CUSTOMER">고객/사원 정보</option>
-                  </select>
-                </div>
-
-                {/* 검색 필터 */}
-                <div className="relative max-w-xs w-full">
-                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                  <input 
-                    type="text"
-                    placeholder="조작자, 내용, 문서 번호 검색..."
-                    value={auditSearchQuery}
-                    onChange={(e) => setAuditSearchQuery(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-colors"
-                  />
-                  {auditSearchQuery && (
-                    <button 
-                      onClick={() => setAuditSearchQuery('')}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 border-none bg-transparent cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* 감사 피드 리스트 */}
-              {filteredAuditLogs.length === 0 ? (
-                <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 shadow-xs">
-                  <Database className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-                  <span className="text-xs font-bold block">필터 조건에 부합하는 감사 내역이 존재하지 않습니다.</span>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filteredAuditLogs.map((log) => {
-                    const isAi = log.source === 'AI';
-                    return (
-                      <div 
-                        key={log.id}
-                        onClick={() => setSelectedAudit(log)}
-                        className="bg-white border border-slate-200/85 hover:border-indigo-200 hover:bg-indigo-50/10 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all hover:shadow-md cursor-pointer group text-left"
-                      >
-                        <div className="flex items-start gap-4">
-                          {/* 조작 주체 아이콘 */}
-                          <div className={`p-3 rounded-2xl shrink-0 ${isAi ? 'bg-indigo-50 text-indigo-650' : 'bg-slate-100 text-slate-650'}`}>
-                            {isAi ? <Cpu className="w-6 h-6 animate-pulse" /> : <User className="w-6 h-6" />}
-                          </div>
-                          
-                          <div className="space-y-1">
-                            <div className="flex items-center flex-wrap gap-2">
-                              <span className="text-sm font-black text-slate-800">{log.doc_title}</span>
-                              
-                              {/* 구분 배지 */}
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${isAi ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                                {isAi ? '🤖 AI 자율 대행' : '👤 임직원 조작'}
-                              </span>
-
-                              {/* 액션 타입 배지 */}
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
-                                log.action_type === 'INSERT' ? 'bg-emerald-50 text-emerald-800' : log.action_type === 'DELETE' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-800'
-                              }`}>
-                                {log.action_type === 'INSERT' ? '등록' : log.action_type === 'DELETE' ? '삭제' : '수정'}
-                              </span>
-                            </div>
-
-                            <div className="text-xs text-slate-500 font-semibold flex items-center gap-2">
-                              <span>조작자: <span className="text-slate-700 font-bold">{log.operator}</span></span>
-                              <span>•</span>
-                              <span>테이블: <span className="font-mono text-indigo-600">{log.doc_type}</span></span>
-                            </div>
-
-                            <div className="text-[10px] text-slate-400 flex items-center gap-1.5 pt-1">
-                              <Clock className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{log.created_at}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 self-stretch md:self-auto justify-end">
-                          <span className="text-[11px] text-indigo-650 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-                            <span>상세 변경 데이터 비교(Diff)</span>
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : (
-            // 💡 실시간 관제 이벤트 피드 게시판
-            filteredEvents.length === 0 ? (
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 shadow-xs">
-                <ShieldCheck className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-                <span className="text-xs font-bold block">조회가 활성화된 관제 알림이 비어 있습니다.</span>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredEvents.map((evt) => {
-                  return (
-                    <div 
-                      key={evt.id}
-                      onClick={() => handleOpenDetail(evt)}
-                      className="bg-white border border-slate-200/85 hover:border-indigo-200 hover:bg-indigo-50/10 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all hover:shadow-md cursor-pointer group"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className={`p-3 rounded-2xl shrink-0 ${
-                          evt.type === 'STORE_ORDER' 
-                            ? 'bg-blue-50 text-blue-650' 
-                            : evt.type === 'RAG_HOLD' 
-                              ? 'bg-rose-50 text-rose-600' 
-                              : evt.type === 'TASK_CANCEL_REQUEST'
-                                ? 'bg-indigo-50 text-indigo-600'
-                                : 'bg-amber-50 text-amber-600'
-                        }`}>
-                          {evt.type === 'STORE_ORDER' && <FileText className="w-6 h-6" />}
-                          {evt.type === 'RAG_HOLD' && <ShieldAlert className="w-6 h-6 animate-pulse" />}
-                          {evt.type === 'TASK_CANCEL_REQUEST' && <Trash2 className="w-6 h-6" />}
-                          {evt.type === 'LOW_STOCK' && <AlertTriangle className="w-6 h-6" />}
-                        </div>
-                        <div className="space-y-1 text-left">
-                          <div className="flex items-center flex-wrap gap-2">
-                            <span className="text-sm font-black text-slate-800">{evt.title}</span>
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
-                              evt.type === 'STORE_ORDER' 
-                                ? 'bg-blue-50 text-blue-700' 
-                                : evt.type === 'RAG_HOLD' 
-                                  ? 'bg-rose-50 text-rose-700' 
-                                  : evt.type === 'TASK_CANCEL_REQUEST'
-                                    ? 'bg-indigo-50 text-indigo-700'
-                                    : 'bg-amber-50 text-amber-700'
-                            }`}>
-                              {evt.type === 'STORE_ORDER' ? '스토어 주문' : evt.type === 'RAG_HOLD' ? 'AI 결재 보류' : evt.type === 'TASK_CANCEL_REQUEST' ? '업무 취소 요청' : '재고 부족 경보'}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-500 font-semibold">{evt.subtitle}</p>
-                          <div className="text-[10px] text-slate-400 flex items-center flex-wrap gap-2.5 pt-1">
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{evt.created_at}</span>
-                            </div>
-                            {(() => {
-                              const operator = 
-                                evt.data?.operator || 
-                                evt.data?.created_by || 
-                                evt.data?.updated_by ||
-                                (evt.type === 'STORE_ORDER' ? evt.data?.customer_name : null);
-                                
-                              if (!operator) return null;
-                              
-                              return (
-                                <div className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold border border-indigo-100/50">
-                                  <User className="w-3 h-3 text-indigo-600" />
-                                  <span>상신자: {operator}</span>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 self-stretch md:self-auto justify-end">
-                        <span className="text-[11px] text-indigo-650 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-                          <span>검토 및 다음 조치 수행</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )
           )}
-        </div>
-
-        {/* 🤖 5구역: AI 자율 실행 통제 규칙 제어 센터 */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm text-left space-y-6 mt-8">
-          <div className="flex items-center gap-2 pb-4 border-b border-slate-100">
-            <Cpu className="w-6 h-6 text-indigo-650 animate-pulse shrink-0" />
-            <div>
-              <h3 className="text-base font-black text-slate-800 tracking-tight">AI 자율 실행 통제 규칙 제어 센터</h3>
-              <p className="text-slate-500 text-xs mt-0.5 font-semibold">최고관리자의 의사결정 기록을 자율 규칙으로 변환하여, 임직원의 결재 상신 시 자동 승인을 대행합니다.</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* 규칙 추가 폼 */}
-            <form onSubmit={handleAddRule} className="lg:col-span-5 bg-slate-50 border border-slate-200/50 rounded-2xl p-5 space-y-4">
-              <h4 className="text-xs font-black text-slate-700">🤖 신규 자율 실행 규칙 등록</h4>
-              
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400">규칙 이름</label>
-                <input 
-                  type="text" 
-                  placeholder="예: 김직원 소액 취소 자동 승인"
-                  value={newRuleName}
-                  onChange={(e) => setNewRuleName(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400">자연어 자동화 조건</label>
-                <textarea 
-                  rows={3}
-                  placeholder="예: 김직원이 취소 요청한 모든 건은 자동 승인한다.&#13;&#10;또는: 김직원이 올린 500만원 이하의 수입통관은 자동 승인한다."
-                  value={newRuleExpression}
-                  onChange={(e) => setNewRuleExpression(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-colors resize-none leading-relaxed"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-black py-2.5 px-4 rounded-xl transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>규칙 등록 및 기억하기</span>
-              </button>
-            </form>
-
-            {/* 규칙 목록 리스트 */}
-            <div className="lg:col-span-7 space-y-4">
-              <h4 className="text-xs font-black text-slate-700">📜 활성화된 자율 통제 규칙 목록 ({rules.length})</h4>
-
-              {rulesLoading ? (
-                <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400">
-                  <Loader2 className="w-5 h-5 animate-spin text-indigo-650" />
-                  <span className="text-xs font-bold">규칙 목록 로드 중...</span>
-                </div>
-              ) : rules.length === 0 ? (
-                <div className="py-12 text-center border border-dashed border-slate-200 rounded-2xl text-slate-400">
-                  <Cpu className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                  <span className="text-xs font-bold block">등록된 자율 통제 규칙이 없습니다. 최초의 규칙을 정의해 보세요!</span>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
-                  {rules.map(rule => {
-                    let structured: any = {};
-                    try {
-                      structured = JSON.parse(rule.structured_rule || "{}");
-                    } catch {}
-
-                    return (
-                      <div 
-                        key={rule.id}
-                        className={`p-4 rounded-2xl border transition-all text-left flex justify-between items-start gap-4 ${
-                          rule.is_active === 1 
-                            ? "bg-indigo-50/10 border-indigo-100 hover:border-indigo-200" 
-                            : "bg-slate-50 border-slate-200 opacity-60"
-                        }`}
-                      >
-                        <div className="space-y-1.5 flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-black text-slate-800 truncate">{rule.rule_name}</span>
-                            <span className={`text-[8.5px] px-1.5 py-0.2 rounded font-black ${
-                              rule.is_active === 1 ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-slate-100 text-slate-500 border-slate-200"
-                            }`}>
-                              {rule.is_active === 1 ? "ON (가동중)" : "OFF (비활성)"}
-                            </span>
-                          </div>
-
-                          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-                            "{rule.rule_expression}"
-                          </p>
-
-                          {/* LLM 파싱 분석 태그 */}
-                          <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                            <span className="text-[8.5px] text-slate-400 font-bold">AI 규칙 인식:</span>
-                            <span className="text-[8.5px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-bold">
-                              대상: {structured.operator === 'ALL' ? '전체 직원' : (structured.operator || '전체 직원')}
-                            </span>
-                            <span className="text-[8.5px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-bold">
-                              서류: {structured.doc_type === 'import_customs' ? '수입통관' : (structured.doc_type === 'TASK_CANCEL_REQUEST' ? '업무 취소' : '전체')}
-                            </span>
-                            {structured.max_amount !== undefined && structured.max_amount !== null && (
-                              <span className="text-[8.5px] bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded font-black">
-                                한도: {(structured.max_amount).toLocaleString()} 원 이하
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0 pt-0.5">
-                          {/* 토글 스위치 */}
-                          <button
-                            onClick={() => handleToggleRule(rule.id, rule.is_active)}
-                            className="bg-transparent border-none p-1 text-slate-400 hover:text-indigo-650 cursor-pointer transition-colors"
-                            title={rule.is_active === 1 ? "규칙 끄기" : "규칙 켜기"}
-                          >
-                            {rule.is_active === 1 ? (
-                              <ToggleRight className="w-7 h-7 text-indigo-600" />
-                            ) : (
-                              <ToggleLeft className="w-7 h-7 text-slate-400" />
-                            )}
-                          </button>
-
-                          {/* 삭제 단추 */}
-                          <button
-                            onClick={() => handleDeleteRule(rule.id)}
-                            className="bg-transparent border-none p-1 text-rose-500 hover:text-rose-600 cursor-pointer transition-colors"
-                            title="규칙 삭제"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
       </div>
@@ -1686,6 +2037,239 @@ export default function GovernanceDashboard() {
           </div>
         );
       })()}
+
+      {/* 5.1구역: 일일 업무 보고서 상세 검토 및 결재 모달 (신규) */}
+      {selectedReport && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 animate-scale-in text-left">
+            {/* 헤더 */}
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-650" />
+                <h3 className="text-base font-black text-slate-800">
+                  {selectedReport.operator} 사원 일일 보고서 검토
+                </h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setSelectedReport(null);
+                  setReportComment("");
+                  setAiComments([]);
+                }}
+                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors border-none bg-transparent cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 메타데이터 */}
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-slate-400 font-semibold block">보고 사원</span>
+                  <span className="font-bold text-slate-800">{selectedReport.operator}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold block">보고 일자</span>
+                  <span className="font-bold text-slate-800">{selectedReport.report_date}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold block">현재 상태</span>
+                  <span className={`font-bold text-xs ${
+                    selectedReport.status === 'APPROVED' ? 'text-emerald-600' : selectedReport.status === 'REJECTED' ? 'text-rose-600' : 'text-amber-600 animate-pulse'
+                  }`}>
+                    {selectedReport.status === 'APPROVED' ? '결재 승인완료' : selectedReport.status === 'REJECTED' ? '반려' : '결재 대기 중'}
+                  </span>
+                </div>
+                {selectedReport.approved_at && (
+                  <div>
+                    <span className="text-slate-400 font-semibold block">결재 처리 일시</span>
+                    <span className="font-bold text-slate-800">{selectedReport.approved_at}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 보고서 내용 */}
+            <div className="space-y-2 text-xs">
+              <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">제출된 일보 본문</h4>
+              <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 text-slate-800 font-semibold leading-relaxed whitespace-pre-wrap max-h-[250px] overflow-y-auto">
+                {selectedReport.report_content}
+              </div>
+            </div>
+
+            {/* 대표자 코멘트 및 AI 추천 */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">
+                  대표자 코멘트 및 결재 의견
+                </label>
+
+                {/* 🤖 AI 코멘트 피드백 제안 단추 */}
+                <button
+                  onClick={() => handleGetAiComments(selectedReport)}
+                  disabled={aiCommentsLoading}
+                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] px-3 py-1.5 rounded-xl border border-indigo-100 transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-650 animate-pulse" />
+                  <span>{aiCommentsLoading ? '의견 분석 중...' : '🤖 AI 피드백 코멘트 제안'}</span>
+                </button>
+              </div>
+
+              {/* AI 제안 칩 노출 */}
+              {aiComments.length > 0 && (
+                <div className="space-y-2 p-3 bg-indigo-50/20 border border-indigo-100/50 rounded-2xl">
+                  <span className="text-[9px] font-black text-indigo-700 block">💡 마음에 드는 AI 추천 피드백을 선택해 보세요:</span>
+                  <div className="flex flex-col gap-2">
+                    {aiComments.map((comment) => (
+                      <button
+                        key={comment.type}
+                        onClick={() => setReportComment(comment.text)}
+                        className="text-left p-2.5 bg-white border border-indigo-100 hover:border-indigo-300 hover:bg-indigo-50/30 rounded-xl text-[11px] font-semibold text-slate-700 leading-relaxed transition-all cursor-pointer shadow-2xs"
+                      >
+                        <span className="font-extrabold text-indigo-700 block mb-0.5">{comment.label}</span>
+                        {comment.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <textarea
+                value={reportComment}
+                onChange={(e) => setReportComment(e.target.value)}
+                rows={3}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-3.5 py-2.5 text-xs font-semibold text-slate-750 leading-relaxed placeholder-slate-400 outline-none focus:border-indigo-500 resize-none transition-colors"
+                placeholder="직원에게 전달할 피드백이나 지시 사항을 작성해 주세요. (결재 승인/반려 시 모두 적용됩니다)"
+              />
+            </div>
+
+            {/* 기존 대표자 피드백 코멘트가 있는 경우 */}
+            {selectedReport.comment && (
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
+                <span className="text-slate-400 font-bold block">결재 의견 피드백:</span>
+                <span className="text-slate-700 font-semibold">{selectedReport.comment}</span>
+              </div>
+            )}
+
+            {/* 결재 버튼 */}
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <button
+                onClick={() => {
+                  setSelectedReport(null);
+                  setReportComment("");
+                  setAiComments([]);
+                }}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2.5 rounded-xl text-xs border-none cursor-pointer transition-colors"
+              >
+                취소
+              </button>
+              
+              {selectedReport.status === 'SUBMITTED' && (
+                <>
+                  <button
+                    onClick={() => handleDecideReport(selectedReport.id, 'REJECTED')}
+                    disabled={isProcessing}
+                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer border border-rose-250/30 transition-colors shadow-2xs"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>보완 및 반려</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => handleDecideReport(selectedReport.id, 'APPROVED')}
+                    disabled={isProcessing}
+                    className="bg-indigo-650 hover:bg-indigo-750 text-white font-bold px-6 py-2.5 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer border-none transition-colors shadow-xs"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    <span>결재 승인 완료</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6구역: 자율 규칙 자동 제안 및 등록 모달 (프리미엄 기능) */}
+      {suggestRuleModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 animate-scale-in text-left">
+            {/* 헤더 */}
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-indigo-600 animate-pulse" />
+                <h3 className="text-base font-black text-slate-800">🤖 AI 자율 규칙 원클릭 등록</h3>
+              </div>
+              <button 
+                onClick={() => setSuggestRuleModalOpen(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors border-none bg-transparent cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 설명 및 내용 */}
+            <div className="space-y-4">
+              <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+                최고관리자님의 조치 이력을 바탕으로 AI가 자동으로 자율 처리 규칙을 추천합니다.
+                등록 후 활성화(ON)해 두시면 다음 유사 상신 건은 최고관리자 승인 없이 자동 자율 대행 처리됩니다.
+              </p>
+
+              {/* 규칙 명칭 */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">자율 규칙명</label>
+                <input 
+                  type="text"
+                  value={suggestedRuleName}
+                  onChange={(e) => setSuggestedRuleName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-850 placeholder-slate-400 outline-none focus:border-indigo-500 transition-colors"
+                  placeholder="예: [자동화] 특정 규칙"
+                />
+              </div>
+
+              {/* 규칙 자연어 표현식 */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">자율 통제 조건 (자연어)</label>
+                <textarea
+                  value={suggestedRuleExpression}
+                  onChange={(e) => setSuggestedRuleExpression(e.target.value)}
+                  rows={4}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-750 leading-relaxed placeholder-slate-400 outline-none focus:border-indigo-500 resize-none transition-colors"
+                  placeholder="의사결정 및 처리 흐름을 자연어로 묘사해 주세요."
+                />
+              </div>
+            </div>
+
+            {/* 푸터 버튼 */}
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <button
+                onClick={() => setSuggestRuleModalOpen(false)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2.5 rounded-xl text-xs border-none cursor-pointer transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleConfirmSuggestRule}
+                disabled={isProcessing}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer border-none transition-colors shadow-xs"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>등록 중...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>규칙 등록 및 기동</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

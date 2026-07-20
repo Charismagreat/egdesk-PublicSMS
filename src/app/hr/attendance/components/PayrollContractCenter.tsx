@@ -18,6 +18,8 @@ interface PayrollContractCenterProps {
   setWeeklyHours: (hours: number) => void;
   allowHolidayPay: number;
   setAllowHolidayPay: (allow: number) => void;
+  allowOvertimePaid: number;
+  setAllowOvertimePaid: (allow: number) => void;
   workDays: string;
   setWorkDays: (days: string) => void;
   contractMemo: string;
@@ -43,6 +45,8 @@ export const PayrollContractCenter: React.FC<PayrollContractCenterProps> = ({
   setWeeklyHours,
   allowHolidayPay,
   setAllowHolidayPay,
+  allowOvertimePaid,
+  setAllowOvertimePaid,
   workDays,
   setWorkDays,
   contractMemo,
@@ -52,12 +56,14 @@ export const PayrollContractCenter: React.FC<PayrollContractCenterProps> = ({
   submitLoading,
   payrollLoading,
 }) => {
-  const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'PRESIDENT';
+  const isAdmin = currentUser?.role === 'TENANT_ADMIN' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'PRESIDENT' || currentUser?.role === 'SYSTEM_ADMIN';
   if (!isAdmin) return null;
 
   const getRoleKorean = (role: string) => {
     if (!role) return "";
     switch (role.toUpperCase()) {
+      case 'SYSTEM_ADMIN': return '시스템 운영자';
+      case 'TENANT_ADMIN': return '최고관리자';
       case 'SUPER_ADMIN': return '최고관리자';
       case 'SUB_OPERATOR': return '부운영자';
       case 'EMPLOYEE': return '일반직원';
@@ -166,6 +172,31 @@ export const PayrollContractCenter: React.FC<PayrollContractCenterProps> = ({
               </div>
             </div>
 
+            {/* 연장근로 가산 여부 */}
+            <div className="space-y-1 block">
+              <label className="text-[10px] text-slate-400 uppercase tracking-widest block">연장근로 가산 정책 (1.5배)</label>
+              <div className="flex bg-white p-1 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setAllowOvertimePaid(1)}
+                  className={`flex-1 py-1.5 text-[10px] font-black rounded-lg transition-all border-0 cursor-pointer ${
+                    allowOvertimePaid === 1 ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 bg-transparent'
+                  }`}
+                >
+                  연장 가산 적용 🟢
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllowOvertimePaid(0)}
+                  className={`flex-1 py-1.5 text-[10px] font-black rounded-lg transition-all border-0 cursor-pointer ${
+                    allowOvertimePaid === 0 ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 bg-transparent'
+                  }`}
+                >
+                  가산 미적용 🔴
+                </button>
+              </div>
+            </div>
+
             {/* 근무 요일 */}
             <div className="space-y-1 block">
               <label className="text-[10px] text-slate-400 uppercase tracking-widest block">소정 근무 요일</label>
@@ -238,24 +269,29 @@ export const PayrollContractCenter: React.FC<PayrollContractCenterProps> = ({
                           {pay.name} {pay.employee_number ? `(${pay.employee_number})` : ''}
                         </td>
                         <td className="p-3 text-slate-500">
-                          {pay.role === 'PRESIDENT' ? '대표이사' : pay.role === 'SUPER_ADMIN' ? '최고관리자' : '일반직원'}
+                          {pay.role === 'PRESIDENT' ? '대표이사' : pay.role === 'TENANT_ADMIN' ? '최고관리자' : '일반직원'}
                         </td>
                         <td className="p-3 font-mono">{(pay.hourly_wage ?? 0).toLocaleString()}원</td>
                         <td className="p-3">
-                          주 {pay.weekly_hours ?? 0}h / <b className="text-indigo-650 font-bold">{pay.total_worked_hours ?? 0}h</b>
+                          <div className="flex flex-col gap-0.5">
+                            <span>주 {pay.weekly_hours ?? 0}h / <b className="text-indigo-650 font-bold">{pay.total_hours ?? 0}h</b></span>
+                            {pay.allow_overtime_paid === 1 && (
+                              <span className="text-[10px] text-slate-400 font-bold">초과: <b className="text-amber-600 font-bold">{pay.overtime_hours ?? 0}h</b></span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-3 text-right font-mono">{(pay.base_salary ?? 0).toLocaleString()}원</td>
                         <td className="p-3 text-right font-mono text-emerald-650">
-                          +{(pay.weekly_holiday_allowance ?? 0).toLocaleString()}원
+                          +{(pay.total_holiday_pay ?? 0).toLocaleString()}원
                         </td>
                         <td className="p-3 text-right font-mono text-indigo-600">
-                          +{(pay.overtime_allowance ?? 0).toLocaleString()}원
+                          +{(pay.overtime_pay ?? 0).toLocaleString()}원
                         </td>
                         <td className="p-3 text-right font-mono text-rose-500">
-                          -{(pay.deduction_amount ?? 0).toLocaleString()}원
+                          -{((pay as any).deduction_amount ?? 0).toLocaleString()}원
                         </td>
                         <td className="p-3 text-right font-mono font-extrabold text-indigo-700 bg-indigo-50/10">
-                          {(pay.net_salary ?? 0).toLocaleString()}원
+                          {(pay.total_payroll ?? 0).toLocaleString()}원
                         </td>
                       </tr>
                     ))

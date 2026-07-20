@@ -143,6 +143,24 @@ async function initHrDatabase() {
     } catch (err: any) {
       console.error('⚠️ HR In-app migration error:', err.message);
     }
+
+    // crm_operators 테이블 work_start_time, work_end_time 컬럼 추가 자율 마이그레이션 (자가치유)
+    try {
+      const opSchemaInfo = await getTableSchema('crm_operators');
+      const opColumns = opSchemaInfo.columns || [];
+      const opColNames = opColumns.map((c: any) => c.name);
+      
+      if (!opColNames.includes('work_start_time')) {
+        await executeSQL("ALTER TABLE crm_operators ADD COLUMN work_start_time TEXT DEFAULT '09:00:00';");
+        console.log('✓ In-app migration: added work_start_time to crm_operators via executeSQL');
+      }
+      if (!opColNames.includes('work_end_time')) {
+        await executeSQL("ALTER TABLE crm_operators ADD COLUMN work_end_time TEXT DEFAULT '18:00:00';");
+        console.log('✓ In-app migration: added work_end_time to crm_operators via executeSQL');
+      }
+    } catch (err: any) {
+      console.error('⚠️ Operators In-app migration error:', err.message);
+    }
   } catch (err) {
     console.error('HR 데이터베이스 자율 마이그레이션 처리 실패:', err);
   }
@@ -159,7 +177,8 @@ async function verifyUserRole() {
     const name = payload.name as string || payload.username as string || 'Unknown';
     const username = payload.username as string || '';
     const tenantId = payload.tenant_id as string || 'default';
-    const isAuthorized = role === 'SUPER_ADMIN' || role === 'SUB_OPERATOR';
+    // SYSTEM_ADMIN, TENANT_ADMIN, SUPER_ADMIN 및 일반 사원/임직원 전원 허용
+    const isAuthorized = role === 'SYSTEM_ADMIN' || role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN' || role === 'SUB_OPERATOR' || role === 'EMPLOYEE' || role === 'MEMBER' || !!username;
     return { isAuthorized, role, name, username, tenantId };
   } catch (e) {
     return { isAuthorized: false, role: 'SUB_OPERATOR', name: 'Unknown', username: '', tenantId: 'default' };
@@ -177,18 +196,23 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const workDate = searchParams.get('work_date') || new Date().toISOString().split('T')[0];
 
-    const { isAuthorized, tenantId, username: loggedUsername } = await verifyUserRole();
+    const { isAuthorized, role: userRole, name: loggedName, tenantId, username: loggedUsername } = await verifyUserRole();
     if (!isAuthorized) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
-    // 1. 직원 마스터 목록 스캔 (소프트 삭제 배제, 테넌트 격리)
+    // 1. 직원 마스터 목록 스캔 (소프트 삭제 배제, 테넌트 격리, SYSTEM_ADMIN 차단)
     const queryFilters: any = { is_active: '1' };
     if (loggedUsername !== 'admin') {
       queryFilters.tenant_id = tenantId;
     }
     const operatorsRes = await queryTable('crm_operators', { filters: queryFilters });
-    const employees = (operatorsRes.rows || []).filter((emp: any) => !emp.deleted_at);
+    const employees = (operatorsRes.rows || []).filter((emp: any) => {
+      if (emp.deleted_at) return false;
+      // 최상위 시스템 운영자(SYSTEM_ADMIN, admin 계정)는 직원 명부 및 급여 계산에서 완벽히 배제
+      if (emp.role === 'SYSTEM_ADMIN' || emp.username === 'admin') return false;
+      return true;
+    });
 
     // 2. 당일 전원 근태 정보 스캔 (소프트 삭제 배제, 테넌트 격리)
     const attFilters: any = { work_date: workDate };
@@ -257,7 +281,7 @@ export async function GET(req: Request) {
       companyEvents,
       approvedLeaves,
       allAttendance,
-      currentUser: { id: loggedUsername, name: loggedUsername, role: loggedUsername === 'admin' ? 'SUPER_ADMIN' : 'SUB_OPERATOR' }
+      currentUser: { id: loggedUsername, name: loggedName, role: userRole }
     });
 
   } catch (error: any) {
@@ -289,6 +313,20 @@ export async function POST(req: Request) {
     const workDate = now.toISOString().split('T')[0];
     const timeStr = now.toTimeString().split(' ')[0]; // "HH:MM:SS"
 
+    // 💡 [신규] 해당 직원의 기준 출근/퇴근 설정 시각 동적 조회
+    let workStartTime = '09:00:00';
+    let workEndTime = '18:00:00';
+    try {
+      const opRes = await queryTable('crm_operators', { filters: { id: operatorId } });
+      const opInfo = opRes.rows?.[0];
+      if (opInfo) {
+        if (opInfo.work_start_time) workStartTime = opInfo.work_start_time;
+        if (opInfo.work_end_time) workEndTime = opInfo.work_end_time;
+      }
+    } catch (e) {
+      console.warn("사원 기준 출퇴근시간 로드 실패, 기본값 폴백:", e);
+    }
+
     // 당일 기존 근태 기록이 있는지 스캔 (테넌트 격리)
     const existingFilters: any = { operator_id: operatorId, work_date: workDate };
     existingFilters.tenant_id = tenantId;
@@ -300,8 +338,8 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: '이미 오늘의 출근 스탬프가 찍혀 있습니다.' }, { status: 400 });
       }
 
-      // 출근 시간 판별 기준 (기본 09:00:00)
-      const isLate = timeStr > '09:00:00';
+      // 출근 시간 판별 기준 (사원 설정 기준 시각 동적 적용)
+      const isLate = timeStr > workStartTime;
       const status = isLate ? 'LATE' : 'NORMAL';
 
       const newRecord = {
@@ -346,9 +384,9 @@ export async function POST(req: Request) {
         workingHours = Math.max(0, Math.round((diffMs / 3600) * 10) / 10); // 소수점 첫째자리
       }
 
-      // 조퇴 판별 기준 (기본 18:00:00 이전 퇴근 시)
+      // 조퇴 판별 기준 (사원 설정 퇴근 시각 이전 퇴근 시 동적 적용)
       let currentStatus = attRecord.status;
-      if (timeStr < '18:00:00' && currentStatus === 'NORMAL') {
+      if (timeStr < workEndTime && currentStatus === 'NORMAL') {
         currentStatus = 'EARLY_LEAVE';
       }
 

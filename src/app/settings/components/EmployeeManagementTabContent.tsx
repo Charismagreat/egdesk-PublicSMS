@@ -32,6 +32,8 @@ export default function EmployeeManagementTabContent() {
   const [formEmpNumber, setFormEmpNumber] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formDepartment, setFormDepartment] = useState("");
+  const [formWorkStartTime, setFormWorkStartTime] = useState("09:00");
+  const [formWorkEndTime, setFormWorkEndTime] = useState("18:00");
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -98,6 +100,8 @@ export default function EmployeeManagementTabContent() {
     setFormEmpNumber("");
     setFormPhone("");
     setFormDepartment("");
+    setFormWorkStartTime("09:00");
+    setFormWorkEndTime("18:00");
     setFormError("");
     setIsModalOpen(true);
   };
@@ -111,6 +115,8 @@ export default function EmployeeManagementTabContent() {
     setFormEmpNumber(emp.employee_number || "");
     setFormPhone(emp.phone || "");
     setFormDepartment(emp.department || "");
+    setFormWorkStartTime((emp.work_start_time || "09:00:00").substring(0, 5));
+    setFormWorkEndTime((emp.work_end_time || "18:00:00").substring(0, 5));
     setFormError("");
     setIsModalOpen(true);
   };
@@ -131,6 +137,8 @@ export default function EmployeeManagementTabContent() {
       employee_number: formEmpNumber.trim(),
       phone: formPhone.trim(),
       department: formDepartment.trim(),
+      work_start_time: formWorkStartTime ? `${formWorkStartTime}:00` : "09:00:00",
+      work_end_time: formWorkEndTime ? `${formWorkEndTime}:00` : "18:00:00",
     };
 
     if (isEdit) {
@@ -573,6 +581,30 @@ export default function EmployeeManagementTabContent() {
                     <option value="SUB_OPERATOR">부운영자</option>
                   </select>
                 )}
+              </div>
+
+              {/* 7. 출퇴근 기준 시간 설정 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5">출근 기준 시각</label>
+                  <input
+                    type="time"
+                    required
+                    value={formWorkStartTime}
+                    onChange={(e) => setFormWorkStartTime(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-600 mb-1.5">퇴근 기준 시각</label>
+                  <input
+                    type="time"
+                    required
+                    value={formWorkEndTime}
+                    onChange={(e) => setFormWorkEndTime(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                  />
+                </div>
               </div>
 
               {/* 모달 하단 버튼 */}

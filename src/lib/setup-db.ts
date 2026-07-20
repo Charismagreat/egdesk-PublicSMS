@@ -169,6 +169,19 @@ export async function setupDatabase() {
     { name: 'created_at', type: 'TEXT', notNull: true }
   ], { tableName: 'crm_governance_rules', uniqueKeyColumns: ['id'] });
 
+  // 💡 [신규] 일일 업무 보고서 테이블 생성
+  await safeCreateTable('일일 업무 보고서', [
+    { name: 'id', type: 'INTEGER', notNull: true },
+    { name: 'report_date', type: 'TEXT', notNull: true },
+    { name: 'operator', type: 'TEXT', notNull: true },
+    { name: 'ai_summary', type: 'TEXT' },
+    { name: 'report_content', type: 'TEXT' },
+    { name: 'status', type: 'TEXT', notNull: true },
+    { name: 'comment', type: 'TEXT' },
+    { name: 'approver', type: 'TEXT' },
+    { name: 'approved_at', type: 'TEXT' }
+  ], { tableName: 'crm_daily_reports', uniqueKeyColumns: ['id'] });
+
   // 초기 시범 자율 규칙 시딩 (테넌트: tenant-guest-id-2222)
   try {
     const rulesCheck = await queryTable('crm_governance_rules', { limit: 1 });
@@ -285,24 +298,24 @@ export async function setupDatabase() {
 
     // admin 계정이 아예 없거나, 존재하더라도 tenant_id가 비어있다면(구버전 데이터) 업데이트 또는 생성
     if (!adminCheck.rows || adminCheck.rows.length === 0) {
-      console.log('➡️ 최초 기동: 디폴트 최고관리자 계정을 생성합니다.');
+      console.log('➡️ 최초 기동: 디폴트 시스템 운영자 계정을 생성합니다.');
       await insertRows('crm_operators', [
         {
           id: 1,
           username: 'admin',
           password_hash: password_hash,
-          name: '최고관리자',
-          role: 'SUPER_ADMIN',
+          name: '시스템 운영자',
+          role: 'SYSTEM_ADMIN',
           tenant_id: 'tenant-admin-id-1111',
           created_at: dateStr
         }
       ]);
-    } else if (!adminCheck.rows[0].tenant_id || adminCheck.rows[0].tenant_id === '') {
-      console.log('⚙️ 최초 기동: 구버전 최고관리자 계정의 테넌트 및 비밀번호 정보를 자동 정규화 보정합니다.');
+    } else {
+      // 💡 [롤 개편 가드] 기존 admin의 role을 SYSTEM_ADMIN으로 강제 동기화 보정
       await updateRows('crm_operators', {
-        password_hash: password_hash,
+        name: '시스템 운영자',
+        role: 'SYSTEM_ADMIN',
         tenant_id: 'tenant-admin-id-1111',
-        role: 'SUPER_ADMIN',
         updated_at: dateStr
       }, {
         filters: { username: 'admin' }
@@ -318,17 +331,16 @@ export async function setupDatabase() {
           username: 'guest',
           password_hash: guest_password_hash,
           name: '테스트게스트',
-          role: 'SUPER_ADMIN',
+          role: 'TENANT_ADMIN',
           tenant_id: 'tenant-guest-id-2222',
           created_at: dateStr
         }
       ]);
-    } else if (!guestCheck.rows[0].tenant_id || guestCheck.rows[0].tenant_id === '') {
-      console.log('⚙️ 최초 기동: 테스트 게스트 계정의 테넌트 및 비밀번호 정보를 자동 정규화 보정합니다.');
+    } else {
+      // 💡 [롤 개편 가드] 기존 guest의 role을 TENANT_ADMIN으로 강제 동기화 보정
       await updateRows('crm_operators', {
-        password_hash: guest_password_hash,
+        role: 'TENANT_ADMIN',
         tenant_id: 'tenant-guest-id-2222',
-        role: 'SUPER_ADMIN',
         updated_at: dateStr
       }, {
         filters: { username: 'guest' }

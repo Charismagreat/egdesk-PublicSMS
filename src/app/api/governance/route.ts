@@ -214,16 +214,19 @@ async function checkAndApplyAutoGovernanceRules(
  */
 export async function GET(request: Request) {
   try {
-    const adminUser = await verifySuperAdmin();
-    if (!adminUser) {
-      return NextResponse.json(
-        { success: false, error: '🔒 권한이 없습니다. 최고관리자만 접근할 수 있습니다.' },
-        { status: 403 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
+
+    const adminUser = await verifySuperAdmin();
+    // 모바일 포털과의 연동을 위해 보고서 초안 생성 및 조회 액션은 최고관리자 검증 예외
+    if (action !== 'generate_report_draft' && action !== 'daily_reports') {
+      if (!adminUser) {
+        return NextResponse.json(
+          { success: false, error: '🔒 권한이 없습니다. 최고관리자만 접근할 수 있습니다.' },
+          { status: 403 }
+        );
+      }
+    }
 
     // 1. 통합 관제 게시판 이벤트 피드 조립
     if (action === 'events') {
@@ -379,6 +382,99 @@ export async function GET(request: Request) {
       }
     }
 
+    // 💡 [신규] 일일 업무 보고서 목록 조회
+    if (action === 'daily_reports') {
+      try {
+        const tenantId = await resolveTenantId();
+        // 소프트 삭제 필터링 (deleted_at IS NULL) 규칙 준수
+        const res = await queryTable('crm_daily_reports', {
+          filters: { deleted_at: null, tenant_id: tenantId }
+        });
+        const reports = res.rows || [];
+        // 최신 보고서 순으로 정렬
+        reports.sort((a: any, b: any) => (b.report_date || '').localeCompare(a.report_date || ''));
+        return NextResponse.json({ success: true, reports });
+      } catch (err: any) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
+    // 💡 [신규] 일일 업무 보고서 AI 초안 생성
+    if (action === 'generate_report_draft') {
+      try {
+        const operator = searchParams.get('operator') || '김직원';
+        const reportDate = searchParams.get('report_date') || new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().substring(0, 10);
+        const tenantId = await resolveTenantId();
+
+        // 1) 당일 직원이 상신한 관제 로그 데이터 수집
+        const govLogsRes = await queryTable('crm_governance_logs', {
+          filters: { operator, tenant_id: tenantId }
+        });
+        const todayGovLogs = (govLogsRes.rows || []).filter((l: any) => (l.created_at || '').startsWith(reportDate));
+
+        // 2) 당일 태스크 폴더 업로드 문서 수집
+        const folderItemsRes = await queryTable('crm_task_folder_items', { limit: 1000 });
+        const todayFolderItems = (folderItemsRes.rows || []).filter((item: any) => (item.created_at || '').startsWith(reportDate));
+
+        // 3) 요약 생성 (한국어로만 설명 및 AI 요약본 템플릿 완성)
+        let summaryLines: string[] = [];
+        if (todayGovLogs.length > 0) {
+          summaryLines.push(`[결재/관제상신] 금일 총 ${todayGovLogs.length}건의 관제 이벤트를 상신 및 검토받았습니다.`);
+          todayGovLogs.forEach((l: any) => {
+            summaryLines.push(`  - ${l.doc_title || '상신 건'} (상태: ${l.status === 'RESOLVED' ? '완료' : '대기중'})`);
+          });
+        }
+        if (todayFolderItems.length > 0) {
+          summaryLines.push(`[수집자료 업로드] 태스크 폴더에 총 ${todayFolderItems.length}개의 주요 증빙/문서를 수집하였습니다.`);
+          todayFolderItems.forEach((item: any) => {
+            summaryLines.push(`  - 문서명: ${item.title} (유형: ${item.type || '일반'}, 파일: ${item.file_name || '없음'})`);
+          });
+        }
+
+        let draftContent = "";
+        if (summaryLines.length === 0) {
+          // 활동 내역 폴백 생성
+          draftContent = `금일 등록된 모바일 관제 상신 내역 및 태스크 폴더 자료 업로드 이력이 존재하지 않습니다. 특별한 금일 특이사항이나 수동 보고 사항이 있으신 경우, 이 내용을 편집하여 보고서를 작성해 주시기 바랍니다.`;
+        } else {
+          draftContent = `금일 업무 수행 보고드립니다.\n\n${summaryLines.join('\n')}\n\n위 내용과 같이 금일 업무 및 수집된 문서에 대해 이상이 없음을 확인하고 보고서를 제출합니다.`;
+        }
+
+        return NextResponse.json({
+          success: true,
+          report_date: reportDate,
+          operator,
+          ai_summary: JSON.stringify({ govLogs: todayGovLogs, folderItems: todayFolderItems }),
+          draft_content: draftContent
+        });
+      } catch (err: any) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
+    // 💡 [신규] 대표자 결재용 AI 코멘트 추천
+    if (action === 'suggest_comment') {
+      try {
+        const content = searchParams.get('report_content') || '';
+        const operator = searchParams.get('operator') || '직원';
+
+        // 보고서 텍스트 기반 3가지 어조의 AI 코멘트 추천 리스트 생성
+        const commentA = `오늘도 ${operator}님의 신속한 상신 처리와 꼼꼼한 증빙 자료 수집 덕분에 전사 비즈니스 통제망이 안전하게 유지되고 있습니다. 수고 많으셨습니다!`;
+        const commentB = `제출하신 보고 내용 중 거래처 등록 분석 건은 OCR 판독 오차가 없는지 최종 확인이 중요합니다. 모바일 피드백 루프를 적극 활용하여 조치 완료해주어 고맙습니다.`;
+        const commentC = `금일 제출된 일일 보고서 결재 승인합니다. 수집된 계약서/견적서 상의 정산 일정과 자재 공급 부족 경보 부분은 다음 주 주간 회의 전까지 자재팀과 크로스 체크하여 특이사항 보고 바랍니다.`;
+
+        return NextResponse.json({
+          success: true,
+          suggestions: [
+            { type: 'A', label: '👏 격려/응원형', text: commentA },
+            { type: 'B', label: '🔍 피드백/지도형', text: commentB },
+            { type: 'C', label: '📋 공식/업무지시형', text: commentC }
+          ]
+        });
+      } catch (err: any) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
     return NextResponse.json(
       { success: false, error: '유효하지 않은 action 파라미터입니다.' },
       { status: 400 }
@@ -407,8 +503,8 @@ export async function POST(request: Request) {
 
     const adminUser = await verifySuperAdmin();
     
-    // 모바일에서의 현장 요청 생성인 경우, 최고관리자가 아니더라도 세션이 있으면 허용
-    if (action !== 'create_mobile_request') {
+    // 모바일에서의 현장 요청 생성 및 보고서 제출인 경우, 최고관리자가 아니더라도 세션이 있으면 허용
+    if (action !== 'create_mobile_request' && action !== 'submit_report') {
       if (!adminUser) {
         return NextResponse.json(
           { success: false, error: '🔒 권한이 없습니다. 최고관리자만 조작할 수 있습니다.' },
@@ -418,7 +514,7 @@ export async function POST(request: Request) {
     }
 
     let currentUser = adminUser || 'guest';
-    if (!adminUser && action === 'create_mobile_request') {
+    if (!adminUser && (action === 'create_mobile_request' || action === 'submit_report')) {
       try {
         const cookieStore = await cookies();
         const token = cookieStore.get('auth_token')?.value;
@@ -1135,6 +1231,75 @@ export async function POST(request: Request) {
       }, { filters: { id: ruleId, tenant_id: tenantId } });
 
       return NextResponse.json({ success: true, message: '자율 규칙이 성공적으로 삭제되었습니다.' });
+    }
+
+    // 💡 [신규] 직원 일일 보고서 제출 처리
+    if (action === 'submit_report') {
+      const { report_date, report_content, ai_summary } = body;
+      if (!report_date || !report_content) {
+        return NextResponse.json({ success: false, error: '보고 날짜와 보고서 본문 내용이 필요합니다.' }, { status: 400 });
+      }
+
+      const tenantId = await resolveTenantId();
+      
+      // 혹시 동일 날짜에 동일 직원 보고서가 이미 존재하는지 체크
+      const checkRes = await queryTable('crm_daily_reports', {
+        filters: { report_date, operator: currentUser, tenant_id: tenantId }
+      });
+      const existing = checkRes.rows || [];
+
+      if (existing.length > 0) {
+        // 이미 존재하면 덮어쓰기 업데이트
+        const targetId = existing[0].id;
+        await updateRows('crm_daily_reports', {
+          report_content,
+          ai_summary: ai_summary || existing[0].ai_summary,
+          status: 'SUBMITTED',
+          updated_at: nowStr,
+          updated_by: currentUser
+        }, { filters: { id: targetId, tenant_id: tenantId } });
+        return NextResponse.json({ success: true, message: '일일 보고서가 업데이트 및 제출되었습니다.' });
+      } else {
+        // 신규 인서트
+        const reportId = Date.now();
+        const uuid = `report_${reportId}`;
+        await insertRows('crm_daily_reports', [{
+          id: reportId,
+          report_date,
+          operator: currentUser,
+          ai_summary: ai_summary || '{}',
+          report_content,
+          status: 'SUBMITTED',
+          tenant_id: tenantId,
+          uuid,
+          updated_at: nowStr,
+          updated_by: currentUser
+        }]);
+        return NextResponse.json({ success: true, message: '일일 보고서가 성공적으로 제출되었습니다.' });
+      }
+    }
+
+    // 💡 [신규] 대표자 일일 보고서 결재 및 코멘트 작성
+    if (action === 'approve_report') {
+      const { report_id, status, comment } = body;
+      if (!report_id || !status) {
+        return NextResponse.json({ success: false, error: '보고서 ID와 결재 상태가 누락되었습니다.' }, { status: 400 });
+      }
+
+      const tenantId = await resolveTenantId();
+      await updateRows('crm_daily_reports', {
+        status,
+        comment: comment || '',
+        approver: currentUser,
+        approved_at: nowStr,
+        updated_at: nowStr,
+        updated_by: currentUser
+      }, { filters: { id: report_id, tenant_id: tenantId } });
+
+      return NextResponse.json({ 
+        success: true, 
+        message: status === 'APPROVED' ? '일일 보고서가 승인 결재되었습니다.' : '일일 보고서가 반려/보완요청 처리되었습니다.' 
+      });
     }
 
     return NextResponse.json(

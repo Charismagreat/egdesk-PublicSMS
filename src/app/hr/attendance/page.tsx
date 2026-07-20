@@ -76,6 +76,7 @@ export default function HrAttendancePage() {
   const [hourlyWage, setHourlyWage] = useState(10000);
   const [weeklyHours, setWeeklyHours] = useState(40);
   const [allowHolidayPay, setAllowHolidayPay] = useState(1); 
+  const [allowOvertimePaid, setAllowOvertimePaid] = useState(0); 
   const [workDays, setWorkDays] = useState("월,화,수,목,금");
   const [contractMemo, setContractMemo] = useState("");
 
@@ -106,7 +107,8 @@ export default function HrAttendancePage() {
 
   // 연월 또는 권한 세션 변경 시 인사/급여 데이터 조회
   useEffect(() => {
-    if (currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'PRESIDENT') {
+    const hasPrivilege = currentUser?.role === 'TENANT_ADMIN' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'PRESIDENT' || currentUser?.role === 'SYSTEM_ADMIN';
+    if (hasPrivilege) {
       fetchContractsAndPayroll();
     }
   }, [currentUser, payrollYearMonth]);
@@ -239,7 +241,7 @@ export default function HrAttendancePage() {
       setError('서버 연결 불안정 또는 네트워크 장애');
     } finally {
       setLoading(false);
-      const hasPrivilege = loadedUser?.role === 'SUPER_ADMIN' || loadedUser?.role === 'PRESIDENT' || isHighPrivilege;
+      const hasPrivilege = loadedUser?.role === 'TENANT_ADMIN' || loadedUser?.role === 'SUPER_ADMIN' || loadedUser?.role === 'PRESIDENT' || loadedUser?.role === 'SYSTEM_ADMIN' || isHighPrivilege;
       if (hasPrivilege) {
         fetchBriefingHistories(true);
       } else {
@@ -453,12 +455,14 @@ export default function HrAttendancePage() {
       setHourlyWage(matched.hourly_wage || 10000);
       setWeeklyHours(matched.weekly_hours || 40);
       setAllowHolidayPay(matched.allow_weekly_holiday_paid !== undefined ? matched.allow_weekly_holiday_paid : 1);
+      setAllowOvertimePaid(matched.overtime_paid !== undefined ? matched.overtime_paid : 0);
       setWorkDays(matched.work_days || "월,화,수,목,금");
       setContractMemo(matched.contract_memo || "");
     } else {
       setHourlyWage(10000);
       setWeeklyHours(40);
       setAllowHolidayPay(1);
+      setAllowOvertimePaid(0);
       setWorkDays("월,화,수,목,금");
       setContractMemo("");
     }
@@ -501,6 +505,7 @@ export default function HrAttendancePage() {
           hourly_wage: hourlyWage,
           weekly_hours: weeklyHours,
           allow_weekly_holiday_paid: allowHolidayPay,
+          overtime_paid: allowOvertimePaid,
           work_days: workDays,
           contract_memo: contractMemo
         })
@@ -695,13 +700,7 @@ export default function HrAttendancePage() {
         </div>
       </div>
 
-      {/* 2. 나의 오늘 출퇴근 간편 스탬프 카드 */}
-      <MyCommuteStamp
-        currentEmpRecord={currentEmpRecord}
-        submitLoading={submitLoading}
-        handleClockStamp={handleClockStamp}
-        onOpenLeaveModal={() => setIsLeaveModalOpen(true)}
-      />
+
 
       {/* 3. 대시보드 5대 통계 스코어카드 */}
       <AttendanceStats
@@ -770,18 +769,7 @@ export default function HrAttendancePage() {
             setIsRejectModalOpen={setIsRejectModalOpen}
           />
 
-          {/* 직원용 잔여 연차 안내 카드 */}
-          <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm block">
-            <div className="flex justify-between items-center bg-indigo-50/40 border border-indigo-105 p-4 rounded-2xl">
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-black text-indigo-750 uppercase tracking-wider block">나의 잔여 연차</span>
-                <p className="text-[9px] text-slate-400 font-bold">올해 사용 가능한 유급 연차 잔액입니다.</p>
-              </div>
-              <span className="text-xl font-black text-indigo-700 font-mono flex items-baseline gap-0.5">
-                {employees.find(e => e.id === currentUser?.id)?.remaining_leaves ?? 15} <span className="text-xs font-bold text-slate-400">일</span>
-              </span>
-            </div>
-          </div>
+
         </div>
       </div>
 
@@ -801,6 +789,8 @@ export default function HrAttendancePage() {
         setWeeklyHours={setWeeklyHours}
         allowHolidayPay={allowHolidayPay}
         setAllowHolidayPay={setAllowHolidayPay}
+        allowOvertimePaid={allowOvertimePaid}
+        setAllowOvertimePaid={setAllowOvertimePaid}
         workDays={workDays}
         setWorkDays={setWorkDays}
         contractMemo={contractMemo}
