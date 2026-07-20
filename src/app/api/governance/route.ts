@@ -886,7 +886,7 @@ export async function POST(request: Request) {
 
           else if (act === 'auto_register_sales_order') {
             // (2) 판독된 내용을 토대로 crm_sales_orders에 자동 등록 적재
-            const tenantId = await resolveTenantId();
+            const tenantId = originalData?.tenant_id || originalData?.tenantId || await resolveTenantId() || 'default';
             const orderId = `SO-AUTO-${Date.now()}`;
             
             await insertRows('crm_sales_orders', [{
@@ -902,7 +902,7 @@ export async function POST(request: Request) {
 
             // 관련 crm_governance_logs 상태를 RESOLVED 처리
             if (eventId) {
-              const logRawId = eventId.replace('rag_hold_', '');
+              const logRawId = eventId.replace('event_rag_hold_', '').replace('rag_hold_', '');
               await updateRows('crm_governance_logs', {
                 status: 'RESOLVED',
                 reason: `최고관리자(${adminUser})에 의해 현장 발주서 스캔 및 수주 등록 자율 조치 처리 완료.`
@@ -959,7 +959,7 @@ export async function POST(request: Request) {
               }
 
               if (eventId) {
-                const logRawId = eventId.replace('rag_hold_', '');
+                const logRawId = eventId.replace('event_rag_hold_', '').replace('rag_hold_', '');
                 await updateRows('crm_governance_logs', {
                   status: 'FORCE_APPROVED',
                   reason: `최고관리자(${adminUser})에 의해 자율 대행 조치로 강제 삭제 처리 승인됨.`
@@ -1000,7 +1000,7 @@ export async function POST(request: Request) {
 
             // 거버넌스 로그 상태를 승인 완료로 갱신
             if (eventId) {
-              const logRawId = eventId.replace('cancel_req_', '');
+              const logRawId = eventId.replace('event_cancel_req_', '').replace('cancel_req_', '');
               await updateRows('crm_governance_logs', {
                 status: 'APPROVED',
                 reason: `최고관리자(${adminUser})에 의해 업무 취소 최종 승인 및 소프트 삭제 완료.`
@@ -1038,7 +1038,7 @@ export async function POST(request: Request) {
 
             // 거버넌스 로그 상태를 반려(기각)로 갱신
             if (eventId) {
-              const logRawId = eventId.replace('cancel_req_', '');
+              const logRawId = eventId.replace('event_cancel_req_', '').replace('cancel_req_', '');
               await updateRows('crm_governance_logs', {
                 status: 'REJECTED',
                 reason: `최고관리자(${adminUser})에 의해 취소 요청 기각 및 반려됨.`
