@@ -802,22 +802,60 @@ export async function POST(request: Request) {
             return;
           }
 
-          // 3. 파일 바이너리 다운로드
+          // 3. 파일 바이너리 다운로드 (egdesk-helpers 의 downloadFile 1순위 사용 및 통합 게이트웨이 폴백 연동)
+          let downloadSuccess = false;
+          let downloadErrorMsg = '';
+
           const downloadRes = await downloadFile({
             tableName: 'crm_snaptask_items',
             rowId: Number(targetItem.id),
             columnName: 'file_url'
           });
           
-          if (!downloadRes.success || !downloadRes.data) {
+          if (downloadRes.success && downloadRes.data) {
+            imageBase64 = downloadRes.data;
+            downloadSuccess = true;
+          } else {
+            downloadErrorMsg = downloadRes.error || '바이너리 데이터 부재';
+          }
+
+          // 💡 [게이트웨이 폴백 가드] downloadFile이 실패할 경우 본사 통합 파일 게이트웨이 API로 2차 연동 호출 시도
+          if (!downloadSuccess) {
+            try {
+              const cookieStore = await cookies();
+              const allCookies = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
+              
+              let gatewayUrl = `http://localhost:4000/api/shared/files?tableName=crm_snaptask_items&rowId=${targetItem.id}&columnName=file_url`;
+              if (targetItem.file_url && targetItem.file_url.includes('fileId=')) {
+                const match = targetItem.file_url.match(/fileId=([^&]+)/);
+                if (match) {
+                  gatewayUrl = `http://localhost:4000/api/shared/files?fileId=${match[1]}`;
+                }
+              }
+
+              const fileResponse = await fetch(gatewayUrl, {
+                headers: { 'Cookie': allCookies }
+              });
+
+              if (fileResponse.ok) {
+                const arrayBuffer = await fileResponse.arrayBuffer();
+                imageBase64 = Buffer.from(arrayBuffer).toString('base64');
+                downloadSuccess = true;
+              } else {
+                downloadErrorMsg = `통합 게이트웨이(HTTP ${fileResponse.status}) 응답 실패: ${fileResponse.statusText}`;
+              }
+            } catch (gatewayErr: any) {
+              downloadErrorMsg = `통합 게이트웨이 연동 에러: ${gatewayErr.message}`;
+            }
+          }
+
+          if (!downloadSuccess) {
             sharedOcrSuccess = false;
-            sharedOcrDetail = `[바이너리 다운로드 실패] 스토리지로부터 이미지 파일('${targetItem.content_text}')의 실물 바이너리를 로드하는 데 실패했습니다. 에러: ${downloadRes.error || '바이너리 데이터 부재'}. 수동 등록 또는 반려 처리가 필요합니다.`;
+            sharedOcrDetail = `[바이너리 다운로드 실패] 스토리지로부터 이미지 파일('${targetItem.content_text}')의 실물 바이너리를 로드하는 데 실패했습니다. 에러: ${downloadErrorMsg}. 수동 등록 또는 반려 처리가 필요합니다.`;
             return;
           }
 
-          imageBase64 = downloadRes.data;
-          imageFilename = downloadRes.filename || targetItem.content_text?.replace('[상신 첨부] ', '') || imageFilename;
-          imageMime = downloadRes.mimeType || imageMime;
+          imageFilename = targetItem.content_text?.replace('[상신 첨부] ', '') || imageFilename;
 
           // 4. 로컬 OCR API 호출 및 분석
           const cookieStore = await cookies();
