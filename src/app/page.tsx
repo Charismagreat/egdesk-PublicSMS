@@ -44,6 +44,12 @@ export default async function Home() {
   let todayAutoActions = 0;    // 금일 AI 자율 조치 건수
   let todayDocsCount = 0;      // 금일 수집된 문서 건수
 
+  // 실시간 재고 통계 변수 추가
+  let totalMaterialValue = 0;  // 원자재 재고 자산액
+  let totalProductValue = 0;   // 완제품 재고 자산액
+  let totalInventoryValue = 0; // 총재고 자산액
+  let valuationMethodLabel = '이동평균법 (Moving Average)'; // 재고 평가방법 명칭
+
   let copilotEnabled = true;
 
   try {
@@ -170,6 +176,28 @@ export default async function Home() {
     todayDocsCount = (folderItemsRes.rows || []).filter((item: any) => 
       (item.created_at || '').startsWith(todayStr)
     ).length;
+
+    // 2.5. 재고 자산 및 평가방법 통계 집계 (실시간 DB 연동)
+    try {
+      const valuationSetting = await queryTable('system_settings', { filters: { key: 'inventory_valuation_method' } }).catch(() => ({ rows: [] }));
+      const valuationMethodVal = valuationSetting.rows && valuationSetting.rows.length > 0 ? valuationSetting.rows[0].value : 'moving_average';
+      valuationMethodLabel = valuationMethodVal === 'fifo' ? '선입선출법 (FIFO)' : valuationMethodVal === 'lifo' ? '후입선출법 (LIFO)' : '이동평균법 (Moving Average)';
+
+      const statsRes = await executeSQL(`
+        SELECT 
+          SUM(CASE WHEN type IN ('원부자재', '자재', '원자재', 'material') THEN stock * price ELSE 0 END) as materialValue,
+          SUM(CASE WHEN type IN ('완제품', '제품', 'product') THEN stock * price ELSE 0 END) as productValue
+        FROM inventory_items 
+        WHERE deleted_at IS NULL
+      `).catch(() => ({ rows: [] }));
+
+      const stats = statsRes.rows?.[0] || {};
+      totalMaterialValue = Number(stats.materialValue) || 0;
+      totalProductValue = Number(stats.productValue) || 0;
+      totalInventoryValue = totalMaterialValue + totalProductValue;
+    } catch (invErr: any) {
+      console.warn("⚠️ 대시보드 재고 통계 산출 실패:", invErr.message);
+    }
 
   } catch (err: any) {
     console.error("대시보드 실시간 지표 쿼리 에러:", err);
@@ -312,8 +340,8 @@ export default async function Home() {
 
       </div>
 
-      {/* 2구역: 임직원 근태 현황 및 추천 프리미엄 관제 지표 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* 2구역: 임직원 근태 현황, 실시간 재고 현황 및 추천 프리미엄 관제 지표 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* 근태 현황 */}
         <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs text-left">
@@ -396,6 +424,45 @@ export default async function Home() {
               </div>
             </div>
 
+          </div>
+        </div>
+
+        {/* 실시간 재고 자산 현황 */}
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs text-left">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-indigo-650" />
+              <h2 className="text-base font-black text-slate-800">실시간 재고 자산 현황</h2>
+            </div>
+            <span className="text-[10px] bg-slate-50 text-slate-500 font-extrabold px-2.5 py-1 rounded-lg border border-slate-100">
+              {valuationMethodLabel}
+            </span>
+          </div>
+
+          <div className="space-y-4">
+            {/* 총재고액 대형 수치 */}
+            <div className="bg-indigo-50/30 border border-indigo-100/40 p-4.5 rounded-2xl flex flex-col justify-center text-center">
+              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-wider block mb-1">Total Asset Value</span>
+              <span className="text-2xl font-black text-indigo-950">
+                ₩ {totalInventoryValue.toLocaleString()}
+              </span>
+            </div>
+
+            {/* 제품 및 원자재 구분 표시 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-50/50 border border-slate-100 p-3 rounded-2xl text-center">
+                <span className="text-[9px] font-extrabold text-slate-400 block mb-0.5">완제품 자산액</span>
+                <span className="text-xs font-extrabold text-slate-800 block truncate">
+                  ₩ {totalProductValue.toLocaleString()}
+                </span>
+              </div>
+              <div className="bg-slate-50/50 border border-slate-100 p-3 rounded-2xl text-center">
+                <span className="text-[9px] font-extrabold text-slate-400 block mb-0.5">원부자재 자산액</span>
+                <span className="text-xs font-extrabold text-slate-800 block truncate">
+                  ₩ {totalMaterialValue.toLocaleString()}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
