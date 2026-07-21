@@ -412,9 +412,10 @@ export async function POST(request: Request) {
 
       // E. 개별 서류 1:1 파독 보고서(AI_ANALYSIS_REPORT) 생성 및 저장
       if (folderId) {
-        const reportContent = `[Gemini 1.5/2.0 Flash 멀티모달 Vision 파독 보고서]
+        const reportContent = `[${systemSettingModel} 멀티모달 Vision 파독 보고서]
 ================================================================================
 ■ 스캔 일시: ${todayStr}
+■ 사용 AI 모델: ${systemSettingModel} (시스템 설정 연동)
 ■ 수집 서류 파일명: ${realFileNames}
 ■ 수집 자료 제목: ${realTitles}
 ■ 문서 분류 카테고리: [ ${docCategory} ]
@@ -540,9 +541,10 @@ ${realContents}
       // E. 태스크 폴더에 실제 업로드된 자료 및 AI API 분석 결과를 결합한 종합 분석 보고서 문서(crm_task_folder_items) 생성 및 저장
       let reportItem = null;
       if (folderId) {
-        const reportContent = `[Gemini 1.5/2.0 Flash 멀티모달 Vision 파독 보고서]
+        const reportContent = `[${systemSettingModel} 멀티모달 Vision 파독 보고서]
 ================================================================================
 ■ 스캔 일시: ${todayStr}
+■ 사용 AI 모델: ${systemSettingModel} (시스템 설정 연동)
 ■ 수집 서류 파일명: ${realFileNames}
 ■ 수집 자료 제목: ${realTitles}
 ■ 문서 분류 카테고리: [ ${docCategory} ]
