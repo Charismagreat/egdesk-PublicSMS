@@ -242,12 +242,16 @@ export async function POST(request: Request) {
     // 5. 모바일/PC 담당자의 태스크 완료 처리
     if (action === 'update_task_status') {
       const { taskId, status } = payload;
-      const updateData = {
-        id: taskId,
+      const targetId = Number(taskId || payload.id);
+      if (!targetId) {
+        return NextResponse.json({ success: false, error: 'taskId가 필요합니다.' }, { status: 400 });
+      }
+
+      const res = await updateRows('cert_patent_tasks', {
         status: status || 'COMPLETED',
         updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
-      };
-      const res = await updateRows('cert_patent_tasks', [updateData]);
+      }, { ids: [targetId] });
+
       return NextResponse.json({ success: true, result: res });
     }
 
