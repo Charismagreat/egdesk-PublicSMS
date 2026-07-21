@@ -102,7 +102,6 @@ export const MENU_METADATA_LIST: MenuMetadata[] = [
 
   // 4. 인사/노무/경영지원 (전사 백오피스)
   { href: "/task-folders", label: "태스크 폴더 AI", icon: FolderOpen, color: "text-indigo-500", category: 4 },
-  { href: "/employees", label: "직원 관리 대장", icon: Users, color: "text-blue-600", category: 4 },
   { href: "/governance", label: "AI 컨트롤타워", icon: Bot, color: "text-purple-600", category: 4 },
   { href: "/my-db", label: "MY DB 센터", icon: Database, color: "text-emerald-600", category: 4 },
   { href: "/hr/attendance", label: "근태 관리 AI", icon: CalendarDays, color: "text-indigo-650", category: 4 },
