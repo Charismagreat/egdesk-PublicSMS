@@ -127,7 +127,8 @@ export default function GovernanceDashboard() {
         alert(`[${selectedTaskForAssign.title}] 업무가 '${assignTargetUser}'에게 성공적으로 배정되었습니다!`);
         setIsAssignModalOpen(false);
         setSelectedTaskForAssign(null);
-        fetchData();
+        fetchAiSuggestedTasks();
+        fetchAuditLogs();
       } else {
         alert("배정 실패: " + (data.error || "서버 오류"));
       }
