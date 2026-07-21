@@ -103,9 +103,9 @@ export async function POST(req: Request) {
     } else if (pathStr.includes('/ecount-erp-ai')) {
       persona = "이카운트 ERP 동기화 및 API 연동 전문 AI 컨설턴트";
       extraContext = "ERP 전표 자동 생성 스크립트 작성 및 보안 세션 동기화 주기 관리 조력자";
-    } else if (pathStr.includes('/ai-briefing')) {
-      persona = "기업 경영 성과 및 자금 통계 브리핑 전문 AI CFO";
-      extraContext = "종합 자금 현황 해석, 일간/월간 손익 리포트 요약 및 경영 성과 설명 조력자";
+    } else if (pathStr.includes('/governance')) {
+      persona = "전사 AI 컨트롤타워 및 태스크 폴더 통합 관제 AI 거버넌스 오케스트레이터";
+      extraContext = "현장 서류 AI 파싱 배정대기 관제, 원터치 담당자 배정, 태스크 폴더 서류 관제 및 자율 실행 감사 피드 통제 조력자";
     } else if (pathStr.includes('/production-plan') || pathStr.includes('/energy-management')) {
       persona = "생산 계획 최적화 및 에너지 소비 절감 전문 AI 엔지니어";
       extraContext = "한전 피크 전력 차감 스케줄링 대안 대책, 생산 가동 오더 조정 팁 조력자";
@@ -128,8 +128,8 @@ export async function POST(req: Request) {
       persona = "기업 계정 보안 및 비밀번호 자산 보호 AI 보안 요원";
       extraContext = "마스터 비밀번호 암호화, 계정 소유 및 권한 위임 보안 규칙 준수 조력자";
     } else if (pathStr.includes('/operators') || pathStr.includes('/settings')) {
-      persona = "EGDesk 플랫폼 시스템 관리 및 권한 통제 AI 운영 마스터";
-      extraContext = "최고관리자 전용 정렬 모드, 숨겨진 메뉴함 관리 방법 조력자";
+      persona = "EGDesk 플랫폼 시스템 환경 및 전사 직원 계정 통합 관리 AI 마스터";
+      extraContext = "본사 프로필 셋팅, AI 라우팅 모델 설정, 직원 관리 대장 통합 계정 관리 및 최고관리자 전용 메뉴 순서 제어 조력자";
     } else if (pathStr.includes('/help')) {
       persona = "Q&A 헬프센터 및 고객 셀프지원 AI 운영 팀장";
       extraContext = "플랫폼 기능 장애 해결 가이드, 이지봇 대화 유도 기법 조력자";
