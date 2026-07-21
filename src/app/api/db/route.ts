@@ -31,8 +31,8 @@ async function verifyUserRole() {
     const username = payload.username as string || '';
     const tenantId = payload.tenant_id as string || 'default';
     
-    // 최고관리자(SUPER_ADMIN) 및 부운영자(SUB_OPERATOR) 등급 허용
-    const isAuthorized = role === 'SUPER_ADMIN' || role === 'SUB_OPERATOR';
+    // 최고관리자(SUPER_ADMIN, TENANT_ADMIN, SYSTEM_ADMIN, PRESIDENT) 및 부운영자(SUB_OPERATOR) 등급 허용
+    const isAuthorized = ['SUPER_ADMIN', 'TENANT_ADMIN', 'SYSTEM_ADMIN', 'PRESIDENT', 'SUB_OPERATOR'].includes(role);
     
     return {
       isAuthorized,

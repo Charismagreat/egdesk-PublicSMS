@@ -121,6 +121,10 @@ export default function MobileHubPage() {
   const [activeMobileFolderId, setActiveMobileFolderId] = usePersistedState<string>("activeMobileFolderId", "");
   const [mobileFolderItems, setMobileFolderItems] = useState<TaskFolderItem[]>([]);
   const [mobileItemsLoading, setMobileItemsLoading] = useState(false);
+
+  // 🛡️ 인증서·특허 AI 배정 기한 할 일 상태
+  const [certPatentTasks, setCertPatentTasks] = useState<any[]>([]);
+
   const [isMobileFolderModalOpen, setIsMobileFolderModalOpen] = useState(false);
   const [isFolderSearchModalOpen, setIsFolderSearchModalOpen] = useState(false);
   const [folderSearchQuery, setFolderSearchQuery] = useState("");
@@ -231,6 +235,44 @@ export default function MobileHubPage() {
       }
     } catch (e) {
       alert("서버 연결 실패");
+    }
+  };
+
+  // 🛡️ 인증서·특허 AI 기한 할 일 페치
+  const fetchCertPatentTasks = async () => {
+    try {
+      const res = await fetch("/api/cert-patent");
+      const data = await res.json();
+      if (data.success) {
+        // 모바일 접속자 또는 전체 배정 건 중 완료 안 된 건
+        const pending = (data.tasks || []).filter(
+          (t: any) => t.status === "ASSIGNED" || t.status === "AI_SUGGESTED"
+        );
+        setCertPatentTasks(pending);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleCompleteCertTask = async (taskId: number) => {
+    if (!window.confirm("해당 기한 업무 조치를 완료 처리하시겠습니까?")) return;
+    try {
+      const res = await fetch("/api/cert-patent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_task_status",
+          payload: { taskId, status: "COMPLETED" }
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("업무 완료 처리가 적용되었습니다.");
+        fetchCertPatentTasks();
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -442,6 +484,11 @@ export default function MobileHubPage() {
   };
 
 
+
+  // 🛡️ 모바일 마운트 시 인증서·특허 AI 기한 할 일 초기 로드
+  useEffect(() => {
+    fetchCertPatentTasks();
+  }, []);
 
   // FAB 모달 열릴 때 기본 선택 폴더 세팅
   useEffect(() => {
@@ -1512,6 +1559,49 @@ export default function MobileHubPage() {
           {/* A. 할 일 리스트 영역 */}
           {activeSubTab === 'todo' && (
             <div className="space-y-3">
+              {/* 🛡️ 인증서·특허 AI 기한 배정 할 일 섹션 */}
+              {certPatentTasks.length > 0 && (
+                <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white rounded-3xl p-4 shadow-md mb-2">
+                  <div className="flex items-center justify-between mb-3 border-b border-indigo-700/50 pb-2">
+                    <div className="flex items-center gap-2">
+                      <Award className="w-5 h-5 text-amber-400" />
+                      <span className="text-xs font-black tracking-tight text-indigo-100">
+                        인증서·특허 AI 기한 할 일 ({certPatentTasks.length}건)
+                      </span>
+                    </div>
+                    <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-full">
+                      D-Day 모니터링
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {certPatentTasks.map((ct) => (
+                      <div
+                        key={ct.id}
+                        className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-3 flex items-center justify-between text-left"
+                      >
+                        <div className="space-y-1 pr-2">
+                          <div className="flex items-center gap-1.5 text-[10px] text-indigo-200 font-bold">
+                            <span className="bg-indigo-600/60 px-1.5 py-0.5 rounded text-white">{ct.due_date || '기한임박'}</span>
+                            <span>•</span>
+                            <span>{ct.assigned_to ? `담당: ${ct.assigned_to}` : '배정대기'}</span>
+                          </div>
+                          <h4 className="text-xs font-bold text-white line-clamp-1">{ct.title}</h4>
+                          <p className="text-[10px] text-slate-300 line-clamp-1">{ct.description}</p>
+                        </div>
+                        <button
+                          onClick={() => handleCompleteCertTask(ct.id)}
+                          className="shrink-0 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl text-[10px] font-black flex items-center gap-1 shadow-sm transition-all"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          완료
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {tasksLoading ? (
                 <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 shadow-xs flex items-center justify-center gap-2">
                   <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />

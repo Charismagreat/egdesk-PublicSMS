@@ -1,0 +1,549 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import {
+  Calendar as CalendarIcon,
+  Sparkles,
+  UserCheck,
+  Clock,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  FolderOpen,
+  ArrowUpRight,
+  Plus,
+  Award,
+  FileCheck,
+  AlertCircle,
+  Truck,
+  Filter,
+  ShieldCheck
+} from "lucide-react";
+import Link from "next/link";
+
+export default function DashboardCertPatentWidget() {
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [certificates, setCertificates] = useState<any[]>([]);
+  const [patents, setPatents] = useState<any[]>([]);
+  const [salesDeliveries, setSalesDeliveries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 카테고리 필터 상태 ('ALL' | 'AI_TASK' | 'CERT_PATENT' | 'SALES')
+  const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
+
+  // 달력 연도 / 월 선택 상태
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState<string>("");
+
+  // 최고관리자 담당자 배정 모달
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [assigneeName, setAssigneeName] = useState("");
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/cert-patent");
+      const data = await res.json();
+      if (data.success) {
+        setTasks(data.tasks || []);
+        setCertificates(data.certificates || []);
+        setPatents(data.patents || []);
+        setSalesDeliveries(data.salesDeliveries || []);
+      }
+    } catch (e) {
+      console.error("Universal Calendar Widget Fetch Error:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    const todayStr = new Date().toISOString().split('T')[0];
+    setSelectedDateStr(todayStr);
+  }, []);
+
+  // AI Daily Scanner 가동
+  const handleTriggerAiScan = async () => {
+    try {
+      const res = await fetch("/api/cert-patent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "trigger_ai_scan",
+          payload: {
+            title: "전사 기한 서류 AI 일일 파싱 및 마일스톤 자동 등록",
+            file_name: "전사_통합서류_스캔.pdf"
+          }
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("AI Daily Scanner가 가동되어 전사 통합 기한 달력에 새로운 마일스톤이 등록되었습니다!");
+        fetchData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // 최고관리자 배정
+  const handleAssignTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTask || !assigneeName.trim()) return;
+
+    try {
+      const res = await fetch("/api/cert-patent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "assign_task",
+          payload: {
+            taskId: selectedTask.id,
+            assignedTo: assigneeName.trim(),
+            assignedBy: "최고관리자"
+          }
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`'${assigneeName}' 담당자에게 할 일이 성공적으로 배정되었습니다.`);
+        setIsAssignModalOpen(false);
+        setSelectedTask(null);
+        setAssigneeName("");
+        fetchData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // 월 이동 핸들러
+  const handlePrevMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+  const handleNextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+  const handleToday = () => {
+    const today = new Date();
+    setCurrentDate(today);
+    setSelectedDateStr(today.toISOString().split('T')[0]);
+  };
+
+  // 🗓️ 월별 달력 그리드 일자 계산
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const firstDayOfMonth = new Date(year, month, 1);
+  const lastDayOfMonth = new Date(year, month + 1, 0);
+
+  const startDayOfWeek = firstDayOfMonth.getDay();
+  const daysInMonth = lastDayOfMonth.getDate();
+
+  const calendarCells = [];
+
+  const prevMonthLastDay = new Date(year, month, 0).getDate();
+  for (let i = startDayOfWeek - 1; i >= 0; i--) {
+    const d = prevMonthLastDay - i;
+    const prevMonthDate = new Date(year, month - 1, d);
+    calendarCells.push({
+      dateStr: prevMonthDate.toISOString().split('T')[0],
+      dayNum: d,
+      isCurrentMonth: false
+    });
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateObj = new Date(year, month, d);
+    const yyyy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    calendarCells.push({
+      dateStr,
+      dayNum: d,
+      isCurrentMonth: true
+    });
+  }
+
+  const remainingCells = 42 - calendarCells.length;
+  for (let d = 1; d <= (remainingCells >= 7 ? remainingCells - 7 : remainingCells); d++) {
+    const nextMonthDate = new Date(year, month + 1, d);
+    calendarCells.push({
+      dateStr: nextMonthDate.toISOString().split('T')[0],
+      dayNum: d,
+      isCurrentMonth: false
+    });
+  }
+
+  // 특정 날짜에 대한 전사 기한 이벤트 조회 (카테고리 필터 포함)
+  const getEventsForDate = (dateStr: string) => {
+    const eventList: any[] = [];
+
+    // 1. AI 수집/태스크
+    if (categoryFilter === "ALL" || categoryFilter === "AI_TASK") {
+      tasks.forEach(t => {
+        if (t.due_date === dateStr) {
+          eventList.push({
+            category: 'AI_TASK',
+            type: 'TASK',
+            id: t.id,
+            title: t.title,
+            status: t.status,
+            assigned_to: t.assigned_to,
+            raw: t
+          });
+        }
+      });
+    }
+
+    // 2. 인증서 만료일 & 특허 연차료
+    if (categoryFilter === "ALL" || categoryFilter === "CERT_PATENT") {
+      certificates.forEach(c => {
+        if (c.expire_date === dateStr) {
+          eventList.push({
+            category: 'CERT_PATENT',
+            type: 'CERT',
+            id: c.id,
+            title: `[인증만료] ${c.cert_name}`,
+            status: c.renewal_status,
+            raw: c
+          });
+        }
+      });
+
+      patents.forEach(p => {
+        if (p.next_annual_fee_date === dateStr) {
+          eventList.push({
+            category: 'CERT_PATENT',
+            type: 'PATENT',
+            id: p.id,
+            title: `[연차료] ${p.title}`,
+            amount: p.annual_fee_amount,
+            raw: p
+          });
+        }
+      });
+    }
+
+    // 3. 수주/발주 납기 기한
+    if (categoryFilter === "ALL" || categoryFilter === "SALES") {
+      salesDeliveries.forEach(s => {
+        if (s.due_date === dateStr) {
+          eventList.push({
+            category: 'SALES',
+            type: 'SALES_DELIVERY',
+            id: s.id,
+            title: s.title,
+            amount: s.amount,
+            raw: s
+          });
+        }
+      });
+    }
+
+    return eventList;
+  };
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const selectedEvents = selectedDateStr ? getEventsForDate(selectedDateStr) : [];
+
+  return (
+    <div className="w-full block bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm transition-all">
+      {/* 캘린더 위젯 상단 헤더 */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5 border-b border-slate-100 pb-5">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-indigo-100 text-indigo-700 rounded-2xl">
+            <CalendarIcon className="w-7 h-7" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+              전사 캘린더
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              인증서/특허 만료일, 영업 수주·발주 납품 기한, 결제일 및 AI 수집 일일 할 일을 포함한 회사 전체 기한을 중앙에서 추적 관리합니다.
+            </p>
+          </div>
+        </div>
+
+        {/* 컨트롤 버튼 */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              onClick={handlePrevMonth}
+              className="p-1.5 hover:bg-white text-slate-600 hover:text-slate-900 rounded-lg transition-all"
+              title="이전달"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="px-3 text-sm font-black text-slate-800">
+              {year}년 {month + 1}월
+            </span>
+            <button
+              onClick={handleNextMonth}
+              className="p-1.5 hover:bg-white text-slate-600 hover:text-slate-900 rounded-lg transition-all"
+              title="다음달"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <button
+            onClick={handleToday}
+            className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-2xs"
+          >
+            오늘
+          </button>
+
+          <button
+            onClick={handleTriggerAiScan}
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            AI Daily Scanner 가동
+          </button>
+        </div>
+      </div>
+
+      {/* 범주 필터 칩스 (Category Filters) */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+        <span className="text-xs font-bold text-slate-500 flex items-center gap-1 mr-1">
+          <Filter className="w-3.5 h-3.5" /> 기한 범주:
+        </span>
+        <button
+          onClick={() => setCategoryFilter("ALL")}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            categoryFilter === "ALL"
+              ? "bg-slate-900 text-white shadow-xs"
+              : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+          }`}
+        >
+          전체 기한 보기
+        </button>
+        <button
+          onClick={() => setCategoryFilter("AI_TASK")}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+            categoryFilter === "AI_TASK"
+              ? "bg-amber-500 text-white shadow-xs"
+              : "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200"
+          }`}
+        >
+          <Sparkles className="w-3 h-3" /> AI 수집/태스크
+        </button>
+        <button
+          onClick={() => setCategoryFilter("CERT_PATENT")}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+            categoryFilter === "CERT_PATENT"
+              ? "bg-indigo-600 text-white shadow-xs"
+              : "bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200"
+          }`}
+        >
+          <ShieldCheck className="w-3 h-3" /> 인증서 · 특허
+        </button>
+        <button
+          onClick={() => setCategoryFilter("SALES")}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+            categoryFilter === "SALES"
+              ? "bg-rose-600 text-white shadow-xs"
+              : "bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200"
+          }`}
+        >
+          <Truck className="w-3 h-3" /> 수주 · 발주 · 납기일
+        </button>
+      </div>
+
+      {/* 🗓️ 7일 요일 헤더 (일 ~ 토) */}
+      <div className="grid grid-cols-7 text-center font-bold text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-t-2xl py-2.5">
+        <div className="text-rose-500">일 (Sun)</div>
+        <div>월 (Mon)</div>
+        <div>화 (Tue)</div>
+        <div>수 (Wed)</div>
+        <div>목 (Thu)</div>
+        <div>금 (Fri)</div>
+        <div className="text-indigo-600">토 (Sat)</div>
+      </div>
+
+      {/* 🗓️ 6주 x 7일 월별 격자 달력 그리드 UI */}
+      <div className="grid grid-cols-7 border-x border-b border-slate-200 rounded-b-2xl divide-x divide-y divide-slate-200/80 bg-slate-50/30">
+        {calendarCells.map((cell, idx) => {
+          const events = getEventsForDate(cell.dateStr);
+          const isToday = cell.dateStr === todayStr;
+          const isSelected = cell.dateStr === selectedDateStr;
+          const isSunday = idx % 7 === 0;
+          const isSaturday = idx % 7 === 6;
+
+          return (
+            <div
+              key={cell.dateStr + idx}
+              onClick={() => setSelectedDateStr(cell.dateStr)}
+              className={`min-h-[135px] p-2.5 transition-all cursor-pointer flex flex-col justify-between ${
+                !cell.isCurrentMonth
+                  ? "bg-slate-100/50 text-slate-400"
+                  : isSelected
+                  ? "bg-indigo-50/60 ring-2 ring-indigo-500/80 z-10"
+                  : "bg-white hover:bg-slate-50/80"
+              }`}
+            >
+              {/* 날짜 숫 표시 및 오늘 뱃지 */}
+              <div className="flex items-center justify-between mb-1">
+                <span
+                  className={`text-xs font-black px-1.5 py-0.5 rounded-full ${
+                    isToday
+                      ? "bg-indigo-600 text-white shadow-xs"
+                      : isSunday
+                      ? "text-rose-500"
+                      : isSaturday
+                      ? "text-indigo-600"
+                      : cell.isCurrentMonth
+                      ? "text-slate-700"
+                      : "text-slate-400"
+                  }`}
+                >
+                  {cell.dayNum}
+                </span>
+
+                {events.length > 0 && (
+                  <span className="text-[10px] font-black px-1.5 py-0.5 bg-amber-400 text-slate-950 rounded-full">
+                    {events.length}건
+                  </span>
+                )}
+              </div>
+
+              {/* 해당 날짜의 통합 이벤트 칩 리스트 */}
+              <div className="space-y-1 flex-1 overflow-hidden">
+                {events.slice(0, 3).map((ev, i) => (
+                  <div
+                    key={i}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (ev.type === "TASK" && ev.status === "AI_SUGGESTED") {
+                        setSelectedTask(ev.raw);
+                        setIsAssignModalOpen(true);
+                      }
+                    }}
+                    className={`px-1.5 py-1 rounded-md text-[10px] font-extrabold truncate flex items-center justify-between transition-all ${
+                      ev.category === "SALES"
+                        ? "bg-rose-100 text-rose-900 border border-rose-200"
+                        : ev.type === "TASK" && ev.status === "AI_SUGGESTED"
+                        ? "bg-amber-100 text-amber-900 border border-amber-200"
+                        : ev.type === "TASK" && ev.status === "ASSIGNED"
+                        ? "bg-indigo-100 text-indigo-900 border border-indigo-200"
+                        : ev.type === "CERT"
+                        ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
+                        : "bg-purple-100 text-purple-900 border border-purple-200"
+                    }`}
+                    title={ev.title}
+                  >
+                    <span className="truncate">{ev.title}</span>
+                    {ev.type === "TASK" && ev.status === "AI_SUGGESTED" && (
+                      <span className="text-[8px] bg-amber-500 text-white px-1 py-0.2 rounded font-black shrink-0 ml-1">배정</span>
+                    )}
+                  </div>
+                ))}
+
+                {events.length > 3 && (
+                  <div className="text-[9px] text-slate-400 font-bold text-center">
+                    +{events.length - 3}건 더보기
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 캘린더 하단: 선택된 날짜 상세 마일스톤 이력 패널 */}
+      <div className="mt-5 bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+            <Clock className="w-4 h-4 text-indigo-600" />
+            선택 일자 전사 마일스톤: <strong className="text-slate-900 font-mono">{selectedDateStr}</strong> ({selectedEvents.length}건)
+          </h4>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {selectedEvents.length === 0 ? (
+              <span className="text-xs text-slate-400">선택한 날짜에 예정된 전사 기한 일정이 없습니다.</span>
+            ) : (
+              selectedEvents.map((ev, i) => (
+                <div key={i} className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2 shadow-2xs">
+                  <span className="font-bold text-slate-800">{ev.title}</span>
+                  {ev.type === "TASK" && ev.status === "AI_SUGGESTED" && (
+                    <button
+                      onClick={() => {
+                        setSelectedTask(ev.raw);
+                        setIsAssignModalOpen(true);
+                      }}
+                      className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-[10px] font-bold"
+                    >
+                      직원 배정하기
+                    </button>
+                  )}
+                  {ev.assigned_to && (
+                    <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">
+                      담당: {ev.assigned_to}
+                    </span>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <Link
+          href="/governance"
+          className="px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1 shrink-0 self-start md:self-auto shadow-2xs"
+        >
+          <FolderOpen className="w-3.5 h-3.5 text-slate-500" />
+          태스크 폴더 관제 센터
+          <ArrowUpRight className="w-3 h-3 text-slate-400" />
+        </Link>
+      </div>
+
+      {/* 모달: 최고관리자 담당자 배정 */}
+      {isAssignModalOpen && selectedTask && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100">
+            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-2">
+              <UserCheck className="w-5 h-5 text-indigo-600" />
+              직원에게 할 일 배정
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              항목: <strong className="text-slate-800">{selectedTask.title}</strong>
+            </p>
+
+            <form onSubmit={handleAssignTask} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">담당 직원 이름/사번</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="예: 홍길동 (또는 EMP-001)"
+                  value={assigneeName}
+                  onChange={(e) => setAssigneeName(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAssignModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md"
+                >
+                  배정 확정 (모바일 전송)
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

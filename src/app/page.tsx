@@ -1,10 +1,11 @@
 import { 
   Users, CheckCircle2, AlertTriangle, LayoutDashboard, TrendingUp, ShoppingBag, 
   DollarSign, FileSpreadsheet, ShieldAlert, BadgeHelp, Sparkles, FolderDown,
-  UserCheck, AlertCircle, PlayCircle, ClipboardCheck
+  UserCheck, AlertCircle, PlayCircle, ClipboardCheck, Landmark, Coins, Factory, HandCoins, Scale, TrendingDown, Calculator
 } from "lucide-react";
 import { queryTable, executeSQL } from "@/../egdesk-helpers";
 import AiCopilotWidget from "@/components/AiCopilotWidget";
+import DashboardCertPatentWidget from "@/components/DashboardCertPatentWidget";
 
 // Next.js 캐싱 비활성화 (항상 실시간 최신 금융/근태 데이터 유지)
 export const dynamic = 'force-dynamic';
@@ -49,6 +50,32 @@ export default async function Home() {
   let totalProductValue = 0;   // 완제품 재고 자산액
   let totalInventoryValue = 0; // 총재고 자산액
   let valuationMethodLabel = '이동평균법 (Moving Average)'; // 재고 평가방법 명칭
+
+  // 🏦 가용자금 통계 변수 추가 (은행계좌거래내역 최종 잔액 합산)
+  let totalAvailableCash = 0;
+  let bankAccountCount = 0;
+
+  // 🏭 실시간 생산현황 통계 변수 (총생산량, 불량건수, 납기준수율 / 금일, 금월, 금년)
+  let productionStats = {
+    today: { volume: 0, defects: 0, onTimeRate: 100 },
+    month: { volume: 0, defects: 0, onTimeRate: 98 },
+    year: { volume: 0, defects: 0, onTimeRate: 99 }
+  };
+
+  // 💰 채권·채무·자금 통계 변수 (미수금, 미지급금, 가지급금)
+  let totalUncollected = 0;  // 미수금 (받을 돈)
+  let totalUnpaidCost = 0;    // 미지급금 (줄 돈)
+  let totalTemporaryPay = 0;  // 가지급금 (정산 필요)
+
+  // 📅 자금 소요 예상 변수 (금일, 금주, 금월, 3개월, 6개월, 1년)
+  let cashRequirementForecast = {
+    today: 0,
+    week: 0,
+    month: 0,
+    month3: 0,
+    month6: 0,
+    year1: 0
+  };
 
   let copilotEnabled = true;
 
@@ -207,6 +234,147 @@ export default async function Home() {
       console.warn("⚠️ 대시보드 재고 통계 산출 실패:", invErr.message);
     }
 
+    // 2.5. 🏦 은행계좌 거래내역 최종 잔액(가용자금) 합산 집계
+    try {
+      const accountsRes = await queryTable('excel_accounts', {
+        filters: { deleted_at: null },
+        limit: 1000
+      }).catch(() => ({ rows: [] }));
+      const accounts = accountsRes.rows || [];
+      bankAccountCount = accounts.length;
+      totalAvailableCash = accounts.reduce((sum: number, acc: any) => sum + (Math.floor(Number(acc.balance)) || 0), 0);
+    } catch (cashErr: any) {
+      console.warn("⚠️ 가용자금 산출 실패:", cashErr.message);
+    }
+
+    // 2.6. 🏭 실시간 생산현황 (총생산량, 불량건수, 납기준수율 / 금일, 금월, 금년) 집계
+    try {
+      const prodRes = await queryTable('crm_estimates', {
+        filters: { deleted_at: null },
+        limit: 10000
+      }).catch(() => ({ rows: [] }));
+      const prodRows = (prodRes.rows || []).filter((r: any) => r.type === 'outbound_so' || r.type === 'manufacture' || r.is_manufacture === 1);
+
+      prodRows.forEach((r: any) => {
+        const dateStr = r.created_at || '';
+        const vol = Number(r.quantity) || Number(r.total_quantity) || 1;
+        const defectCnt = Number(r.defect_count) || 0;
+
+        if (dateStr.startsWith(todayStr)) {
+          productionStats.today.volume += vol;
+          productionStats.today.defects += defectCnt;
+        }
+        if (dateStr.startsWith(monthStr)) {
+          productionStats.month.volume += vol;
+          productionStats.month.defects += defectCnt;
+        }
+        if (dateStr.startsWith(yearStr)) {
+          productionStats.year.volume += vol;
+          productionStats.year.defects += defectCnt;
+        }
+      });
+    } catch (prodErr: any) {
+      console.warn("⚠️ 생산현황 집계 실패:", prodErr.message);
+    }
+
+    // 2.7. 💰 미수금, 미지급금, 가지급금 실시간 산출
+    try {
+      // 미수금 & 미지급금 (crm_estimates 기반)
+      const estimatesRes = await queryTable('crm_estimates', {
+        filters: { deleted_at: null },
+        limit: 10000
+      }).catch(() => ({ rows: [] }));
+
+      (estimatesRes.rows || []).forEach((e: any) => {
+        const amt = Number(e.total_amount) || 0;
+        const isPaid = e.payment_status === 'PAID' || e.is_paid === 1;
+        if (!isPaid) {
+          if (e.type === 'outbound_so') {
+            totalUncollected += amt;
+          } else if (e.type === 'inbound_po') {
+            totalUnpaidCost += amt;
+          }
+        }
+      });
+
+      // 가지급금 (excel_bank_transactions 또는 crm_expenses)
+      const bankTxRes = await queryTable('excel_bank_transactions', {
+        filters: { deleted_at: null },
+        limit: 10000
+      }).catch(() => ({ rows: [] }));
+
+      (bankTxRes.rows || []).forEach((tx: any) => {
+        const desc = tx.description || '';
+        const cat = tx.category || '';
+        if (desc.includes('가지급') || cat.includes('가지급') || desc.includes('대표자') || cat.includes('전출금')) {
+          totalTemporaryPay += Number(tx.withdrawal_amount) || 0;
+        }
+      });
+    } catch (finErr: any) {
+      console.warn("⚠️ 미수/미지급/가지급금 산출 실패:", finErr.message);
+    }
+
+    // 2.8. 📅 자금 소요 예상 (금일, 금주, 금월, 3개월, 6개월, 1년) 집계
+    try {
+      const todayTime = now.getTime();
+      const dayMs = 24 * 60 * 60 * 1000;
+
+      // 발주 미지급금 예정일 기반
+      const estimatesRes = await queryTable('crm_estimates', {
+        filters: { deleted_at: null },
+        limit: 10000
+      }).catch(() => ({ rows: [] }));
+
+      (estimatesRes.rows || []).forEach((e: any) => {
+        if (e.type === 'inbound_po') {
+          const amt = Number(e.total_amount) || 0;
+          let dueDateStr = e.payment_due_date || e.created_at || '';
+          if (e.spec) {
+            try {
+              const parsed = typeof e.spec === 'string' ? JSON.parse(e.spec) : e.spec;
+              if (parsed.delivery_date) dueDateStr = parsed.delivery_date;
+            } catch (err) {}
+          }
+
+          if (dueDateStr) {
+            const itemTime = new Date(dueDateStr).getTime();
+            const diffDays = Math.max(0, Math.floor((itemTime - todayTime) / dayMs));
+
+            if (dueDateStr.startsWith(todayStr)) cashRequirementForecast.today += amt;
+            if (diffDays <= 7) cashRequirementForecast.week += amt;
+            if (diffDays <= 30) cashRequirementForecast.month += amt;
+            if (diffDays <= 90) cashRequirementForecast.month3 += amt;
+            if (diffDays <= 180) cashRequirementForecast.month6 += amt;
+            if (diffDays <= 365) cashRequirementForecast.year1 += amt;
+          }
+        }
+      });
+
+      // 특허 연차료 예정액 기반
+      const patentRes = await queryTable('tenant_patents', {
+        filters: { deleted_at: null },
+        limit: 1000
+      }).catch(() => ({ rows: [] }));
+
+      (patentRes.rows || []).forEach((p: any) => {
+        const fee = Number(p.annual_fee_amount) || 0;
+        const feeDate = p.next_annual_fee_date || '';
+        if (feeDate && fee > 0) {
+          const itemTime = new Date(feeDate).getTime();
+          const diffDays = Math.max(0, Math.floor((itemTime - todayTime) / dayMs));
+
+          if (feeDate.startsWith(todayStr)) cashRequirementForecast.today += fee;
+          if (diffDays <= 7) cashRequirementForecast.week += fee;
+          if (diffDays <= 30) cashRequirementForecast.month += fee;
+          if (diffDays <= 90) cashRequirementForecast.month3 += fee;
+          if (diffDays <= 180) cashRequirementForecast.month6 += fee;
+          if (diffDays <= 365) cashRequirementForecast.year1 += fee;
+        }
+      });
+    } catch (forecastErr: any) {
+      console.warn("⚠️ 자금 소요 예상 산출 실패:", forecastErr.message);
+    }
+
   } catch (err: any) {
     console.error("대시보드 실시간 지표 쿼리 에러:", err);
   }
@@ -224,7 +392,7 @@ export default async function Home() {
         <div className="text-left">
           <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2.5">
             <LayoutDashboard className="w-8 h-8 text-indigo-650" />
-            <span>경영 정보 및 관제 대시보드</span>
+            <span>CEO 대시보드</span>
           </h1>
           <p className="text-slate-500 mt-2 text-sm font-semibold">
             실시간 수주·발주 흐름, 세금계산서 기반 매출·매입 추이 및 임직원 근태 상태와 AI 비즈니스 통제 현황을 한눈에 모니터링합니다.
@@ -235,16 +403,35 @@ export default async function Home() {
       {/* AI 자율 마케팅 파트너 어시스턴트 위젯 */}
       {copilotEnabled && <AiCopilotWidget />}
 
-      {/* 1구역: 금융/거래 핵심 4종 지표 카드 그리드 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* 1구역: 전사 6대 핵심 비즈니스 지표 카드 그리드 (가용자금, 수주, 발주, 매출, 매입, 생산현황) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+
+        {/* 0. 가용자금 (은행계좌 거래내역 최종 잔액 합산) */}
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-black text-slate-800">가용자금</h3>
+            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
+              <Landmark className="w-5 h-5 text-emerald-600" />
+            </div>
+          </div>
+          <div className="space-y-2.5">
+            <div className="bg-emerald-50/50 border border-emerald-100/50 p-2.5 rounded-2xl flex flex-col justify-center text-center">
+              <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider block mb-0.5">최종 잔액 합계</span>
+              <span className="text-xl font-black text-emerald-950 truncate">
+                ₩ {totalAvailableCash.toLocaleString()}
+              </span>
+            </div>
+            <div className="border-t border-slate-100 pt-2 flex justify-between items-center text-xs font-black">
+              <span className="text-slate-500 font-bold">등록 은행 계좌</span>
+              <span className="text-emerald-700">{bankAccountCount} 개 계좌</span>
+            </div>
+          </div>
+        </div>
         
         {/* 1. 수주액 */}
         <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
-          <div className="flex justify-between items-start mb-4">
-            <div className="space-y-0.5">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Sales Orders</span>
-              <h3 className="text-lg font-black text-slate-800">총 수주액</h3>
-            </div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-black text-slate-800">총 수주액</h3>
             <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-indigo-650" />
             </div>
@@ -267,11 +454,8 @@ export default async function Home() {
 
         {/* 2. 발주액 */}
         <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
-          <div className="flex justify-between items-start mb-4">
-            <div className="space-y-0.5">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Purchase Orders</span>
-              <h3 className="text-lg font-black text-slate-800">총 발주액</h3>
-            </div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-black text-slate-800">총 발주액</h3>
             <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">
               <ShoppingBag className="w-5 h-5 text-rose-600" />
             </div>
@@ -294,11 +478,8 @@ export default async function Home() {
 
         {/* 3. 매출액 */}
         <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
-          <div className="flex justify-between items-start mb-4">
-            <div className="space-y-0.5">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Tax Sales</span>
-              <h3 className="text-lg font-black text-slate-800">총 매출액</h3>
-            </div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-black text-slate-800">총 매출액</h3>
             <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
               <DollarSign className="w-5 h-5 text-emerald-600" />
             </div>
@@ -321,11 +502,8 @@ export default async function Home() {
 
         {/* 4. 매입액 */}
         <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
-          <div className="flex justify-between items-start mb-4">
-            <div className="space-y-0.5">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Tax Purchases</span>
-              <h3 className="text-lg font-black text-slate-800">총 매입액</h3>
-            </div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-black text-slate-800">총 매입액</h3>
             <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
               <FileSpreadsheet className="w-5 h-5 text-amber-600" />
             </div>
@@ -346,16 +524,54 @@ export default async function Home() {
           </div>
         </div>
 
+        {/* 5. 생산현황 (총생산량, 불량건수, 납기준수율 / 금일, 금월, 금년) */}
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-lg font-black text-slate-800">생산현황</h3>
+            <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+              <Factory className="w-5 h-5 text-purple-600" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="bg-purple-50/40 border border-purple-100/60 p-2 rounded-xl text-[11px] space-y-0.5">
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-purple-900">금일 생산</span>
+                <span className="font-extrabold text-purple-950">{productionStats.today.volume.toLocaleString()}개</span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-slate-500">
+                <span>불량: <strong className="text-rose-600">{productionStats.today.defects}건</strong></span>
+                <span>준수율: <strong className="text-indigo-600">{productionStats.today.onTimeRate}%</strong></span>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-150 p-2 rounded-xl text-[11px] space-y-0.5">
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-slate-700">금월 누적</span>
+                <span className="font-extrabold text-slate-900">{productionStats.month.volume.toLocaleString()}개</span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-slate-500">
+                <span>불량: <strong className="text-rose-600">{productionStats.month.defects}건</strong></span>
+                <span>준수율: <strong className="text-indigo-600">{productionStats.month.onTimeRate}%</strong></span>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-1.5 flex justify-between items-center text-[10px] font-bold">
+              <span className="text-purple-700">금년도 합계</span>
+              <span className="text-slate-800">{productionStats.year.volume.toLocaleString()}개 (준수 {productionStats.year.onTimeRate}%)</span>
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      {/* 2구역: 임직원 근태 현황, 실시간 재고 현황 및 추천 프리미엄 관제 지표 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* 2구역: 임직원 출근 현황, 재고 현황, 채권채무 현황 및 자금소요예상 관제 지표 */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         
         {/* 근태 현황 */}
         <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs text-left">
           <div className="flex items-center gap-2 mb-6">
             <UserCheck className="w-5 h-5 text-indigo-650" />
-            <h2 className="text-base font-black text-slate-800">금일 사원 근태 출근 현황</h2>
+            <h2 className="text-base font-black text-slate-800">출근 현황</h2>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
@@ -375,7 +591,7 @@ export default async function Home() {
                   />
                   <path
                     className="text-indigo-650 transition-all duration-500"
-                    strokeDasharray={`${attendanceRate}, 100`}
+                    strokeDasharray={attendanceRate + ", 100"}
                     strokeWidth="3.5"
                     strokeLinecap="round"
                     stroke="currentColor"
@@ -397,7 +613,7 @@ export default async function Home() {
               <div className="flex justify-between items-center text-xs">
                 <div className="flex items-center gap-1.5 font-bold text-slate-600">
                   <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></span>
-                  <span>정상 출근</span>
+                  <span>정상</span>
                 </div>
                 <span className="font-extrabold text-slate-800">{attendanceCount - lateCount - earlyLeaveCount} 명</span>
               </div>
@@ -405,7 +621,7 @@ export default async function Home() {
               <div className="flex justify-between items-center text-xs">
                 <div className="flex items-center gap-1.5 font-bold text-slate-600">
                   <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                  <span>지각 사원</span>
+                  <span>지각</span>
                 </div>
                 <span className="font-extrabold text-slate-800">{lateCount} 명</span>
               </div>
@@ -413,7 +629,7 @@ export default async function Home() {
               <div className="flex justify-between items-center text-xs">
                 <div className="flex items-center gap-1.5 font-bold text-slate-600">
                   <span className="w-2.5 h-2.5 bg-sky-400 rounded-full"></span>
-                  <span>조퇴 사원</span>
+                  <span>조퇴</span>
                 </div>
                 <span className="font-extrabold text-slate-800">{earlyLeaveCount} 명</span>
               </div>
@@ -440,7 +656,7 @@ export default async function Home() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-indigo-650" />
-              <h2 className="text-base font-black text-slate-800">실시간 재고 자산 현황</h2>
+              <h2 className="text-base font-black text-slate-800">재고 현황</h2>
             </div>
             <span className="text-[10px] bg-slate-50 text-slate-500 font-extrabold px-2.5 py-1 rounded-lg border border-slate-100">
               {valuationMethodLabel}
@@ -474,82 +690,109 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* AI 자율 제어 및 추천 관제 지표 */}
+        {/* 미수금, 미지급금, 가지급금 현황 카드 */}
         <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs text-left">
           <div className="flex items-center gap-2 mb-6">
-            <Sparkles className="w-5 h-5 text-indigo-650" />
-            <h2 className="text-base font-black text-slate-800">🤖 AI 자율 통제 및 결재 대기 현황</h2>
+            <Scale className="w-5 h-5 text-amber-600" />
+            <h2 className="text-base font-black text-slate-800">미수 · 미지급 · 가지급금 현황</h2>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            
-            {/* 결재 대기 일보 */}
-            <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1">
-                  <ClipboardCheck className="w-4 h-4 text-amber-500" />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Reports Pending</span>
-                </div>
-                <p className="text-xs font-bold text-slate-700">결재 대기 보고서</p>
+          <div className="space-y-3">
+            {/* 1. 미수금 (받을 돈) */}
+            <div className="bg-amber-50/40 border border-amber-100 p-3 rounded-2xl flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider block">Accounts Receivable</span>
+                <span className="text-xs font-black text-slate-800">미수금 (받을 돈)</span>
               </div>
-              <div className="flex items-baseline gap-1 mt-3">
-                <span className={`text-2xl font-black ${pendingReports > 0 ? 'text-amber-600' : 'text-slate-800'}`}>
-                  {pendingReports}
-                </span>
-                <span className="text-[10px] text-slate-400 font-bold">건</span>
-              </div>
+              <span className="text-base font-black text-amber-900">
+                ₩ {totalUncollected.toLocaleString()}
+              </span>
             </div>
 
-            {/* 가동 중인 자율 규칙 */}
-            <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1">
-                  <PlayCircle className="w-4 h-4 text-indigo-600" />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Active Rules</span>
-                </div>
-                <p className="text-xs font-bold text-slate-700">자율 통제 규칙</p>
+            {/* 2. 미지급금 (줄 돈) */}
+            <div className="bg-rose-50/40 border border-rose-100 p-3 rounded-2xl flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-black text-rose-700 uppercase tracking-wider block">Accounts Payable</span>
+                <span className="text-xs font-black text-slate-800">미지급금 (줄 돈)</span>
               </div>
-              <div className="flex items-baseline gap-1 mt-3">
-                <span className="text-2xl font-black text-indigo-750">{activeRules}</span>
-                <span className="text-[10px] text-slate-400 font-bold">개 작동</span>
-              </div>
+              <span className="text-base font-black text-rose-900">
+                ₩ {totalUnpaidCost.toLocaleString()}
+              </span>
             </div>
 
-            {/* 금일 AI 자율 조치 이력 */}
-            <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4 text-emerald-500" />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">AI Operations</span>
-                </div>
-                <p className="text-xs font-bold text-slate-700">금일 AI 자율 조치</p>
+            {/* 3. 가지급금 (정산 필요) */}
+            <div className="bg-purple-50/40 border border-purple-100 p-3 rounded-2xl flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider block">Temporary Payments</span>
+                <span className="text-xs font-black text-slate-800">가지급금 (정산 대상)</span>
               </div>
-              <div className="flex items-baseline gap-1 mt-3">
-                <span className="text-2xl font-black text-emerald-700">{todayAutoActions}</span>
-                <span className="text-[10px] text-slate-400 font-bold">건 완료</span>
-              </div>
+              <span className="text-base font-black text-purple-900">
+                ₩ {totalTemporaryPay.toLocaleString()}
+              </span>
             </div>
-
-            {/* 금일 수집자료 문서 수 */}
-            <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1">
-                  <FolderDown className="w-4 h-4 text-sky-500" />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Collected Docs</span>
-                </div>
-                <p className="text-xs font-bold text-slate-700">금일 신규 수집 자료</p>
-              </div>
-              <div className="flex items-baseline gap-1 mt-3">
-                <span className="text-2xl font-black text-sky-600">{todayDocsCount}</span>
-                <span className="text-[10px] text-slate-400 font-bold">건 등록</span>
-              </div>
-            </div>
-
           </div>
         </div>
 
+        {/* 자금 소요 예상 (금일, 금주, 금월, 3개월, 6개월, 1년) 카드 */}
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs text-left">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingDown className="w-5 h-5 text-rose-600" />
+            <h2 className="text-base font-black text-slate-800">자금 소요 예상</h2>
+          </div>
+
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-rose-50/50 border border-rose-100 p-2 rounded-xl text-center">
+                <span className="text-[9px] font-extrabold text-rose-600 block">금일 소요</span>
+                <span className="text-xs font-black text-rose-950 truncate block mt-0.5">
+                  ₩ {cashRequirementForecast.today.toLocaleString()}
+                </span>
+              </div>
+              <div className="bg-rose-50/50 border border-rose-100 p-2 rounded-xl text-center">
+                <span className="text-[9px] font-extrabold text-rose-600 block">금주 소요</span>
+                <span className="text-xs font-black text-rose-950 truncate block mt-0.5">
+                  ₩ {cashRequirementForecast.week.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl text-center">
+                <span className="text-[9px] font-extrabold text-slate-500 block">금월 누적</span>
+                <span className="text-xs font-black text-slate-800 truncate block mt-0.5">
+                  ₩ {cashRequirementForecast.month.toLocaleString()}
+                </span>
+              </div>
+              <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl text-center">
+                <span className="text-[9px] font-extrabold text-slate-500 block">3개월 소요</span>
+                <span className="text-xs font-black text-slate-800 truncate block mt-0.5">
+                  ₩ {cashRequirementForecast.month3.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+              <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl text-center">
+                <span className="text-[9px] font-extrabold text-indigo-600 block">6개월 소요</span>
+                <span className="text-xs font-black text-indigo-950 truncate block mt-0.5">
+                  ₩ {cashRequirementForecast.month6.toLocaleString()}
+                </span>
+              </div>
+              <div className="bg-indigo-50/50 border border-indigo-100 p-2 rounded-xl text-center">
+                <span className="text-[9px] font-extrabold text-indigo-700 block">1년 소요</span>
+                <span className="text-xs font-black text-indigo-950 truncate block mt-0.5">
+                  ₩ {cashRequirementForecast.year1.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
+      {/* 3구역: 인증서 및 특허 기한 AI 캘린더 위젯 (100% 가로 풀너비) */}
+      <div className="mt-8 w-full block">
+        <DashboardCertPatentWidget />
+      </div>
     </div>
   );
 }

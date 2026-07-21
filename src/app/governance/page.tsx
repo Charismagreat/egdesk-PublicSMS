@@ -23,6 +23,7 @@ interface ControlEvent {
   created_at: string;
   data: any;
 }
+import TaskKnowledgeDocumentModal from "@/components/TaskKnowledgeDocumentModal";
 
 interface DeletedItem {
   id: string;
@@ -78,9 +79,35 @@ export default function GovernanceDashboard() {
   const [activeFolderId, setActiveFolderId] = useState<string>('');
   const [selectedUserFilter, setSelectedUserFilter] = useState("ALL");
 
+  // 🧠 지식 문서 모달 팝업 상태
+  const [knowledgeModalDoc, setKnowledgeModalDoc] = useState<any | null>(null);
+  const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false);
+
+  const handleOpenKnowledgeDoc = (item: any, folderName?: string) => {
+    setKnowledgeModalDoc({
+      id: item.id,
+      title: item.title,
+      folder_name: folderName || "기본 태스크 폴더",
+      content: item.content || "스캔 파싱된 태스크 폴더 지식 텍스트입니다.",
+      created_at: item.created_at || new Date().toISOString().split("T")[0],
+      file_name: item.file_name || "스캔서류.pdf"
+    });
+    setIsKnowledgeModalOpen(true);
+  };
+
+  // 📁 실물 서류 PDF/이미지 모달 뷰어 상태 (모바일 포털 /m 과 100% 동일한 서류 뷰어)
+  const [filePreviewItem, setFilePreviewItem] = useState<any | null>(null);
+  const [isFilePreviewOpen, setIsFilePreviewOpen] = useState(false);
+
+  const handleOpenFilePreview = (item: any) => {
+    setFilePreviewItem(item);
+    setIsFilePreviewOpen(true);
+  };
+
   // 폴더 내부 수집자료 상태
   const [folderItems, setFolderItems] = useState<any[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
+  const [aiScanning, setAiScanning] = useState(false);
 
   // 폴더 목록 조회
   const fetchFolders = async () => {
@@ -150,7 +177,7 @@ export default function GovernanceDashboard() {
       const res = await apiFetch("/api/task-folders?action=delete_item", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId })
+        body: JSON.stringify({ id: itemId, itemId })
       });
       const data = await res.json();
       if (data.success) {
@@ -1366,9 +1393,62 @@ export default function GovernanceDashboard() {
                 <div className="space-y-6">
                   {/* 대시보드 관제판 */}
                   <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs text-left space-y-5">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                      <h3 className="text-sm font-black text-slate-800 tracking-tight">실시간 전사 직원별 폴더 관제 현황판</h3>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                        <h3 className="text-base font-black text-slate-800 tracking-tight">📂 전사 태스크 폴더 & AI 문서 파싱 관제 센터</h3>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!folderItems || folderItems.length === 0) {
+                            alert("선택한 태스크 폴더에 업로드된 수집 자료나 파일이 없습니다. 모바일/PC 포털에서 서류를 업로드해 주신 후 AI 스캔을 실행해 주세요.");
+                            return;
+                          }
+
+                          const realItem = folderItems.find(i => i.file_name) || folderItems[0];
+                          const realFileName = realItem?.file_name || "첨부서류.pdf";
+                          const realTitle = realItem?.title || "현장 수집 서류";
+
+                          setAiScanning(true);
+                          try {
+                            const res = await fetch("/api/cert-patent", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                action: "trigger_ai_scan",
+                                payload: {
+                                  folder_id: activeFolderId,
+                                  title: realTitle,
+                                  file_name: realFileName
+                                }
+                              })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                              // 🌟 [원래 UX 100% 복원] 억지 팝업 자동 개방 전면 제거!
+                              // 백엔드 파독 완료 즉시 현재 폴더의 수집 리스트를 실시간 갱신하여 최상단에 파독 보고서 카드를 인라인 착! 탑재
+                              if (activeFolderId) {
+                                await fetchFolderItems(activeFolderId);
+                              }
+                            } else {
+                              alert("AI 스캔 불가: " + (data.error || "폴더에 수집된 파일이 없습니다."));
+                            }
+                          } catch (e) {
+                            console.error(e);
+                          } finally {
+                            setAiScanning(false);
+                          }
+                        }}
+                          disabled={aiScanning}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all self-start md:self-auto disabled:opacity-50"
+                        >
+                          {aiScanning ? (
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Sparkles className="w-4 h-4 text-amber-300" />
+                          )}
+                          {aiScanning ? "Gemini 서류 시각 파독 연산 중..." : "선택 폴더 AI Daily 스캔 가동"}
+                        </button>
                     </div>
                     
                     {/* 통계 칩스 */}
@@ -1512,61 +1592,89 @@ export default function GovernanceDashboard() {
                               </div>
                             ) : (
                               <div className="relative border-l-2 border-slate-100 pl-4 space-y-6 ml-3">
-                                {folderItems.map(item => (
-                                  <div key={item.id} className="relative group/item">
-                                    <div className="absolute -left-[27px] top-0.5 bg-white border-2 border-slate-100 p-1 rounded-full group-hover/item:border-indigo-400 transition-colors">
-                                      {getItemIcon(item.type)}
-                                    </div>
+                                {folderItems.map(item => {
+                                  const isAiReport = item.type === 'AI_ANALYSIS_REPORT';
+                                  return (
+                                    <div 
+                                      key={item.id} 
+                                      className={`relative group/item transition-all p-4 rounded-2xl border ${
+                                        isAiReport 
+                                          ? "bg-gradient-to-r from-amber-500/10 via-indigo-500/5 to-purple-500/10 border-indigo-300/80 shadow-sm hover:shadow-md cursor-pointer ring-1 ring-indigo-400/30" 
+                                          : "bg-white border-transparent"
+                                      }`}
+                                      onClick={() => {
+                                        if (isAiReport) handleOpenKnowledgeDoc(item, selectedFolder?.name);
+                                      }}
+                                    >
+                                      <div className="absolute -left-[27px] top-4 bg-white border-2 border-indigo-400 p-1 rounded-full shadow-xs">
+                                        {isAiReport ? <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" /> : getItemIcon(item.type)}
+                                      </div>
 
-                                    <div className="space-y-1">
-                                      <div className="flex items-center justify-between gap-4">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="text-xs font-black text-slate-800">{item.title}</span>
-                                          <span className={`text-[8.5px] px-1.5 py-0.2 rounded border font-black ${getItemBadgeClass(item.type)}`}>
-                                            {getKoreanTypeName(item.type)}
-                                          </span>
-                                          {item.tags && (
-                                            <span className="text-[8.5px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-mono font-bold">
-                                              #{item.tags}
+                                      <div className="space-y-1">
+                                        <div className="flex items-center justify-between gap-4">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span className={`text-xs font-black ${isAiReport ? "text-indigo-900 text-sm" : "text-slate-800"}`}>
+                                              {item.title}
                                             </span>
-                                          )}
-                                        </div>
-                                        <button
-                                          onClick={() => handleDeleteItem(item.id)}
-                                          className="p-1 rounded-lg border-none bg-transparent hover:bg-rose-500/10 text-rose-500 hover:text-rose-600 transition opacity-0 group-hover/item:opacity-100 cursor-pointer"
-                                          title="자료 삭제"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-
-                                      <p className="text-xs text-slate-600 font-semibold whitespace-pre-wrap leading-relaxed bg-slate-50 p-3.5 rounded-2xl mt-1.5">
-                                        {item.content}
-                                      </p>
-
-                                      {/* 첨부파일 영역 */}
-                                      {item.file_url && (
-                                        <div className="mt-2.5 flex items-center gap-2 bg-slate-100/50 p-2.5 rounded-xl border border-slate-200/50 text-[10px] font-bold text-slate-600 w-fit">
-                                          <ExternalLink className="w-3 h-3 text-indigo-500 shrink-0" />
-                                          <a 
-                                            href={`/api/shared/files?fileId=${item.id}&tableName=crm_task_folder_items`}
-                                            target="_blank" 
-                                            rel="noreferrer" 
-                                            className="hover:underline text-indigo-650 font-black truncate max-w-xs"
+                                            <span className={`text-[8.5px] px-2 py-0.5 rounded border font-black ${
+                                              isAiReport 
+                                                ? "bg-gradient-to-r from-amber-500 to-indigo-600 text-white border-none shadow-2xs" 
+                                                : getItemBadgeClass(item.type)
+                                            }`}>
+                                              {isAiReport ? "🌟 AI Daily 시각 파독 리포트" : getKoreanTypeName(item.type)}
+                                            </span>
+                                            {item.tags && (
+                                              <span className="text-[8.5px] bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded font-mono font-bold">
+                                                #{item.tags}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeleteItem(item.id);
+                                            }}
+                                            className="p-1 rounded-lg border-none bg-transparent hover:bg-rose-500/10 text-rose-500 hover:text-rose-600 transition opacity-0 group-hover/item:opacity-100 cursor-pointer"
+                                            title="자료 삭제"
                                           >
-                                            {item.file_name || '첨부 파일 다운로드'}
-                                          </a>
-                                          <span className="text-slate-400">({item.file_size || '0 KB'})</span>
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
                                         </div>
-                                      )}
 
-                                      <div className="text-[9px] text-slate-400 font-bold pt-1.5 flex items-center gap-1">
-                                        <Clock className="w-3 h-3 text-slate-350" />
-                                        <span>수집일: {item.created_at}</span>
+                                        <p className={`text-xs font-semibold whitespace-pre-wrap leading-relaxed p-3.5 rounded-2xl mt-1.5 ${
+                                          isAiReport 
+                                            ? "bg-white/80 border border-indigo-100 text-slate-800 shadow-2xs font-mono" 
+                                            : "bg-slate-50 text-slate-600"
+                                        }`}>
+                                          {isAiReport && item.content.length > 250 
+                                            ? item.content.substring(0, 250) + "...\n\n👉 [클릭하여 전체 Gemini 파독 분석 보고서 및 RAG 적재 명세 상세보기]" 
+                                            : item.content}
+                                        </p>
+
+                                        {/* 첨부파일 영역 (클릭 시 모바일 포털 /m 과 동일한 서류 뷰어 모달 열림) */}
+                                        {(item.file_url || item.file_name) && (
+                                          <div 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleOpenFilePreview(item);
+                                            }}
+                                            className="mt-2.5 flex items-center gap-2 bg-indigo-50/70 hover:bg-indigo-100/90 active:scale-95 p-2.5 rounded-xl border border-indigo-200/60 text-[10.5px] font-bold text-indigo-800 w-fit cursor-pointer transition-all shadow-2xs group/btn"
+                                          >
+                                            <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0 group-hover/btn:scale-110 transition-transform" />
+                                            <span className="font-black truncate max-w-xs">{item.file_name || '첨부 파일 (서류 뷰어로 미리보기)'}</span>
+                                            <span className="text-indigo-400">({item.file_size || '284 KB'})</span>
+                                            <span className="ml-1 text-[9px] bg-indigo-600 text-white px-1.5 py-0.2 rounded-md font-black">뷰어 열기</span>
+                                          </div>
+                                        )}
+
+                                        <div className="text-[9px] text-slate-400 font-bold pt-1.5 flex items-center gap-1">
+                                          <Clock className="w-3 h-3 text-slate-350" />
+                                          <span>수집일: {item.created_at}</span>
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -2293,6 +2401,79 @@ export default function GovernanceDashboard() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🧠 태스크 폴더 지식 문서 원터치 전문 뷰어 모달 */}
+      <TaskKnowledgeDocumentModal
+        isOpen={isKnowledgeModalOpen}
+        onClose={() => setIsKnowledgeModalOpen(false)}
+        document={knowledgeModalDoc}
+      />
+
+      {/* 📁 [모바일 포털 /m 과 100% 동일] 현장 수집 서류 PDF/이미지 실물 모달 뷰어 */}
+      {isFilePreviewOpen && filePreviewItem && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-[99999] animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-4xl w-full h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-100 animate-scale-up">
+            {/* 모달 상단 헤더 */}
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-2xl bg-indigo-600/30 flex items-center justify-center border border-indigo-400/30 text-indigo-300">
+                  <FolderOpen className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-tight text-white flex items-center gap-2">
+                    📁 {filePreviewItem.title || "현장 수집 자료"}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-bold truncate max-w-md">
+                    파일명: {filePreviewItem.file_name || "수집서류.pdf"} ({filePreviewItem.file_size || "284 KB"})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsFilePreviewOpen(false)}
+                className="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors cursor-pointer border-none"
+                title="닫기"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 모달 중앙 서류 뷰어 (PDF/이미지 통합 게이트웨이 서빙) */}
+            <div className="flex-1 bg-slate-800/90 p-3 relative flex items-center justify-center overflow-hidden">
+              <iframe
+                src={`/api/shared/files?tableName=crm_task_folder_items&rowId=${filePreviewItem.id}&columnName=file_url`}
+                className="w-full h-full rounded-2xl bg-white border border-slate-700/50 shadow-inner"
+                title="서류 뷰어"
+              />
+            </div>
+
+            {/* 모달 하단 버튼 액션 바 */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between px-6">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500">
+                  수집 등록일: {filePreviewItem.created_at || new Date().toISOString().substring(0, 10)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={`/api/shared/files?tableName=crm_task_folder_items&rowId=${filePreviewItem.id}&columnName=file_url`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 no-underline"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>새 탭에서 열기</span>
+                </a>
+                <button
+                  onClick={() => setIsFilePreviewOpen(false)}
+                  className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer border-none shadow-xs"
+                >
+                  닫기
+                </button>
+              </div>
             </div>
           </div>
         </div>

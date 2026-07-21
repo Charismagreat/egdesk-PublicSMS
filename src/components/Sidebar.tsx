@@ -88,7 +88,7 @@ export default async function Sidebar() {
           <div className="flex flex-col">
             <span className="text-sm font-medium text-slate-200 leading-tight">{userName}</span>
             <span className="text-[10px] text-slate-500 leading-tight">
-              {userRole === 'SUPER_ADMIN' ? '최고관리자' : userRole === 'EMPLOYEE' ? '일반직원' : '부운영자'}
+              {userRole === 'SUPER_ADMIN' || userRole === 'SYSTEM_ADMIN' || userRole === 'TENANT_ADMIN' || userRole === 'PRESIDENT' ? '최고관리자' : userRole === 'EMPLOYEE' ? '일반직원' : '부운영자'}
             </span>
           </div>
         </div>

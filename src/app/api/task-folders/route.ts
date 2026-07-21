@@ -172,16 +172,21 @@ export async function POST(req: Request) {
         created_at: nowStr
       };
 
-      // 2. 파일 스토리지 업로드 처리
+      // 2. 파일 스토리지 업로드 및 실물 파일 텍스트/OCR 자동 추출 파이프라인
       if (fileBuffer && rowId && file) {
         try {
           const fileMime = file.type || 'image/jpeg';
           const dataUrl = `data:${fileMime};base64,${fileBuffer.toString('base64')}`;
           const uploadRes = await uploadFile('crm_task_folder_items', rowId, 'file_url', fileName, dataUrl);
+          
           if (uploadRes && uploadRes.success) {
-            // 💡 [진짜 파일 ID 업데이트] downloadFile이 스토리지에서 바이너리를 안전히 역추적하도록 파일 ID를 기록합니다.
-            const storageFileId = uploadRes.fileId || `file_${rowId}_${fileName}`;
-            await updateRows('crm_task_folder_items', { file_url: storageFileId }, { filters: { id: String(rowId) } });
+            const storageFileId = uploadRes.fileId || `file_${rowId}__${fileName}`;
+            
+            // 💡 [순수 파일 스토리지 ID만 업데이트] 업로드 시점에는 어떠한 파싱이나 키워드 문구도 생성하지 않고 순수 파일 ID만 기록합니다. (매일 자정 배치 전담)
+            await updateRows('crm_task_folder_items', { 
+              file_url: storageFileId
+            }, { ids: [Number(rowId)] });
+
             newItem.file_url = storageFileId;
           } else {
             console.error("uploadFile returned failed status:", uploadRes);
@@ -297,15 +302,15 @@ export async function POST(req: Request) {
     }
 
     if (action === 'delete_item') {
-      const { id } = body;
-      if (!id) {
+      const targetId = body.id || body.itemId;
+      if (!targetId) {
         return NextResponse.json({ success: false, error: 'id가 필요합니다.' }, { status: 400 });
       }
 
       const res = await updateRows('crm_task_folder_items', {
         deleted_at: nowStr,
         deleted_by: '최고관리자'
-      }, { ids: [Number(id)] });
+      }, { ids: [Number(targetId)] });
 
       if (res.success) {
         return NextResponse.json({ success: true });

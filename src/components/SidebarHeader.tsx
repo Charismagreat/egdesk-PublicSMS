@@ -62,7 +62,7 @@ export default function SidebarHeader({
     // (1) 대시보드
     staticItems.push({
       href: "/",
-      label: "대시보드",
+      label: "CEO 대시보드",
       icon: LayoutDashboard,
       color: "text-blue-550",
       type: "기본 관제"

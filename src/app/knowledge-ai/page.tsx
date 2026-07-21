@@ -10,8 +10,10 @@ import { AssetList } from "./components/AssetList";
 import { DocumentDetail } from "./components/DocumentDetail";
 import { ChatBot } from "./components/ChatBot";
 import { AutopilotModal } from "./components/AutopilotModal";
-import { Compass } from "lucide-react";
+import { Compass, Folder, FileText, Sparkles } from "lucide-react";
 import { EasyBotInstructionCard } from "./components/EasyBotInstructionCard";
+import { TaskFolderKnowledgeTab } from "./components/TaskFolderKnowledgeTab";
+import { usePersistedState } from "@/hooks/usePersistedState";
 
 export default function KnowledgeAiDashboard() {
   const {
@@ -83,6 +85,10 @@ export default function KnowledgeAiDashboard() {
     handleCadMouseUp,
   } = useKnowledgeAi();
 
+  const [activeKnowledgeTab, setActiveKnowledgeTab] = usePersistedState<
+    "RAG_HUB" | "TASK_KNOWLEDGE"
+  >("knowledge_ai_main_active_tab", "RAG_HUB");
+
   return (
     <div className="w-full space-y-6 pb-20 min-w-0 font-sans text-slate-800 animate-fade-in text-left" data-easybot-hint="지식 관리 AI: 사내 매뉴얼, 비정형 텍스트 데이터를 RAG 학습용 벡터 데이터로 적재하고 훈련시킵니다.">
       {/* 1. 상단 타이틀 및 권한 제어 */}
@@ -95,49 +101,83 @@ export default function KnowledgeAiDashboard() {
         setCurrentDept={setCurrentDept}
       />
 
-      {/* 2. 최고관리자 전용 Zero-Trust 보안 심사 피드 */}
-      <SecurityReview
-        documents={documents}
-        currentRole={currentRole}
-        handleDowngradeSecurity={handleDowngradeSecurity}
-      />
+      {/* 탭 스위처 (문서 자산 RAG 허브 vs 태스크 폴더 지식자산) */}
+      <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 w-fit mb-6">
+        <button
+          onClick={() => setActiveKnowledgeTab("RAG_HUB")}
+          className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+            activeKnowledgeTab === "RAG_HUB"
+              ? "bg-white text-indigo-700 shadow-sm border border-slate-200/60"
+              : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>사내 비정형 문서 RAG 허브</span>
+        </button>
 
-      {/* 이지봇 자율 대행 작동 지침 설정 영역 */}
-      <EasyBotInstructionCard currentRole={currentRole} />
+        <button
+          onClick={() => setActiveKnowledgeTab("TASK_KNOWLEDGE")}
+          className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+            activeKnowledgeTab === "TASK_KNOWLEDGE"
+              ? "bg-indigo-600 text-white shadow-md"
+              : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+          }`}
+        >
+          <Folder className="w-4 h-4" />
+          <span>📁 태스크 폴더 지식자산 탐색기</span>
+          <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full font-bold">
+            NEW
+          </span>
+        </button>
+      </div>
 
-      {/* 3. 대시보드 3단 격자 레이아웃 */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* [좌측 4열]: 문서 리스트 및 비정형 업로드 폼 */}
-        <div className="lg:col-span-4 space-y-6">
-          <IngestHub
-            uploadTitle={uploadTitle}
-            setUploadTitle={setUploadTitle}
-            uploadType={uploadType}
-            setUploadType={setUploadType}
-            uploadFile={uploadFile}
-            setUploadFile={setUploadFile}
-            isUploading={isUploading}
-            uploadProgress={uploadProgress}
-            assetTypes={assetTypes}
-            isAssetTypesLoading={isAssetTypesLoading}
-            currentRole={currentRole}
-            currentUser={currentUser}
-            setVaultError={setVaultError}
-            setIsTypeVaultOpen={setIsTypeVaultOpen}
-            handleFileUpload={handleFileUpload}
-            uploadMode={uploadMode}
-            setUploadMode={setUploadMode}
-            directContent={directContent}
-            setDirectContent={setDirectContent}
-          />
-
-          <AssetList
-            isLoading={isLoading}
+      {activeKnowledgeTab === "TASK_KNOWLEDGE" ? (
+        <TaskFolderKnowledgeTab />
+      ) : (
+        <>
+          {/* 2. 최고관리자 전용 Zero-Trust 보안 심사 피드 */}
+          <SecurityReview
             documents={documents}
-            selectedDoc={selectedDoc}
-            setSelectedDoc={setSelectedDoc}
+            currentRole={currentRole}
+            handleDowngradeSecurity={handleDowngradeSecurity}
           />
-        </div>
+
+          {/* 이지봇 자율 대행 작동 지침 설정 영역 */}
+          <EasyBotInstructionCard currentRole={currentRole} />
+
+          {/* 3. 대시보드 3단 격자 레이아웃 */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* [좌측 4열]: 문서 리스트 및 비정형 업로드 폼 */}
+            <div className="lg:col-span-4 space-y-6">
+              <IngestHub
+                uploadTitle={uploadTitle}
+                setUploadTitle={setUploadTitle}
+                uploadType={uploadType}
+                setUploadType={setUploadType}
+                uploadFile={uploadFile}
+                setUploadFile={setUploadFile}
+                isUploading={isUploading}
+                uploadProgress={uploadProgress}
+                assetTypes={assetTypes}
+                isAssetTypesLoading={isAssetTypesLoading}
+                currentRole={currentRole}
+                currentUser={currentUser}
+                setVaultError={setVaultError}
+                setIsTypeVaultOpen={setIsTypeVaultOpen}
+                handleFileUpload={handleFileUpload}
+                uploadMode={uploadMode}
+                setUploadMode={setUploadMode}
+                directContent={directContent}
+                setDirectContent={setDirectContent}
+              />
+
+              <AssetList
+                isLoading={isLoading}
+                documents={documents}
+                selectedDoc={selectedDoc}
+                setSelectedDoc={setSelectedDoc}
+              />
+            </div>
 
         {/* [중앙 5열]: 비정형 데이터 특화 프리뷰어 및 본문 */}
         <div className="lg:col-span-5 space-y-6">
@@ -283,6 +323,8 @@ export default function KnowledgeAiDashboard() {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* 4. AI Autopilot 자동 결재 채점 게이지 팝업 모달 */}
       <AutopilotModal

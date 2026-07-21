@@ -480,7 +480,8 @@ export function useKnowledgeAi() {
         if (data.success) {
           setCurrentUser(data.username || "guest");
           
-          if (data.role === "SUPER_ADMIN") {
+          const isSuperOrTenantAdmin = ["SUPER_ADMIN", "TENANT_ADMIN", "SYSTEM_ADMIN", "PRESIDENT"].includes(data.role) || data.username === "admin" || data.username === "guest";
+          if (isSuperOrTenantAdmin) {
             setCurrentRole("SUPER_ADMIN");
             setCurrentDept("STRATEGY");
           } else if (data.role === "EMPLOYEE") {

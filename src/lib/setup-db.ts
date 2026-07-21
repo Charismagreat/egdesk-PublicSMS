@@ -530,5 +530,67 @@ export async function setupDatabase() {
     console.error('⚠️ 전사 통합 감사 로그 테이블 생성 에러:', err.message);
   }
 
+  // 59. 테넌트 인증서 관리 테이블 (tenant_certificates)
+  try {
+    await safeCreateTable('테넌트 인증서', [
+      { name: 'id', type: 'INTEGER', notNull: true },
+      { name: 'cert_name', type: 'TEXT', notNull: true },
+      { name: 'cert_number', type: 'TEXT' },
+      { name: 'issuer', type: 'TEXT' },
+      { name: 'issue_date', type: 'TEXT' },
+      { name: 'expire_date', type: 'TEXT' },
+      { name: 'renewal_status', type: 'TEXT' },
+      { name: 'attachment_file_id', type: 'TEXT' },
+      { name: 'folder_id', type: 'INTEGER' }
+    ], { tableName: 'tenant_certificates', uniqueKeyColumns: ['id'] });
+    console.log('✓ 테넌트 인증서 테이블 신설 완료.');
+  } catch (err: any) {
+    console.error('⚠️ 테넌트 인증서 테이블 생성 에러:', err.message);
+  }
+
+  // 60. 테넌트 특허 및 지식재산권 관리 테이블 (tenant_patents)
+  try {
+    await safeCreateTable('테넌트 특허 및 지식재산권', [
+      { name: 'id', type: 'INTEGER', notNull: true },
+      { name: 'ip_type', type: 'TEXT', notNull: true },
+      { name: 'title', type: 'TEXT', notNull: true },
+      { name: 'application_number', type: 'TEXT' },
+      { name: 'registration_number', type: 'TEXT' },
+      { name: 'applicant', type: 'TEXT' },
+      { name: 'registration_date', type: 'TEXT' },
+      { name: 'next_annual_fee_date', type: 'TEXT' },
+      { name: 'current_annual_year', type: 'INTEGER' },
+      { name: 'annual_fee_amount', type: 'INTEGER' },
+      { name: 'attachment_file_id', type: 'TEXT' },
+      { name: 'folder_id', type: 'INTEGER' }
+    ], { tableName: 'tenant_patents', uniqueKeyColumns: ['id'] });
+    console.log('✓ 테넌트 특허 및 지식재산권 테이블 신설 완료.');
+  } catch (err: any) {
+    console.error('⚠️ 테넌트 특허 테이블 생성 에러:', err.message);
+  }
+
+  // 61. AI 폴더 태스크 & 캘린더 할 일 테이블 (cert_patent_tasks)
+  try {
+    await safeCreateTable('AI 인증특허 태스크', [
+      { name: 'id', type: 'INTEGER', notNull: true },
+      { name: 'folder_id', type: 'INTEGER' },
+      { name: 'task_type', type: 'TEXT', notNull: true },
+      { name: 'title', type: 'TEXT', notNull: true },
+      { name: 'description', type: 'TEXT' },
+      { name: 'due_date', type: 'TEXT' },
+      { name: 'status', type: 'TEXT', notNull: true },
+      { name: 'assigned_to', type: 'TEXT' },
+      { name: 'assigned_by', type: 'TEXT' },
+      { name: 'assigned_at', type: 'TEXT' },
+      { name: 'source_file_id', type: 'TEXT' },
+      { name: 'source_file_name', type: 'TEXT' },
+      { name: 'ai_analysis_result', type: 'TEXT' }
+    ], { tableName: 'cert_patent_tasks', uniqueKeyColumns: ['id'] });
+    console.log('✓ AI 인증특허 태스크 테이블 신설 완료.');
+  } catch (err: any) {
+    console.error('⚠️ AI 인증특허 태스크 테이블 생성 에러:', err.message);
+  }
+
   console.log('Database setup complete.');
 }
+

@@ -101,6 +101,10 @@ export const MENU_METADATA_LIST: MenuMetadata[] = [
   { href: "/ecount-erp-ai", label: "이카운트 ERP AI", icon: ArrowRightLeft, color: "text-sky-550", category: 3 },
 
   // 4. 인사/노무/경영지원 (전사 백오피스)
+  { href: "/task-folders", label: "태스크 폴더 AI", icon: FolderOpen, color: "text-indigo-500", category: 4 },
+  { href: "/employees", label: "직원 관리 대장", icon: Users, color: "text-blue-600", category: 4 },
+  { href: "/governance", label: "AI 컨트롤타워", icon: Bot, color: "text-purple-600", category: 4 },
+  { href: "/my-db", label: "MY DB 센터", icon: Database, color: "text-emerald-600", category: 4 },
   { href: "/hr/attendance", label: "근태 관리 AI", icon: CalendarDays, color: "text-indigo-650", category: 4 },
   { href: "/recruitment", label: "채용 매니저 AI", icon: Briefcase, color: "text-rose-550", category: 4 },
   { href: "/expenses", label: "지출 관리 AI", icon: Coins, color: "text-rose-550", category: 4 },

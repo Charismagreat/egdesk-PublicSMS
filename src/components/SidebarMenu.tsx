@@ -27,6 +27,8 @@ interface MenuSettingItem {
 
 export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenuProps) {
   const pathname = usePathname();
+  const isAdmin = userRole === "SUPER_ADMIN" || userRole === "SYSTEM_ADMIN" || userRole === "TENANT_ADMIN" || userRole === "PRESIDENT";
+  const isSystemAdmin = userRole === "SYSTEM_ADMIN" || (userRole === "SUPER_ADMIN" && userUsername === "admin");
   
   // 1. 초기 렌더링 시 깜빡임이나 공백 방지를 위해 정적 기본 배열로 초기값 바인딩
   const getInitialDefaultItems = () => {
@@ -39,7 +41,7 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     // 일반 계정일 경우 AI 브리핑은 제외
     const filtered = baseItems.filter(item => {
       if (item.href === "/ai-briefing") {
-        return userRole === "SUPER_ADMIN";
+        return isAdmin;
       }
       return true;
     });
@@ -299,12 +301,12 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     }
   };
 
-  // 현재 노출할 메뉴와 숨김 메뉴 분리 (SUPER_ADMIN 권한만 숨김 필터링 적용)
-  const visibleItems = userRole === "SUPER_ADMIN" 
+  // 현재 노출할 메뉴와 숨김 메뉴 분리 (최고관리자 권한만 숨김 필터링 적용)
+  const visibleItems = isAdmin 
     ? displayMenuItems.filter((item) => !hiddenHrefs.includes(item.href))
     : displayMenuItems;
 
-  const hiddenItems = userRole === "SUPER_ADMIN"
+  const hiddenItems = isAdmin
     ? displayMenuItems.filter((item) => hiddenHrefs.includes(item.href))
     : [];
 
@@ -382,7 +384,7 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
             >
               <div className="flex items-center space-x-3 min-w-0">
                 <Icon className={`w-5 h-5 shrink-0 transition-colors ${active ? "text-white" : item.color}`} />
-                <span className="truncate">{item.label}</span>
+                <span className="truncate text-sm">{item.label}</span>
               </div>
               <div className="flex items-center space-x-1.5 shrink-0 ml-2 z-10">
                 {/* 💡 새 탭에서 열기 숏컷 버튼 */}
@@ -394,7 +396,7 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </button>
-                {userRole === "SUPER_ADMIN" && (
+                {isAdmin && (
                   <button
                     type="button"
                     onClick={(e) => hideMenu(item.href, e)}
@@ -409,8 +411,8 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
           );
         })}
 
-        {/* 숨겨진 메뉴함 (SUPER_ADMIN 최고관리자 전용) */}
-        {userRole === "SUPER_ADMIN" && hiddenItems.length > 0 && (
+        {/* 숨겨진 메뉴함 (최고관리자 전용) */}
+        {isAdmin && hiddenItems.length > 0 && (
           <div className="relative group/vault pt-2 mx-1 border-t border-slate-700/60 mt-4">
             <div className="flex items-center justify-between text-xs font-semibold text-slate-400 hover:text-slate-200 cursor-default p-2 rounded-lg hover:bg-slate-800/30">
               <div className="flex items-center space-x-2">
@@ -452,7 +454,7 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
       
       {/* 하단 고정 메뉴 영역 */}
       <div className="p-4 border-t border-slate-700/80 bg-slate-900/95 backdrop-blur-md space-y-2 shadow-[0_-12px_24px_-8px_rgba(0,0,0,0.8)] relative z-10">
-        {userRole === "SUPER_ADMIN" && userUsername === "admin" && (
+        {isSystemAdmin && (
           <Link
             href="/admin/members"
             className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
@@ -465,7 +467,6 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
               <Shield className={`w-5 h-5 shrink-0 ${isActive("/admin/members") ? "text-white" : "text-slate-400"}`} />
               <span>회원 관리</span>
             </div>
-            {/* 💡 새 탭에서 열기 숏컷 버튼 */}
             <button
               type="button"
               onClick={(e) => handleOpenNewTab(e, "/admin/members")}
@@ -486,10 +487,9 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
           }`}
         >
           <div className="flex items-center space-x-3 min-w-0">
-            <LayoutDashboard className={`w-5 h-5 shrink-0 ${isActive("/") ? "text-white" : "text-blue-550"}`} />
-            <span>대시보드</span>
+            <LayoutDashboard className={`w-5 h-5 shrink-0 ${isActive("/") ? "text-white" : "text-blue-555"}`} />
+            <span>CEO 대시보드</span>
           </div>
-          {/* 💡 새 탭에서 열기 숏컷 버튼 */}
           <button
             type="button"
             onClick={(e) => handleOpenNewTab(e, "/")}
@@ -500,7 +500,7 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
           </button>
         </Link>
 
-        {userRole === "SUPER_ADMIN" && (
+        {isAdmin && (
           <Link
             href="/governance"
             className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
@@ -525,7 +525,7 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
           </Link>
         )}
 
-        {(userRole === "SUPER_ADMIN" || userRole === "SUB_OPERATOR") && (
+        {(isAdmin || userRole === "SUB_OPERATOR") && (
           <Link
             href="/my-db"
             className={`group flex items-center justify-between p-3 rounded-lg transition-all ${

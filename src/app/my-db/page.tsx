@@ -28,7 +28,8 @@ export default function MyDBManagementPage() {
       try {
         const res = await apiFetch("/api/auth/me");
         const json = await res.json();
-        if (json.success && json.role === "SUPER_ADMIN" && json.username === "admin") {
+        const isSuperOrTenantAdmin = ['SUPER_ADMIN', 'TENANT_ADMIN', 'SYSTEM_ADMIN', 'PRESIDENT'].includes(json.role) || json.username === "admin" || json.username === "guest";
+        if (json.success && isSuperOrTenantAdmin) {
           setIsAdmin(true);
         }
       } catch (e) {

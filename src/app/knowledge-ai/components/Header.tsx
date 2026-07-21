@@ -42,7 +42,7 @@ export function Header({
               ? "bg-blue-100 text-blue-700 border border-blue-200" 
               : "bg-cyan-100 text-cyan-700 border border-cyan-200"
         }`}>
-          {currentRole === "SUPER_ADMIN" ? "최고관리자 (대표)" : 
+          {currentRole === "SUPER_ADMIN" ? "테넌트 최고관리자 (대표)" : 
            currentDept === "SALES" ? "영업부서장" : "일반사원"}
         </span>
         <span className="text-slate-300 font-light">|</span>

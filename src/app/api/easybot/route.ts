@@ -781,6 +781,38 @@ export async function POST(req: Request) {
     }
     dbTablesInfo += "\n" + financialStatementsRAG;
 
+    // 💡 [RAG] 태스크 폴더별 AI 스캔 종합 분석 리포트 및 인증/특허 기한 데이터 프롬프트 RAG 인입
+    let certPatentTaskFolderRAG = '';
+    try {
+      const folderItemsRes = await queryTable('crm_task_folder_items', { limit: 100 }).catch(() => ({ rows: [] }));
+      const certTasksRes = await queryTable('cert_patent_tasks', { limit: 100 }).catch(() => ({ rows: [] }));
+      
+      const folderItems = (folderItemsRes.rows || []).filter((r: any) => !r.deleted_at);
+      const certTasks = (certTasksRes.rows || []).filter((r: any) => !r.deleted_at);
+
+      if (folderItems.length > 0 || certTasks.length > 0) {
+        certPatentTaskFolderRAG = "\n============================\n[태스크 폴더 AI 스캔 종합 분석 리포트 & 인증·특허 기한 데이터 (RAG)]\n";
+        
+        if (folderItems.length > 0) {
+          certPatentTaskFolderRAG += "■ 태스크 폴더 수집 및 AI 파싱 리포트 목록:\n";
+          for (const item of folderItems) {
+            certPatentTaskFolderRAG += `- 폴더ID: ${item.folder_id}, 제목: ${item.title}, 파일: ${item.file_name || 'N/A'}, 등록일: ${item.created_at}\n  * 리포트 내용: ${item.content || '내용 없음'}\n`;
+          }
+        }
+
+        if (certTasks.length > 0) {
+          certPatentTaskFolderRAG += "\n■ 전사 인증·특허 기한 및 할 일 배정 목록:\n";
+          for (const task of certTasks) {
+            certPatentTaskFolderRAG += `- 제목: ${task.title}, 기한일자: ${task.due_date}, 상태: ${task.status}, 담당자: ${task.assigned_to || '미배정'}, 설명: ${task.description}\n`;
+          }
+        }
+        certPatentTaskFolderRAG += "============================\n";
+      }
+    } catch (certRagErr) {
+      console.warn('태스크 폴더 AI 리포트 RAG 빌드 실패:', certRagErr);
+    }
+    dbTablesInfo += "\n" + certPatentTaskFolderRAG;
+
     // 3. STEP 1: 사용자의 질문을 분석하여 DB 조회가 필요한지 확인하고 SELECT 쿼리 생성
     const step1SystemPrompt = `
 You are the database analysis engine of "EasyBot" (이지봇), a premium management assistant.
