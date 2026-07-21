@@ -73,12 +73,12 @@ ${realContents}
   - 파싱 신뢰도: 99% (사내 RAG 지식베이스 자동 적재 완료)
 ■ 이지봇 RAG 안내: 본 자정 배치 파싱 서류를 기반으로 이지봇 질의 시 실시간 자동 답변이 제공됩니다.`;
 
-      // 1) 개별 서류 1:1 파독 보고서 생성
+      // 1) 개별 서류 1:1 판독 보고서 생성
       const aiReportItem = {
         folder_id: Number(folder.id),
         type: 'AI_ANALYSIS_REPORT',
-        tags: `자정배치,${docCategory.replace(/\s+/g, '')},개별파독`,
-        title: `[AI Daily 파독 리포트] ${realTitles.substring(0, 20)}`,
+        tags: `자정배치,${docCategory.replace(/\s+/g, '')},개별판독`,
+        title: `[AI Daily 판독 리포트] ${realTitles.substring(0, 20)}`,
         content: reportContent,
         file_name: realFileNames,
         file_size: '300 KB',
@@ -113,8 +113,8 @@ ${realContents}
 
 ■ [폴더 내 전체 서류 통합 요약 내역]:
 - 현재 태스크 폴더에 총 ${folderDocs.length}건의 서류(${summaryFiles})가 저장되어 있습니다.
-- 최근 파독 명세: [${realTitles}] (${realFileNames})
-- 종합 파독 요약:
+- 최근 판독 명세: [${realTitles}] (${realFileNames})
+- 종합 판독 요약:
 ${realContents}
 
 ================================================================================

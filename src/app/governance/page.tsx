@@ -1518,7 +1518,7 @@ export default function GovernanceDashboard() {
                             const data = await res.json();
                             if (data.success) {
                               // 🌟 [원래 UX 100% 복원] 억지 팝업 자동 개방 전면 제거!
-                              // 백엔드 파독 완료 즉시 현재 폴더의 수집 리스트를 실시간 갱신하여 최상단에 파독 보고서 카드를 인라인 착! 탑재
+                              // 백엔드 판독 완료 즉시 현재 폴더의 수집 리스트를 실시간 갱신하여 최상단에 판독 보고서 카드를 인라인 착! 탑재
                               if (activeFolderId) {
                                 await fetchFolderItems(activeFolderId);
                               }
@@ -1539,7 +1539,7 @@ export default function GovernanceDashboard() {
                           ) : (
                             <Sparkles className="w-4 h-4 text-amber-300" />
                           )}
-                          {aiScanning ? "Gemini 서류 시각 파독 연산 중..." : "선택 폴더 AI Daily 스캔 가동"}
+                          {aiScanning ? "Gemini 서류 시각 판독 연산 중..." : "선택 폴더 AI Daily 스캔 가동"}
                         </button>
                     </div>
                     
@@ -1704,7 +1704,7 @@ export default function GovernanceDashboard() {
                                                 ? "bg-gradient-to-r from-amber-500 to-indigo-600 text-white border-none shadow-2xs" 
                                                 : getItemBadgeClass(item.type)
                                             }`}>
-                                              {isAiReport ? "🌟 AI Daily 시각 파독 리포트" : getKoreanTypeName(item.type)}
+                                              {isAiReport ? "🌟 AI Daily 시각 판독 리포트" : getKoreanTypeName(item.type)}
                                             </span>
                                             {item.tags && (
                                               <span className="text-[8.5px] bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded font-mono font-bold">
@@ -1730,7 +1730,7 @@ export default function GovernanceDashboard() {
                                             : "bg-slate-50 text-slate-600"
                                         }`}>
                                           {isAiReport && item.content.length > 250 
-                                            ? item.content.substring(0, 250) + "...\n\n👉 [클릭하여 전체 Gemini 파독 분석 보고서 및 RAG 적재 명세 상세보기]" 
+                                            ? item.content.substring(0, 250) + "...\n\n👉 [클릭하여 전체 Gemini 판독 분석 보고서 및 RAG 적재 명세 상세보기]" 
                                             : item.content}
                                         </p>
 

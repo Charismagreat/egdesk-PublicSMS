@@ -310,7 +310,7 @@ export async function POST(request: Request) {
       let realContents = rawContents.trim();
 
       // 🌟 [Gemini 멀티모달 Direct 서류 파싱 파이프라인] 
-      // downloadFile API로 수신한 실물 Base64 바이너리를 Gemini 멀티모달 Vision API (inlineData)로 Direct 꽂아서 시각 파독
+      // downloadFile API로 수신한 실물 Base64 바이너리를 Gemini 멀티모달 Vision API (inlineData)로 Direct 꽂아서 시각 판독
       try {
         const targetItem = realFolderItems[0];
         if (targetItem && targetItem.id) {
@@ -384,7 +384,7 @@ export async function POST(request: Request) {
                 });
 
                 if (aiCallerResult && aiCallerResult.content) {
-                  console.log(`[CALL_AI_CALLER SUCCESS] 시스템 설정 모델 '${systemSettingModel}' 파독 응답 수신 성공! (사용 토큰: ${aiCallerResult.usage?.totalTokens || 0})`);
+                  console.log(`[CALL_AI_CALLER SUCCESS] 시스템 설정 모델 '${systemSettingModel}' 판독 응답 수신 성공! (사용 토큰: ${aiCallerResult.usage?.totalTokens || 0})`);
                   realContents = aiCallerResult.content;
                 }
               } catch (aiErr: any) {
@@ -410,9 +410,9 @@ export async function POST(request: Request) {
         realContents = `■ 수집 서류 파일명: ${realFileNames}\n■ 수집 자료 제목: ${realTitles}\n■ 본문 텍스트 상태: 사용자가 업로드한 수집 서류입니다.`;
       }
 
-      // E. 개별 서류 1:1 파독 보고서(AI_ANALYSIS_REPORT) 생성 및 저장
+      // E. 개별 서류 1:1 판독 보고서(AI_ANALYSIS_REPORT) 생성 및 저장
       if (folderId) {
-        const reportContent = `[${systemSettingModel} 멀티모달 Vision 파독 보고서]
+        const reportContent = `[${systemSettingModel} 멀티모달 Vision 판독 보고서]
 ================================================================================
 ■ 스캔 일시: ${todayStr}
 ■ 사용 AI 모델: ${systemSettingModel} (시스템 설정 연동)
@@ -424,14 +424,14 @@ export async function POST(request: Request) {
 ${realContents}
 
 ================================================================================
-■ 이지봇 RAG 지식 학습 완료: 본 서류 파독 내용이 사내 RAG 벡터 지식베이스에 실시간 적재되어 질문 시 자동 답변됩니다.`;
+■ 이지봇 RAG 지식 학습 완료: 본 서류 판독 내용이 사내 RAG 벡터 지식베이스에 실시간 적재되어 질문 시 자동 답변됩니다.`;
 
-        // 1) 개별 서류 1:1 독립 파독 보고서 생성
+        // 1) 개별 서류 1:1 독립 판독 보고서 생성
         const aiAnalysisReport = {
           folder_id: Number(folderId),
           type: 'AI_ANALYSIS_REPORT',
-          tags: `AI파서,${docCategory.replace(/\s+/g, '')},개별파독`,
-          title: `[AI 파독 리포트] ${realTitles.substring(0, 25)}`,
+          tags: `AI파서,${docCategory.replace(/\s+/g, '')},개별판독`,
+          title: `[AI 판독 리포트] ${realTitles.substring(0, 25)}`,
           content: reportContent,
           file_name: realFileNames,
           file_size: '310 KB',
@@ -456,21 +456,19 @@ ${realContents}
             const summaryFileNames = currentFolderDocs.map((i: any) => i.file_name).filter(Boolean).join(', ');
             
             const folderSummaryContent = `[🌟 폴더 통합 AI 최신 종합 리포트]
+            const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+            const batchSummaryContent = `[🌟 폴더 통합 AI 최신 종합 리포트]
 ================================================================================
-■ 최종 갱신 일시: ${new Date().toISOString().replace('T', ' ').substring(0, 19)}
+■ 배치 갱신 일시: ${nowStr}
 ■ 대상 폴더 ID: ${folderId}
 ■ 수집 보관 서류 총 수량: ${currentFolderDocs.length}건
-■ 등록된 수집 서류 목록: ${summaryFileNames}
-■ 수집 서류 제목들: ${summaryTitles}
-
-■ [폴더 내 전체 수집 서류 통합 요약 내역]:
-- 본 태스크 폴더에는 현재 총 ${currentFolderDocs.length}건의 실물 서류(${summaryFileNames})가 수집/보관되어 있습니다.
-- 최근 파독된 서류: [${realTitles}] (${realFileNames})
-- 최근 파독 명세:
-${realContents}
-
+■ 등록된 서류 목록: ${summaryFileNames}
+■ 최근 판독된 서류: [${realTitles}] (${realFileNames})
+■ 최근 판독 명세:
+${realContents.substring(0, 450)}...
 ================================================================================
-■ 이지봇 RAG 통합 학습 완료: 신규 서류 추가에 따라 폴더 전체 통합 수치 및 지식이 실시간 오토 싱크(UPDATE) 되었습니다.`;
+■ 이지봇 RAG 통합 학습 완료: 신규 서류 추가에 따른 폴더 전체 지식이 오토 싱크(UPDATE) 되었습니다.`;
 
             // 기존 폴더 종합 보고서 존재 여부 조회
             const existingSummary = (allFolderItemsRes.rows || []).find((i: any) => 
@@ -541,7 +539,7 @@ ${realContents}
       // E. 태스크 폴더에 실제 업로드된 자료 및 AI API 분석 결과를 결합한 종합 분석 보고서 문서(crm_task_folder_items) 생성 및 저장
       let reportItem = null;
       if (folderId) {
-        const reportContent = `[${systemSettingModel} 멀티모달 Vision 파독 보고서]
+        const reportContent = `[${systemSettingModel} 멀티모달 Vision 판독 보고서]
 ================================================================================
 ■ 스캔 일시: ${todayStr}
 ■ 사용 AI 모델: ${systemSettingModel} (시스템 설정 연동)
@@ -553,7 +551,7 @@ ${realContents}
 ${realContents}
 
 ================================================================================
-■ 이지봇 RAG 지식 학습 완료: 본 서류 파독 내용이 사내 RAG 벡터 지식베이스에 실시간 적재되어 질문 시 자동 답변됩니다.`;
+■ 이지봇 RAG 지식 학습 완료: 본 서류 판독 내용이 사내 RAG 벡터 지식베이스에 실시간 적재되어 질문 시 자동 답변됩니다.`;
 
         const aiAnalysisReport = {
           folder_id: Number(folderId),
