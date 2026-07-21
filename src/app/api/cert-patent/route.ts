@@ -257,6 +257,7 @@ export async function POST(request: Request) {
       const todayStr = new Date().toISOString().split('T')[0];
       const today = new Date();
       const dueDate = new Date(today.setDate(today.getDate() + 30)).toISOString().split('T')[0];
+      let aiApiResult: any = null;
 
       // A. 해당 폴더에 실제로 업로드/수집되어 저장된 실물 아이템 레코드 DB 직접 조회
       let realFolderItems: any[] = [];
@@ -528,7 +529,7 @@ ${realContents}
         ai_analysis_result: JSON.stringify({
           confidence: 0.99,
           doc_category: docCategory,
-          extracted_entities: extractedEntities,
+          extracted_entities: { docCategory, realTitles, realFileNames },
           ai_api_document_id: aiApiResult?.id || null
         }),
         updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
