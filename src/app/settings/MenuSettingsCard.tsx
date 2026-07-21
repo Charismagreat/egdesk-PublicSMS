@@ -29,11 +29,12 @@ export default function MenuSettingsCard() {
 
   // 1. 유저 권한 및 메뉴 데이터 로딩
   useEffect(() => {
-    // 1-1. 최고관리자 권한 조회
+    // 1-1. 최고관리자 권한 조회 (SUPER_ADMIN, SYSTEM_ADMIN, TENANT_ADMIN, PRESIDENT 통합 지원)
     apiFetch("/api/auth/me")
       .then(res => res.json())
       .then(data => {
-        if (data.success && data.role === "SUPER_ADMIN") {
+        const isAdminRole = ["SUPER_ADMIN", "SYSTEM_ADMIN", "TENANT_ADMIN", "PRESIDENT"].includes(data.role);
+        if (data.success && isAdminRole) {
           setIsAdmin(true);
         } else {
           setIsAdmin(false);

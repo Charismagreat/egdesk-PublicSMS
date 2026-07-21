@@ -148,7 +148,10 @@ export async function POST(req: Request) {
     }
 
     const payload = decodeJwt(token);
-    if (payload.role !== 'SUPER_ADMIN') {
+    const userRole = (payload as any)?.role;
+    const isAdminRole = ["SUPER_ADMIN", "SYSTEM_ADMIN", "TENANT_ADMIN", "PRESIDENT"].includes(userRole);
+
+    if (!isAdminRole) {
       return NextResponse.json({ success: false, error: '메뉴 편집 권한이 없습니다. 최고관리자 계정으로 로그인해주세요.' }, { status: 403 });
     }
 
