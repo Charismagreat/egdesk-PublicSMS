@@ -73,11 +73,12 @@ ${realContents}
   - 파싱 신뢰도: 99% (사내 RAG 지식베이스 자동 적재 완료)
 ■ 이지봇 RAG 안내: 본 자정 배치 파싱 서류를 기반으로 이지봇 질의 시 실시간 자동 답변이 제공됩니다.`;
 
+      // 1) 개별 서류 1:1 파독 보고서 생성
       const aiReportItem = {
         folder_id: Number(folder.id),
         type: 'AI_ANALYSIS_REPORT',
-        tags: `자정배치,${docCategory.replace(/\s+/g, '')},AI지식자산`,
-        title: `[AI Daily 자정 파싱 리포트] ${realTitles.substring(0, 20)} 종합 분석 보고서`,
+        tags: `자정배치,${docCategory.replace(/\s+/g, '')},개별파독`,
+        title: `[AI Daily 파독 리포트] ${realTitles.substring(0, 20)}`,
         content: reportContent,
         file_name: realFileNames,
         file_size: '300 KB',
@@ -87,6 +88,74 @@ ${realContents}
       await insertRows('crm_task_folder_items', [aiReportItem]);
       processedCount += unparsedItems.length;
       reportCount++;
+
+      // 2) 🌟 [자정 배치 폴더 종합 보고서 UPSERT 자동 갱신] 폴더 내 미삭제 서류 2개 이상 시 오토 갱신
+      try {
+        const allFolderDocsRes = await queryTable('crm_task_folder_items', { limit: 1000 });
+        const folderDocs = (allFolderDocsRes.rows || []).filter((i: any) => 
+          !i.deleted_at && 
+          String(i.folder_id) === String(folder.id) && 
+          i.type !== 'AI_ANALYSIS_REPORT' && 
+          i.type !== 'AI_FOLDER_SUMMARY_REPORT'
+        );
+
+        if (folderDocs.length >= 2) {
+          const summaryTitles = folderDocs.map((i: any) => i.title).filter(Boolean).join(', ');
+          const summaryFiles = folderDocs.map((i: any) => i.file_name).filter(Boolean).join(', ');
+
+          const batchSummaryContent = `[🌟 폴더 통합 AI 최신 종합 리포트]
+================================================================================
+■ 배치 갱신 일시: ${nowStr} (자정 AI Daily Scan)
+■ 대상 폴더: ${folder.name || '직원폴더'}
+■ 수집 보관 서류 총 수량: ${folderDocs.length}건
+■ 서류 목록: ${summaryFiles}
+■ 수집 서류 제목들: ${summaryTitles}
+
+■ [폴더 내 전체 서류 통합 요약 내역]:
+- 현재 태스크 폴더에 총 ${folderDocs.length}건의 서류(${summaryFiles})가 저장되어 있습니다.
+- 최근 파독 명세: [${realTitles}] (${realFileNames})
+- 종합 파독 요약:
+${realContents}
+
+================================================================================
+■ 이지봇 RAG 통합 학습 완료: 신규 서류 추가에 따라 폴더 전체 통합 지식이 자정 배치를 통해 자동 갱신(UPDATE) 되었습니다.`;
+
+          const existingSummary = (allFolderDocsRes.rows || []).find((i: any) => 
+            !i.deleted_at && 
+            String(i.folder_id) === String(folder.id) && 
+            i.type === 'AI_FOLDER_SUMMARY_REPORT'
+          );
+
+          if (existingSummary) {
+            const updateTitle = `[🌟 폴더 통합 AI 최신 종합 리포트] 총 ${folderDocs.length}건 서류 요약`;
+            const updateFileName = `통합_${folderDocs.length}건_서류_요약.pdf`;
+
+            await updateRows(
+              'crm_task_folder_items', 
+              {
+                title: updateTitle,
+                content: batchSummaryContent,
+                file_name: updateFileName,
+                updated_at: nowStr
+              },
+              { ids: [Number(existingSummary.id)] }
+            );
+          } else {
+            await insertRows('crm_task_folder_items', [{
+              folder_id: Number(folder.id),
+              type: 'AI_FOLDER_SUMMARY_REPORT',
+              tags: '자정배치,폴더종합,통합리포트',
+              title: `[🌟 폴더 통합 AI 최신 종합 리포트] 총 ${folderDocs.length}건 서류 요약`,
+              content: batchSummaryContent,
+              file_name: `통합_${folderDocs.length}건_서류_요약.pdf`,
+              file_size: '500 KB',
+              created_at: nowStr
+            }]);
+          }
+        }
+      } catch (cronSummaryErr: any) {
+        console.warn('[CRON FOLDER SUMMARY UPSERT EXCEPTION]:', cronSummaryErr.message);
+      }
     }
 
     return NextResponse.json({

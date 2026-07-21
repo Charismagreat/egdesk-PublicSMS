@@ -1541,18 +1541,9 @@ export default function GovernanceDashboard() {
                                     </span>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <button
-                                    onClick={(e) => handleDeleteFolder(f.id, e)}
-                                    className={`p-1.5 rounded-lg border-none bg-transparent hover:bg-rose-500/10 text-rose-500 hover:text-rose-600 transition opacity-0 group-hover:opacity-100 cursor-pointer ${
-                                      isActive ? "hover:bg-white/10 text-rose-400 hover:text-rose-300" : ""
-                                    }`}
-                                    title="폴더 삭제"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                  <ArrowRight className={`w-4 h-4 transition-transform ${isActive ? "translate-x-1" : "opacity-40"}`} />
-                                </div>
+                                <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${
+                                  isActive ? "text-indigo-400 translate-x-1" : "text-slate-350 group-hover:translate-x-0.5"
+                                }`} />
                               </div>
                             );
                           })}
