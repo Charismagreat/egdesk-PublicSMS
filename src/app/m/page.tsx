@@ -122,8 +122,9 @@ export default function MobileHubPage() {
   const [mobileFolderItems, setMobileFolderItems] = useState<TaskFolderItem[]>([]);
   const [mobileItemsLoading, setMobileItemsLoading] = useState(false);
 
-  // 🛡️ 인증서·특허 AI 배정 기한 할 일 상태
+  // 🛡️ 인증서·특허 AI 배정 기한 할 일 상태 (미완료 & 전체)
   const [certPatentTasks, setCertPatentTasks] = useState<any[]>([]);
+  const [allCertPatentTasks, setAllCertPatentTasks] = useState<any[]>([]);
 
   const [isMobileFolderModalOpen, setIsMobileFolderModalOpen] = useState(false);
   const [isFolderSearchModalOpen, setIsFolderSearchModalOpen] = useState(false);
@@ -244,6 +245,7 @@ export default function MobileHubPage() {
       const res = await fetch("/api/cert-patent");
       const data = await res.json();
       if (data.success) {
+        setAllCertPatentTasks(data.tasks || []);
         // 모바일 접속자 또는 전체 배정 건 중 완료 안 된 건
         const pending = (data.tasks || []).filter(
           (t: any) => t.status === "ASSIGNED" || t.status === "AI_SUGGESTED"
@@ -1049,8 +1051,24 @@ export default function MobileHubPage() {
   // 진행 중인 일(할 일) 분류
   const activeTasks = tasks.filter(t => t.status === "ACTIVE" || t.status === "PENDING");
   
-  // 완료된 일(한 일) 분류
-  const completedTasksRaw = tasks.filter(t => t.status !== "ACTIVE" && t.status !== "PENDING");
+  // 완료된 일(한 일) 분류 (스냅태스크 + 완료된 AI 기한 할 일 통합 결합)
+  const completedCertTasksMapped: TaskItem[] = allCertPatentTasks
+    .filter(t => t.status === "COMPLETED")
+    .map(t => ({
+      id: `cert_${t.id}`,
+      title: t.title || "[AI 스캔] 기한 관리 업무",
+      status: "APPROVED" as any,
+      created_at: t.created_at || new Date().toISOString().substring(0, 10),
+      updated_at: t.updated_at || new Date().toISOString().substring(0, 10),
+      field_name: "인증서/특허 AI 관제",
+      work_type: "AI 기한 조치 완료",
+      description: t.description || "완료 처리된 서류 검토 및 조치 건입니다."
+    }));
+
+  const completedTasksRaw = [
+    ...tasks.filter(t => t.status !== "ACTIVE" && t.status !== "PENDING"),
+    ...completedCertTasksMapped
+  ];
 
   // KST 날짜 변환 헬퍼
   const getKstDate = (dateStr?: string) => {
