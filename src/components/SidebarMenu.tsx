@@ -30,6 +30,14 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
   const isAdmin = userRole === "SUPER_ADMIN" || userRole === "SYSTEM_ADMIN" || userRole === "TENANT_ADMIN" || userRole === "PRESIDENT";
   const isSystemAdmin = userRole === "SYSTEM_ADMIN" || (userRole === "SUPER_ADMIN" && userUsername === "admin");
   
+  // 💡 정적 사이드바 영역에 포함되는 4개 메뉴 (동적 메뉴 리스트에서 이중 노출 방지를 위해 엄격 제외)
+  const STATIC_EXCLUDED_HREFS = new Set([
+    "/governance",    // AI 컨트롤타워
+    "/my-db",         // MY DB 센터
+    "/employees",     // 직원 관리 대장
+    "/task-folders"   // 태스크 폴더 AI
+  ]);
+
   // 1. 초기 렌더링 시 깜빡임이나 공백 방지를 위해 정적 기본 배열로 초기값 바인딩
   const getInitialDefaultItems = () => {
     const baseItems = Object.entries(MENU_STATIC_MAP).map(([href, meta]) => ({
@@ -38,8 +46,13 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
       icon: meta.icon,
       color: meta.color
     }));
-    // 일반 계정일 경우 AI 브리핑은 제외
+
     const filtered = baseItems.filter(item => {
+      // (1) 정적 메뉴 4종은 동적 목록에서 제거
+      if (STATIC_EXCLUDED_HREFS.has(item.href)) {
+        return false;
+      }
+      // (2) 일반 계정일 경우 AI 브리핑 제외
       if (item.href === "/ai-briefing") {
         return isAdmin;
       }
@@ -97,10 +110,13 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
             
             const cleanHref = (setting.menu_href || "").trim();
             
-            // (2) 정적 메뉴 맵(MENU_STATIC_MAP)에 없는 미구현/미개발 임시 경로는 완전히 제외
+            // (2) 정적 사이드바 4개 메뉴는 동적 목록에서 제거
+            if (STATIC_EXCLUDED_HREFS.has(cleanHref)) return false;
+
+            // (3) 정적 메뉴 맵(MENU_STATIC_MAP)에 없는 미구현/미개발 임시 경로는 완전히 제외
             if (!MENU_STATIC_MAP[cleanHref]) return false;
             
-            // (3) AI 브리핑은 데이터베이스에 켜져 있더라도 최고관리자만 노출
+            // (4) AI 브리핑은 데이터베이스에 켜져 있더라도 최고관리자만 노출
             if (cleanHref === "/ai-briefing") {
               return userRole === "SUPER_ADMIN";
             }
