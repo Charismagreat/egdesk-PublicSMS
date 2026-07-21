@@ -46,13 +46,9 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     }));
 
     const filtered = baseItems.filter(item => {
-      // (1) 정적 메뉴 4종은 동적 목록에서 제거
+      // (1) 정적 전용 메뉴는 동적 목록에서 제거
       if (STATIC_EXCLUDED_HREFS.has(item.href)) {
         return false;
-      }
-      // (2) 일반 계정일 경우 AI 브리핑 제외
-      if (item.href === "/ai-briefing") {
-        return isAdmin;
       }
       return true;
     });
@@ -114,10 +110,6 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
             // (3) 정적 메뉴 맵(MENU_STATIC_MAP)에 없는 미구현/미개발 임시 경로는 완전히 제외
             if (!MENU_STATIC_MAP[cleanHref]) return false;
             
-            // (4) AI 브리핑은 데이터베이스에 켜져 있더라도 최고관리자만 노출
-            if (cleanHref === "/ai-briefing") {
-              return userRole === "SUPER_ADMIN";
-            }
             return true;
           })
           .map(setting => {

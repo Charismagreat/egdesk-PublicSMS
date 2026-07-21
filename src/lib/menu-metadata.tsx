@@ -115,7 +115,6 @@ export const MENU_METADATA_LIST: MenuMetadata[] = [
   { href: "/lawyer-ai", label: "법률 상담 AI", icon: Scale, color: "text-indigo-650", category: 4 },
   { href: "/rnd-management", label: "연구소 관리 AI", icon: Award, color: "text-amber-550", category: 4 },
   { href: "/meeting-minutes", label: "회의 기록 AI", icon: Mic, color: "text-purple-550", category: 4 },
-  { href: "/ai-briefing", label: "AI 브리핑", icon: Sparkles, color: "text-indigo-550", category: 4 },
   
 ];
 
