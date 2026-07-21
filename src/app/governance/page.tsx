@@ -62,6 +62,13 @@ export default function GovernanceDashboard() {
   const [aiComments, setAiComments] = useState<any[]>([]);
   const [aiCommentsLoading, setAiCommentsLoading] = useState(false);
 
+  // 🎗️ AI 파싱 배정 대기 건 및 담당자 배정 모달 상태
+  const [aiSuggestedTasks, setAiSuggestedTasks] = useState<any[]>([]);
+  const [selectedTaskForAssign, setSelectedTaskForAssign] = useState<any | null>(null);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assignTargetUser, setAssignTargetUser] = useState("김직원");
+  const [assignTaskLoading, setAssignTaskLoading] = useState(false);
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -98,6 +105,38 @@ export default function GovernanceDashboard() {
   // 📁 실물 서류 PDF/이미지 모달 뷰어 상태 (모바일 포털 /m 과 100% 동일한 서류 뷰어)
   const [filePreviewItem, setFilePreviewItem] = useState<any | null>(null);
   const [isFilePreviewOpen, setIsFilePreviewOpen] = useState(false);
+
+  // 🎯 AI 파싱 배정대기 할 일 담당자 배정 실행 함수
+  const handleAssignTask = async () => {
+    if (!selectedTaskForAssign) return;
+    setAssignTaskLoading(true);
+    try {
+      const res = await apiFetch("/api/cert-patent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "assign_task",
+          payload: {
+            id: selectedTaskForAssign.id,
+            assigned_to: assignTargetUser
+          }
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`[${selectedTaskForAssign.title}] 업무가 '${assignTargetUser}'에게 성공적으로 배정되었습니다!`);
+        setIsAssignModalOpen(false);
+        setSelectedTaskForAssign(null);
+        fetchData();
+      } else {
+        alert("배정 실패: " + (data.error || "서버 오류"));
+      }
+    } catch (e: any) {
+      alert("오류 발생: " + e.message);
+    } finally {
+      setAssignTaskLoading(false);
+    }
+  };
 
   const handleOpenFilePreview = (item: any) => {
     setFilePreviewItem(item);
@@ -474,6 +513,18 @@ export default function GovernanceDashboard() {
       const reportsData = await reportsRes.json();
       if (reportsData.success) {
         setReports(reportsData.reports || []);
+      }
+
+      // 2.6. AI 스캔 파싱 배정대기 건들 조회
+      try {
+        const certRes = await apiFetch("/api/cert-patent");
+        const certData = await certRes.json();
+        if (certData.success) {
+          const suggested = (certData.tasks || []).filter((t: any) => t.status === 'AI_SUGGESTED');
+          setAiSuggestedTasks(suggested);
+        }
+      } catch (cErr) {
+        console.warn("AI 배정대기 건 로드 생략:", cErr);
       }
     } catch (err: any) {
       console.error("Governance data fetch error:", err);
@@ -945,7 +996,7 @@ export default function GovernanceDashboard() {
                   }`}
                 >
                   <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse" />
-                  관제 대상 ({events.filter(e => e.status === 'WAITING').length})
+                  관제 대상 ({events.filter(e => e.status === 'WAITING').length + aiSuggestedTasks.length})
                 </button>
                 <button
                   onClick={() => setSubTab('RESOLVED')}
@@ -1042,8 +1093,49 @@ export default function GovernanceDashboard() {
                 </div>
               </div>
 
-              {/* 3. 통합 피드 리스트 */}
-              {filteredFeed.length === 0 ? (
+              {/* 3. AI 파싱 서류 미배정 관제 피드 (관제 대상/전체 탭 선택 시 상단 노출) */}
+              {(subTab === 'WAITING' || subTab === 'ALL') && aiSuggestedTasks.length > 0 && (
+                <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/5 to-purple-500/10 border border-amber-300 rounded-3xl p-6 shadow-sm space-y-4 text-left">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-amber-600 animate-bounce" />
+                      <h3 className="text-base font-black text-amber-950">AI 스캔 파싱 미배정 관제 대상 ({aiSuggestedTasks.length}건)</h3>
+                      <span className="text-[10px] bg-amber-500 text-white font-black px-2 py-0.5 rounded-full">담당자 배정 필요</span>
+                    </div>
+                    <span className="text-xs text-amber-800 font-bold">최고관리자가 담당 직원을 지정하면 모바일 포털로 즉시 전송됩니다.</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {aiSuggestedTasks.map((t) => (
+                      <div key={t.id} className="bg-white/90 border border-amber-200/80 rounded-2xl p-4 shadow-xs space-y-2 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs text-slate-500 font-bold mb-1">
+                            <span className="text-amber-800 font-extrabold truncate">📄 {t.source_file_name || '실물 서류 스캔'}</span>
+                            <span className="text-rose-600 font-black shrink-0">기한: {t.due_date}까지</span>
+                          </div>
+                          <h4 className="text-sm font-extrabold text-slate-800">{t.title}</h4>
+                          <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{t.description}</p>
+                        </div>
+                        <div className="pt-2 flex justify-end">
+                          <button
+                            onClick={() => {
+                              setSelectedTaskForAssign(t);
+                              setIsAssignModalOpen(true);
+                            }}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                          >
+                            <UserCheck className="w-3.5 h-3.5" />
+                            직원에게 할 일 배정하기
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. 통합 피드 리스트 */}
+              {filteredFeed.length === 0 && aiSuggestedTasks.length === 0 ? (
                 <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 shadow-xs">
                   <Database className="w-12 h-12 mx-auto text-slate-300 mb-3" />
                   <span className="text-xs font-bold block">조건에 부합하는 관제 및 감사 내역이 없습니다.</span>
@@ -2465,6 +2557,76 @@ export default function GovernanceDashboard() {
                   닫기
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 👤 AI 파싱 배정대기 할 일 담당자 지정 모달 */}
+      {isAssignModalOpen && selectedTaskForAssign && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-[99999] animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 border border-slate-100 animate-scale-up text-left">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 font-bold">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800">담당 직원 할 일 배정</h3>
+                  <p className="text-xs text-slate-500 font-bold">선택한 직원의 모바일 포털로 즉시 발송 전송됩니다.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAssignModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-indigo-50/60 p-4 rounded-2xl border border-indigo-100 space-y-1">
+              <span className="text-[10px] bg-indigo-600 text-white font-black px-2 py-0.5 rounded">대상 서류/할 일</span>
+              <h4 className="text-xs font-black text-slate-800 pt-1">{selectedTaskForAssign.title}</h4>
+              <p className="text-[11px] text-slate-500 line-clamp-2">{selectedTaskForAssign.description}</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-black text-slate-700 block">배정 대상 직원 선택</label>
+              <select
+                value={assignTargetUser}
+                onChange={(e) => setAssignTargetUser(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="김직원">김직원 (현장 모바일)</option>
+                <option value="박대리">박대리 (무역/통관팀)</option>
+                <option value="최고관리자">최고관리자 (직접 수행)</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <button
+                onClick={() => setIsAssignModalOpen(false)}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer border-none"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleAssignTask}
+                disabled={assignTaskLoading}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer border-none shadow-sm flex items-center gap-1.5"
+              >
+                {assignTaskLoading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>배정 전송 중...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>담당 배정 완료 및 발송</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

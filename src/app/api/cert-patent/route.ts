@@ -225,16 +225,17 @@ export async function POST(request: Request) {
 
     // 4. 최고관리자의 담당자(Assignee) 배정
     if (action === 'assign_task') {
-      const { taskId, assignedTo, assignedBy } = payload;
-      const updateData = {
-        id: taskId,
-        assigned_to: assignedTo,
-        assigned_by: assignedBy || '최고관리자',
-        assigned_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      const { id, assigned_to } = payload;
+      if (!id || !assigned_to) {
+        return NextResponse.json({ success: false, error: 'id와 assigned_to가 필요합니다.' }, { status: 400 });
+      }
+
+      const res = await updateRows('cert_patent_tasks', {
+        assigned_to: assigned_to,
         status: 'ASSIGNED',
         updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
-      };
-      const res = await updateRows('cert_patent_tasks', [updateData]);
+      }, { ids: [Number(id)] });
+
       return NextResponse.json({ success: true, result: res });
     }
 
