@@ -33,8 +33,7 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
   // 💡 정적 사이드바 영역에 포함되는 정적 전용 메뉴 (동적 메뉴 리스트에서 이중 노출 방지를 위해 엄격 제외)
   const STATIC_EXCLUDED_HREFS = new Set([
     "/governance",    // AI 컨트롤타워
-    "/my-db",         // MY DB 센터
-    "/task-folders"   // 태스크 폴더 AI
+    "/my-db"          // MY DB 센터
   ]);
 
   // 1. 초기 렌더링 시 깜빡임이나 공백 방지를 위해 정적 기본 배열로 초기값 바인딩
