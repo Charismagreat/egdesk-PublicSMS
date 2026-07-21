@@ -512,11 +512,6 @@ ${realContents}
         } catch (summaryErr: any) {
           console.warn('[FOLDER SUMMARY UPSERT EXCEPTION]:', summaryErr.message);
         }
-      }     tags: ['AI분석', '태스크폴더', docCategory.replace(/\s+/g, '')]
-        });
-        console.log('[AI API] 실시간 AI 지식 파서 분석 완료:', aiApiResult?.id || '성공');
-      } catch (err: any) {
-        console.warn('[AI API] 실시간 AI API 호출 예외 (Fallback 유지):', err.message);
       }
 
       // D. 전사 캘린더 할 일(AI_SUGGESTED) 생성
