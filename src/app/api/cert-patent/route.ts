@@ -259,6 +259,21 @@ export async function POST(request: Request) {
       const dueDate = new Date(today.setDate(today.getDate() + 30)).toISOString().split('T')[0];
       let aiApiResult: any = null;
 
+      // 🌟 [시스템 설정 DB 연동] egdesk_config 시스템 설정 테이블에서 ai_model_name 조회의 정석 셋팅 (Top Scope)
+      let systemSettingModel = 'gemini-3.5-flash';
+      try {
+        const configRes = await queryTable('egdesk_config', { limit: 100 });
+        const modelRow = (configRes.rows || []).filter((r: any) => !r.deleted_at).find(
+          (r: any) => r.key === 'ai_model_name' || r.key === 'default_ai_model' || r.key === 'gemini_model'
+        );
+        if (modelRow && modelRow.value) {
+          systemSettingModel = modelRow.value;
+          console.log(`[SYSTEM SETTINGS MODEL FOUND] 시스템 설정 DB 모델 로드 완료: '${systemSettingModel}'`);
+        }
+      } catch (e) {
+        console.warn('[SYSTEM SETTINGS READ FALLBACK] 기본 시스템 모델(gemini-3.5-flash) 적용');
+      }
+
       // A. 해당 폴더에 실제로 업로드/수집되어 저장된 실물 아이템 레코드 DB 직접 조회
       let realFolderItems: any[] = [];
       if (folderId) {
@@ -344,20 +359,7 @@ export async function POST(request: Request) {
             console.log(`[GEMINI MULTIMODAL DIRECT SCAN] 실물 바이너리 준비 완료 (파일명: ${realFileNames}, Base64: ${fileBase64.length} chars)`);
           }
 
-            // 🌟 [시스템 설정 DB 연동] egdesk_config 시스템 설정 테이블에서 ai_model_name 조회의 정석 셋팅
-            let systemSettingModel = 'gemini-3.5-flash';
-            try {
-              const configRes = await queryTable('egdesk_config', { limit: 100 });
-              const modelRow = (configRes.rows || []).filter((r: any) => !r.deleted_at).find(
-                (r: any) => r.key === 'ai_model_name' || r.key === 'default_ai_model' || r.key === 'gemini_model'
-              );
-              if (modelRow && modelRow.value) {
-                systemSettingModel = modelRow.value;
-                console.log(`[SYSTEM SETTINGS MODEL FOUND] 시스템 설정 DB 모델 로드 완료: '${systemSettingModel}'`);
-              }
-            } catch (e) {
-              console.warn('[SYSTEM SETTINGS READ FALLBACK] 기본 시스템 모델(gemini-3.5-flash) 적용');
-            }
+
 
             if (fileBase64) {
               console.log(`[CALL_AI_CALLER] callAiCaller() 로 시스템 설정 모델 '${systemSettingModel}' 지정 전송 시작... (파일명: ${realFileNames})`);
