@@ -454,11 +454,9 @@ ${realContents}
             
             const summaryTitles = currentFolderDocs.map((i: any) => i.title).filter(Boolean).join(', ');
             const summaryFileNames = currentFolderDocs.map((i: any) => i.file_name).filter(Boolean).join(', ');
-            
-            const folderSummaryContent = `[🌟 폴더 통합 AI 최신 종합 리포트]
             const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
-            const batchSummaryContent = `[🌟 폴더 통합 AI 최신 종합 리포트]
+            const folderSummaryContent = `[🌟 폴더 통합 AI 최신 종합 리포트]
 ================================================================================
 ■ 배치 갱신 일시: ${nowStr}
 ■ 대상 폴더 ID: ${folderId}
