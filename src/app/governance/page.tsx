@@ -2419,7 +2419,7 @@ export default function GovernanceDashboard() {
                 취소
               </button>
               
-              {selectedReport.status === 'SUBMITTED' && (
+              {(selectedReport.status === 'SUBMITTED' || selectedReport.status === 'RESUBMITTED') && (
                 <>
                   <button
                     onClick={() => handleDecideReport(selectedReport.id, 'REJECTED')}
