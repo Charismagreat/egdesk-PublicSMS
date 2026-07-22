@@ -2347,13 +2347,88 @@ export default function GovernanceDashboard() {
               </div>
             </div>
 
-            {/* 💡 [추가] 반려 후 재상신 건일 때 직전 반려 사유 노출 */}
-            {selectedReport.status === 'RESUBMITTED' && selectedReport.comment && (
-              <div className="bg-rose-50/40 border border-rose-100/50 rounded-2xl p-4 text-xs font-semibold space-y-1 animate-scale-in">
-                <span className="text-[10px] font-black text-rose-700 block">💬 직전 결재 반려 의견 (보완 요구 사항):</span>
-                <p className="text-slate-700 whitespace-pre-wrap leading-relaxed font-bold">{selectedReport.comment}</p>
-              </div>
-            )}
+            {/* 💡 [신규] 결재 진행 이력 타임라인 (당초 보고내용 ~ 반려 사유 ~ 재상신 내역) */}
+            {(() => {
+              let history: any[] = [];
+              try {
+                const parsed = JSON.parse(selectedReport.ai_summary || '{}');
+                if (Array.isArray(parsed.history)) {
+                  history = parsed.history;
+                }
+              } catch (e) {}
+
+              if (history.length === 0) return null;
+
+              return (
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-3xs space-y-3">
+                  <div className="flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                    <Clock className="w-4 h-4 text-indigo-600 animate-spin-slow" />
+                    <span className="text-xs font-black text-slate-800">일보 결재 진행 이력 (타임라인)</span>
+                  </div>
+                  <div className="relative pl-4 border-l border-slate-200 space-y-4 text-left ml-2.5">
+                    {history.map((h: any, idx: number) => {
+                      const isSubmitted = h.action === 'SUBMITTED';
+                      const isResubmitted = h.action === 'RESUBMITTED';
+                      const isApproved = h.action === 'APPROVED';
+                      const isRejected = h.action === 'REJECTED';
+
+                      let title = "";
+                      let iconBg = "";
+                      let textColor = "";
+                      let iconEl = null;
+
+                      if (isSubmitted) {
+                        title = `${h.executor || '직원'} - 최초 일보 제출`;
+                        iconBg = "bg-indigo-50 text-indigo-650 border border-indigo-200";
+                        textColor = "text-indigo-750";
+                        iconEl = <FileText className="w-3 h-3" />;
+                      } else if (isResubmitted) {
+                        title = `${h.executor || '직원'} - 보완 재상신 (보완 완료)`;
+                        iconBg = "bg-sky-50 text-sky-700 border border-sky-200";
+                        textColor = "text-sky-750";
+                        iconEl = <Clock className="w-3 h-3" />;
+                      } else if (isApproved) {
+                        title = `${h.executor || '대표자'} - 최종 결재 승인 (APPROVED)`;
+                        iconBg = "bg-emerald-50 text-emerald-700 border border-emerald-200";
+                        textColor = "text-emerald-750";
+                        iconEl = <CheckCircle2 className="w-3 h-3" />;
+                      } else if (isRejected) {
+                        title = `${h.executor || '대표자'} - 보완 요청 및 반려 (REJECTED)`;
+                        iconBg = "bg-rose-50 text-rose-700 border border-rose-250/50";
+                        textColor = "text-rose-750";
+                        iconEl = <AlertTriangle className="w-3 h-3" />;
+                      }
+
+                      return (
+                        <div key={idx} className="relative space-y-1">
+                          {/* 타임라인 원형 뱃지 노드 */}
+                          <div className={`absolute -left-[24.5px] top-0.5 w-5.5 h-5.5 rounded-full flex items-center justify-center shadow-3xs ${iconBg}`}>
+                            {iconEl}
+                          </div>
+                          <div className="flex justify-between items-center pl-1">
+                            <span className={`text-[10.5px] font-black ${textColor}`}>{title}</span>
+                            <span className="text-[9px] text-slate-400 font-bold">{h.date}</span>
+                          </div>
+                          
+                          {/* 본문 또는 코멘트 출력 */}
+                          {h.content && (
+                            <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 ml-1 text-[10px] font-semibold text-slate-650 leading-relaxed whitespace-pre-wrap">
+                              {h.content}
+                            </div>
+                          )}
+                          {h.comment && (
+                            <div className="bg-rose-50/20 border border-rose-100/30 rounded-xl p-2.5 ml-1 text-[10px] font-bold text-rose-700/90 leading-relaxed whitespace-pre-wrap flex items-start gap-1">
+                              <span>💬 의견:</span>
+                              <span className="text-slate-600 font-semibold">{h.comment}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* 대표자 코멘트 및 AI 추천 */}
             <div className="space-y-3">

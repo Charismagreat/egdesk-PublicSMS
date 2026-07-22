@@ -1687,6 +1687,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: '자율 규칙이 성공적으로 삭제되었습니다.' });
     }
 
+    // 💡 [추가] 일보 라이프사이클 결재 이력(타임라인)을 JSON 형태로 누적하기 위한 헬퍼 함수
+    const appendHistoryToSummary = (aiSummaryJsonStr: string, newHistoryEntry: any) => {
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(aiSummaryJsonStr || '{}');
+      } catch (e) {
+        parsed = {};
+      }
+      if (!parsed || typeof parsed !== 'object') {
+        parsed = {};
+      }
+      if (!Array.isArray(parsed.history)) {
+        parsed.history = [];
+      }
+      parsed.history.push(newHistoryEntry);
+      return JSON.stringify(parsed);
+    };
+
     // 💡 [신규] 직원 일일 보고서 제출 처리
     if (action === 'submit_report') {
       const { report_date, report_content, ai_summary } = body;
@@ -1713,12 +1731,21 @@ export async function POST(request: Request) {
         }
 
         const isReSubmit = currentStatus === 'REJECTED';
+        const targetId = existing[0].id;
+
+        // 히스토리 엔트리 생성
+        const historyEntry = {
+          action: isReSubmit ? 'RESUBMITTED' : 'SUBMITTED',
+          date: nowStr,
+          executor: currentUser,
+          content: report_content
+        };
+        const updatedAiSummary = appendHistoryToSummary(existing[0].ai_summary, historyEntry);
 
         // 이미 존재하면 덮어쓰기 업데이트
-        const targetId = existing[0].id;
         await updateRows('crm_daily_reports', {
           report_content,
-          ai_summary: ai_summary || existing[0].ai_summary,
+          ai_summary: updatedAiSummary,
           status: isReSubmit ? 'RESUBMITTED' : 'SUBMITTED', // 💡 반려 후 재상신 구분
           updated_at: nowStr,
           updated_by: currentUser
@@ -1728,11 +1755,21 @@ export async function POST(request: Request) {
         // 신규 인서트
         const reportId = Date.now();
         const uuid = `report_${reportId}`;
+
+        // 최초 제출 히스토리 엔트리 생성
+        const historyEntry = {
+          action: 'SUBMITTED',
+          date: nowStr,
+          executor: currentUser,
+          content: report_content
+        };
+        const initialAiSummary = appendHistoryToSummary(ai_summary || '{}', historyEntry);
+
         await insertRows('crm_daily_reports', [{
           id: reportId,
           report_date,
           operator: currentUser,
-          ai_summary: ai_summary || '{}',
+          ai_summary: initialAiSummary,
           report_content,
           status: 'SUBMITTED',
           tenant_id: tenantId,
@@ -1752,9 +1789,27 @@ export async function POST(request: Request) {
       }
 
       const tenantId = await resolveTenantId();
+
+      // 기존 일보 정보 조회하여 이전 ai_summary 가져오기
+      const reportRes = await queryTable('crm_daily_reports', {
+        filters: { id: report_id, tenant_id: tenantId }
+      });
+      const reportsList = reportRes.rows || [];
+      let updatedAiSummary = '{}';
+      if (reportsList.length > 0) {
+        const historyEntry = {
+          action: status, // APPROVED 또는 REJECTED
+          date: nowStr,
+          executor: '대표자',
+          comment: comment || ''
+        };
+        updatedAiSummary = appendHistoryToSummary(reportsList[0].ai_summary, historyEntry);
+      }
+
       await updateRows('crm_daily_reports', {
         status,
         comment: comment || '',
+        ai_summary: updatedAiSummary, // 💡 히스토리 보존 누적
         approver: currentUser,
         approved_at: nowStr,
         updated_at: nowStr,
