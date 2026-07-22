@@ -584,7 +584,8 @@ export async function setupDatabase() {
       { name: 'assigned_at', type: 'TEXT' },
       { name: 'source_file_id', type: 'TEXT' },
       { name: 'source_file_name', type: 'TEXT' },
-      { name: 'ai_analysis_result', type: 'TEXT' }
+      { name: 'ai_analysis_result', type: 'TEXT' },
+      { name: 'created_at', type: 'TEXT' }
     ], { tableName: 'cert_patent_tasks', uniqueKeyColumns: ['id'] });
     console.log('✓ AI 인증특허 태스크 테이블 신설 완료.');
   } catch (err: any) {

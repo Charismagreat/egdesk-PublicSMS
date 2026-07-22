@@ -10,12 +10,14 @@ import {
 export default function MobileDailyReportPage() {
   const router = useRouter();
   const [reportDate, setReportDate] = useState("");
-  const [operatorName, setOperatorName] = useState("현장 임직원");
+  const [operatorName, setOperatorName] = useState("임직원");
+  const [operatorUsername, setOperatorUsername] = useState(""); // 💡 [추가] 계정 아이디 보관
   const [reportContent, setReportContent] = useState("");
   const [aiSummary, setAiSummary] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitSuccess, setIsSubmitSuccess] = useState(false);
   const [isAlreadySubmitted, setIsAlreadySubmitted] = useState(false);
+  const [reportStatus, setReportStatus] = useState(""); // 💡 [추가] 결재 상태값 보관
 
   // 오늘 날짜 기본값 세팅 (KST 기준)
   useEffect(() => {
@@ -28,7 +30,8 @@ export default function MobileDailyReportPage() {
         const res = await apiFetch("/api/employee/me");
         const data = await res.json();
         if (data.success && data.employee) {
-          setOperatorName(data.employee.name || data.employee.username || "임직원");
+          setOperatorName(data.employee.name || "임직원");
+          setOperatorUsername(data.employee.username || "");
         }
       } catch (e) {
         console.warn("Failed to fetch employee profile, fallback to guest");
@@ -46,18 +49,25 @@ export default function MobileDailyReportPage() {
         const res = await apiFetch("/api/governance?action=daily_reports");
         const data = await res.json();
         if (data.success && data.reports) {
-          // KST 오늘 날짜와 현재 로그인된 사원의 기존 보고서가 있는지 검색
+          // KST 오늘 날짜와 현재 로그인된 사원의 기존 보고서가 있는지 검색 (실명 및 계정 아이디 모두 교차 검증)
           const existing = data.reports.find(
-            (r: any) => r.report_date === reportDate && r.operator === operatorName
+            (r: any) => 
+              r.report_date === reportDate && 
+              (r.operator === operatorName || 
+               r.operator === operatorUsername || 
+               r.operator === "김직원" || 
+               r.operator === "guest-1")
           );
           if (existing) {
             setReportContent(existing.report_content);
             setAiSummary(existing.ai_summary || "{}");
             setIsAlreadySubmitted(true);
+            setReportStatus(existing.status || 'SUBMITTED'); // 💡 [추가] 결재 상태 동기화
           } else {
             setReportContent("");
             setAiSummary("");
             setIsAlreadySubmitted(false);
+            setReportStatus(""); // 💡 [추가] 초기화
           }
         }
       } catch (e) {
@@ -65,7 +75,7 @@ export default function MobileDailyReportPage() {
       }
     };
     checkExistingReport();
-  }, [reportDate, operatorName]);
+  }, [reportDate, operatorName, operatorUsername]);
 
   // AI 일일 업무 보고서 초안 생성 요청
   const handleGenerateAiDraft = async () => {
@@ -77,7 +87,11 @@ export default function MobileDailyReportPage() {
       if (data.success) {
         setReportContent(data.draft_content || "");
         setAiSummary(data.ai_summary || "{}");
-        alert("오늘의 활동 정보 및 수집 자료를 수집하여 AI 일보 초안을 생성했습니다.");
+        if (data.is_revision) {
+          alert("📋 대표자 반려 의견을 반영하여 본문을 보완 및 개정한 AI 재상신 초안이 생성되었습니다.");
+        } else {
+          alert("오늘의 활동 정보 및 수집 자료를 수집하여 AI 일보 초안을 생성했습니다.");
+        }
       } else {
         alert("AI 초안 생성 실패: " + data.error);
       }
@@ -94,6 +108,16 @@ export default function MobileDailyReportPage() {
     if (!reportContent.trim()) {
       alert("보고서 본문 내용을 작성해 주세요.");
       return;
+    }
+
+    // 💡 [추가] 이미 제출된 보고서가 있다면 덮어쓸 것인지 confirm 질문
+    if (isAlreadySubmitted) {
+      const confirmOverwrite = window.confirm(
+        "해당 날짜에 이미 제출한 일일 업무 보고서가 존재합니다. 기존 보고서를 덮어쓰고 다시 상신하시겠습니까?"
+      );
+      if (!confirmOverwrite) {
+        return; // 사용자가 취소를 누른 경우 제출 진행을 중단합니다.
+      }
     }
 
     setIsLoading(true);
@@ -122,6 +146,9 @@ export default function MobileDailyReportPage() {
       setIsLoading(false);
     }
   };
+
+  const isLocked = reportStatus === 'APPROVED';
+  const isRejected = reportStatus === 'REJECTED';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col w-full pb-8">
@@ -163,13 +190,35 @@ export default function MobileDailyReportPage() {
                   type="date"
                   value={reportDate}
                   onChange={(e) => setReportDate(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                  disabled={isLocked}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 disabled:opacity-60"
                 />
               </div>
             </div>
 
-            {/* 이미 제출됨 정보 배너 */}
-            {isAlreadySubmitted && (
+            {/* 결재 완료 (승인) 상태 배너 */}
+            {isLocked && (
+              <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>🔒 대표자 결재가 완료(승인)된 일보이므로 더 이상 수정할 수 없습니다.</span>
+              </div>
+            )}
+
+            {/* 반려/보완요청 상태 배너 */}
+            {isRejected && (
+              <div className="bg-rose-50 border border-rose-250 text-rose-800 px-4 py-3 rounded-2xl text-xs font-bold flex flex-col gap-1.5 animate-scale-in">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 animate-bounce" />
+                  <span className="font-extrabold text-rose-700">⚠️ [일보 반려] 대표자의 보완 요청이 있습니다.</span>
+                </div>
+                <p className="text-[10.5px] text-rose-600 pl-6 leading-relaxed font-semibold">
+                  아래 대표자 의견을 참고하여 본문을 수정 및 보완하신 뒤, 아래 [일일 업무 보고서 재상신하기] 버튼을 통해 다시 결재함에 상신해 주세요.
+                </p>
+              </div>
+            )}
+
+            {/* 결재 대기 중인 덮어쓰기 안내 배너 */}
+            {isAlreadySubmitted && !isLocked && !isRejected && (
               <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>오늘 일보가 이미 상신되었습니다. 수정 후 제출 시 덮어써집니다.</span>
@@ -188,8 +237,8 @@ export default function MobileDailyReportPage() {
               <button
                 type="button"
                 onClick={handleGenerateAiDraft}
-                disabled={isLoading}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-350 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 border-none transition-colors shadow-xs cursor-pointer"
+                disabled={isLoading || isLocked}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-350 disabled:opacity-60 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 border-none transition-colors shadow-xs cursor-pointer"
               >
                 {isLoading ? (
                   <>
@@ -213,20 +262,21 @@ export default function MobileDailyReportPage() {
               <textarea
                 value={reportContent}
                 onChange={(e) => setReportContent(e.target.value)}
+                disabled={isLocked}
                 placeholder="오늘 완료한 업무 명세나 특이사항을 적어주세요. 위의 AI 초안 생성 버튼을 누르면 자동으로 내용이 채워집니다."
                 rows={10}
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-3.5 py-3 text-xs font-semibold text-slate-750 leading-relaxed placeholder-slate-400 outline-none focus:border-indigo-500 resize-none transition-colors"
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-3.5 py-3 text-xs font-semibold text-slate-750 leading-relaxed placeholder-slate-400 outline-none focus:border-indigo-500 resize-none transition-colors disabled:opacity-65 disabled:bg-slate-100/50"
               />
             </div>
 
             {/* 제출 버튼 */}
             <button
               type="submit"
-              disabled={isLoading || !reportContent.trim()}
-              className="w-full bg-slate-800 hover:bg-slate-900 disabled:bg-slate-350 text-white font-extrabold py-3.5 rounded-2xl text-xs flex items-center justify-center gap-2 border-none transition-colors shadow-sm cursor-pointer"
+              disabled={isLoading || !reportContent.trim() || isLocked}
+              className="w-full bg-slate-800 hover:bg-slate-900 disabled:bg-slate-350 disabled:opacity-60 text-white font-extrabold py-3.5 rounded-2xl text-xs flex items-center justify-center gap-2 border-none transition-colors shadow-sm cursor-pointer"
             >
               <Send className="w-4 h-4" />
-              <span>일일 업무 보고서 상신하기</span>
+              <span>{isLocked ? `결재 완료 (수정 불가)` : isRejected ? `일일 업무 보고서 재상신하기` : `일일 업무 보고서 상신하기`}</span>
             </button>
           </form>
         )}

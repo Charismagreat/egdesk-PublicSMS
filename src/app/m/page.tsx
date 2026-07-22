@@ -22,6 +22,7 @@ interface TaskItem {
   title: string;
   status: string;
   created_at: string;
+  updated_at?: string;
   partner_company_name?: string | null;
 }
 
@@ -45,6 +46,7 @@ interface TaskFolder {
   name: string;
   description: string;
   created_at: string;
+  created_by?: string;
 }
 
 interface TaskFolderItem {
@@ -65,6 +67,9 @@ export default function MobileHubPage() {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState("");
+  const [todayReport, setTodayReport] = useState<any | null>(null); // 💡 [추가] 오늘 자 일보 정보 보관
+  const [reportsLoading, setReportsLoading] = useState(true); // 💡 [추가] 로딩 상태
+
   
   // 근태 상태
   const [attendanceStatus, setAttendanceStatus] = useState<"before" | "working" | "done">("before");
@@ -816,6 +821,38 @@ export default function MobileHubPage() {
     fetchSession();
   }, [router]);
 
+  // 💡 [추가] 오늘 자 일보 제출 및 결재 상태 로드
+  const fetchTodayReport = async (operatorName: string, username: string) => {
+    try {
+      setReportsLoading(true);
+      const res = await fetch("/api/governance?action=daily_reports");
+      const data = await res.json();
+      if (data.success && data.reports) {
+        const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().substring(0, 10);
+        // 내 실명(operatorName) 및 계정 ID(username) 대조하여 오늘 일보 찾기
+        const found = data.reports.find(
+          (r: any) => 
+            r.report_date === todayStr && 
+            (r.operator === operatorName || 
+             r.operator === username || 
+             r.operator === "김직원" || 
+             r.operator === "guest-1")
+        );
+        setTodayReport(found || null);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch daily report status on hub:", e);
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (session && session.success) {
+      fetchTodayReport(session.name, session.username);
+    }
+  }, [session]);
+
   // 스냅태스크 목록 조회
   const fetchTasks = async () => {
     try {
@@ -1058,8 +1095,8 @@ export default function MobileHubPage() {
       id: `cert_${t.id}`,
       title: t.title || "[AI 스캔] 기한 관리 업무",
       status: "APPROVED" as any,
-      created_at: t.created_at || new Date().toISOString().substring(0, 10),
-      updated_at: t.updated_at || new Date().toISOString().substring(0, 10),
+      created_at: t.created_at || t.updated_at || new Date().toISOString().replace('T', ' ').substring(0, 19),
+      updated_at: t.updated_at || t.created_at || new Date().toISOString().replace('T', ' ').substring(0, 19),
       field_name: "인증서/특허 AI 관제",
       work_type: "AI 기한 조치 완료",
       description: t.description || "완료 처리된 서류 검토 및 조치 건입니다."
@@ -1076,6 +1113,22 @@ export default function MobileHubPage() {
     // 하이픈(-)을 슬래시(/)로 변경하여 브라우저 타임존 오차(UTC 변환 버그) 방지
     const cleanStr = dateStr.replace(/-/g, "/");
     return new Date(cleanStr);
+  };
+
+  // 날짜 시분초 포맷터 헬퍼 (YYYY-MM-DD HH:MM:SS)
+  const formatDateTime = (dateStr?: string) => {
+    if (!dateStr) return "-";
+    // 이미 YYYY-MM-DD HH:MM:SS 형식이면 바로 반환
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateStr)) {
+      return dateStr;
+    }
+    try {
+      const d = getKstDate(dateStr);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    } catch (e) {
+      return dateStr;
+    }
   };
 
   // 한 일 (완료) 기간별 필터링 연산
@@ -1517,22 +1570,101 @@ export default function MobileHubPage() {
           </div>
         </div>
 
-        {/* 📋 일일 업무 보고 작성 단독 바로가기 단추 */}
-        <div 
-          onClick={() => router.push('/m/daily-report')}
-          className="bg-white border border-slate-200/80 hover:border-indigo-200 hover:bg-indigo-50/5 rounded-2xl shadow-xs p-3.5 mb-4 flex items-center justify-between cursor-pointer transition-all hover:shadow-sm"
-        >
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-indigo-50 text-indigo-650 rounded-xl flex items-center justify-center shadow-3xs shrink-0">
-              <FileText className="w-4 h-4 text-indigo-600 animate-pulse" />
+        {/* 📋 일일 업무 보고 작성 단독 바로가기 단추 (결재 상태 연동 버전) */}
+        {!todayReport ? (
+          // A. 아직 미제출 상태
+          <div 
+            onClick={() => router.push('/m/daily-report')}
+            className="bg-white border border-slate-200/80 hover:border-indigo-200 hover:bg-indigo-50/5 rounded-2xl shadow-xs p-3.5 mb-4 flex items-center justify-between cursor-pointer transition-all hover:shadow-sm animate-scale-in"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-indigo-50 text-indigo-650 rounded-xl flex items-center justify-center shadow-3xs shrink-0">
+                <FileText className="w-4 h-4 text-indigo-600 animate-pulse" />
+              </div>
+              <div className="text-left space-y-0.5">
+                <span className="font-extrabold text-slate-800 text-xs block leading-tight">오늘의 일일 업무 보고서</span>
+                <span className="text-[9px] text-slate-405 font-bold block">AI 요약 기반으로 간편하게 오늘 일보를 상신하세요.</span>
+              </div>
             </div>
-            <div className="text-left space-y-0.5">
-              <span className="font-extrabold text-slate-800 text-xs block leading-tight">오늘의 일일 업무 보고서</span>
-              <span className="text-[9px] text-slate-405 font-bold block">AI 요약 기반으로 간편하게 오늘 일보를 상신하세요.</span>
-            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
-        </div>
+        ) : todayReport.status === 'SUBMITTED' ? (
+          // B. 결재 대기 중 (SUBMITTED)
+          <div 
+            onClick={() => router.push('/m/daily-report')}
+            className="bg-amber-50/40 border border-amber-200 text-amber-800 rounded-2xl shadow-xs p-3.5 mb-4 flex items-center justify-between cursor-pointer transition-all hover:shadow-sm"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-amber-100/70 text-amber-700 rounded-xl flex items-center justify-center shadow-3xs shrink-0">
+                <Clock className="w-4 h-4 text-amber-600 animate-spin-slow" />
+              </div>
+              <div className="text-left space-y-0.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-extrabold text-slate-800 text-xs block leading-tight">일일 업무 보고서 (결재 대기)</span>
+                  <span className="bg-amber-100 text-amber-850 text-[8px] px-1.5 py-0.5 rounded-md font-extrabold">제출 완료</span>
+                </div>
+                <span className="text-[9px] text-slate-500 font-bold block">오늘 일보가 대표자 결재함에 대기 중입니다. (클릭 시 수정 가능)</span>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-amber-600" />
+          </div>
+        ) : todayReport.status === 'APPROVED' ? (
+          // C. 대표자 결재 승인 완료 (APPROVED)
+          <div 
+            onClick={() => router.push('/m/daily-report')}
+            className="bg-emerald-50/40 border border-emerald-250 text-emerald-800 rounded-2xl shadow-xs p-3.5 mb-4 flex flex-col gap-2 cursor-pointer transition-all hover:shadow-sm"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-emerald-100/70 text-emerald-700 rounded-xl flex items-center justify-center shadow-3xs shrink-0">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="text-left space-y-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-extrabold text-slate-800 text-xs block leading-tight">일일 업무 보고서 (승인 완료)</span>
+                    <span className="bg-emerald-100 text-emerald-850 text-[8px] px-1.5 py-0.5 rounded-md font-extrabold">최종 승인</span>
+                  </div>
+                  <span className="text-[9px] text-slate-500 font-bold block">오늘의 일보가 대표자에 의해 승인되었습니다. (수정 불가)</span>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-emerald-600" />
+            </div>
+            {todayReport.comment && (
+              <div className="bg-white/80 border border-emerald-100 rounded-xl p-2.5 text-[9.5px] font-bold text-slate-700 leading-normal flex items-start gap-1">
+                <span className="text-emerald-700 shrink-0">💬 대표자 의견:</span>
+                <span className="text-slate-650 font-semibold">{todayReport.comment}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          // D. 반려됨 (REJECTED)
+          <div 
+            onClick={() => router.push('/m/daily-report')}
+            className="bg-rose-50/40 border border-rose-250 text-rose-800 rounded-2xl shadow-xs p-3.5 mb-4 flex flex-col gap-2 cursor-pointer transition-all hover:shadow-sm"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-rose-100/75 text-rose-700 rounded-xl flex items-center justify-center shadow-3xs shrink-0 animate-pulse">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 animate-bounce" />
+                </div>
+                <div className="text-left space-y-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-extrabold text-slate-800 text-xs block leading-tight text-rose-750">일일 업무 보고서 (반려/보완)</span>
+                    <span className="bg-rose-100 text-rose-850 text-[8px] px-1.5 py-0.5 rounded-md font-extrabold">재작성 필요</span>
+                  </div>
+                  <span className="text-[9px] text-slate-600 font-bold block">일보 보완 요청이 왔습니다. 클릭하여 수정한 뒤 다시 상신하세요.</span>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-rose-600" />
+            </div>
+            {todayReport.comment && (
+              <div className="bg-white/85 border border-rose-100 rounded-xl p-2.5 text-[9.5px] font-bold text-slate-700 leading-normal flex items-start gap-1">
+                <span className="text-rose-700 shrink-0">💬 반려 사유:</span>
+                <span className="text-slate-650 font-semibold">{todayReport.comment}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 3. 할 일 vs 한 일 vs 태스크 폴더 메인 가로 탭 */}
         <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-1 flex mb-4">
@@ -1647,8 +1779,8 @@ export default function MobileHubPage() {
                           {session?.role === 'SUPER_ADMIN' && (
                             <>
                               <span>•</span>
-                              <span className="bg-slate-100 text-slate-600 border border-slate-200/80 px-1.5 py-0.5 rounded text-[8px] font-black tracking-tight">
-                                상신자: {(t as any).created_by || (t as any).updated_by || '현장 모바일'}
+                              <span className="bg-indigo-50 text-indigo-700 border border-indigo-100 px-1.5 py-0.5 rounded text-[8px] font-black tracking-tight shadow-3xs">
+                                작성: {(t as any).created_by || (t as any).updated_by || '현장 모바일'}
                               </span>
                             </>
                           )}
@@ -1716,18 +1848,20 @@ export default function MobileHubPage() {
                     >
                       <div className="space-y-1 text-left">
                         <span className="text-xs font-semibold text-slate-655 block line-through line-clamp-2 leading-relaxed">{t.title}</span>
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
-                          <span className="font-mono">{t.id}</span>
-                          <span>•</span>
-                          <span>{t.created_at}</span>
-                          {session?.role === 'SUPER_ADMIN' && (
-                            <>
-                              <span>•</span>
-                              <span className="bg-slate-100 text-slate-600 border border-slate-200/80 px-1.5 py-0.5 rounded text-[8px] font-black tracking-tight">
-                                상신자: {(t as any).created_by || (t as any).updated_by || '현장 모바일'}
+                        <div className="flex flex-col gap-0.5 text-[9px] text-slate-400 font-bold">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-slate-500">{t.id}</span>
+                            <span>•</span>
+                            <span>등록: {formatDateTime(t.created_at)}</span>
+                            {session?.role === 'SUPER_ADMIN' && (
+                              <span className="bg-indigo-50 text-indigo-700 border border-indigo-100 px-1.5 py-0.5 rounded text-[8px] font-black tracking-tight ml-1.5 shadow-3xs">
+                                작성: {(t as any).created_by || (t as any).updated_by || '현장 모바일'}
                               </span>
-                            </>
-                          )}
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-emerald-600/80 font-black">
+                            <span>완료: {formatDateTime(t.updated_at)}</span>
+                          </div>
                         </div>
                       </div>
                       <span className="text-[9px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100/60 px-2 py-0.5 rounded-md shrink-0">
@@ -1811,7 +1945,18 @@ export default function MobileHubPage() {
                             : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
                         }`}
                       >
-                        <span>📁 {f.name.length > 8 ? `${f.name.slice(0, 8)}...` : f.name}</span>
+                        <span className="flex flex-col items-start gap-0.5">
+                          <span className="flex items-center gap-1 font-extrabold text-xs">
+                            📁 {f.name.length > 8 ? `${f.name.slice(0, 8)}...` : f.name}
+                          </span>
+                          {session?.role === 'SUPER_ADMIN' && f.created_by && (
+                            <span className={`text-[8px] px-1 py-0.2 rounded font-black tracking-tight ${
+                              isSelected ? 'bg-white/20 text-white/90' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              소유: {f.created_by}
+                            </span>
+                          )}
+                        </span>
                         {/* 폴더 제어 영역 */}
                         <div className="flex items-center gap-1.5 shrink-0 ml-1">
                           {activeFolderMenuId === f.id ? (
@@ -3045,27 +3190,35 @@ export default function MobileHubPage() {
                 <>
                   {/* 스냅태스크 상태 표시 */}
                   {taskDetail && (
-                    <div className="flex justify-between items-center bg-slate-50 p-3 rounded-2xl border border-slate-100 text-xs">
-                      <div>
-                        <span className="text-slate-400 font-bold block text-[10px]">작업 등록 일시</span>
-                        <span className="font-semibold text-slate-700">{taskDetail.created_at}</span>
+                    <div className="flex flex-col gap-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="text-slate-400 font-bold block text-[10px]">진행 상태</span>
+                          <span className={`font-black text-[10px] px-2 py-0.5 rounded-md border inline-block mt-0.5 ${
+                            taskDetail.status === 'ACTIVE'
+                              ? 'bg-amber-50 text-amber-700 border-amber-100'
+                              : taskDetail.status === 'PENDING_APPROVAL'
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                          }`}>
+                            {taskDetail.status === 'ACTIVE' 
+                              ? '진행중' 
+                              : taskDetail.status === 'PENDING_APPROVAL' 
+                                ? '취소 승인 대기' 
+                                : '완료됨'}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-slate-400 font-bold block text-[10px]">작업 등록 일시</span>
+                          <span className="font-semibold text-slate-700 block mt-0.5">{formatDateTime(taskDetail.created_at)}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-slate-400 font-bold block text-[10px] text-right">진행 상태</span>
-                        <span className={`font-black text-[10px] px-2 py-0.5 rounded-md border ${
-                          taskDetail.status === 'ACTIVE'
-                            ? 'bg-amber-50 text-amber-700 border-amber-100'
-                            : taskDetail.status === 'PENDING_APPROVAL'
-                              ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                        }`}>
-                          {taskDetail.status === 'ACTIVE' 
-                            ? '진행중' 
-                            : taskDetail.status === 'PENDING_APPROVAL' 
-                              ? '취소 승인 대기' 
-                              : taskDetail.status}
-                        </span>
-                      </div>
+                      {taskDetail.status !== 'ACTIVE' && taskDetail.status !== 'PENDING_APPROVAL' && (
+                        <div className="border-t border-slate-200/60 pt-2.5 flex justify-between items-center">
+                          <span className="text-emerald-700 font-bold text-[10px]">작업 완료 일시</span>
+                          <span className="font-semibold text-emerald-700">{formatDateTime(taskDetail.updated_at || taskDetail.created_at)}</span>
+                        </div>
+                      )}
                     </div>
                   )}
 

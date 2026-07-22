@@ -1488,7 +1488,7 @@ export default function GovernanceDashboard() {
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex items-center gap-2">
                         <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                        <h3 className="text-base font-black text-slate-800 tracking-tight">📂 전사 태스크 폴더 & AI 문서 파싱 관제 센터</h3>
+                        <h3 className="text-base font-black text-slate-800 tracking-tight">📂 태스크 폴더 관제 센터</h3>
                       </div>
                       <button
                         onClick={async () => {
@@ -1779,7 +1779,7 @@ export default function GovernanceDashboard() {
               <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
                 <div className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
                   <ListTodo className="w-4 h-4 text-slate-400" />
-                  <span>김직원이 모바일에서 제출한 일일 보고서 결재 목록입니다.</span>
+                  <span>임직원이 모바일에서 제출한 일일 업무 보고서 결재 목록입니다.</span>
                 </div>
               </div>
 
@@ -1810,9 +1810,11 @@ export default function GovernanceDashboard() {
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
                               : report.status === 'REJECTED'
                                 ? 'bg-rose-50 text-rose-700 border-rose-100'
-                                : 'bg-amber-50 text-amber-700 border-amber-100 animate-pulse'
+                                : report.status === 'RESUBMITTED'
+                                  ? 'bg-sky-50 text-sky-700 border-sky-200 animate-pulse'
+                                  : 'bg-amber-50 text-amber-700 border-amber-100 animate-pulse'
                           }`}>
-                            {report.status === 'APPROVED' ? '결재 승인' : report.status === 'REJECTED' ? '반려' : '결재 대기'}
+                            {report.status === 'APPROVED' ? '결재 승인' : report.status === 'REJECTED' ? '반려' : report.status === 'RESUBMITTED' ? '🔄 보완 재상신' : '결재 대기'}
                           </span>
                         </div>
                         <p className="text-xs text-slate-650 font-semibold line-clamp-3 leading-relaxed whitespace-pre-wrap">
@@ -2294,9 +2296,15 @@ export default function GovernanceDashboard() {
                 <div>
                   <span className="text-slate-400 font-semibold block">현재 상태</span>
                   <span className={`font-bold text-xs ${
-                    selectedReport.status === 'APPROVED' ? 'text-emerald-600' : selectedReport.status === 'REJECTED' ? 'text-rose-600' : 'text-amber-600 animate-pulse'
+                    selectedReport.status === 'APPROVED' 
+                      ? 'text-emerald-600' 
+                      : selectedReport.status === 'REJECTED' 
+                        ? 'text-rose-600' 
+                        : selectedReport.status === 'RESUBMITTED'
+                          ? 'text-sky-600 animate-pulse'
+                          : 'text-amber-600 animate-pulse'
                   }`}>
-                    {selectedReport.status === 'APPROVED' ? '결재 승인완료' : selectedReport.status === 'REJECTED' ? '반려' : '결재 대기 중'}
+                    {selectedReport.status === 'APPROVED' ? '결재 승인완료' : selectedReport.status === 'REJECTED' ? '반려' : selectedReport.status === 'RESUBMITTED' ? '🔄 보완 재상신 검토 중' : '결재 대기 중'}
                   </span>
                 </div>
                 {selectedReport.approved_at && (
@@ -2315,6 +2323,14 @@ export default function GovernanceDashboard() {
                 {selectedReport.report_content}
               </div>
             </div>
+
+            {/* 💡 [추가] 반려 후 재상신 건일 때 직전 반려 사유 노출 */}
+            {selectedReport.status === 'RESUBMITTED' && selectedReport.comment && (
+              <div className="bg-rose-50/40 border border-rose-100/50 rounded-2xl p-4 text-xs font-semibold space-y-1 animate-scale-in">
+                <span className="text-[10px] font-black text-rose-700 block">💬 직전 결재 반려 의견 (보완 요구 사항):</span>
+                <p className="text-slate-700 whitespace-pre-wrap leading-relaxed font-bold">{selectedReport.comment}</p>
+              </div>
+            )}
 
             {/* 대표자 코멘트 및 AI 추천 */}
             <div className="space-y-3">
@@ -2397,7 +2413,7 @@ export default function GovernanceDashboard() {
                   <button
                     onClick={() => handleDecideReport(selectedReport.id, 'APPROVED')}
                     disabled={isProcessing}
-                    className="bg-indigo-650 hover:bg-indigo-750 text-white font-bold px-6 py-2.5 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer border-none transition-colors shadow-xs"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer border-none transition-colors shadow-xs"
                   >
                     <CheckSquare className="w-3.5 h-3.5" />
                     <span>결재 승인 완료</span>

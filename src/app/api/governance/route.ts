@@ -9,7 +9,8 @@ import {
   deleteRows,
   executeSQL,
   uploadFile,
-  downloadFile
+  downloadFile,
+  callAiCaller // 💡 [추가] AI 호출 헬퍼
 } from '../../../../egdesk-helpers';
 
 /**
@@ -34,7 +35,8 @@ async function verifySuperAdmin(): Promise<string | null> {
     const token = cookieStore.get('auth_token')?.value;
     if (!token) return null;
     const payload = decodeJwt(token);
-    if (payload.role === 'SUPER_ADMIN') {
+    // 💡 [수정] 대표자 계정(TENANT_ADMIN) 및 시스템 관리자(SYSTEM_ADMIN) 역할까지 관리자 자격으로 인증 범위를 확장합니다.
+    if (payload.role === 'SUPER_ADMIN' || payload.role === 'TENANT_ADMIN' || payload.role === 'SYSTEM_ADMIN') {
       return (payload.username as string) || 'SUPER_ADMIN';
     }
   } catch (e) {
@@ -414,15 +416,41 @@ export async function GET(request: Request) {
     if (action === 'daily_reports') {
       try {
         const tenantId = await resolveTenantId();
-        // 소프트 삭제 필터링 (deleted_at IS NULL) 규칙 준수
-        const res = await queryTable('crm_daily_reports', {
-          filters: { deleted_at: null, tenant_id: tenantId }
-        });
-        const reports = res.rows || [];
+        const cookieStore = await cookies();
+        const token = cookieStore.get('auth_token')?.value;
+        let isSuperAdmin = false;
+        let decodedPayload: any = null;
+        if (token) {
+          try {
+            decodedPayload = decodeJwt(token);
+            isSuperAdmin = decodedPayload.role === 'SUPER_ADMIN' || decodedPayload.role === 'TENANT_ADMIN' || decodedPayload.role === 'SYSTEM_ADMIN';
+          } catch (e: any) {
+            console.error('JWT Decode Exception in daily_reports:', e.message);
+            isSuperAdmin = false;
+          }
+        }
+
+        console.log(`[DEBUG_DAILY_REPORTS] tokenExists: ${!!token}, decodedPayload:`, decodedPayload, `resolveTenantId: ${tenantId}, isSuperAdmin: ${isSuperAdmin}`);
+
+
+        // 최고관리자(TENANT_ADMIN, SYSTEM_ADMIN 포함)는 모든 직원의 보고서를 모니터링 및 결재할 수 있어야 하므로 테넌트 필터를 완화합니다.
+        const filters: Record<string, any> = {};
+        if (!isSuperAdmin) {
+          filters.tenant_id = tenantId;
+        }
+
+        console.log(`[DEBUG_DAILY_REPORTS] Querying crm_daily_reports with filters:`, filters);
+        const res = await queryTable('crm_daily_reports', { filters });
+        let reports = res.rows || [];
+        
+        // deleted_at: null 쿼리 번역기 오류를 피하기 위해 메모리 상에서 소프트 삭제 필터링을 수행합니다.
+        reports = reports.filter((r: any) => !r.deleted_at);
+        console.log(`[DEBUG_DAILY_REPORTS] Found reports count after memory filter: ${reports.length}`);
         // 최신 보고서 순으로 정렬
         reports.sort((a: any, b: any) => (b.report_date || '').localeCompare(a.report_date || ''));
         return NextResponse.json({ success: true, reports });
       } catch (err: any) {
+        console.error('[ERROR_DAILY_REPORTS] Exception occurred:', err);
         return NextResponse.json({ success: false, error: err.message }, { status: 500 });
       }
     }
@@ -433,6 +461,65 @@ export async function GET(request: Request) {
         const operator = searchParams.get('operator') || '김직원';
         const reportDate = searchParams.get('report_date') || new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().substring(0, 10);
         const tenantId = await resolveTenantId();
+
+        // 💡 [추가] 오늘 자 일보가 이미 제출되었고, 그 상태가 REJECTED(반려)인 경우
+        // 대표자의 반려 코멘트를 반영하여 AI가 개선된 일보 본문 초안을 동적으로 리팩토링 및 요약하도록 합니다.
+        const existingReportRes = await queryTable('crm_daily_reports', {
+          filters: { report_date: reportDate, operator: operator, tenant_id: tenantId }
+        });
+        const existingReports = existingReportRes.rows || [];
+        if (existingReports.length > 0 && existingReports[0].status === 'REJECTED') {
+          const existingReportContent = existingReports[0].report_content || '';
+          const rejectComment = existingReports[0].comment || '';
+
+          if (existingReportContent.trim() && rejectComment.trim()) {
+            const prompt = `
+당신은 기업의 성실한 직원입니다.
+당신이 제출한 일일 업무 보고서(일보)에 대해 대표자(CEO)로부터 반려 및 보완 요청을 받았습니다.
+대표자가 남겨준 피드백(반려 의견)을 정독하고, 기존에 작성했던 일보 본문 내용을 대표자의 요구사항에 맞추어 완벽하게 보완 및 개정한 재제출용 일보 본문을 완성해 주세요.
+
+[기존 일보 본문]
+${existingReportContent}
+
+[대표자의 반려 의견 (보완 요구사항)]
+${rejectComment}
+
+지시사항:
+1. 대표자가 지적하거나 요청한 보완 사항을 일보 내용에 자연스럽게 보강하여 작성해야 합니다.
+2. 추가적인 변명이나 해명, 인사말, 또는 마크다운 코드 블록(\`\`\` 등)을 절대 포함하지 마십시오. 오직 직원이 재상신할 최종 일보 본문 텍스트만 출력해 주세요.
+`;
+
+            try {
+              const aiRes = await callAiCaller(prompt);
+              const draftContent = aiRes.content.trim();
+              return NextResponse.json({
+                success: true,
+                report_date: reportDate,
+                operator,
+                ai_summary: existingReports[0].ai_summary,
+                draft_content: draftContent,
+                is_revision: true
+              });
+            } catch (aiErr: any) {
+              console.error('[GENERATE_DRAFT_AI_ERROR] 반려 보완 초안 AI 생성 실패:', aiErr.message);
+            }
+          }
+        }
+
+        // 💡 [추가] 과거 일보 이력 수집 (최근 최대 3건)
+        const allReportsRes = await queryTable('crm_daily_reports', {
+          filters: { operator, tenant_id: tenantId }
+        });
+        const allReports = allReportsRes.rows || [];
+        // 과거 날짜 보고서만 필터링 후 정렬
+        const pastReports = allReports
+          .filter((r: any) => (r.report_date || '') < reportDate && r.status !== 'REJECTED')
+          .sort((a: any, b: any) => (b.report_date || '').localeCompare(a.report_date || ''))
+          .slice(0, 3);
+
+        const pastReportsText = pastReports.length > 0
+          ? pastReports.map((r: any) => `* [${r.report_date} 보고서 내용]\n${r.report_content}`).join('\n\n')
+          : '기존 과거 일보 이력이 존재하지 않습니다. (최초 보고)';
 
         // 1) 당일 직원이 상신한 관제 로그 데이터 수집
         const govLogsRes = await queryTable('crm_governance_logs', {
@@ -459,12 +546,39 @@ export async function GET(request: Request) {
           });
         }
 
-        let draftContent = "";
+        // 기본 룰 기반 초안 (AI 호출 실패 시의 폴백)
+        let fallbackDraft = "";
         if (summaryLines.length === 0) {
-          // 활동 내역 폴백 생성
-          draftContent = `금일 등록된 모바일 관제 상신 내역 및 태스크 폴더 자료 업로드 이력이 존재하지 않습니다. 특별한 금일 특이사항이나 수동 보고 사항이 있으신 경우, 이 내용을 편집하여 보고서를 작성해 주시기 바랍니다.`;
+          fallbackDraft = `금일 등록된 모바일 관제 상신 내역 및 태스크 폴더 자료 업로드 이력이 존재하지 않습니다. 특별한 금일 특이사항이나 수동 보고 사항이 있으신 경우, 이 내용을 편집하여 보고서를 작성해 주시기 바랍니다.`;
         } else {
-          draftContent = `금일 업무 수행 보고드립니다.\n\n${summaryLines.join('\n')}\n\n위 내용과 같이 금일 업무 및 수집된 문서에 대해 이상이 없음을 확인하고 보고서를 제출합니다.`;
+          fallbackDraft = `금일 업무 수행 보고드립니다.\n\n${summaryLines.join('\n')}\n\n위 내용과 같이 금일 업무 및 수집된 문서에 대해 이상이 없음을 확인하고 보고서를 제출합니다.`;
+        }
+
+        // 💡 [핵심] 과거 이력과 오늘 로그를 융합하여 인텔리전트 AI 초안 동적 작성
+        const aiPrompt = `
+당신은 기업의 성실한 직원입니다.
+아래의 [오늘 진행한 업무 요약 내역]을 정독하고, 오늘 자 일일 업무 보고서(일보) 본문을 프로페셔널한 문체로 완성해 주세요.
+특히 업무의 연속성 및 연결성을 반영하기 위해, 아래 제공된 [과거 최근 일보 이력]을 면밀히 분석하여 어제 완료했거나 진행 중이었던 업무가 오늘로 어떻게 이어져서 완수되었는지 또는 연계되어 진행 중인지를 자연스럽게 어필해 주셔야 합니다.
+
+[과거 최근 일보 이력 (최신순)]
+${pastReportsText}
+
+[오늘 진행한 업무 요약 내역]
+${summaryLines.length > 0 ? summaryLines.join('\n') : '오늘 기록된 모바일 상신 및 문서 업로드 활동 내역이 없습니다. (수동 보고 필요)'}
+
+지시사항:
+1. 과거에 이어지던 연속적인 업무 동향(예: 연계 진행, 보완, 대기 등)을 고려하여 오늘 일보 본문 텍스트를 풍부하고 매끄럽게 보강하여 작성하십시오.
+2. 부가적인 대표자 인사나 해명, 또는 마크다운 기호(\`\`\` 등)를 절대 포함하지 마십시오. 오직 직원이 제출할 완성형 일보 본문 텍스트만 그대로 출력해 주세요.
+`;
+
+        let draftContent = fallbackDraft;
+        try {
+          const aiCallResult = await callAiCaller(aiPrompt);
+          if (aiCallResult.content && aiCallResult.content.trim()) {
+            draftContent = aiCallResult.content.trim();
+          }
+        } catch (aiErr: any) {
+          console.error('[GENERATE_DRAFT_PAST_AI_ERROR] 과거 이력 참조 AI 초안 생성 실패, fallback 사용:', aiErr.message);
         }
 
         return NextResponse.json({
@@ -479,25 +593,75 @@ export async function GET(request: Request) {
       }
     }
 
-    // 💡 [신규] 대표자 결재용 AI 코멘트 추천
+    // 💡 [신규] 대표자 결재용 AI 코멘트 추천 (Gemini 연동 실시간 동적 생성)
     if (action === 'suggest_comment') {
       try {
         const content = searchParams.get('report_content') || '';
         const operator = searchParams.get('operator') || '직원';
 
-        // 보고서 텍스트 기반 3가지 어조의 AI 코멘트 추천 리스트 생성
-        const commentA = `오늘도 ${operator}님의 신속한 상신 처리와 꼼꼼한 증빙 자료 수집 덕분에 전사 비즈니스 통제망이 안전하게 유지되고 있습니다. 수고 많으셨습니다!`;
-        const commentB = `제출하신 보고 내용 중 거래처 등록 분석 건은 OCR 판독 오차가 없는지 최종 확인이 중요합니다. 모바일 피드백 루프를 적극 활용하여 조치 완료해주어 고맙습니다.`;
-        const commentC = `금일 제출된 일일 보고서 결재 승인합니다. 수집된 계약서/견적서 상의 정산 일정과 자재 공급 부족 경보 부분은 다음 주 주간 회의 전까지 자재팀과 크로스 체크하여 특이사항 보고 바랍니다.`;
+        // 폴백용 기본 코멘트 정의
+        const fallbackA = `오늘도 ${operator}님의 신속한 상신 처리와 꼼꼼한 증빙 자료 수집 덕분에 전사 비즈니스 통제망이 안전하게 유지되고 있습니다. 수고 많으셨습니다!`;
+        const fallbackB = `제출하신 보고 내용 중 거래처 등록 분석 건은 OCR 판독 오차가 없는지 최종 확인이 중요합니다. 모바일 피드백 루프를 적극 활용하여 조치 완료해주어 고맙습니다.`;
+        const fallbackC = `금일 제출된 일일 보고서 결재 승인합니다. 수집된 계약서/견적서 상의 정산 일정과 자재 공급 부족 경보 부분은 다음 주 주간 회의 전까지 자재팀과 크로스 체크하여 특이사항 보고 바랍니다.`;
+        const fallbackD = `금일 제출하신 일보 내용에 구체적인 모바일 업무 이력(수주/견적/발주서 스캔 내역 등) 기술이나 상세 설명이 다소 미흡합니다. 내용 보완 후 재상신 바랍니다.`;
 
-        return NextResponse.json({
-          success: true,
-          suggestions: [
-            { type: 'A', label: '👏 격려/응원형', text: commentA },
-            { type: 'B', label: '🔍 피드백/지도형', text: commentB },
-            { type: 'C', label: '📋 공식/업무지시형', text: commentC }
-          ]
-        });
+        const fallbackSuggestions = [
+          { type: 'A', label: '👏 격려/응원형', text: fallbackA },
+          { type: 'B', label: '🔍 피드백/지도형', text: fallbackB },
+          { type: 'C', label: '📋 공식/업무지시형', text: fallbackC },
+          { type: 'D', label: '⚠️ 반려/보완요청형', text: fallbackD }
+        ];
+
+        if (!content.trim()) {
+          return NextResponse.json({ success: true, suggestions: fallbackSuggestions });
+        }
+
+        const prompt = `
+당신은 기업의 대표자(CEO)입니다. 
+아래는 직원(${operator})이 제출한 일일 업무 보고서(일보) 본문입니다.
+
+[제출된 일보 본문]
+${content}
+
+이 일보 내용을 정독 및 분석하여, 대표자가 직원에게 남길 수 있는 4가지 어조의 맞춤형 피드백 코멘트(격려/응원형, 피드백/지도형, 공식/업무지시형, 반려/보완요청형)를 작성해 주세요. 
+단순한 템플릿 문구가 아닌, 실제 위 일보 본문에 기록된 업무의 핵심 사건(예: 수주, 재고 조사, 보고서 내용 등)을 직접적으로 언급하고 연계하여 진정성 있고 전문적이게 작성해야 합니다.
+
+반드시 아래 JSON 형식으로만 완벽하게 응답해 주세요. JSON 마크다운 기호(\`\`\`json)를 포함하지 않는 순수한 raw JSON 데이터만 출력해 주셔야 합니다.
+{
+  "suggestions": [
+    { "type": "A", "label": "👏 격려/응원형", "text": "일보 본문의 성과나 수고를 직접 격려하고 아끼는 멘트" },
+    { "type": "B", "label": "🔍 피드백/지도형", "text": "일보 본문 내용의 보완점이나 유의할 점을 지적하고 조언하는 멘트" },
+    { "type": "C", "label": "📋 공식/업무지시형", "text": "일보 본문 업무의 연계선상에서 지시할 후속 조치나 업무 지시 멘트" },
+    { "type": "D", "label": "⚠️ 반려/보완요청형", "text": "일보 내용 중 구체성이 떨어지는 부분이나 불충분한 부분을 논리적으로 지적하며 보완 후 재작성해 줄 것을 정중하게 지시하는 멘트" }
+  ]
+}
+`;
+
+        try {
+          const aiRes = await callAiCaller(prompt);
+          let parsed: any = null;
+
+          if (aiRes.json && typeof aiRes.json === 'object') {
+            parsed = aiRes.json;
+          } else {
+            // json 필드가 null인 경우, content 텍스트에서 JSON 파싱 시도
+            const contentText = aiRes.content.trim();
+            const cleanJsonText = contentText
+              .replace(/^```json\s*/i, '')
+              .replace(/```$/, '')
+              .trim();
+            parsed = JSON.parse(cleanJsonText);
+          }
+
+          if (parsed && Array.isArray(parsed.suggestions) && parsed.suggestions.length === 4) {
+            return NextResponse.json({ success: true, suggestions: parsed.suggestions });
+          }
+        } catch (aiErr: any) {
+          console.error('[SUGGEST_COMMENT_AI_ERROR] AI 호출 실패, fallback 사용:', aiErr.message);
+        }
+
+        // AI 생성에 실패하거나 형식이 맞지 않으면 폴백 코멘트 반환
+        return NextResponse.json({ success: true, suggestions: fallbackSuggestions });
       } catch (err: any) {
         return NextResponse.json({ success: false, error: err.message }, { status: 500 });
       }
@@ -1539,12 +1703,23 @@ export async function POST(request: Request) {
       const existing = checkRes.rows || [];
 
       if (existing.length > 0) {
+        // 💡 [추가] 이미 대표자 승인이 완료된 보고서는 수정(업데이트)이 불가능하도록 보안 제한을 둡니다. (반려된 보고서는 재제출 허용)
+        const currentStatus = existing[0].status;
+        if (currentStatus === 'APPROVED') {
+          return NextResponse.json({
+            success: false,
+            error: '🔒 이미 대표자 승인이 완료된 보고서는 수정할 수 없습니다.'
+          }, { status: 400 });
+        }
+
+        const isReSubmit = currentStatus === 'REJECTED';
+
         // 이미 존재하면 덮어쓰기 업데이트
         const targetId = existing[0].id;
         await updateRows('crm_daily_reports', {
           report_content,
           ai_summary: ai_summary || existing[0].ai_summary,
-          status: 'SUBMITTED',
+          status: isReSubmit ? 'RESUBMITTED' : 'SUBMITTED', // 💡 반려 후 재상신 구분
           updated_at: nowStr,
           updated_by: currentUser
         }, { filters: { id: targetId, tenant_id: tenantId } });

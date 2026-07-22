@@ -535,6 +535,7 @@ ${realContents.substring(0, 450)}...
           extracted_entities: { docCategory, realTitles, realFileNames },
           ai_api_document_id: aiApiResult?.id || null
         }),
+        created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
         updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
       };
 
