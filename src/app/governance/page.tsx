@@ -61,6 +61,7 @@ export default function GovernanceDashboard() {
   const [reportComment, setReportComment] = useState("");
   const [aiComments, setAiComments] = useState<any[]>([]);
   const [aiCommentsLoading, setAiCommentsLoading] = useState(false);
+  const [aiSuggestionsCache, setAiSuggestionsCache] = useState<Record<number, any[]>>({}); // 💡 [추가] 모달 재오픈 시 AI API 중복 호출 방지용 임시 캐시
 
   // 🎗️ AI 파싱 배정 대기 건 및 담당자 배정 모달 상태
   const [aiSuggestedTasks, setAiSuggestedTasks] = useState<any[]>([]);
@@ -426,6 +427,12 @@ export default function GovernanceDashboard() {
         setSelectedReport(null);
         setReportComment("");
         setAiComments([]);
+        // 💡 [추가] 결재 완료된 보고서의 이전 AI 피드백 캐시 소거 (재상신/신규 작성 대비)
+        setAiSuggestionsCache(prev => {
+          const next = { ...prev };
+          delete next[reportId];
+          return next;
+        });
         fetchReports();
         alert(status === 'APPROVED' ? "보고서가 성공적으로 결재 승인되었습니다." : "보고서가 반려 처리되었습니다.");
       } else {
@@ -445,7 +452,13 @@ export default function GovernanceDashboard() {
       const res = await apiFetch(`/api/governance?action=suggest_comment&report_content=${encodeURIComponent(report.report_content)}&operator=${encodeURIComponent(report.operator)}`);
       const data = await res.json();
       if (data.success) {
-        setAiComments(data.suggestions || []);
+        const suggestions = data.suggestions || [];
+        setAiComments(suggestions);
+        // 💡 [추가] 받아온 추천 피드백 리스트를 메모리 캐시에 저장
+        setAiSuggestionsCache(prev => ({
+          ...prev,
+          [report.id]: suggestions
+        }));
       }
     } catch (e) {
       console.error("Failed to suggest comments:", e);
@@ -1795,7 +1808,14 @@ export default function GovernanceDashboard() {
                       key={report.id}
                       onClick={() => {
                         setSelectedReport(report);
-                        handleGetAiComments(report);
+                        
+                        // 💡 [변경] 이미 AI 의견을 한 번 로드한 보고서인 경우 캐시를 재활용하고, 처음 여는 경우에만 1회 자동 실행합니다.
+                        if (aiSuggestionsCache[report.id]) {
+                          setAiComments(aiSuggestionsCache[report.id]);
+                        } else {
+                          setAiComments([]); // 초기화
+                          handleGetAiComments(report);
+                        }
                       }}
                       className="bg-white border border-slate-200/85 hover:border-indigo-200 hover:bg-indigo-50/10 rounded-3xl p-5 shadow-xs flex flex-col justify-between transition-all hover:shadow-md cursor-pointer text-left group"
                     >
