@@ -1809,8 +1809,11 @@ export default function GovernanceDashboard() {
                       onClick={() => {
                         setSelectedReport(report);
                         
-                        // 💡 [변경] 이미 AI 의견을 한 번 로드한 보고서인 경우 캐시를 재활용하고, 처음 여는 경우에만 1회 자동 실행합니다.
-                        if (aiSuggestionsCache[report.id]) {
+                        // 💡 [변경] 이미 결재 완료(승인/반려)된 건은 AI 의견 제안을 수행하지 않으며, 결재 대기/재상신 상태인 경우에만 1회 자동 실행(캐시 활용)합니다.
+                        const isClosed = report.status === 'APPROVED' || report.status === 'REJECTED';
+                        if (isClosed) {
+                          setAiComments([]);
+                        } else if (aiSuggestionsCache[report.id]) {
                           setAiComments(aiSuggestionsCache[report.id]);
                         } else {
                           setAiComments([]); // 초기화
@@ -2359,15 +2362,17 @@ export default function GovernanceDashboard() {
                   대표자 코멘트 및 결재 의견
                 </label>
 
-                {/* 🤖 AI 코멘트 피드백 제안 단추 */}
-                <button
-                  onClick={() => handleGetAiComments(selectedReport)}
-                  disabled={aiCommentsLoading}
-                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] px-3 py-1.5 rounded-xl border border-indigo-100 transition shadow-2xs flex items-center gap-1 cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-650 animate-pulse" />
-                  <span>{aiCommentsLoading ? '의견 분석 중...' : '🤖 AI 피드백 코멘트 제안'}</span>
-                </button>
+                {/* 🤖 AI 코멘트 피드백 제안 단추 (결재 대기/재상신 상태인 경우만 노출) */}
+                {selectedReport.status !== 'APPROVED' && selectedReport.status !== 'REJECTED' && (
+                  <button
+                    onClick={() => handleGetAiComments(selectedReport)}
+                    disabled={aiCommentsLoading}
+                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] px-3 py-1.5 rounded-xl border border-indigo-100 transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-650 animate-pulse" />
+                    <span>{aiCommentsLoading ? '의견 분석 중...' : '🤖 AI 피드백 코멘트 제안'}</span>
+                  </button>
+                )}
               </div>
 
               {/* AI 제안 칩 노출 */}
@@ -2390,21 +2395,14 @@ export default function GovernanceDashboard() {
               )}
 
               <textarea
-                value={reportComment}
+                value={reportComment || selectedReport.comment || ""}
                 onChange={(e) => setReportComment(e.target.value)}
+                disabled={selectedReport.status === 'APPROVED' || selectedReport.status === 'REJECTED'}
                 rows={3}
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-3.5 py-2.5 text-xs font-semibold text-slate-750 leading-relaxed placeholder-slate-400 outline-none focus:border-indigo-500 resize-none transition-colors"
-                placeholder="직원에게 전달할 피드백이나 지시 사항을 작성해 주세요. (결재 승인/반려 시 모두 적용됩니다)"
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-3.5 py-2.5 text-xs font-semibold text-slate-750 leading-relaxed placeholder-slate-400 outline-none focus:border-indigo-500 resize-none transition-colors disabled:opacity-65 disabled:bg-slate-100/50"
+                placeholder={selectedReport.status === 'APPROVED' || selectedReport.status === 'REJECTED' ? "결재 처리가 완료된 보고서입니다." : "직원에게 전달할 피드백이나 지시 사항을 작성해 주세요. (결재 승인/반려 시 모두 적용됩니다)"}
               />
             </div>
-
-            {/* 기존 대표자 피드백 코멘트가 있는 경우 */}
-            {selectedReport.comment && (
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
-                <span className="text-slate-400 font-bold block">결재 의견 피드백:</span>
-                <span className="text-slate-700 font-semibold">{selectedReport.comment}</span>
-              </div>
-            )}
 
             {/* 결재 버튼 */}
             <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
