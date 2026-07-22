@@ -539,6 +539,20 @@ export default function GovernanceDashboard() {
       } catch (cErr) {
         console.warn("AI 배정대기 건 로드 생략:", cErr);
       }
+
+      // 💡 [추가] 2.7. 자율 규칙 목록 조회 및 카운트 동기화
+      try {
+        await fetchRules();
+      } catch (rErr) {
+        console.warn("자율 규칙 로드 생략:", rErr);
+      }
+
+      // 💡 [추가] 2.8. 태스크 폴더 목록 조회 및 카운트 동기화
+      try {
+        await fetchFolders();
+      } catch (fErr) {
+        console.warn("태스크 폴더 로드 생략:", fErr);
+      }
     } catch (err: any) {
       console.error("Governance data fetch error:", err);
       setError("데이터를 로드하는 중 에러가 발생했습니다.");

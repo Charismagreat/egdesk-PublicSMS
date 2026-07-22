@@ -27,17 +27,39 @@ export async function GET(req: Request) {
 
   try {
     if (action === 'list') {
-      // deleted_at IS NULL 규칙 적용
       const res = await queryTable('crm_task_folders', {
         orderBy: 'created_at DESC'
       });
-      const rows = res.rows || [];
+      let rows = res.rows || [];
+      
+      // 💡 [자가 치유] DB에 폴더가 단 하나도 존재하지 않는 경우, 모바일 연동의 기본 13번 폴더를 강제 자동 생성
+      if (rows.length === 0) {
+        const defaultFolder = {
+          id: 13,
+          name: '수입통관 및 증빙 수집 폴더',
+          description: '모바일 포털 및 현장에서 스캔하여 수집한 관제용 무역 서류를 안전하게 보관하는 기본 폴더입니다.',
+          created_at: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19),
+          created_by: '최고관리자',
+          tenant_id: 'default',
+          uuid: 'folder_default_13',
+          updated_at: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19),
+          updated_by: '최고관리자'
+        };
+        await insertRows('crm_task_folders', [defaultFolder]);
+        
+        // 다시 조회
+        const reFetch = await queryTable('crm_task_folders', {
+          orderBy: 'created_at DESC'
+        });
+        rows = reFetch.rows || [];
+      }
       
       // 계정 수준 격리 필터링
       const activeRows = rows.filter((r: any) => {
         if (r.deleted_at) return false;
         
-        if (userRole === 'SUPER_ADMIN') {
+        // 💡 [추가] TENANT_ADMIN 및 SYSTEM_ADMIN 역할까지 확장하여 격리 우회 적용
+        if (userRole === 'SUPER_ADMIN' || userRole === 'TENANT_ADMIN' || userRole === 'SYSTEM_ADMIN') {
           // 최고 관리자는 모바일 포털에서도 모든 직원의 폴더를 볼 수 있습니다.
           return true;
         } else {
@@ -61,12 +83,20 @@ export async function GET(req: Request) {
       });
       const rows = res.rows || [];
       
-      // 테넌트 및 폴더 매칭 필터링
-      const activeRows = rows.filter((r: any) => 
-        !r.deleted_at && 
-        String(r.folder_id) === String(folderId) && 
-        String(r.tenant_id) === String(userTenantId)
-      );
+      // 테넌트 및 폴더 매칭 필터링 (null / default 하위 호환 결합)
+      const activeRows = rows.filter((r: any) => {
+        const matchedFolder = String(r.folder_id) === String(folderId);
+        if (!matchedFolder || r.deleted_at) return false;
+        
+        // 최고 관리자 권한 격리 우회
+        if (userRole === 'SUPER_ADMIN' || userRole === 'TENANT_ADMIN' || userRole === 'SYSTEM_ADMIN') {
+          return true;
+        }
+        
+        const isNullOrEmpty = !r.tenant_id || r.tenant_id === 'default';
+        const isUserDefault = userTenantId === 'default';
+        return r.tenant_id === userTenantId || (isNullOrEmpty && isUserDefault);
+      });
       
       // 최신순 정렬 재확보 (자바스크립트 수준의 이중 가드)
       activeRows.sort((a: any, b: any) => {
