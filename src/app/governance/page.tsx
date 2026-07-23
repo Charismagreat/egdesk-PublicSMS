@@ -1008,6 +1008,58 @@ export default function GovernanceDashboard() {
     }
   };
 
+  // 💡 [신규] 컨트롤타워 내 모바일 연차 신청 결재 승인 처리
+  const handleApproveLeave = async (leaveId: string) => {
+    if (!window.confirm("정말로 이 휴가 신청서를 최종 결재 승인하시겠습니까?\n승인 시 해당 사원의 연차 잔액이 소모되며 근태 캘린더에 연동 적재됩니다.")) return;
+    setIsExecuting(true);
+    try {
+      const res = await apiFetch("/api/governance?action=approve_leave_request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leave_id: leaveId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message || "성공적으로 승인 완료되었습니다.");
+        setSelectedEvent(null); // 모달 닫기
+        loadData(); // 대장 목록 리프레시
+      } else {
+        alert("승인 실패: " + data.error);
+      }
+    } catch (e) {
+      alert("서버와 통신하는 중 오류가 발생했습니다.");
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  // 💡 [신규] 컨트롤타워 내 모바일 연차 신청 결재 반려 처리
+  const handleRejectLeave = async (leaveId: string) => {
+    const rejectReason = window.prompt("기각 사유를 작성해 주십시오:", "업무 일정 조율 필요");
+    if (rejectReason === null) return; // 취소 버튼
+
+    setIsExecuting(true);
+    try {
+      const res = await apiFetch("/api/governance?action=reject_leave_request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leave_id: leaveId, reject_reason: rejectReason })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message || "정상 반려 기각되었습니다.");
+        setSelectedEvent(null);
+        loadData();
+      } else {
+        alert("반려 실패: " + data.error);
+      }
+    } catch (e) {
+      alert("서버와 통신하는 중 오류가 발생했습니다.");
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
   // 🤖 대안 A: 통합 피드 매핑 및 정렬, 복합 필터링 로직
   const mappedEvents = events.map(e => ({
     id: `event_${e.id}`,
@@ -2562,11 +2614,36 @@ export default function GovernanceDashboard() {
                     </div>
                   </>
                 )}
+                {selectedEvent.type === 'LEAVE_APPROVAL_REQUEST' && (
+                  <>
+                    <div className="col-span-2 border-t border-slate-100 my-1"></div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">연차/휴가 신청자</span>
+                      <span className="font-bold text-slate-800">{selectedEvent.data.employee_name || '임직원'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">휴가 종류 (소요 일수)</span>
+                      <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg text-xs w-fit inline-block">
+                        {selectedEvent.data.leave_type_str} ({selectedEvent.data.days_spent}일)
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block">휴가 희망 기간</span>
+                      <span className="font-bold text-slate-800">{selectedEvent.data.start_date} ~ {selectedEvent.data.end_date}</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-slate-400 font-semibold block">휴가 신청 상세 사유</span>
+                      <span className="font-semibold text-slate-800 bg-slate-50 p-4 rounded-2xl block mt-1 leading-relaxed border border-slate-150 whitespace-pre-wrap">
+                        {selectedEvent.data.reason || '사유가 기재되지 않았습니다.'}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
             {/* AI 추천 자율 대행 액션 리스트 */}
-            {!actionReports && (
+            {!actionReports && selectedEvent.type !== 'LEAVE_APPROVAL_REQUEST' && (
               <div className="space-y-3">
                 <div className="flex items-center gap-1.5">
                   <ListTodo className="w-4 h-4 text-indigo-650" />
@@ -2632,7 +2709,25 @@ export default function GovernanceDashboard() {
                 {actionReports ? "닫기 및 리프레시" : "검토 보류"}
               </button>
               
-              {!actionReports ? (
+              {!actionReports && selectedEvent.type === 'LEAVE_APPROVAL_REQUEST' ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleRejectLeave(selectedEvent.data.id)}
+                    disabled={isExecuting}
+                    className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-6 py-3 rounded-xl shadow-xs text-xs border border-rose-200 cursor-pointer transition-all"
+                  >
+                    기각 및 반려
+                  </button>
+                  <button
+                    onClick={() => handleApproveLeave(selectedEvent.data.id)}
+                    disabled={isExecuting}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3 rounded-xl shadow-xs text-xs border-none cursor-pointer flex items-center gap-1.5 transition-all"
+                  >
+                    {isExecuting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    <span>최종 결재 승인</span>
+                  </button>
+                </div>
+              ) : !actionReports ? (
                 <button
                   onClick={handleExecuteActions}
                   disabled={isExecuting || selectedActions.length === 0}

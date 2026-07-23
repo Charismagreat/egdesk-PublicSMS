@@ -117,6 +117,20 @@ export default function MobileHubPage() {
   const [voiceText, setVoiceText] = useState("");
   const [requestTitle, setRequestTitle] = useState("");
 
+  // 💡 [신규] 모바일 지각 사유 신고 및 간편 연차 상신 상태 변수
+  const [lateReason, setLateReason] = useState("");
+  const [isReportingLateReason, setIsReportingLateReason] = useState(false);
+  const [isLateReasonReported, setIsLateReasonReported] = useState(false);
+  const [isTodayLate, setIsTodayLate] = useState(false);
+
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [leaveType, setLeaveType] = useState("ANNUAL");
+  const [leaveStartDate, setLeaveStartDate] = useState("");
+  const [leaveEndDate, setLeaveEndDate] = useState("");
+  const [leaveDays, setLeaveDays] = useState("1");
+  const [leaveReason, setLeaveReason] = useState("");
+  const [isLeaveSubmitting, setIsLeaveSubmitting] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -772,6 +786,10 @@ export default function MobileHubPage() {
       if (data.success && data.employees) {
         const myData = data.employees.find((emp: any) => emp.username === username);
         if (myData) {
+          // 지각 상태 및 지각 사유 기재 여부 판단
+          setIsTodayLate(myData.status === 'LATE');
+          setIsLateReasonReported(!!myData.memo && myData.memo !== '지각 출근 기록' && myData.memo !== '모바일 포털 출근');
+
           if (myData.clock_in) {
             const [h, m] = myData.clock_in.split(":");
             const hourNum = parseInt(h, 10);
@@ -927,6 +945,7 @@ export default function MobileHubPage() {
         const now = new Date();
         setClockInTime(now.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }));
         setAttendanceStatus("working");
+        await syncAttendanceStatus(session.username);
         alert(data.message || "출근이 정상 처리되었습니다.");
       } else {
         alert("출근 등록 실패: " + data.error);
@@ -954,6 +973,75 @@ export default function MobileHubPage() {
       }
     } catch (e) {
       alert("서버 통신 실패");
+    }
+  };
+
+  // 💡 [신규] 모바일 지각 사유 상신 처리 함수
+  const handleReportLateReason = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lateReason.trim()) {
+      alert("지각 사유를 작성해 주십시오.");
+      return;
+    }
+
+    setIsReportingLateReason(true);
+    try {
+      const res = await fetch("/api/hr/attendance?action=REPORT_LATE_REASON", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memo: lateReason.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message || "지각 사유가 정상 상신 완료되었습니다.");
+        setLateReason("");
+        setIsLateReasonReported(true); // 입력창 즉시 닫기
+      } else {
+        alert("사유 상신 실패: " + data.error);
+      }
+    } catch (e) {
+      alert("통신 중 오류가 발생했습니다.");
+    } finally {
+      setIsReportingLateReason(false);
+    }
+  };
+
+  // 💡 [신규] 모바일 간편 연차 신청서 제출 함수
+  const handleApplyLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leaveStartDate || !leaveEndDate || !leaveDays || !leaveReason.trim()) {
+      alert("연차 신청서 항목을 모두 입력해 주십시오.");
+      return;
+    }
+
+    setIsLeaveSubmitting(true);
+    try {
+      const res = await fetch("/api/hr/leaves?action=APPLY", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leave_type: leaveType,
+          start_date: leaveStartDate,
+          end_date: leaveEndDate,
+          days_spent: leaveDays,
+          reason: leaveReason.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message || "연차가 성공적으로 상신되었습니다! AI 컨트롤타워에 실시간 전달됩니다.");
+        setIsLeaveModalOpen(false); // 모달 닫기
+        setLeaveStartDate("");
+        setLeaveEndDate("");
+        setLeaveDays("1");
+        setLeaveReason("");
+      } else {
+        alert("신청 실패: " + data.error);
+      }
+    } catch (e) {
+      alert("서버와 통신하는 중 오류가 발생했습니다.");
+    } finally {
+      setIsLeaveSubmitting(false);
     }
   };
 
@@ -1523,6 +1611,17 @@ export default function MobileHubPage() {
           </button>
         </div>
 
+        {/* 📅 모바일 간편 연차/휴가 상신 단추 바 */}
+        <div className="mb-4 animate-scale-in">
+          <button
+            onClick={() => setIsLeaveModalOpen(true)}
+            className="w-full py-3 bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-650 hover:to-cyan-600 text-white font-black rounded-2xl shadow-xs text-xs border-none cursor-pointer flex items-center justify-center gap-1.5 transition-all active:scale-98 shadow-sm"
+          >
+            <Calendar className="w-4 h-4 animate-pulse" />
+            <span>모바일 간편 연차 / 휴가 신청</span>
+          </button>
+        </div>
+
         {/* 2. 콤팩트화된 가로형 실시간 근태 체크 위젯 */}
         <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 mb-4 flex items-center justify-between">
           <div className="flex flex-col text-left">
@@ -1569,6 +1668,32 @@ export default function MobileHubPage() {
             )}
           </div>
         </div>
+
+        {/* ⚠️ 지각 사유 간편 상신 폼 */}
+        {isTodayLate && !isLateReasonReported && (
+          <form onSubmit={handleReportLateReason} className="bg-amber-50/50 border border-amber-200 rounded-2xl p-4 mb-4 text-left animate-scale-in">
+            <div className="flex items-center gap-1.5 mb-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <span className="text-xs font-black text-amber-950">금일 지각 근태 사유 상신 요구됨</span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={lateReason}
+                onChange={(e) => setLateReason(e.target.value)}
+                placeholder="지각 사유를 기입하세요 (예: 대중교통 지연)"
+                className="flex-1 bg-white border border-amber-200/80 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-amber-400"
+              />
+              <button
+                type="submit"
+                disabled={isReportingLateReason}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-350 text-white text-xs font-black rounded-xl border-none cursor-pointer shadow-3xs"
+              >
+                {isReportingLateReason ? "상신 중..." : "제출"}
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* 📋 일일 업무 보고 작성 단독 바로가기 단추 (결재 상태 연동 버전) */}
         {!todayReport ? (
@@ -3388,6 +3513,115 @@ export default function MobileHubPage() {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* 📅 [신규] 모바일 간편 연차/휴가 신청서 모달 */}
+      {isLeaveModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-end z-50 animate-fade-in">
+          <div className="bg-white rounded-t-3xl border-t border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto text-left animate-slide-up pb-8">
+            {/* 모달 헤더 */}
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-indigo-600 animate-pulse" />
+                <h3 className="text-sm font-black text-slate-800">📅 간편 연차 / 휴가 신청서 기안</h3>
+              </div>
+              <button 
+                onClick={() => setIsLeaveModalOpen(false)}
+                className="p-1 rounded-lg bg-slate-50 hover:bg-slate-100 border-none cursor-pointer text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 입력 폼 */}
+            <form onSubmit={handleApplyLeave} className="space-y-4 text-xs font-bold text-slate-800">
+              <div className="space-y-1">
+                <label className="text-slate-450 block">휴가 종류 선택</label>
+                <select
+                  value={leaveType}
+                  onChange={(e) => setLeaveType(e.target.value)}
+                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 font-extrabold text-slate-800 cursor-pointer"
+                >
+                  <option value="ANNUAL">연차 휴가 (1일 소모)</option>
+                  <option value="HALF">반차 휴가 (0.5일 소모)</option>
+                  <option value="SICK">병가 신청 (유/무급)</option>
+                  <option value="SPECIAL">특별 휴가 (경조사 등)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-slate-450 block">시작 일자</label>
+                  <input
+                    type="date"
+                    required
+                    value={leaveStartDate}
+                    onChange={(e) => setLeaveStartDate(e.target.value)}
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 font-extrabold text-slate-850"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-450 block">종료 일자</label>
+                  <input
+                    type="date"
+                    required
+                    value={leaveEndDate}
+                    onChange={(e) => setLeaveEndDate(e.target.value)}
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 font-extrabold text-slate-855"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-450 block">소요 일수 (계산/기재)</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  required
+                  value={leaveDays}
+                  onChange={(e) => setLeaveDays(e.target.value)}
+                  placeholder="예: 1 또는 0.5"
+                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 font-extrabold text-slate-855"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-450 block">휴가 신청 구체적 사유</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={leaveReason}
+                  onChange={(e) => setLeaveReason(e.target.value)}
+                  placeholder="신청 사유를 작성하세요 (예: 개인 사정으로 인한 연차 신청)"
+                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 resize-none font-semibold text-slate-800 leading-relaxed bg-white"
+                />
+              </div>
+
+              {/* 제출 제어 */}
+              <div className="pt-3 border-t border-slate-100 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsLeaveModalOpen(false)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-3 rounded-xl border-none cursor-pointer text-xs transition active:scale-97"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLeaveSubmitting}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-350 text-white font-black py-3 rounded-xl border-none cursor-pointer text-xs transition flex items-center justify-center gap-1 active:scale-97 shadow-3xs"
+                >
+                  {isLeaveSubmitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <span>결재 상신 기안 📝</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

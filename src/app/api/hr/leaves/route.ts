@@ -85,15 +85,22 @@ export async function POST(req: Request) {
   try {
     const { action, ...payload } = await req.json();
 
-    const { isAuthorized, tenantId, role: sessionRole } = await verifyUserRole();
-    if (!isAuthorized) {
-      return NextResponse.json({ success: false, error: '인증 세션이 만료되었습니다. 다시 로그인해주세요.' }, { status: 401 });
-    }
-
     const cookieStore = await cookies();
     const token = cookieStore.get('auth_token')?.value;
-    const sessionUser = decodeJwt(token!);
+    if (!token) {
+      return NextResponse.json({ success: false, error: '인증 세션이 만료되었습니다. 다시 로그인해주세요.' }, { status: 401 });
+    }
+    const sessionUser = decodeJwt(token);
     const operatorId = sessionUser.id as string;
+    const tenantId = (sessionUser.tenant_id as string) || 'default';
+
+    // 💡 [수정] 신규 연차 신청(APPLY)을 제외한 결재 심사(APPROVE/REJECT) 조작은 관리자 권한 필수 검증
+    if (action !== 'APPLY') {
+      const { isAuthorized } = await verifyUserRole();
+      if (!isAuthorized) {
+        return NextResponse.json({ success: false, error: '🔒 권한이 없습니다. 결재 권한을 확인해 주세요.' }, { status: 403 });
+      }
+    }
 
     const now = new Date();
 

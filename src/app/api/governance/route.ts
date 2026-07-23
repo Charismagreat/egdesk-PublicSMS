@@ -344,6 +344,43 @@ export async function GET(request: Request) {
         console.error('Failed to load inventory for events:', e);
       }
 
+      // 1.4. crm_annual_leaves (휴가 신청 결재 대기 건)
+      try {
+        const leavesRes = await queryTable('crm_annual_leaves', { filters: { status: 'PENDING' } });
+        const pendingLeaves = leavesRes.rows || [];
+        
+        // 이름 매핑을 위한 직원 마스터 조회
+        const tenantId = await resolveTenantId();
+        const operatorsRes = await queryTable('crm_operators', { filters: { tenant_id: tenantId } });
+        const ops = operatorsRes.rows || [];
+
+        pendingLeaves.forEach((leave: any) => {
+          if (leave.deleted_at) return;
+          const emp = ops.find((o: any) => String(o.id) === String(leave.operator_id));
+          const empName = emp ? emp.name : '알수없음';
+          const leaveTypeStr = 
+            leave.leave_type === 'ANNUAL' ? '연차' :
+            leave.leave_type === 'HALF' ? '반차' :
+            leave.leave_type === 'SICK' ? '병가' : '특별휴가';
+
+          events.push({
+            id: `leave_${leave.id}`,
+            type: 'LEAVE_APPROVAL_REQUEST',
+            title: `📅 휴가/연차 결재 승인 요청 (${empName})`,
+            subtitle: `종류: ${leaveTypeStr} (${leave.days_spent}일) / 기간: ${leave.start_date} ~ ${leave.end_date}`,
+            status: 'WAITING',
+            created_at: leave.created_at || nowStr,
+            data: {
+              ...leave,
+              employee_name: empName,
+              leave_type_str: leaveTypeStr
+            }
+          });
+        });
+      } catch (lErr) {
+        console.warn("관제 피드 휴가 목록 로드 실패:", lErr);
+      }
+
       // 최신순 정렬
       events.sort((a, b) => b.created_at.localeCompare(a.created_at));
 
@@ -2057,6 +2094,91 @@ ${leaderComment}
         success: true,
         message: '추천 태스크가 최종 승인되어 실제 업무 및 캘린더에 배정되었습니다.'
       });
+    }
+
+    // 💡 [신규] 모바일 휴가 상신에 대한 컨트롤타워 직결 승인 처리
+    if (action === 'approve_leave_request') {
+      const { leave_id } = body;
+      if (!leave_id) {
+        return NextResponse.json({ success: false, error: '휴가 신청서 ID가 필요합니다.' }, { status: 400 });
+      }
+
+      const tenantId = await resolveTenantId();
+      
+      // 1. 연차 신청 대장 정보 조회
+      const leaveRes = await queryTable('crm_annual_leaves', { filters: { id: leave_id, tenant_id: tenantId } });
+      const leaveDoc = leaveRes.rows?.[0];
+      if (!leaveDoc) {
+        return NextResponse.json({ success: false, error: '존재하지 않는 휴가 신청 내역입니다.' }, { status: 404 });
+      }
+
+      // 2. 해당 직원의 연차 잔고 차감
+      const empBalanceRes = await queryTable('crm_operator_leave_balances', { filters: { operator_id: leaveDoc.operator_id, tenant_id: tenantId } });
+      const empBal = empBalanceRes.rows?.[0];
+      if (empBal) {
+        const updatedUsed = empBal.used + leaveDoc.days_spent;
+        const updatedRemaining = Math.max(0, empBal.total_allowed - updatedUsed);
+
+        await updateRows('crm_operator_leave_balances', {
+          used: updatedUsed,
+          remaining: updatedRemaining,
+          updated_at: nowStr
+        }, { filters: { operator_id: leaveDoc.operator_id, tenant_id: tenantId } });
+      }
+
+      // 3. crm_attendance 대장에 status = 'LEAVE' 플래그 스케줄 자동 적재
+      const start = new Date(leaveDoc.start_date);
+      const end = new Date(leaveDoc.end_date);
+      const attendanceRows: any[] = [];
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        attendanceRows.push({
+          id: `att-leave-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          operator_id: leaveDoc.operator_id,
+          work_date: dateStr,
+          clock_in: null,
+          clock_out: null,
+          status: 'LEAVE',
+          working_hours: 0,
+          memo: `[연차승인] ${leaveDoc.reason || '휴가'}`,
+          tenant_id: tenantId,
+          created_at: nowStr,
+          updated_at: nowStr
+        });
+      }
+
+      if (attendanceRows.length > 0) {
+        await insertRows('crm_attendance', attendanceRows).catch(e => console.error('근태 연동 백필 실패:', e));
+      }
+
+      // 4. 연차 신청 상태 APPROVED로 변경
+      await updateRows('crm_annual_leaves', {
+        status: 'APPROVED',
+        approver_id: currentUser,
+        updated_at: nowStr
+      }, { filters: { id: leave_id, tenant_id: tenantId } });
+
+      return NextResponse.json({ success: true, message: '휴가 신청서가 최종 결재 승인되어 근태 대장에 스케줄링 적재되었습니다.' });
+    }
+
+    // 💡 [신규] 모바일 휴가 상신에 대한 컨트롤타워 직결 반려 처리
+    if (action === 'reject_leave_request') {
+      const { leave_id, reject_reason } = body;
+      if (!leave_id) {
+        return NextResponse.json({ success: false, error: '휴가 신청서 ID가 필요합니다.' }, { status: 400 });
+      }
+
+      const tenantId = await resolveTenantId();
+
+      await updateRows('crm_annual_leaves', {
+        status: 'REJECTED',
+        reject_reason: reject_reason || '최고운영자 결재 기각',
+        approver_id: currentUser,
+        updated_at: nowStr
+      }, { filters: { id: leave_id, tenant_id: tenantId } });
+
+      return NextResponse.json({ success: true, message: '휴가 신청 결재가 정식 반려(기각) 처리되었습니다.' });
     }
 
     // 💡 [신규] AI 추천 후속 업무 관제 반려(삭제)

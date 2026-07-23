@@ -408,6 +408,32 @@ export async function POST(req: Request) {
       });
     }
 
+    if (action === 'REPORT_LATE_REASON') {
+      if (records.length === 0) {
+        return NextResponse.json({ success: false, error: '금일 출퇴근 기록이 아직 생성되지 않았습니다.' }, { status: 400 });
+      }
+      
+      const attRecord = records[0];
+      if (!memo || !memo.trim()) {
+        return NextResponse.json({ success: false, error: '근태 사유를 입력해 주십시오.' }, { status: 400 });
+      }
+
+      const updates = {
+        memo: memo.trim(),
+        updated_at: now.toISOString()
+      };
+
+      const updateFilters: any = { id: attRecord.id };
+      updateFilters.tenant_id = tenantId;
+      await updateRows('crm_attendance', updates, { filters: updateFilters });
+
+      return NextResponse.json({
+        success: true,
+        message: '금일 근태 사유(지각/조퇴 등) 보고가 정상 상신되었습니다.',
+        record: { ...attRecord, ...updates }
+      });
+    }
+
     return NextResponse.json({ success: false, error: '잘못된 액션 명령입니다.' }, { status: 400 });
 
   } catch (error: any) {
