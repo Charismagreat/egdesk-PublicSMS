@@ -5,7 +5,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   FolderOpen, Cpu, Loader2, CheckCircle2, 
-  Database, FileSpreadsheet, Sparkles 
+  Database, FileSpreadsheet, Sparkles, Trash2
 } from "lucide-react";
 
 export default function ExcelPageBuilderWidget() {
@@ -62,6 +62,33 @@ export default function ExcelPageBuilderWidget() {
       alert("오류 발생: " + err.message);
     } finally {
       setIsUploadingExcel(false);
+    }
+  };
+
+  // 3. 맞춤형 페이지 대장 자체 삭제 처리 (소프트 삭제)
+  const handleDeletePage = async (pageId: string, pageTitle: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!window.confirm(`⚠️ [${pageTitle}] 맞춤형 서비스 대장 자체를 완전히 삭제하시겠습니까?\n\n대장 마스터 정보 및 적재된 모든 데이터 행이 함께 일괄 삭제되며 복구할 수 없습니다.`)) {
+      return;
+    }
+
+    try {
+      const res = await apiFetch("/api/custom-pages?action=delete_page", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ page_id: pageId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("성공적으로 삭제되었습니다.");
+        fetchCustomPages(); // 리스트 갱신
+      } else {
+        alert("삭제 실패: " + (data.error || "서버 오류"));
+      }
+    } catch (err: any) {
+      alert("오류 발생: " + err.message);
     }
   };
 
@@ -176,9 +203,18 @@ export default function ExcelPageBuilderWidget() {
                         슬러그: /custom/{page.page_slug}
                       </div>
                     </div>
-                    <span className="text-[9px] bg-slate-200/60 group-hover:bg-indigo-100 group-hover:text-indigo-700 px-2 py-0.5 rounded-full font-black text-slate-500 transition-colors">
-                      바로가기 →
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => handleDeletePage(page.id, page.page_title, e)}
+                        className="p-1 hover:bg-rose-50 hover:text-rose-600 rounded-lg text-slate-400 transition-colors border-none cursor-pointer"
+                        title="이 대장 서비스 자체를 삭제"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="text-[9px] bg-slate-200/60 group-hover:bg-indigo-100 group-hover:text-indigo-700 px-2 py-0.5 rounded-full font-black text-slate-500 transition-colors">
+                        바로가기 →
+                      </span>
+                    </div>
                   </div>
                   <div className="mt-2 text-[9px] text-slate-400 font-bold border-t border-slate-200/50 pt-1.5 flex justify-between">
                     <span>생성: {page.created_at?.slice(0, 10)}</span>

@@ -327,6 +327,38 @@ ${JSON.stringify(sampleRows)}
       return NextResponse.json({ success: true, message: '해당 기록이 삭제되었습니다.' });
     }
 
+    // 4. 맞춤형 페이지 대장 자체 삭제 (delete_page)
+    if (action === 'delete_page') {
+      const body = await request.json();
+      const { page_id } = body;
+
+      if (!page_id) {
+        return NextResponse.json({ success: false, error: '삭제할 페이지 ID가 필요합니다.' }, { status: 400 });
+      }
+
+      // 페이지 마스터 소프트 삭제
+      await updateRows('crm_custom_pages', {
+        deleted_at: nowStr,
+        deleted_by: currentUser,
+        updated_at: nowStr,
+        updated_by: currentUser
+      }, {
+        filters: { id: page_id, tenant_id: tenantId }
+      });
+
+      // 하위 종속된 데이터 레코드 전체 소프트 삭제 일괄 진행
+      await updateRows('crm_custom_page_data', {
+        deleted_at: nowStr,
+        deleted_by: currentUser,
+        updated_at: nowStr,
+        updated_by: currentUser
+      }, {
+        filters: { page_id: page_id, tenant_id: tenantId }
+      });
+
+      return NextResponse.json({ success: true, message: '맞춤형 서비스 대장이 영구 삭제 처리되었습니다.' });
+    }
+
     return NextResponse.json({ success: false, error: '유효하지 않은 POST action입니다.' }, { status: 400 });
   } catch (err: any) {
     console.error('[CUSTOM_PAGES_POST_ERROR]:', err);
