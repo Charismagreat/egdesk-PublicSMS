@@ -213,6 +213,22 @@ export async function setupDatabase() {
     { name: 'result_detail', type: 'TEXT' }
   ], { tableName: 'crm_governance_subtasks', uniqueKeyColumns: ['id'] });
 
+  // 💡 [신규] 맞춤형 커스텀 페이지 마스터 테이블 생성
+  await safeCreateTable('맞춤형 커스텀 페이지 마스터', [
+    { name: 'id', type: 'TEXT', notNull: true },
+    { name: 'page_slug', type: 'TEXT', notNull: true },
+    { name: 'page_title', type: 'TEXT', notNull: true },
+    { name: 'ui_schema', type: 'TEXT', notNull: true },
+    { name: 'data_schema', type: 'TEXT', notNull: true }
+  ], { tableName: 'crm_custom_pages', uniqueKeyColumns: ['id'] });
+
+  // 💡 [신규] 맞춤형 커스텀 페이지 데이터 테이블 생성
+  await safeCreateTable('맞춤형 커스텀 페이지 데이터', [
+    { name: 'id', type: 'INTEGER', notNull: true },
+    { name: 'page_id', type: 'TEXT', notNull: true },
+    { name: 'row_data', type: 'TEXT', notNull: true }
+  ], { tableName: 'crm_custom_page_data', uniqueKeyColumns: ['id'] });
+
   // 초기 시범 자율 규칙 시딩 (테넌트: tenant-guest-id-2222)
   try {
     const rulesCheck = await queryTable('crm_governance_rules', { limit: 1 });

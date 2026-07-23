@@ -122,6 +122,9 @@ function DynamicTitleHandler() {
       title = "임직원 정보 시스템";
     } else if (pathname.startsWith("/interpretation-ai")) {
       title = "AI 동시 통역기";
+    } else if (pathname.startsWith("/custom/")) {
+      const slug = pathname.split("/").pop() || "";
+      title = `맞춤형 AI 서비스 (${slug})`;
     } else {
       // 일반 정확도 매칭
       title = staticTitles[pathname] || staticTitles[pathname.replace(/\/$/, "")] || "EGDESK SMS";
