@@ -173,10 +173,10 @@ export default function CustomDynamicPage() {
         <h2 className="text-xl font-black text-slate-700">페이지 로드 실패</h2>
         <p className="text-sm text-slate-400 mt-2 font-bold">{error || "페이지를 찾을 수 없습니다."}</p>
         <button
-          onClick={() => router.push("/governance")}
+          onClick={() => router.push("/")}
           className="mt-6 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black shadow-sm transition-colors border-none cursor-pointer"
         >
-          AI 컨트롤타워로 돌아가기
+          CEO 대시보드로 돌아가기
         </button>
       </div>
     );
@@ -191,9 +191,9 @@ export default function CustomDynamicPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
             <button
-              onClick={() => router.push("/governance")}
+              onClick={() => router.push("/")}
               className="mt-1 p-2 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all border-none cursor-pointer text-slate-600"
-              title="컨트롤타워로 돌아가기"
+              title="CEO 대시보드로 돌아가기"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
