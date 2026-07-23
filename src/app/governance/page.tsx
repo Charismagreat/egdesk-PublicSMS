@@ -76,6 +76,16 @@ export default function GovernanceDashboard() {
   const [editedDescription, setEditedDescription] = useState("");
   const [editedDueDate, setEditedDueDate] = useState("");
 
+  // 💡 [신규] 하향식 AI 자율 명령 센터 상태 변수
+  const [commandInput, setCommandInput] = useState("");
+  const [parsedSubtasks, setParsedSubtasks] = useState<any[]>([]);
+  const [isParsingCommand, setIsParsingCommand] = useState(false);
+  const [isCommandExecuting, setIsCommandExecuting] = useState(false);
+  const [commandsList, setCommandsList] = useState<any[]>([]);
+  const [selectedCommandId, setSelectedCommandId] = useState<string | null>(null);
+  const [subtasksMap, setSubtasksMap] = useState<Record<string, any[]>>({});
+  const [isCommandsLoading, setIsCommandsLoading] = useState(false);
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -232,6 +242,99 @@ export default function GovernanceDashboard() {
       alert("오류 발생: " + e.message);
     } finally {
       setAssignTaskLoading(false);
+    }
+  };
+
+  // 💡 [신규] 대표자 자연어 지시 목록 조회
+  const fetchCommands = async () => {
+    try {
+      setIsCommandsLoading(true);
+      const res = await apiFetch("/api/governance?action=get_commands");
+      const data = await res.json();
+      if (data.success) {
+        setCommandsList(data.commands || []);
+        for (const cmd of (data.commands || [])) {
+          fetchSubtasks(cmd.id);
+        }
+      }
+    } catch (err) {
+      console.warn("대표자 지시 목록 로드 실패:", err);
+    } finally {
+      setIsCommandsLoading(false);
+    }
+  };
+
+  // 💡 [신규] 특정 지시 하위 세부 작업 조회 및 캐싱
+  const fetchSubtasks = async (commandId: string) => {
+    try {
+      const res = await apiFetch(`/api/governance?action=get_subtasks&command_id=${commandId}`);
+      const data = await res.json();
+      if (data.success) {
+        setSubtasksMap(prev => ({
+          ...prev,
+          [commandId]: data.subtasks || []
+        }));
+      }
+    } catch (err) {
+      console.warn(`지시 하위 작업 로드 실패 (ID: ${commandId}):`, err);
+    }
+  };
+
+  // 💡 [신규] 자연어 명령 분석 및 태스크 분해 요청
+  const handleParseCommand = async () => {
+    if (!commandInput.trim()) {
+      alert("지시 내용을 자연어로 입력해 주십시오.");
+      return;
+    }
+    setIsParsingCommand(true);
+    setParsedSubtasks([]);
+    try {
+      const res = await apiFetch("/api/governance?action=parse_command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command_text: commandInput })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setParsedSubtasks(data.subtasks || []);
+      } else {
+        alert("지시 분석 실패: " + (data.error || "서버 오류"));
+      }
+    } catch (err: any) {
+      alert("오류 발생: " + err.message);
+    } finally {
+      setIsParsingCommand(false);
+    }
+  };
+
+  // 💡 [신규] 분해된 서브 태스크 최종 실행 기동
+  const handleExecuteCommand = async () => {
+    if (parsedSubtasks.length === 0) return;
+    if (!window.confirm("분해된 실행 계획에 따라 AI 지시를 실제로 기동하시겠습니까?")) return;
+    
+    setIsCommandExecuting(true);
+    try {
+      const res = await apiFetch("/api/governance?action=execute_command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          raw_command: commandInput,
+          subtasks: parsedSubtasks
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("대표자 지시 오케스트레이션이 성공적으로 기동되었습니다!");
+        setCommandInput("");
+        setParsedSubtasks([]);
+        fetchCommands();
+      } else {
+        alert("기동 실패: " + (data.error || "서버 오류"));
+      }
+    } catch (err: any) {
+      alert("오류 발생: " + err.message);
+    } finally {
+      setIsCommandExecuting(false);
     }
   };
 
@@ -667,6 +770,13 @@ export default function GovernanceDashboard() {
         await fetchFolders();
       } catch (fErr) {
         console.warn("태스크 폴더 로드 생략:", fErr);
+      }
+
+      // 💡 [추가] 2.9. 대표자 자연어 지시 목록 로드
+      try {
+        await fetchCommands();
+      } catch (cErr) {
+        console.warn("대표자 지시 목록 로드 생략:", cErr);
       }
     } catch (err: any) {
       console.error("Governance data fetch error:", err);
@@ -1117,6 +1227,268 @@ export default function GovernanceDashboard() {
           ) : activeTab === 'EVENTS' ? (
             // 💡 대안 A: 통합 관제 및 감사 피드 탭 뷰 렌더링
             <div className="space-y-4">
+              {/* ⚡ [신규] 하향식 AI 자율 명령 센터 패널 */}
+              <div className="bg-white border border-slate-200/80 rounded-3xl shadow-sm p-6 space-y-4 text-left">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-xl bg-purple-50 text-purple-600 font-bold">
+                      <Zap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-800">대표자 AI 자율 명령 센터 (Top-down)</h3>
+                      <p className="text-xs text-slate-500 font-bold">러프하게 업무를 지시하면 AI가 자율 실행하고 사람에게 세부 조치를 배정합니다.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col md:flex-row gap-3">
+                  <textarea
+                    rows={2}
+                    value={commandInput}
+                    onChange={(e) => setCommandInput(e.target.value)}
+                    placeholder='예: "SCM 자재 현황을 분석하여 부족 품목 발주 기안을 AI가 작성하고, 이과장에게 다음주 화요일까지 납품 일정을 확인 및 조율하게 시켜줘."'
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 resize-none leading-relaxed"
+                  />
+                  <button
+                    onClick={handleParseCommand}
+                    disabled={isParsingCommand || isCommandExecuting}
+                    className="md:w-36 px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-colors border-none cursor-pointer"
+                  >
+                    {isParsingCommand ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>의도 분석 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bot className="w-3.5 h-3.5" />
+                        <span>AI 분석 및 계획 수립</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* 📋 AI 작업 분해 프리뷰 카드 (이중 가드) */}
+                {parsedSubtasks.length > 0 && (
+                  <div className="bg-gradient-to-r from-purple-500/5 via-indigo-500/5 to-pink-500/5 border border-purple-200 rounded-2xl p-5 space-y-4 animate-scale-up">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-purple-600" />
+                        <h4 className="text-sm font-black text-purple-950">AI 자율 조립 실행 계획 프리뷰 (수정 가능)</h4>
+                      </div>
+                      <span className="text-[10px] bg-purple-500 text-white px-2 py-0.5 rounded-full font-black">이중 검증 가드</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {parsedSubtasks.map((st, idx) => (
+                        <div key={idx} className="bg-white/90 border border-slate-200 rounded-xl p-4 space-y-3 flex flex-col justify-between shadow-xs">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-[10px] font-black">
+                              <span className={`px-2 py-0.5 rounded ${
+                                st.executor_type === 'AI' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'
+                              }`}>
+                                {st.executor_type === 'AI' ? '🤖 AI 자율 대행' : '👤 직원 배정'}
+                              </span>
+                              <span className="text-slate-400">#작업 {idx + 1}</span>
+                            </div>
+
+                            <input
+                              type="text"
+                              value={st.task_title}
+                              onChange={(e) => {
+                                const newTasks = [...parsedSubtasks];
+                                newTasks[idx].task_title = e.target.value;
+                                setParsedSubtasks(newTasks);
+                              }}
+                              className="w-full bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1.5 text-xs font-black text-slate-800 focus:bg-white outline-none focus:border-indigo-400"
+                            />
+
+                            <textarea
+                              rows={2}
+                              value={st.task_description}
+                              onChange={(e) => {
+                                const newTasks = [...parsedSubtasks];
+                                newTasks[idx].task_description = e.target.value;
+                                setParsedSubtasks(newTasks);
+                              }}
+                              className="w-full bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-slate-500 focus:bg-white outline-none focus:border-indigo-400 resize-none leading-normal"
+                            />
+                          </div>
+
+                          <div className="space-y-2 pt-2 border-t border-slate-100">
+                            {st.executor_type === 'STAFF' && (
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] text-slate-400 font-bold shrink-0">배정 사원:</span>
+                                <select
+                                  value={st.assignee_id || ""}
+                                  onChange={(e) => {
+                                    const newTasks = [...parsedSubtasks];
+                                    newTasks[idx].assignee_id = e.target.value || null;
+                                    setParsedSubtasks(newTasks);
+                                  }}
+                                  className="w-full bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-700 focus:bg-white outline-none"
+                                >
+                                  <option value="">사원 선택</option>
+                                  {operatorOptions.map((op: any) => (
+                                    <option key={op.id} value={op.id}>{op.name} ({op.role || '사원'})</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] text-slate-400 font-bold shrink-0">완료 기한:</span>
+                              <input
+                                type="date"
+                                value={st.due_date || ""}
+                                onChange={(e) => {
+                                    const newTasks = [...parsedSubtasks];
+                                    newTasks[idx].due_date = e.target.value;
+                                    setParsedSubtasks(newTasks);
+                                }}
+                                className="w-full bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-700 focus:bg-white outline-none"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-end gap-2 border-t border-purple-100 pt-3">
+                      <button
+                        onClick={() => setParsedSubtasks([])}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer border-none"
+                      >
+                        취소
+                      </button>
+                      <button
+                        onClick={handleExecuteCommand}
+                        disabled={isCommandExecuting}
+                        className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black transition-colors cursor-pointer border-none shadow-sm flex items-center gap-1.5"
+                      >
+                        {isCommandExecuting ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>지시 기동 중...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="w-3.5 h-3.5" />
+                            <span>자율 지시 기동 확정</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 📜 대표자 지시 및 진척도 타임라인 이력 */}
+                {commandsList.length > 0 && (
+                  <div className="space-y-3 pt-3 border-t border-slate-100">
+                    <h4 className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>대표자 지시 이력 및 진척도 관제 ({commandsList.length}건)</span>
+                    </h4>
+
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                      {commandsList.map((cmd) => {
+                        const subtasks = subtasksMap[cmd.id] || [];
+                        const completedCount = subtasks.filter((s: any) => s.status === 'COMPLETED').length;
+                        const totalCount = subtasks.length;
+                        const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+                        const isExpanded = selectedCommandId === cmd.id;
+
+                        return (
+                          <div key={cmd.id} className="bg-slate-50/50 border border-slate-150 rounded-2xl p-4 space-y-2 transition-all">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold">{cmd.created_at?.slice(0, 16)}</span>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded-full font-black text-[9px] ${
+                                  cmd.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-purple-100 text-purple-700 animate-pulse'
+                                }`}>
+                                  {cmd.status === 'COMPLETED' ? '전체 완료' : '실행 및 진척 중'}
+                                </span>
+                                <button
+                                  onClick={() => setSelectedCommandId(isExpanded ? null : cmd.id)}
+                                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-transparent border-none cursor-pointer"
+                                >
+                                  {isExpanded ? '세부 접기 ▲' : `상세 관제 (${completedCount}/${totalCount}) ▼`}
+                                </button>
+                              </div>
+                            </div>
+
+                            <p className="text-xs font-extrabold text-slate-800">지시: "{cmd.raw_command}"</p>
+
+                            {/* 프로그레스 바 */}
+                            {totalCount > 0 && (
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                                  <span>지시 진척률</span>
+                                  <span>{pct}% ({completedCount}/{totalCount} 완료)</span>
+                                </div>
+                                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                  <div
+                                    className="bg-indigo-600 h-full transition-all duration-500"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 세부 subtasks 상세 목록 아코디언 */}
+                            {isExpanded && subtasks.length > 0 && (
+                              <div className="pt-3 border-t border-slate-200/60 space-y-2.5 animate-scale-up text-left">
+                                {subtasks.map((st: any) => (
+                                  <div key={st.id} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2 text-xs">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                                          st.executor_type === 'AI' ? 'bg-purple-50 text-purple-700' : 'bg-indigo-50 text-indigo-700'
+                                        }`}>
+                                          {st.executor_type === 'AI' ? '🤖 AI 자율' : '👤 사원'}
+                                        </span>
+                                        <h5 className="font-extrabold text-slate-800">{st.task_title}</h5>
+                                      </div>
+                                      <span className={`px-2 py-0.5 rounded-full font-black text-[9px] ${
+                                        st.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
+                                        st.status === 'FAILED' ? 'bg-rose-100 text-rose-700' :
+                                        'bg-amber-100 text-amber-700 animate-pulse'
+                                      }`}>
+                                        {st.status === 'COMPLETED' ? '완료' :
+                                         st.status === 'FAILED' ? '실패' :
+                                         st.executor_type === 'AI' ? '자율 연산중' : '사원 수행 대기'}
+                                      </span>
+                                    </div>
+
+                                    <p className="text-[11px] text-slate-500 font-bold leading-relaxed">{st.task_description}</p>
+
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-400 font-bold pt-1 border-t border-slate-50">
+                                      <span>배정: {st.executor_type === 'AI' ? 'AI 엔진' : st.assignee_name}</span>
+                                      {st.due_date && <span>기한: {st.due_date}까지</span>}
+                                    </div>
+
+                                    {/* AI 분석 완성 보고서 노출 */}
+                                    {st.executor_type === 'AI' && st.result_detail && (
+                                      <div className="mt-2 p-3 bg-purple-50/50 border border-purple-100 rounded-xl space-y-1">
+                                        <div className="text-[10px] text-purple-700 font-black flex items-center gap-1">
+                                          <Bot className="w-3.5 h-3.5" />
+                                          <span>AI 자율 대행 최종 보고서 결과물</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-700 font-bold leading-relaxed whitespace-pre-wrap">{st.result_detail}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* 1. 세련된 서브 세그먼트 버튼 */}
               <div className="bg-slate-100 p-1 rounded-2xl flex w-fit gap-1 text-xs font-black text-slate-500 border border-slate-200/50">
                 <button

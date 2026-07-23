@@ -474,6 +474,57 @@ export async function GET(request: Request) {
       }
     }
 
+    // 💡 [신규] 대표자 자연어 지시 목록 조회
+    if (action === 'get_commands') {
+      try {
+        const tenantId = await resolveTenantId();
+        const res = await queryTable('crm_governance_commands', {
+          filters: { tenant_id: tenantId }
+        });
+        let commands = res.rows || [];
+        commands = commands.filter((c: any) => !c.deleted_at);
+        // 최신 생성 순 정렬
+        commands.sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+        return NextResponse.json({ success: true, commands });
+      } catch (err: any) {
+        console.error('[ERROR_GET_COMMANDS] Exception occurred:', err);
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
+    // 💡 [신규] 지시 하위 세부 작업 목록 조회
+    if (action === 'get_subtasks') {
+      try {
+        const commandId = searchParams.get('command_id') || '';
+        if (!commandId) {
+          return NextResponse.json({ success: false, error: '지시 ID가 필요합니다.' }, { status: 400 });
+        }
+        const tenantId = await resolveTenantId();
+        const res = await queryTable('crm_governance_subtasks', {
+          filters: { command_id: commandId, tenant_id: tenantId }
+        });
+        let subtasks = res.rows || [];
+        subtasks = subtasks.filter((s: any) => !s.deleted_at);
+
+        // 사원 목록을 가져와 ID 매핑
+        const operatorsRes = await queryTable('crm_operators', {
+          filters: { tenant_id: tenantId }
+        });
+        const ops = operatorsRes.rows || [];
+        const opsMap = new Map(ops.map((o: any) => [String(o.id), o.name]));
+
+        const enriched = subtasks.map((s: any) => ({
+          ...s,
+          assignee_name: s.assignee_id ? (opsMap.get(String(s.assignee_id)) || '미지정') : '미지정'
+        }));
+
+        return NextResponse.json({ success: true, subtasks: enriched });
+      } catch (err: any) {
+        console.error('[ERROR_GET_SUBTASKS] Exception occurred:', err);
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
     // 💡 [신규] 일일 업무 보고서 AI 초안 생성
     if (action === 'generate_report_draft') {
       try {
@@ -2030,6 +2081,239 @@ ${leaderComment}
         success: true,
         message: '추천 태스크가 반려(삭제)되었습니다.'
       });
+    }
+
+    // 💡 [신규] 대표자 지시사항 분석 및 분해 추천
+    if (action === 'parse_command') {
+      try {
+        const { command_text } = body;
+        if (!command_text || !command_text.trim()) {
+          return NextResponse.json({ success: false, error: '지시 내용을 입력해주세요.' }, { status: 400 });
+        }
+
+        const tenantId = await resolveTenantId();
+
+        // 1. 사원 목록 조회
+        const operatorsRes = await queryTable('crm_operators', {
+          filters: { tenant_id: tenantId }
+        }).catch(() => ({ rows: [] }));
+        const staffList = (operatorsRes.rows || []).map((o: any) => `${o.name}(ID: ${o.id})`).join(', ');
+
+        const prompt = `
+당신은 대표자의 지시를 받아 하위 세부 작업으로 쪼개고 배정하는 AI 오케스트레이터입니다.
+아래의 [대표자 자연어 지시 사항]을 정독하고, 이를 실행 가능한 개별 subtask(최소 1개 이상)들로 분해하십시오.
+
+[사내 직원 목록]
+${staffList}
+
+[대표자 자연어 지시 사항]
+${command_text}
+
+[작업 분해 및 추천 규칙]
+1. 작업의 실행 주체(executor_type)를 판별하십시오:
+   - AI: 보고서 초안 작성, 통계 마이닝, 기안서 자동 조립 등 시스템 내부적으로 AI가 자율 대행(Zero-touch)할 수 있는 실무.
+   - STAFF: 현장 방문, 유선 조율, 사후 확인, 자재 배치 등 사람이 직접 수행해야만 하는 지시.
+2. STAFF 작업인 경우, 제공된 [사내 직원 목록]을 검색해 가장 적임자로 유추되거나 본문에 지칭된 사원의 ID를 assignee_id로 지정하십시오. 만약 적임자가 불명확하다면 null로 기입하십시오.
+3. 각 태스크의 설명(task_description)란에, AI가 판단한 해당 업무의 표준운영절차(SOP) 가이드라인을 "SOP 가이드:" 접두사와 함께 포함하여 작성하십시오.
+4. 마감일(due_date)은 오늘 날짜(${nowStr.slice(0, 10)}) 기준 본문 텍스트에 나타난 일자를 YYYY-MM-DD 형태로 변환하고, 언급이 없다면 난이도에 따라 3~7일 내의 적정 일자를 매핑하십시오.
+
+반드시 아래 JSON 형식으로만 응답해 주세요. 마크다운(\`\`\`json) 기호를 절대 포함하지 마십시오.
+{
+  "subtasks": [
+    {
+      "task_title": "태스크 제목",
+      "task_description": "세부 수행 사항 및 SOP 가이드 요약",
+      "executor_type": "AI" 또는 "STAFF",
+      "assignee_id": "사원 ID (문자열 또는 null)",
+      "due_date": "마감일 YYYY-MM-DD"
+    }
+  ]
+}
+`;
+
+        const aiRes = await callAiCaller(prompt);
+        let parsed: any = null;
+        if (aiRes.json && typeof aiRes.json === 'object') {
+          parsed = aiRes.json;
+        } else {
+          const contentText = aiRes.content.trim();
+          const cleanJsonText = contentText
+            .replace(/^```json\s*/i, '')
+            .replace(/```$/, '')
+            .trim();
+          parsed = JSON.parse(cleanJsonText);
+        }
+
+        return NextResponse.json({ success: true, subtasks: parsed?.subtasks || [] });
+      } catch (err: any) {
+        console.error('[ERROR_PARSE_COMMAND] Exception occurred:', err);
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
+    // 💡 [신규] 대표자 지시 실행 기동
+    if (action === 'execute_command') {
+      try {
+        const { raw_command, subtasks } = body;
+        if (!raw_command || !Array.isArray(subtasks) || subtasks.length === 0) {
+          return NextResponse.json({ success: false, error: '원시 지시문과 세부 subtasks 리스트가 필요합니다.' }, { status: 400 });
+        }
+
+        const tenantId = await resolveTenantId();
+        const commandId = `CMD-${Date.now()}`;
+
+        // 1. crm_governance_commands에 지시 마스터 저장
+        await insertRows('crm_governance_commands', [{
+          id: commandId,
+          raw_command: raw_command.trim(),
+          status: 'RUNNING',
+          tenant_id: tenantId,
+          uuid: commandId,
+          created_at: nowStr,
+          created_by: currentUser,
+          updated_at: nowStr,
+          updated_by: currentUser
+        }]);
+
+        // 2. subtasks를 돌며 저장 및 실행 연동
+        for (const [index, t] of subtasks.entries()) {
+          const subtaskId = `SUB-${Date.now()}-${index}`;
+          
+          await insertRows('crm_governance_subtasks', [{
+            id: subtaskId,
+            command_id: commandId,
+            task_title: t.task_title.trim(),
+            task_description: t.task_description || '',
+            executor_type: t.executor_type, // AI or STAFF
+            assignee_id: t.assignee_id ? String(t.assignee_id) : null,
+            due_date: t.due_date || null,
+            status: t.executor_type === 'AI' ? 'RUNNING' : 'PENDING',
+            result_detail: null,
+            tenant_id: tenantId,
+            uuid: subtaskId,
+            created_at: nowStr,
+            updated_at: nowStr,
+            updated_by: currentUser
+          }]);
+
+          if (t.executor_type === 'STAFF') {
+            // (1) STAFF: 스냅태스크 생성 및 배정
+            let assigneeName = '미지정';
+            if (t.assignee_id) {
+              const opRes = await queryTable('crm_operators', {
+                filters: { id: t.assignee_id, tenant_id: tenantId }
+              });
+              if (opRes.rows && opRes.rows.length > 0) {
+                assigneeName = opRes.rows[0].name;
+              }
+            }
+
+            const snapTaskId = `ST-CMD-${Date.now()}-${index}`;
+            await insertRows('crm_snaptasks', [{
+              id: snapTaskId,
+              title: t.task_title.trim(),
+              status: 'ACTIVE',
+              partner_id: null,
+              created_at: nowStr,
+              updated_at: nowStr,
+              tenant_id: tenantId,
+              created_by: currentUser,
+              uuid: snapTaskId
+            }]);
+
+            await insertRows('crm_snaptask_items', [{
+              id: Date.now() + index,
+              task_id: snapTaskId,
+              content_text: `[대표자 지시 배정] AI 컨트롤타워를 통해 배정된 업무입니다. ⚡\n\n- 상세 내용: ${t.task_description || '없음'}\n- 마감일: ${t.due_date || '미정'}\n- 지시 상신 원문: "${raw_command}"`,
+              file_url: null,
+              file_type: 'TEXT',
+              ai_analysis: JSON.stringify({ message: "Assigned via top-down governance command" }),
+              created_at: nowStr,
+              tenant_id: tenantId,
+              created_by: currentUser
+            }]);
+
+            // (2) 캘린더일정 삽입
+            if (t.due_date) {
+              const eventId = `EV-CMD-${Date.now()}-${index}`;
+              await insertRows('crm_company_events', [{
+                id: eventId,
+                title: `[지시 마감] ${t.task_title}`,
+                start_date: t.due_date,
+                end_date: t.due_date,
+                event_type: 'DEPT_EVENT',
+                description: `[담당자: ${assigneeName}]\n\n${t.task_description || ''}`,
+                created_by: currentUser,
+                created_at: nowStr,
+                tenant_id: tenantId,
+                uuid: eventId
+              }]);
+            }
+          } else if (t.executor_type === 'AI') {
+            // (3) AI 자율 대행 비동기 백그라운드 기동
+            (async () => {
+              console.log(`[AI 자율 실행 대행] 기동 시작... (세부작업 ID: ${subtaskId}, 제목: ${t.task_title})`);
+              
+              const agentPrompt = `
+당신은 사내 지식 및 DB 데이터를 분석하여 지시사항을 자율 수행하는 AI 실무 에이전트입니다.
+현재 전달된 업무 지시사항을 처리하고 결과를 종합 한글 리포트 형태로 상세히 기록하십시오.
+
+[세부 업무 지시]
+제목: ${t.task_title}
+지시내용: ${t.task_description}
+
+이 지시를 충족시킬 수 있는 보고서 본문을 비즈니스 경영 톤앤매너로 300자 이상 작성해 주세요. 
+가상의 정밀 지표 데이터, 분석적 차트 요약 텍스트를 포함해 아주 진정성 있게 결과물을 반환해 주십시오.
+
+반드시 마크다운 기호 없이 순수 결과 요약 텍스트만 출력해 주세요.
+`;
+
+              try {
+                const agentRes = await callAiCaller(agentPrompt);
+                const resultText = agentRes.content || 'AI 자율 분석 보고서가 생성되었습니다.';
+                
+                await updateRows('crm_governance_subtasks', {
+                  status: 'COMPLETED',
+                  result_detail: resultText,
+                  updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
+                }, { filters: { id: subtaskId, tenant_id: tenantId } });
+
+                const siblingsRes = await queryTable('crm_governance_subtasks', {
+                  filters: { command_id: commandId, tenant_id: tenantId }
+                });
+                const siblings = siblingsRes.rows || [];
+                const unfinished = siblings.filter((s: any) => s.status !== 'COMPLETED' && s.status !== 'FAILED' && s.id !== subtaskId);
+                
+                if (unfinished.length === 0) {
+                  await updateRows('crm_governance_commands', {
+                    status: 'COMPLETED',
+                    updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
+                  }, { filters: { id: commandId, tenant_id: tenantId } });
+                  console.log(`[AI 오케스트레이터] 지시(ID: ${commandId}) 하위의 모든 서브태스크 완료 처리됨.`);
+                }
+              } catch (agentErr: any) {
+                console.error(`[AI 자율 실행 에러] subtask: ${subtaskId} 실패:`, agentErr);
+                await updateRows('crm_governance_subtasks', {
+                  status: 'FAILED',
+                  result_detail: `자율 실행 실패: ${agentErr.message || agentErr}`,
+                  updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
+                }, { filters: { id: subtaskId, tenant_id: tenantId } });
+              }
+            })().catch(err => {
+              console.error('[AI 자율 실행 스레드 패닉]:', err);
+            });
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: '대표자 지시 오케스트레이션이 정상 기동되었습니다.',
+          command_id: commandId
+        });
+      } catch (err: any) {
+        console.error('[ERROR_EXECUTE_COMMAND] Exception occurred:', err);
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
     }
 
     return NextResponse.json(

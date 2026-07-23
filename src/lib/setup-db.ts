@@ -193,6 +193,26 @@ export async function setupDatabase() {
     { name: 'status', type: 'TEXT', notNull: true }
   ], { tableName: 'crm_governance_pending_tasks', uniqueKeyColumns: ['id'] });
 
+  // 💡 [신규] 대표자 자연어 지시 마스터 테이블 생성
+  await safeCreateTable('대표자 자연어 지시 마스터', [
+    { name: 'id', type: 'TEXT', notNull: true },
+    { name: 'raw_command', type: 'TEXT', notNull: true },
+    { name: 'status', type: 'TEXT', notNull: true }
+  ], { tableName: 'crm_governance_commands', uniqueKeyColumns: ['id'] });
+
+  // 💡 [신규] 하위 분해 세부 작업 테이블 생성
+  await safeCreateTable('하위 분해 세부 작업', [
+    { name: 'id', type: 'TEXT', notNull: true },
+    { name: 'command_id', type: 'TEXT', notNull: true },
+    { name: 'task_title', type: 'TEXT', notNull: true },
+    { name: 'task_description', type: 'TEXT' },
+    { name: 'executor_type', type: 'TEXT', notNull: true }, // AI, STAFF
+    { name: 'assignee_id', type: 'TEXT' },
+    { name: 'due_date', type: 'TEXT' },
+    { name: 'status', type: 'TEXT', notNull: true }, // PENDING, RUNNING, COMPLETED, FAILED
+    { name: 'result_detail', type: 'TEXT' }
+  ], { tableName: 'crm_governance_subtasks', uniqueKeyColumns: ['id'] });
+
   // 초기 시범 자율 규칙 시딩 (테넌트: tenant-guest-id-2222)
   try {
     const rulesCheck = await queryTable('crm_governance_rules', { limit: 1 });
