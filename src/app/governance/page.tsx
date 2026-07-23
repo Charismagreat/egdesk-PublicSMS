@@ -1252,7 +1252,7 @@ export default function GovernanceDashboard() {
                   <button
                     onClick={handleParseCommand}
                     disabled={isParsingCommand || isCommandExecuting}
-                    className="md:w-36 px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-colors border-none cursor-pointer"
+                    className="md:w-auto shrink-0 whitespace-nowrap px-5 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-colors border-none cursor-pointer"
                   >
                     {isParsingCommand ? (
                       <>
