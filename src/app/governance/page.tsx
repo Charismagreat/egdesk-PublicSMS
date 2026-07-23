@@ -11,7 +11,7 @@ import {
   Sparkles, User, Clock, ToggleLeft, ToggleRight, ListTodo,
   ExternalLink, FileText, ChevronRight, X, Loader2, CheckSquare, Square,
   Search, SlidersHorizontal, UserCheck, Cpu, Database, FolderOpen,
-  Camera, Receipt, MessageSquare, Send, Calendar, ArrowRight, Paperclip
+  Camera, Receipt, MessageSquare, Send, Calendar, ArrowRight, Paperclip, Zap, Bot
 } from "lucide-react";
 
 interface ControlEvent {
