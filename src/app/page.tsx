@@ -7,6 +7,7 @@ import { queryTable, executeSQL } from "@/../egdesk-helpers";
 import AiCopilotWidget from "@/components/AiCopilotWidget";
 import DashboardCertPatentWidget from "@/components/DashboardCertPatentWidget";
 import ExcelPageBuilderWidget from "@/components/ExcelPageBuilderWidget";
+import AssetControlTowerWidget from "@/components/AssetControlTowerWidget";
 
 // Next.js 캐싱 비활성화 (항상 실시간 최신 금융/근태 데이터 유지)
 export const dynamic = 'force-dynamic';
@@ -793,6 +794,11 @@ export default async function Home() {
       {/* 3구역: 인증서 및 특허 기한 AI 캘린더 위젯 (100% 가로 풀너비) */}
       <div className="mt-8 w-full block">
         <DashboardCertPatentWidget />
+      </div>
+
+      {/* 3-2구역: 전사 실물 자산 AI 통합 관제 보드 위젯 */}
+      <div className="mt-8 w-full block">
+        <AssetControlTowerWidget />
       </div>
 
       {/* 4구역: 엑셀 기반 AI 페이지 창조 빌더 위젯 */}
