@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, updateRows, callInternalKnowledgeTool } from '../../../../egdesk-helpers';
+import { queryTable, insertRows, updateRows, callInternalKnowledgeTool } from '../../../../../egdesk-helpers';
 import { setupDatabase } from '@/lib/setup-db';
 
 // ⏰ [매일 자정 AI Daily Scan 배치 엔진]

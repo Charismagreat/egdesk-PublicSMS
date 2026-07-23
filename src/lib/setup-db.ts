@@ -182,6 +182,17 @@ export async function setupDatabase() {
     { name: 'approved_at', type: 'TEXT' }
   ], { tableName: 'crm_daily_reports', uniqueKeyColumns: ['id'] });
 
+  // 💡 [신규] AI 추천 후속 업무 관제 테이블 생성
+  await safeCreateTable('AI 추천 후속 업무 관제', [
+    { name: 'id', type: 'INTEGER', notNull: true },
+    { name: 'report_id', type: 'INTEGER', notNull: true },
+    { name: 'task_title', type: 'TEXT', notNull: true },
+    { name: 'task_description', type: 'TEXT' },
+    { name: 'assignee_id', type: 'TEXT' },
+    { name: 'due_date', type: 'TEXT' },
+    { name: 'status', type: 'TEXT', notNull: true }
+  ], { tableName: 'crm_governance_pending_tasks', uniqueKeyColumns: ['id'] });
+
   // 초기 시범 자율 규칙 시딩 (테넌트: tenant-guest-id-2222)
   try {
     const rulesCheck = await queryTable('crm_governance_rules', { limit: 1 });

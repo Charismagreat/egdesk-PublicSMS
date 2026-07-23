@@ -455,6 +455,25 @@ export async function GET(request: Request) {
       }
     }
 
+    // 💡 [신규] AI 추천 후속 업무 관제 목록 조회
+    if (action === 'get_pending_tasks') {
+      try {
+        const tenantId = await resolveTenantId();
+        const res = await queryTable('crm_governance_pending_tasks', {
+          filters: { tenant_id: tenantId }
+        });
+        let tasks = res.rows || [];
+        // 소프트 삭제 필터링 및 대기 상태(PENDING) 필터링
+        tasks = tasks.filter((t: any) => !t.deleted_at && t.status === 'PENDING');
+        // 최신 등록 순 정렬
+        tasks.sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+        return NextResponse.json({ success: true, tasks });
+      } catch (err: any) {
+        console.error('[ERROR_GET_PENDING_TASKS] Exception occurred:', err);
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
     // 💡 [신규] 일일 업무 보고서 AI 초안 생성
     if (action === 'generate_report_draft') {
       try {
@@ -1816,9 +1835,200 @@ export async function POST(request: Request) {
         updated_by: currentUser
       }, { filters: { id: report_id, tenant_id: tenantId } });
 
+      // 💡 [추가] 일보 승인 시 백그라운드 AI 후속 업무 추출 기동
+      if (status === 'APPROVED' && reportsList.length > 0) {
+        const report = reportsList[0];
+        (async () => {
+          const reportContent = report.report_content || '';
+          const leaderComment = comment || '';
+          
+          // 사원 목록 콘텍스트 구성
+          const operatorsRes = await queryTable('crm_operators', {
+            filters: { tenant_id: tenantId }
+          }).catch(() => ({ rows: [] }));
+          const staffList = (operatorsRes.rows || []).map((o: any) => `${o.name}(ID: ${o.id})`).join(', ');
+
+          const aiPrompt = `
+당신은 기업의 비즈니스 프로세스 및 업무 지시 분석 AI입니다.
+아래의 [직원 일일 업무 보고서]와 대표자의 [결재 지시 코멘트]를 읽고, 조치가 필요한 후속 작업(To-Do)을 1개 이상 도출하십시오.
+
+[사내 직원 목록]
+${staffList}
+
+[직원 일일 업무 보고서]
+작성자: ${report.operator}
+내용:
+${reportContent}
+
+[대표자 결재 지시 코멘트]
+${leaderComment}
+
+[추출 규칙]
+1. 결재 코멘트에 구체적인 지시 사항(예: "이과장에게 전달", "언제까지 체크")이 있으면 최우선적으로 태스크로 도출하십시오.
+2. 보고 내용 중 미결 사항, 부품 부족, 클레임 등 위험 요소가 감지되면 후속 태스크를 만드십시오.
+3. 배정 직원(assignee_id)은 제공된 [사내 직원 목록] 중 해당 업무에 적합하거나 지시받은 사람의 숫자 ID만 입력하십시오. 만약 매치되는 사원이 없거나 부재하다면 null로 기입하십시오.
+4. 마감일(due_date)은 오늘 날짜(${nowStr.slice(0, 10)})를 기준으로 텍스트에 나타난 기한을 분석해 YYYY-MM-DD 형태로 변환하십시오. 기한이 명시되지 않았다면 중요도에 따라 3~7일 후로 합리적으로 지정하십시오.
+
+반드시 아래 JSON 형식으로만 완벽하게 응답해 주세요. 마크다운(\`\`\`json) 기호를 절대 포함하지 마십시오.
+{
+  "tasks": [
+    {
+      "task_title": "태스크 제목 (핵심 요약)",
+      "task_description": "태스크 상세 설명 (무엇을 어떻게 해야하는지 구체적으로 기술)",
+      "assignee_id": "사원 ID (숫자 또는 null)",
+      "due_date": "마감일 YYYY-MM-DD"
+    }
+  ]
+}
+`;
+
+          console.log(`[AI 후속 업무 분석] 기동 시작... (일보 ID: ${report_id})`);
+          const aiRes = await callAiCaller(aiPrompt);
+          let parsed: any = null;
+          if (aiRes.json && typeof aiRes.json === 'object') {
+            parsed = aiRes.json;
+          } else {
+            const contentText = aiRes.content.trim();
+            const cleanJsonText = contentText
+              .replace(/^```json\s*/i, '')
+              .replace(/```$/, '')
+              .trim();
+            parsed = JSON.parse(cleanJsonText);
+          }
+
+          if (parsed && Array.isArray(parsed.tasks)) {
+            console.log(`[AI 후속 업무 분석] 태스크 추출 성공 (${parsed.tasks.length}건)`);
+            for (const t of parsed.tasks) {
+              const pendingTaskId = Date.now() + Math.floor(Math.random() * 1000);
+              await insertRows('crm_governance_pending_tasks', [{
+                id: pendingTaskId,
+                report_id: report_id,
+                task_title: t.task_title,
+                task_description: t.task_description,
+                assignee_id: t.assignee_id ? String(t.assignee_id) : null,
+                due_date: t.due_date || null,
+                status: 'PENDING',
+                tenant_id: tenantId,
+                uuid: `pending-task-${pendingTaskId}`,
+                created_at: nowStr,
+                updated_at: nowStr,
+                updated_by: currentUser
+              }]);
+            }
+          }
+        })().catch((err) => {
+          console.error('[AI 후속 업무 분석 에러] 백그라운드 파서 예외:', err);
+        });
+      }
+
       return NextResponse.json({ 
         success: true, 
         message: status === 'APPROVED' ? '일일 보고서가 승인 결재되었습니다.' : '일일 보고서가 반려/보완요청 처리되었습니다.' 
+      });
+    }
+
+    // 💡 [신규] AI 추천 후속 업무 관제 승인 및 자동 배정
+    if (action === 'approve_pending_task') {
+      const { task_id, task_title, task_description, assignee_id, due_date } = body;
+      if (!task_id || !task_title) {
+        return NextResponse.json({ success: false, error: '태스크 ID와 제목이 필요합니다.' }, { status: 400 });
+      }
+
+      const tenantId = await resolveTenantId();
+
+      // 1. 배정자 사원 정보 조회
+      let assigneeName = '미지정';
+      if (assignee_id) {
+        const opRes = await queryTable('crm_operators', {
+          filters: { id: assignee_id, tenant_id: tenantId }
+        });
+        if (opRes.rows && opRes.rows.length > 0) {
+          assigneeName = opRes.rows[0].name;
+        }
+      }
+
+      // 2. crm_snaptasks에 인서트
+      const snapTaskId = `ST-${Date.now()}`;
+      await insertRows('crm_snaptasks', [{
+        id: snapTaskId,
+        title: task_title.trim(),
+        status: 'ACTIVE',
+        partner_id: null,
+        created_at: nowStr,
+        updated_at: nowStr,
+        tenant_id: tenantId,
+        created_by: currentUser,
+        uuid: snapTaskId
+      }]);
+
+      // 3. crm_snaptask_items에 인서트
+      await insertRows('crm_snaptask_items', [{
+        id: Date.now(),
+        task_id: snapTaskId,
+        content_text: `[AI 후속 업무 배정] 최고 관리자 승인에 의해 업무가 배정되었습니다. 🪐\n\n- 업무명: ${task_title}\n- 담당 사원: ${assigneeName} (ID: ${assignee_id || '없음'})\n- 기한: ${due_date || '미정'}\n- 상세 내용: ${task_description || '없음'}`,
+        file_url: null,
+        file_type: 'TEXT',
+        ai_analysis: JSON.stringify({ message: "Task initialized by AI Governance" }),
+        created_at: nowStr,
+        tenant_id: tenantId,
+        created_by: currentUser
+      }]);
+
+      // 4. crm_company_events (캘린더)에 인서트
+      if (due_date) {
+        const eventId = `EV-${Date.now()}`;
+        await insertRows('crm_company_events', [{
+          id: eventId,
+          title: `[업무 마감] ${task_title}`,
+          start_date: due_date,
+          end_date: due_date,
+          event_type: 'DEPT_EVENT',
+          description: `[담당자: ${assigneeName}]\n\n${task_description || ''}`,
+          created_by: currentUser,
+          created_at: nowStr,
+          tenant_id: tenantId,
+          uuid: eventId
+        }]);
+      }
+
+      // 5. 추천 태스크 상태 업데이트 (APPROVED)
+      await updateRows('crm_governance_pending_tasks', {
+        status: 'APPROVED',
+        assignee_id: assignee_id || null,
+        due_date: due_date || null,
+        task_title,
+        task_description,
+        updated_at: nowStr,
+        updated_by: currentUser
+      }, { filters: { id: task_id, tenant_id: tenantId } });
+
+      return NextResponse.json({
+        success: true,
+        message: '추천 태스크가 최종 승인되어 실제 업무 및 캘린더에 배정되었습니다.'
+      });
+    }
+
+    // 💡 [신규] AI 추천 후속 업무 관제 반려(삭제)
+    if (action === 'reject_pending_task') {
+      const { task_id } = body;
+      if (!task_id) {
+        return NextResponse.json({ success: false, error: '태스크 ID가 필요합니다.' }, { status: 400 });
+      }
+
+      const tenantId = await resolveTenantId();
+
+      // 상태를 REJECTED로 갱신하고 소프트 삭제 처리 (deleted_at 기입)
+      await updateRows('crm_governance_pending_tasks', {
+        status: 'REJECTED',
+        deleted_at: nowStr,
+        deleted_by: currentUser,
+        updated_at: nowStr,
+        updated_by: currentUser
+      }, { filters: { id: task_id, tenant_id: tenantId } });
+
+      return NextResponse.json({
+        success: true,
+        message: '추천 태스크가 반려(삭제)되었습니다.'
       });
     }
 

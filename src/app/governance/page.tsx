@@ -70,6 +70,12 @@ export default function GovernanceDashboard() {
   const [assignTargetUser, setAssignTargetUser] = useState("김직원");
   const [assignTaskLoading, setAssignTaskLoading] = useState(false);
 
+  // 💡 [추가] AI 추천 후속 업무 관제 전용 상태 및 편집 필드
+  const [operatorOptions, setOperatorOptions] = useState<any[]>([]);
+  const [editedTitle, setEditedTitle] = useState("");
+  const [editedDescription, setEditedDescription] = useState("");
+  const [editedDueDate, setEditedDueDate] = useState("");
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -103,6 +109,39 @@ export default function GovernanceDashboard() {
     setIsKnowledgeModalOpen(true);
   };
 
+  // 💡 [추가] 사원 목록 로드
+  useEffect(() => {
+    const fetchOperators = async () => {
+      try {
+        const res = await apiFetch("/api/operators");
+        const data = await res.json();
+        if (data.success) {
+          setOperatorOptions(data.rows || []);
+        }
+      } catch (err) {
+        console.warn("사원 목록 로드 실패:", err);
+      }
+    };
+    fetchOperators();
+  }, []);
+
+  // 💡 [추가] 배정 모달 오픈 시 AI 추천 데이터 기반 인풋 기본값 동적 매핑
+  useEffect(() => {
+    if (selectedTaskForAssign) {
+      setEditedTitle(selectedTaskForAssign.task_title || selectedTaskForAssign.title || "");
+      setEditedDescription(selectedTaskForAssign.task_description || selectedTaskForAssign.description || "");
+      setEditedDueDate(selectedTaskForAssign.due_date || "");
+      
+      if (selectedTaskForAssign.assignee_id) {
+        setAssignTargetUser(String(selectedTaskForAssign.assignee_id));
+      } else if (operatorOptions.length > 0) {
+        setAssignTargetUser(String(operatorOptions[0].id));
+      } else {
+        setAssignTargetUser("1");
+      }
+    }
+  }, [selectedTaskForAssign, operatorOptions]);
+
   // 📁 실물 서류 PDF/이미지 모달 뷰어 상태 (모바일 포털 /m 과 100% 동일한 서류 뷰어)
   const [filePreviewItem, setFilePreviewItem] = useState<any | null>(null);
   const [isFilePreviewOpen, setIsFilePreviewOpen] = useState(false);
@@ -112,25 +151,82 @@ export default function GovernanceDashboard() {
     if (!selectedTaskForAssign) return;
     setAssignTaskLoading(true);
     try {
-      const res = await apiFetch("/api/cert-patent", {
+      if (selectedTaskForAssign.isGovernancePending) {
+        // 💡 [신규] 일보 후속 업무 최종 승인 및 연동
+        const res = await apiFetch("/api/governance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "approve_pending_task",
+            task_id: selectedTaskForAssign.id,
+            task_title: editedTitle,
+            task_description: editedDescription,
+            assignee_id: assignTargetUser,
+            due_date: editedDueDate
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`[${editedTitle}] 업무가 성공적으로 배정되고 캘린더에 연동되었습니다!`);
+          setIsAssignModalOpen(false);
+          setSelectedTaskForAssign(null);
+          loadData();
+        } else {
+          alert("배정 실패: " + (data.error || "서버 오류"));
+        }
+      } else {
+        // 기존 서류 스캔 배정
+        const res = await apiFetch("/api/cert-patent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "assign_task",
+            payload: {
+              id: selectedTaskForAssign.id,
+              assigned_to: assignTargetUser
+            }
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`[${selectedTaskForAssign.title}] 업무가 '${assignTargetUser}'에게 성공적으로 배정되었습니다!`);
+          setIsAssignModalOpen(false);
+          setSelectedTaskForAssign(null);
+          loadData();
+        } else {
+          alert("배정 실패: " + (data.error || "서버 오류"));
+        }
+      }
+    } catch (e: any) {
+      alert("오류 발생: " + e.message);
+    } finally {
+      setAssignTaskLoading(false);
+    }
+  };
+
+  // 💡 [신규] AI 추천 후속 업무 반려(삭제) 실행 함수
+  const handleRejectTask = async () => {
+    if (!selectedTaskForAssign) return;
+    if (!window.confirm("정말로 이 AI 추천 후속 업무를 반려(삭제)하시겠습니까?")) return;
+    
+    setAssignTaskLoading(true);
+    try {
+      const res = await apiFetch("/api/governance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "assign_task",
-          payload: {
-            id: selectedTaskForAssign.id,
-            assigned_to: assignTargetUser
-          }
+          action: "reject_pending_task",
+          task_id: selectedTaskForAssign.id
         })
       });
       const data = await res.json();
       if (data.success) {
-        alert(`[${selectedTaskForAssign.title}] 업무가 '${assignTargetUser}'에게 성공적으로 배정되었습니다!`);
+        alert("추천 업무가 반려 처리되었습니다.");
         setIsAssignModalOpen(false);
         setSelectedTaskForAssign(null);
         loadData();
       } else {
-        alert("배정 실패: " + (data.error || "서버 오류"));
+        alert("반려 실패: " + (data.error || "서버 오류"));
       }
     } catch (e: any) {
       alert("오류 발생: " + e.message);
@@ -528,17 +624,36 @@ export default function GovernanceDashboard() {
         setReports(reportsData.reports || []);
       }
 
-      // 2.6. AI 스캔 파싱 배정대기 건들 조회
+      // 2.6. AI 스캔 파싱 배정대기 건들 조회 및 일보 후속 업무 병합
+      let allSuggestedTasks: any[] = [];
       try {
         const certRes = await apiFetch("/api/cert-patent");
         const certData = await certRes.json();
         if (certData.success) {
           const suggested = (certData.tasks || []).filter((t: any) => t.status === 'AI_SUGGESTED');
-          setAiSuggestedTasks(suggested);
+          allSuggestedTasks = [...suggested];
         }
       } catch (cErr) {
         console.warn("AI 배정대기 건 로드 생략:", cErr);
       }
+
+      try {
+        const govTasksRes = await apiFetch("/api/governance?action=get_pending_tasks");
+        const govTasksData = await govTasksRes.json();
+        if (govTasksData.success) {
+          const govTasks = (govTasksData.tasks || []).map((t: any) => ({
+            ...t,
+            isGovernancePending: true, // 일보 후속 업무 플래그
+            title: t.task_title, // 공통 키 바인딩
+            description: t.task_description, // 공통 키 바인딩
+            source_file_name: "📋 일보 후속 업무"
+          }));
+          allSuggestedTasks = [...allSuggestedTasks, ...govTasks];
+        }
+      } catch (gErr) {
+        console.warn("일보 후속 업무 로드 생략:", gErr);
+      }
+      setAiSuggestedTasks(allSuggestedTasks);
 
       // 💡 [추가] 2.7. 자율 규칙 목록 조회 및 카운트 동기화
       try {
@@ -2707,11 +2822,45 @@ export default function GovernanceDashboard() {
               </button>
             </div>
 
-            <div className="bg-indigo-50/60 p-4 rounded-2xl border border-indigo-100 space-y-1">
-              <span className="text-[10px] bg-indigo-600 text-white font-black px-2 py-0.5 rounded">대상 서류/할 일</span>
-              <h4 className="text-xs font-black text-slate-800 pt-1">{selectedTaskForAssign.title}</h4>
-              <p className="text-[11px] text-slate-500 line-clamp-2">{selectedTaskForAssign.description}</p>
-            </div>
+            {selectedTaskForAssign.isGovernancePending ? (
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-slate-700 block">업무 제목</label>
+                  <input
+                    type="text"
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                    placeholder="업무 제목을 입력하십시오."
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-slate-700 block">상세 설명</label>
+                  <textarea
+                    rows={3}
+                    value={editedDescription}
+                    onChange={(e) => setEditedDescription(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 resize-none"
+                    placeholder="업무 상세 내용을 기술하십시오."
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-black text-slate-700 block">완료 마감일 (due_date)</label>
+                  <input
+                    type="date"
+                    value={editedDueDate}
+                    onChange={(e) => setEditedDueDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="bg-indigo-50/60 p-4 rounded-2xl border border-indigo-100 space-y-1">
+                <span className="text-[10px] bg-indigo-600 text-white font-black px-2 py-0.5 rounded">대상 서류/할 일</span>
+                <h4 className="text-xs font-black text-slate-800 pt-1">{selectedTaskForAssign.title}</h4>
+                <p className="text-[11px] text-slate-500 line-clamp-2">{selectedTaskForAssign.description}</p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-xs font-black text-slate-700 block">배정 대상 직원 선택</label>
@@ -2720,36 +2869,59 @@ export default function GovernanceDashboard() {
                 onChange={(e) => setAssignTargetUser(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
               >
-                <option value="김직원">김직원 (현장 모바일)</option>
-                <option value="박대리">박대리 (무역/통관팀)</option>
-                <option value="최고관리자">최고관리자 (직접 수행)</option>
+                {operatorOptions.length > 0 ? (
+                  operatorOptions.map((op: any) => (
+                    <option key={op.id} value={op.id}>
+                      {op.name} ({op.employee_number || op.role || '사원'})
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="김직원">김직원 (현장 모바일)</option>
+                    <option value="박대리">박대리 (무역/통관팀)</option>
+                    <option value="최고관리자">최고관리자 (직접 수행)</option>
+                  </>
+                )}
               </select>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-              <button
-                onClick={() => setIsAssignModalOpen(false)}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer border-none"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleAssignTask}
-                disabled={assignTaskLoading}
-                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer border-none shadow-sm flex items-center gap-1.5"
-              >
-                {assignTaskLoading ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>배정 전송 중...</span>
-                  </>
-                ) : (
-                  <>
-                    <UserCheck className="w-3.5 h-3.5" />
-                    <span>담당 배정 완료 및 발송</span>
-                  </>
-                )}
-              </button>
+            <div className="flex justify-between items-center border-t border-slate-100 pt-4">
+              {selectedTaskForAssign.isGovernancePending ? (
+                <button
+                  onClick={handleRejectTask}
+                  disabled={assignTaskLoading}
+                  className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  추천 반려
+                </button>
+              ) : (
+                <div />
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsAssignModalOpen(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer border-none"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleAssignTask}
+                  disabled={assignTaskLoading}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer border-none shadow-sm flex items-center gap-1.5"
+                >
+                  {assignTaskLoading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>처리 중...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="w-3.5 h-3.5" />
+                      <span>{selectedTaskForAssign.isGovernancePending ? "최종 승인 및 자동 배정" : "담당 배정 완료 및 발송"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
