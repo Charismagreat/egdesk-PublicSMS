@@ -143,7 +143,7 @@ export function OrderModal({
     if (cleanNumber.length === 10) {
       async function autoFillBusiness() {
         try {
-          const res = await fetch(`/api/partners?action=check-biz&business_number=${cleanNumber}`);
+          const res = await apiFetch(`/api/partners?action=check-biz&business_number=${cleanNumber}`);
           const data = await res.json();
           if (data.success && data.exists && data.partner) {
             const p = data.partner;

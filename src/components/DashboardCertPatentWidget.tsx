@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import React, { useState, useEffect } from "react";
 import {
   Calendar as CalendarIcon,
@@ -43,7 +44,7 @@ export default function DashboardCertPatentWidget() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/cert-patent");
+      const res = await apiFetch("/api/cert-patent");
       const data = await res.json();
       if (data.success) {
         setTasks(data.tasks || []);
@@ -67,7 +68,7 @@ export default function DashboardCertPatentWidget() {
   // AI Daily Scanner 가동
   const handleTriggerAiScan = async () => {
     try {
-      const res = await fetch("/api/cert-patent", {
+      const res = await apiFetch("/api/cert-patent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -94,7 +95,7 @@ export default function DashboardCertPatentWidget() {
     if (!selectedTask || !assigneeName.trim()) return;
 
     try {
-      const res = await fetch("/api/cert-patent", {
+      const res = await apiFetch("/api/cert-patent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

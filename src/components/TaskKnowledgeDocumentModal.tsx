@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import React, { useState } from "react";
 import { 
   X, FileText, Folder, Calendar, Sparkles, Send, 
@@ -56,7 +57,7 @@ export default function TaskKnowledgeDocumentModal({
     setIsAiAsking(true);
 
     try {
-      const res = await fetch("/api/ai-help", {
+      const res = await apiFetch("/api/ai-help", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

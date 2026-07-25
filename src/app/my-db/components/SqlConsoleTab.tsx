@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import React from "react";
 import { Terminal, AlertTriangle, X, Play, RefreshCw, Database, CheckCircle, ShieldAlert } from "lucide-react";
 import { ConsoleResult } from "../types";
@@ -242,7 +243,7 @@ export function SqlConsolePlayground({
                       setIsLoading(true);
                       setConsoleResult(null);
                       try {
-                        const res = await fetch("/api/db", {
+                        const res = await apiFetch("/api/db", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ action: "execute", query: aiGeneratedSql })

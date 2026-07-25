@@ -297,7 +297,18 @@ export async function POST(req: Request) {
   try {
     await initHrDatabase();
 
-    const { action, memo } = await req.json(); // action: 'CLOCK_IN' or 'CLOCK_OUT'
+    const { searchParams } = new URL(req.url);
+    const queryAction = searchParams.get('action');
+
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch (e) {
+      // JSON 파싱 실패 시 폴백
+    }
+
+    const action = body.action || queryAction;
+    const memo = body.memo;
 
     const { isAuthorized, tenantId, name: operatorName, username } = await verifyUserRole();
     if (!isAuthorized) {
@@ -307,7 +318,7 @@ export async function POST(req: Request) {
     const cookieStore = await cookies();
     const token = cookieStore.get('auth_token')?.value;
     const payload = decodeJwt(token!);
-    const operatorId = payload.id as string;
+    const operatorId = String(payload.id);
 
     const now = new Date();
     const workDate = now.toISOString().split('T')[0];

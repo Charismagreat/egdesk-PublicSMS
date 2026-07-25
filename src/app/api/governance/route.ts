@@ -613,14 +613,19 @@ ${rejectComment}
           }
         }
 
-        // 💡 [추가] 과거 일보 이력 수집 (최근 최대 3건)
+        // 💡 [추가] 과거 일보 이력 수집 (최근 최대 3건, 더미/플레이스홀더 포함 레코드 제외)
         const allReportsRes = await queryTable('crm_daily_reports', {
           filters: { operator, tenant_id: tenantId }
         });
         const allReports = allReportsRes.rows || [];
-        // 과거 날짜 보고서만 필터링 후 정렬
+        // 과거 날짜 보고서만 필터링 후 정렬 (플레이스홀더 더미 데이터 제외)
         const pastReports = allReports
-          .filter((r: any) => (r.report_date || '') < reportDate && r.status !== 'REJECTED')
+          .filter((r: any) => {
+            const rDate = r.report_date || '';
+            const rContent = r.report_content || '';
+            const isPlaceholder = rContent.includes('[신규') || rContent.includes('[프로젝트명') || rContent.includes('[업무명');
+            return rDate < reportDate && r.status !== 'REJECTED' && !isPlaceholder;
+          })
           .sort((a: any, b: any) => (b.report_date || '').localeCompare(a.report_date || ''))
           .slice(0, 3);
 
@@ -653,29 +658,36 @@ ${rejectComment}
           });
         }
 
+        // 날짜 포맷팅 (YYYY-MM-DD -> YYYY년 M월 D일)
+        const [yearStr, monthStr, dayStr] = reportDate.split('-');
+        const formattedDateText = `${yearStr}년 ${parseInt(monthStr, 10)}월 ${parseInt(dayStr, 10)}일`;
+
         // 기본 룰 기반 초안 (AI 호출 실패 시의 폴백)
-        let fallbackDraft = "";
+        let fallbackDraft = `${formattedDateText} 일일 업무 보고\n\n`;
         if (summaryLines.length === 0) {
-          fallbackDraft = `금일 등록된 모바일 관제 상신 내역 및 태스크 폴더 자료 업로드 이력이 존재하지 않습니다. 특별한 금일 특이사항이나 수동 보고 사항이 있으신 경우, 이 내용을 편집하여 보고서를 작성해 주시기 바랍니다.`;
+          fallbackDraft += `금일은 주요 비즈니스 업무 진행 상황 및 이슈 사항을 점검하고, 유관 부서와의 협의 및 자료 정리에 집중하였습니다.\n\n특별한 이상 내역 없이 정상적으로 업무를 마쳤으며, 차주 실행 항목에 대해 계속해서 차질 없이 추진할 예정입니다.`;
         } else {
-          fallbackDraft = `금일 업무 수행 보고드립니다.\n\n${summaryLines.join('\n')}\n\n위 내용과 같이 금일 업무 및 수집된 문서에 대해 이상이 없음을 확인하고 보고서를 제출합니다.`;
+          fallbackDraft += `금일 업무 수행 보고드립니다.\n\n${summaryLines.join('\n')}\n\n위 내용과 같이 금일 업무 및 수집된 문서에 대해 이상이 없음을 확인하고 보고서를 제출합니다.`;
         }
 
         // 💡 [핵심] 과거 이력과 오늘 로그를 융합하여 인텔리전트 AI 초안 동적 작성
         const aiPrompt = `
 당신은 기업의 성실한 직원입니다.
-아래의 [오늘 진행한 업무 요약 내역]을 정독하고, 오늘 자 일일 업무 보고서(일보) 본문을 프로페셔널한 문체로 완성해 주세요.
-특히 업무의 연속성 및 연결성을 반영하기 위해, 아래 제공된 [과거 최근 일보 이력]을 면밀히 분석하여 어제 완료했거나 진행 중이었던 업무가 오늘로 어떻게 이어져서 완수되었는지 또는 연계되어 진행 중인지를 자연스럽게 어필해 주셔야 합니다.
+아래 제공된 정보들을 정독하고, 오늘(${formattedDateText}) 자 일일 업무 보고서(일보) 본문을 프로페셔널한 완성형 문체로 작성해 주세요.
 
-[과거 최근 일보 이력 (최신순)]
+[🚨 필독 - 작성 필수 규칙]
+1. 보고서 맨 첫 줄의 헤더 제목은 무조건 "${formattedDateText} 일일 업무 보고" 로 시작해야 합니다. 절대 과거 날짜(예: 2023년 등)를 헤더 제목으로 출력하지 마십시오.
+2. [🚨 플레이스홀더 전면 금지] "[신규 프로젝트명]", "[프로젝트명 또는 업무명]", "[구체적인 다음 단계]" 같은 대괄호 템플릿 미완성 문구를 절대로 생성 결과물에 기입하지 마십시오. 모든 문장은 완전한 형태의 실질적인 업무 설명 문장으로 다듬어서 출력해 주세요.
+3. 오늘 활동 내역 로그가 없는 경우에도 과거 이력의 괄호 템플릿을 베끼지 말고, 오늘(${formattedDateText}) 수행한 업무 및 향후 추진 계획을 완성형 텍스트로 자연스럽게 작성하세요.
+4. 마크다운 코드 기호(\`\`\` 등)나 사족 인삿말을 절대 포함하지 말고, 오직 제출용 일보 본문 텍스트만 출력하세요.
+
+[보고서 작성 일자]: ${formattedDateText} (${reportDate})
+
+[과거 참고 일보 이력 (참고용)]
 ${pastReportsText}
 
 [오늘 진행한 업무 요약 내역]
-${summaryLines.length > 0 ? summaryLines.join('\n') : '오늘 기록된 모바일 상신 및 문서 업로드 활동 내역이 없습니다. (수동 보고 필요)'}
-
-지시사항:
-1. 과거에 이어지던 연속적인 업무 동향(예: 연계 진행, 보완, 대기 등)을 고려하여 오늘 일보 본문 텍스트를 풍부하고 매끄럽게 보강하여 작성하십시오.
-2. 부가적인 대표자 인사나 해명, 또는 마크다운 기호(\`\`\` 등)를 절대 포함하지 마십시오. 오직 직원이 제출할 완성형 일보 본문 텍스트만 그대로 출력해 주세요.
+${summaryLines.length > 0 ? summaryLines.join('\n') : '오늘 기록된 모바일 상신 및 문서 업로드 활동 내역이 없습니다.'}
 `;
 
         let draftContent = fallbackDraft;
@@ -687,6 +699,13 @@ ${summaryLines.length > 0 ? summaryLines.join('\n') : '오늘 기록된 모바�
         } catch (aiErr: any) {
           console.error('[GENERATE_DRAFT_PAST_AI_ERROR] 과거 이력 참조 AI 초안 생성 실패, fallback 사용:', aiErr.message);
         }
+
+        // 💡 [후처리 정제] 대괄호 템플릿 문자열([신규 프로젝트명 등])을 완전히 제거/치환하여 더미 문자열 노출 차단
+        draftContent = draftContent
+          .replace(/\[(?:신규\s*)?프로젝트명\s*(?:또는\s*핵심\s*업무명)?\]/g, '주요 프로젝트 및 핵심 과제')
+          .replace(/\[(?:프로젝트명\s*또는\s*)?업무명\]/g, '핵심 업무')
+          .replace(/\[구체적인\s*다음\s*단계\s*(?:예·)?초안\s*작성\]/g, '차주 세부 실행 계획 수립')
+          .replace(/\[[^\]]{2,30}\]/g, '주요 업무');
 
         return NextResponse.json({
           success: true,

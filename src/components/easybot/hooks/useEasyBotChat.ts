@@ -1,11 +1,32 @@
 import { apiFetch } from '@/lib/api';
 import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { 
-  parseInboundExcelHeader, 
-  getExcelColumnsAndRawData, 
-  parseInboundExcelWithMapping 
-} from '@/app/inventory/utils/inbound-excel';
+import { parseInboundExcelHeader, getExcelColumnsAndRawData, parseInboundExcelWithMapping } from '@/app/inventory/utils/inbound-excel';
+
+function cleanBotContent(raw: any): string {
+  if (!raw) return '';
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object') {
+          return cleanBotContent(parsed.reply || parsed.answer || parsed.content || parsed.text || raw);
+        }
+      } catch (e) {
+        // 파싱 실패시 원본 텍스트 리턴
+      }
+    }
+    return raw;
+  }
+  if (typeof raw === 'object') {
+    if (typeof raw.content === 'string') return cleanBotContent(raw.content);
+    if (typeof raw.text === 'string') return cleanBotContent(raw.text);
+    if (typeof raw.reply === 'string') return cleanBotContent(raw.reply);
+    if (typeof raw.answer === 'string') return cleanBotContent(raw.answer);
+  }
+  return String(raw);
+}
 
 interface Message {
   role: 'user' | 'bot';
@@ -493,11 +514,12 @@ export function useEasyBotChat({
       const data = await response.json();
 
       if (data.success) {
+        const replyText = cleanBotContent(data.reply || data.answer);
         setMessages(prev => [
           ...prev,
           {
             role: 'bot',
-            content: data.reply || data.answer,
+            content: replyText,
             timestamp: formatTimestamp(),
             sql: data.sql || null,
             sqlSuccess: data.sqlSuccess !== undefined ? data.sqlSuccess : null,
@@ -506,7 +528,7 @@ export function useEasyBotChat({
         ]);
 
         if (voiceEnabledRef.current) {
-          speakImportantNotesOnly(data.reply || data.answer);
+          speakImportantNotesOnly(replyText);
         }
 
         if (data.redirectUrl) {

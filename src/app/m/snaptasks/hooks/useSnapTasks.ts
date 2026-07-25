@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import { useState, useEffect, useRef } from "react";
 import { SnapTask, TimelineItem, ActionLog } from "../types";
 
@@ -47,7 +48,7 @@ export function useSnapTasks() {
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/snaptasks");
+      const res = await apiFetch("/api/snaptasks");
       const data = await res.json();
       if (data.success) {
         setTasks(data.tasks || []);
@@ -65,7 +66,7 @@ export function useSnapTasks() {
   const fetchTimeline = async (taskId: string) => {
     setDetailLoading(true);
     try {
-      const res = await fetch(`/api/snaptasks?action=timeline&task_id=${taskId}`);
+      const res = await apiFetch(`/api/snaptasks?action=timeline&task_id=${taskId}`);
       const data = await res.json();
       if (data.success) {
         setTimeline(data.timeline || []);
@@ -84,7 +85,7 @@ export function useSnapTasks() {
     if (!newTaskTitle.trim()) return;
 
     try {
-      const res = await fetch("/api/snaptasks", {
+      const res = await apiFetch("/api/snaptasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: newTaskTitle })
@@ -142,7 +143,7 @@ export function useSnapTasks() {
         mimeType: attachedFile ? attachedFile.type : "text/plain"
       };
 
-      const res = await fetch("/api/snaptasks/snap", {
+      const res = await apiFetch("/api/snaptasks/snap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)

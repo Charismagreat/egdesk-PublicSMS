@@ -78,6 +78,40 @@ function estimateTokens(text: string): number {
   return Math.ceil(tokens);
 }
 
+/**
+ * AI 응답 객체 또는 직렬화된 RAW JSON 문자열에서 순수 대화/답변 텍스트만 안전하게 정제(Unwrap)합니다.
+ */
+export function unwrapAiResponseText(res: any): string {
+  if (!res) return '';
+  
+  if (typeof res === 'string') {
+    const trimmed = res.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object') {
+          return unwrapAiResponseText(parsed);
+        }
+      } catch (e) {
+        // 일반 JSON 파싱 불가능한 텍스트일 경우 원문 리턴
+      }
+    }
+    return res;
+  }
+
+  if (typeof res === 'object') {
+    if (typeof res.content === 'string') return unwrapAiResponseText(res.content);
+    if (typeof res.text === 'string') return unwrapAiResponseText(res.text);
+    if (typeof res.reply === 'string') return unwrapAiResponseText(res.reply);
+    if (typeof res.answer === 'string') return unwrapAiResponseText(res.answer);
+    if (Array.isArray(res.candidates) && res.candidates[0]?.content?.parts?.[0]?.text) {
+      return unwrapAiResponseText(res.candidates[0].content.parts[0].text);
+    }
+  }
+
+  return String(res);
+}
+
 async function callGemini(
   prompt: string,
   systemPrompt: string | undefined,
@@ -97,16 +131,7 @@ async function callGemini(
     keyName: (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct'
   } as any);
 
-  let text = '';
-  if (callerRes && typeof callerRes === 'object') {
-    if ('text' in callerRes) {
-      text = String(callerRes.text);
-    } else {
-      text = JSON.stringify(callerRes);
-    }
-  } else if (typeof callerRes === 'string') {
-    text = callerRes;
-  }
+  const text = unwrapAiResponseText(callerRes);
   const usage = (callerRes as any)?.usage || {};
   const promptTokens = (usage as any).promptTokens || (callerRes as any)?.promptTokens || estimateTokens(prompt + (systemPrompt || ''));
   const completionTokens = (usage as any).completionTokens || (callerRes as any)?.completionTokens || estimateTokens(text);

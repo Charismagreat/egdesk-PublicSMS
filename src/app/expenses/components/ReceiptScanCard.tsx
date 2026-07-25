@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import React, { useRef, useState, useMemo, useEffect } from "react";
 import { Upload, RefreshCw, FileText, Sparkles, Bot } from "lucide-react";
 import { convertToKoreanNumber } from "../utils";
@@ -89,7 +90,7 @@ export default function ReceiptScanCard({
   const fetchHometaxInvoices = async () => {
     setIsLoadingHometax(true);
     try {
-      const res = await fetch("/api/expenses/hometax");
+      const res = await apiFetch("/api/expenses/hometax");
       const json = await res.json();
       if (json.success) {
         setHometaxInvoices(json.invoices || []);

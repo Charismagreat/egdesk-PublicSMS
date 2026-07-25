@@ -2069,7 +2069,7 @@ export default function GovernanceDashboard() {
 
                           setAiScanning(true);
                           try {
-                            const res = await fetch("/api/cert-patent", {
+                            const res = await apiFetch("/api/cert-patent", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({

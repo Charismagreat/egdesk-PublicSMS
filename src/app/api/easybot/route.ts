@@ -1,5 +1,6 @@
 export const maxDuration = 300; // 로컬 AI 대용량 연산 지연 대기 허용 (5분)
 import { fetchGeminiWithFallback } from '../../../lib/gemini-fallback';
+import { unwrapAiResponseText } from '../../../lib/ai-router';
 import { NextResponse } from 'next/server';
 import { queryTable, executeSQL, listTables, insertRows, createTable, getGeminiApiKey, AI_KEY_NAMES } from '../../../../egdesk-helpers';
 import fs from 'fs';
@@ -537,6 +538,45 @@ export async function POST(req: Request) {
 `;
     dbTablesInfo += "\n" + financialsTablesInfo;
 
+    // 💡 [HR Attendance] 근태 관리 및 지각/조퇴 사유 테이블 스키마 힌트 주입
+    const attendanceTablesInfo = `
+[Attendance Table (crm_attendance)]
+- Description: 임직원 일일 출퇴근 스탬프 기록 및 지각/조퇴 근태 사유(memo)가 저장되는 핵심 근태 대장 테이블입니다. "누가 지각했어?", "지각 사유가 뭐야?", "근태 현황 알려줘" 같은 질문 시 반드시 이 테이블을 crm_operators와 JOIN하여 조회해야 합니다.
+- Columns:
+  - id (TEXT PRIMARY KEY): 근태 레코드 고유 ID
+  - operator_id (TEXT): 직원 고유 식별자 (crm_operators.id와 1:1 매칭. 주의: INTEGER와 TEXT 타입 차이가 있을 수 있으므로 JOIN 시 CAST(a.operator_id AS TEXT) = CAST(o.id AS TEXT) 조건 사용)
+  - work_date (TEXT): 근무 일자 (YYYY-MM-DD 포맷, 예: '2026-07-25')
+  - clock_in (TEXT): 출근 시각 (HH:MM:SS 포맷, 예: '09:15:30')
+  - clock_out (TEXT): 퇴근 시각 (HH:MM:SS 포맷, 없으면 NULL)
+  - status (TEXT): 근태 상태 ('NORMAL': 정상, 'LATE': 지각, 'EARLY_LEAVE': 조퇴, 'ABSENT': 결근, 'LEAVE': 휴가)
+  - working_hours (REAL): 실 근로 시간 (시간 단위)
+  - memo (TEXT): 지각 사유, 조퇴 사유 등 사원 제출 근태 사유 텍스트 (예: '대중교통 지연으로 지각', '병원 진료' 등)
+  - tenant_id (TEXT): 테넌트 식별자
+
+[Operators / Employee Master Table (crm_operators)]
+- Description: 시스템 운영자 및 전사 임직원 사원 명부 마스터 테이블입니다.
+- Columns:
+  - id (INTEGER/TEXT PRIMARY KEY): 직원 고유 번호
+  - username (TEXT): 로그인 아이디 (예: 'guest-1')
+  - name (TEXT): 직원 실명 (예: '김직원', '홍길동')
+  - role (TEXT): 직책/역할 ('TENANT_ADMIN', 'EMPLOYEE' 등)
+  - employee_number (TEXT): 사원 번호
+  - department (TEXT): 소속 부서명 (예: '마케팅팀', '생산품질팀')
+
+- 💡 근태 및 지각 사유 조회 예시 SELECT 쿼리:
+  - 김직원의 지각 사유 조회 예시 (주의: deleted_at 조건은 절대 쓰지 마십시오):
+    SELECT o.name, a.work_date, a.clock_in, a.status, a.memo
+    FROM crm_attendance a
+    JOIN crm_operators o ON CAST(a.operator_id AS TEXT) = CAST(o.id AS TEXT)
+    WHERE o.name LIKE '%김직원%' AND a.memo IS NOT NULL
+  - 오늘 지각자 목록 및 지각 사유 조회 예시:
+    SELECT o.name, o.department, a.clock_in, a.memo
+    FROM crm_attendance a
+    JOIN crm_operators o ON CAST(a.operator_id AS TEXT) = CAST(o.id AS TEXT)
+    WHERE a.status = 'LATE'
+`;
+    dbTablesInfo += "\n" + attendanceTablesInfo;
+
     // ✨ [Inventory] 재고 및 자율 입고 내역 테이블 스키마 텍스트 주입
     const inventoryTablesInfo = `
 [Inventory Items Table (inventory_items)]
@@ -818,13 +858,12 @@ export async function POST(req: Request) {
 You are the database analysis engine of "EasyBot" (이지봇), a premium management assistant.
 Your task is to analyze the user's inquiry and determine if it requires querying the SQLite database.
 
-If it requires database queries:
-- Write a valid SQLite SELECT query.
-- You can query ANY table (including system_settings, customers, orders, transactions, message_logs, coupons, etc.).
-- Ensure that the query is strictly a SELECT statement. Never suggest UPDATE, INSERT, or DELETE.
-- Use explicit column names or '*' where appropriate.
-- [🚨 CRITICAL] NEVER include columns containing the words "DELETE" or "CREATE" (such as "deleted_at", "created_at") in your query. The backend firewall blocks queries containing these words as substrings. Do not add soft-delete filtering to the query; the backend system handles this automatically.
-- ALWAYS output in JSON format only.
+[🚨 UNIVERSAL ENTITY-DRIVEN PROTOCOL - CRITICAL DIRECTIVE]
+1. DO NOT rely on rigid hardcoded keywords or specific phrase lists.
+2. If the user's inquiry contains ANY business entity or state (e.g., person name/job title like '김직원', date/time like '오늘/어제', attendance status/late reason '지각/조퇴/휴가/사유', inventory quantity/price, financial asset/revenue/statement, customer info, order/estimate ID), you MUST set "requiresQuery": true and generate a valid, optimized SQLite SELECT query.
+3. For person-related queries (e.g. employee attendance, late reasons, tasks), always JOIN crm_attendance with crm_operators on CAST(a.operator_id AS TEXT) = CAST(o.id AS TEXT).
+4. [🚨 CRITICAL] NEVER include columns containing the words "DELETE" or "CREATE" (such as "deleted_at", "created_at") in your query. The backend firewall blocks queries containing these words as substrings. Do not add soft-delete filtering to the query; the backend system handles this automatically.
+5. Only set "requiresQuery": false if the inquiry is a pure basic greeting (e.g., "hi", "hello", "안녕") without any business entity, or explicitly asking for system user manuals.
 
 Available Database Tables Info:
 ${dbTablesInfo}
@@ -832,20 +871,20 @@ ${dbTablesInfo}
 Your response must be in valid JSON format ONLY:
 {
   "requiresQuery": true,
-  "sql": "SELECT COUNT(*) as total_customers FROM customers",
-  "reason": "To count the number of registered customers in the database.",
+  "sql": "SELECT o.name, a.work_date, a.clock_in, a.status, a.memo FROM crm_attendance a JOIN crm_operators o ON CAST(a.operator_id AS TEXT) = CAST(o.id AS TEXT) WHERE o.name LIKE '%김직원%'",
+  "reason": "To query employee attendance status and late reasons.",
   "requiresManual": false
 }
 
-If no database query is needed (e.g. general greeting, chit-chat, explaining browser state):
+If no database query is needed (pure greeting):
 {
   "requiresQuery": false,
   "sql": null,
-  "reason": "General conversation or browser context only.",
+  "reason": "Pure general greeting only.",
   "requiresManual": false
 }
 
-If the user is asking about how to use the system, menus, manuals, guides, or troubleshooting (such as resetting Naver blog session, setting point earning rates, coupon restrictions, multi-page checking, or point OTP security):
+If the user is asking about how to use the system, menus, manuals, guides, or troubleshooting:
 {
   "requiresQuery": false,
   "sql": null,
@@ -947,6 +986,83 @@ If the user is asking about how to use the system, menus, manuals, guides, or tr
       }
     }
 
+    // 💡 [Self-Healing & Secondary Discovery Rail 자율 탐색 엔진]
+    let secondaryDiscoveryContext = "";
+    try {
+      const hasQueryResult = Array.isArray(sqlQueryResult) ? sqlQueryResult.length > 0 : (sqlQueryResult?.rows?.length > 0);
+
+      // 1. Self-Healing Fuzzy Retry (1차 exact match 실패 시 조건 완화 자동 재조회)
+      if (sqlPlan.requiresQuery && !hasQueryResult && sqlPlan.sql) {
+        console.log(`[이지봇 자율 치유] 1차 SQL 결과 0건 감지 -> 퍼지 조건 완화 자율 재조회 시도`);
+        let fallbackSql = sqlPlan.sql;
+        if (fallbackSql.includes('=')) {
+          fallbackSql = fallbackSql.replace(/=\s*'([^']+)'/g, "LIKE '%$1%'");
+        }
+        if (fallbackSql !== sqlPlan.sql && isSafeSelectQuery(fallbackSql)) {
+          try {
+            const retryRes = await executeSQL(fallbackSql);
+            const retryRows = Array.isArray(retryRes) ? retryRes : retryRes?.rows;
+            if (retryRows && retryRows.length > 0) {
+              sqlQueryResult = retryRes;
+              console.log(`[이지봇 자율 치유 성공] 퍼지 쿼리로 ${retryRows.length}건 데이터 복구 완료`);
+            }
+          } catch (rErr) {}
+        }
+      }
+
+      // 2. Secondary Discovery Rail (인명 및 비즈니스 엔티티 포착 시 메인 대장 자율 2차 마이닝)
+      const promptText = prompt || "";
+      const isEntityPresent = /[가-힣]{2,4}/.test(promptText) && !/^(안녕|반가워|하이|수고|고마워)/.test(promptText.trim());
+
+      if (!hasQueryResult && isEntityPresent) {
+        const rawWords = promptText.match(/[가-힣]{2,4}/g) || [];
+        const searchTerms = rawWords
+          .map(w => w.replace(/(의|는|은|이|가|을|를|사유는)$/, ''))
+          .filter(w => w.length >= 2 && !['오늘', '내일', '어제', '사유', '이유', '현황', '조회', '목록', '알려', '지각', '출근', '퇴근', '결근'].includes(w));
+
+        let discoveryRows: any[] = [];
+        if (searchTerms.length > 0) {
+          for (const term of searchTerms) {
+            try {
+              // 1) crm_operators 사원 명부 검색
+              const opRes = await queryTable('crm_operators', { filters: { name: term } });
+              if (opRes?.rows && opRes.rows.length > 0) {
+                const op = opRes.rows[0];
+                const attRes = await executeSQL(`SELECT * FROM crm_attendance WHERE CAST(operator_id AS TEXT) = '${op.id}' ORDER BY work_date DESC LIMIT 5`);
+                const attRows = Array.isArray(attRes) ? attRes : attRes?.rows;
+                if (attRows && attRows.length > 0) {
+                  discoveryRows.push({ employee: op, recent_attendance: attRows });
+                }
+              }
+            } catch (dErr) {}
+          }
+        }
+
+        // 특정 인명이 없는 일반 근태/지각 질의인 경우 최근 전사 근태 기록 자율 탐색
+        if (discoveryRows.length === 0 && (promptText.includes('지각') || promptText.includes('근태') || promptText.includes('출근'))) {
+          try {
+            const todayAttRes = await executeSQL(`
+              SELECT o.name, o.department, a.work_date, a.clock_in, a.status, a.memo
+              FROM crm_attendance a
+              JOIN crm_operators o ON CAST(a.operator_id AS TEXT) = CAST(o.id AS TEXT)
+              ORDER BY a.work_date DESC LIMIT 10
+            `);
+            const todayRows = Array.isArray(todayAttRes) ? todayAttRes : todayAttRes?.rows;
+            if (todayRows && todayRows.length > 0) {
+              discoveryRows.push({ recent_all_attendance: todayRows });
+            }
+          } catch (tErr) {}
+        }
+
+        if (discoveryRows.length > 0) {
+          secondaryDiscoveryContext = `\n============================\n[2차 하이브리드 자율 마이닝 추출 데이터]\n${JSON.stringify(discoveryRows, null, 2)}\n============================\n`;
+          console.log(`[이지봇 2차 하이브리드 보완 레일] 자율 마이닝 데이터 주입 성공 (${discoveryRows.length}건)`);
+        }
+      }
+    } catch (railErr) {
+      console.warn('하이브리드 보완 레일 연산 예외 (무시):', railErr);
+    }
+
     // 매뉴얼 지식 베이스 읽기 (RAG)
     let manualContext = "";
     if (sqlPlan.requiresManual) {
@@ -969,6 +1085,9 @@ If the user is asking about how to use the system, menus, manuals, guides, or tr
 3. 시스템 공식 매뉴얼: 사용법 및 가이드 안내가 필요할 때 지식 베이스로 사용합니다.
 
 답변 작성 규칙:
+- [🚨 필독 - 상투적 안부 인사말 전면 생략]: "안녕하세요! 이지봇입니다", "정밀 분석하였습니다", "추가로 도움이 필요하시면..." 같은 불필요한 안부 인삿말/사족 문구(Filler Text)를 전면 생략하고, 질문에 대한 대답으로 바로 진입하세요.
+- [🚨 필독 - 팩트 + 스마트 브리핑 구성]: 답변은 오직 "📊 실시간 스마트 브리핑 & 인사이트" (주의 요망 사항, 연속 패턴 분석, 권고 조치)와 "정갈한 데이터 요약 표"로만 밀도 있게 구성하세요.
+- [🚨 필독 - HTML 태그 전면 금지 및 마크다운 이모지 사용]: 텍스트나 표 내부에 '<span style="...">' 같은 raw HTML 태그를 절대로 기입하지 마세요. 대신 상태 표현은 '🔴 지각(LATE)', '🟢 정상', '🟡 조퇴' 처럼 직관적인 마크다운 이모지를 사용하세요.
 - 반드시 한국어로 대답해 주세요. (gemini_added_memories 규칙 필수 준수)
 - 코드나 SQL 쿼리를 설명해야 할 때는 백틱(\`\`)을 활용해 가시성 높은 마크다운 코드로 표기해 주세요.
 - 표(Table), 리스트, 볼드체 등을 활용하여 프리미엄 SaaS의 위젯 안에서 읽기 편한 완벽한 텍스트 구조로 만들어 주세요.
@@ -1001,6 +1120,7 @@ ${JSON.stringify(localStorageContext, null, 2)}
 - 시도한 SQL 쿼리: ${sqlPlan.sql || '없음'}
 - 쿼리 실행 결과: ${sqlQueryResult ? JSON.stringify(sqlQueryResult, null, 2) : '결과 없음'}
 - 쿼리 에러 내용: ${sqlError || '에러 없음'}
+${secondaryDiscoveryContext}
 `;
 
     const step2Response = await fetchGeminiWithFallback(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
@@ -1027,7 +1147,7 @@ ${JSON.stringify(localStorageContext, null, 2)}
     }
 
     const step2Data = await step2Response.json();
-    let finalAnswer = step2Data.candidates?.[0]?.content?.parts?.[0]?.text || "답변을 생성하는 데 실패했습니다.";
+    let finalAnswer = unwrapAiResponseText(step2Data.candidates?.[0]?.content?.parts?.[0]?.text || step2Data) || "답변을 생성하는 데 실패했습니다.";
 
     // [REDIRECT:경로] 태그 감지 및 추출, 그리고 마크다운 링크로 치환
     let redirectUrl: string | null = null;

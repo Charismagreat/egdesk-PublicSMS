@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import React, { useState } from "react";
 import { signIn } from "next-auth/react";
 import { MessageSquare, ArrowRight, ShieldCheck } from "lucide-react";
@@ -53,7 +54,7 @@ export default function LoginPage() {
     setError("");
     setLocalLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await apiFetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })

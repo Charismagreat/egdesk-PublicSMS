@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { usePersistedState } from "@/hooks/usePersistedState";
@@ -173,7 +174,7 @@ export default function MobileHubPage() {
   const fetchMobileFolders = async () => {
     try {
       setMobileFoldersLoading(true);
-      const res = await fetch("/api/task-folders?action=list");
+      const res = await apiFetch("/api/task-folders?action=list");
       const data = await res.json();
       if (data.success) {
         const folders = data.folders || [];
@@ -194,7 +195,7 @@ export default function MobileHubPage() {
     if (!folderId) return;
     try {
       setMobileItemsLoading(true);
-      const res = await fetch(`/api/task-folders?action=items&folderId=${folderId}`);
+      const res = await apiFetch(`/api/task-folders?action=items&folderId=${folderId}`);
       const data = await res.json();
       if (data.success) {
         setMobileFolderItems(data.items || []);
@@ -212,7 +213,7 @@ export default function MobileHubPage() {
     if (!newMobileFolderName.trim()) return;
 
     try {
-      const res = await fetch("/api/task-folders?action=create_folder", {
+      const res = await apiFetch("/api/task-folders?action=create_folder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newMobileFolderName, description: newMobileFolderDesc })
@@ -239,7 +240,7 @@ export default function MobileHubPage() {
     }
 
     try {
-      const res = await fetch("/api/task-folders?action=delete_folder", {
+      const res = await apiFetch("/api/task-folders?action=delete_folder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: folderId })
@@ -261,7 +262,7 @@ export default function MobileHubPage() {
   // 🛡️ 인증서·특허 AI 기한 할 일 페치
   const fetchCertPatentTasks = async () => {
     try {
-      const res = await fetch("/api/cert-patent");
+      const res = await apiFetch("/api/cert-patent");
       const data = await res.json();
       if (data.success) {
         setAllCertPatentTasks(data.tasks || []);
@@ -279,7 +280,7 @@ export default function MobileHubPage() {
   const handleCompleteCertTask = async (taskId: number) => {
     if (!window.confirm("해당 기한 업무 조치를 완료 처리하시겠습니까?")) return;
     try {
-      const res = await fetch("/api/cert-patent", {
+      const res = await apiFetch("/api/cert-patent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -304,7 +305,7 @@ export default function MobileHubPage() {
     }
 
     try {
-      const res = await fetch("/api/task-folders?action=delete_item", {
+      const res = await apiFetch("/api/task-folders?action=delete_item", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: itemId })
@@ -330,7 +331,7 @@ export default function MobileHubPage() {
     }
 
     try {
-      const res = await fetch("/api/task-folders?action=update_item", {
+      const res = await apiFetch("/api/task-folders?action=update_item", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -357,7 +358,7 @@ export default function MobileHubPage() {
     if (newTags === null) return;
 
     try {
-      const res = await fetch("/api/task-folders?action=update_item", {
+      const res = await apiFetch("/api/task-folders?action=update_item", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -388,7 +389,7 @@ export default function MobileHubPage() {
     }
 
     try {
-      const res = await fetch("/api/task-folders?action=update_folder", {
+      const res = await apiFetch("/api/task-folders?action=update_folder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -442,7 +443,7 @@ export default function MobileHubPage() {
   // 다른 태스크 폴더로 수집 자료 이동 실행
   const handleMoveFileFolder = async (itemId: number, targetFolderId: number) => {
     try {
-      const res = await fetch('/api/task-folders?action=update_item', {
+      const res = await apiFetch('/api/task-folders?action=update_item', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -582,7 +583,7 @@ export default function MobileHubPage() {
         fd.append('title', baseTitle);
         fd.append('content', uploadModalContent);
 
-        const res = await fetch("/api/task-folders?action=create_item", {
+        const res = await apiFetch("/api/task-folders?action=create_item", {
           method: "POST",
           body: fd
         });
@@ -601,7 +602,7 @@ export default function MobileHubPage() {
           let res;
           if ((item as any).isLink) {
             // 🔗 URL 링크인 경우: JSON API로 다이렉트 전송
-            res = await fetch("/api/task-folders?action=create_item", {
+            res = await apiFetch("/api/task-folders?action=create_item", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -680,7 +681,7 @@ export default function MobileHubPage() {
                return; // 전송 차단!
              }
 
-            res = await fetch("/api/task-folders?action=create_item", {
+            res = await apiFetch("/api/task-folders?action=create_item", {
               method: "POST",
               body: fd
             });
@@ -781,7 +782,7 @@ export default function MobileHubPage() {
   // 근태 상태 동기화 헬퍼
   const syncAttendanceStatus = async (username: string) => {
     try {
-      const res = await fetch("/api/hr/attendance");
+      const res = await apiFetch("/api/hr/attendance");
       const data = await res.json();
       if (data.success && data.employees) {
         const myData = data.employees.find((emp: any) => emp.username === username);
@@ -822,7 +823,7 @@ export default function MobileHubPage() {
         // 💡 [DB 자가치유 가드] 모바일 진입 시 테이블 유실 방지를 위한 백그라운드 셋업 강제 기동
         fetch(getProxiedUrl("/api/setup")).catch(err => console.error("Self-heal setup error:", err));
 
-        const res = await fetch("/api/auth/me");
+        const res = await apiFetch("/api/auth/me");
         const data = await res.json();
         if (data.success) {
           setSession(data);
@@ -843,7 +844,7 @@ export default function MobileHubPage() {
   const fetchTodayReport = async (operatorName: string, username: string) => {
     try {
       setReportsLoading(true);
-      const res = await fetch("/api/governance?action=daily_reports");
+      const res = await apiFetch("/api/governance?action=daily_reports");
       const data = await res.json();
       if (data.success && data.reports) {
         const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().substring(0, 10);
@@ -875,7 +876,7 @@ export default function MobileHubPage() {
   const fetchTasks = async () => {
     try {
       setTasksLoading(true);
-      const res = await fetch("/api/snaptasks");
+      const res = await apiFetch("/api/snaptasks");
       const data = await res.json();
       if (data.success) {
         setTasks(data.tasks || []);
@@ -913,7 +914,7 @@ export default function MobileHubPage() {
   const handleLogout = async () => {
     if (!window.confirm("로그아웃 하시겠습니까?")) return;
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await apiFetch("/api/auth/logout", { method: "POST" });
       router.replace("/login");
     } catch (err) {
       alert("로그아웃 중 오류가 발생했습니다.");
@@ -935,7 +936,7 @@ export default function MobileHubPage() {
 
   const handleClockIn = async () => {
     try {
-      const res = await fetch("/api/hr/attendance", {
+      const res = await apiFetch("/api/hr/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "CLOCK_IN", memo: "모바일 포털 출근" })
@@ -957,7 +958,7 @@ export default function MobileHubPage() {
 
   const handleClockOut = async () => {
     try {
-      const res = await fetch("/api/hr/attendance", {
+      const res = await apiFetch("/api/hr/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "CLOCK_OUT", memo: "모바일 포털 퇴근" })
@@ -986,7 +987,7 @@ export default function MobileHubPage() {
 
     setIsReportingLateReason(true);
     try {
-      const res = await fetch("/api/hr/attendance?action=REPORT_LATE_REASON", {
+      const res = await apiFetch("/api/hr/attendance?action=REPORT_LATE_REASON", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ memo: lateReason.trim() })
@@ -1016,7 +1017,7 @@ export default function MobileHubPage() {
 
     setIsLeaveSubmitting(true);
     try {
-      const res = await fetch("/api/hr/leaves?action=APPLY", {
+      const res = await apiFetch("/api/hr/leaves?action=APPLY", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1126,7 +1127,7 @@ export default function MobileHubPage() {
     setTaskTimeline([]);
     
     try {
-      const res = await fetch(`/api/snaptasks?action=timeline&task_id=${taskId}`);
+      const res = await apiFetch(`/api/snaptasks?action=timeline&task_id=${taskId}`);
       const data = await res.json();
       if (data.success) {
         setTaskDetail(data.task);
@@ -1150,7 +1151,7 @@ export default function MobileHubPage() {
 
     try {
       setIsCancelSubmitting(true);
-      const res = await fetch("/api/governance?action=create_cancel_request", {
+      const res = await apiFetch("/api/governance?action=create_cancel_request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1355,7 +1356,7 @@ export default function MobileHubPage() {
     setIsFolderPickerOpen(true);
     try {
       setPickerLoading(true);
-      const res = await fetch("/api/task-folders?action=list");
+      const res = await apiFetch("/api/task-folders?action=list");
       const data = await res.json();
       if (data.success) {
         setPickerFolders(data.folders || []);
@@ -1377,7 +1378,7 @@ export default function MobileHubPage() {
     if (!folderId) return;
     try {
       setPickerLoading(true);
-      const res = await fetch(`/api/task-folders?action=items&folderId=${folderId}`);
+      const res = await apiFetch(`/api/task-folders?action=items&folderId=${folderId}`);
       const data = await res.json();
       if (data.success) {
         // 실제 파일이 첨부되어 있는 자료들만 필터링
@@ -1535,7 +1536,7 @@ export default function MobileHubPage() {
         });
       }
 
-      const res = await fetch("/api/governance?action=create_mobile_request", {
+      const res = await apiFetch("/api/governance?action=create_mobile_request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

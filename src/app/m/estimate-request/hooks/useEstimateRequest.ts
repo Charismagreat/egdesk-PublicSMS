@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import { useState, useEffect } from "react";
 import { Product, CheckStatusMsg, SelectedEstimateItem } from "../types";
 
@@ -41,7 +42,7 @@ export function useEstimateRequest() {
 
   const fetchEstimateProducts = async () => {
     try {
-      const res = await fetch("/api/estimates");
+      const res = await apiFetch("/api/estimates");
       const data = await res.json();
       if (data.success) {
         const rawProducts = data.products;
@@ -90,7 +91,7 @@ export function useEstimateRequest() {
     setCheckStatusMsg(null);
 
     try {
-      const res = await fetch(`/api/partners?action=check-biz&business_number=${businessNumber}`);
+      const res = await apiFetch(`/api/partners?action=check-biz&business_number=${businessNumber}`);
       const data = await res.json();
       
       setIsCheckPerformed(true);
@@ -156,7 +157,7 @@ export function useEstimateRequest() {
       reader.onload = async () => {
         const base64Data = reader.result as string;
 
-        const ocrRes = await fetch("/api/estimates/ocr", {
+        const ocrRes = await apiFetch("/api/estimates/ocr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -255,7 +256,7 @@ export function useEstimateRequest() {
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/estimates", {
+      const res = await apiFetch("/api/estimates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

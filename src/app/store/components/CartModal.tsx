@@ -93,7 +93,7 @@ export function CartModal({
     if (!isOpen) return;
     async function loadBankInfo() {
       try {
-        const res = await fetch("/api/settings?key=my_company_profile");
+        const res = await apiFetch("/api/settings?key=my_company_profile");
         const data = await res.json();
         if (data.success && data.value) {
           const parsed = JSON.parse(data.value);
@@ -117,7 +117,7 @@ export function CartModal({
     if (cleanNumber.length === 10) {
       async function autoFillBusiness() {
         try {
-          const res = await fetch(`/api/partners?action=check-biz&business_number=${cleanNumber}`);
+          const res = await apiFetch(`/api/partners?action=check-biz&business_number=${cleanNumber}`);
           const data = await res.json();
           if (data.success && data.exists && data.partner) {
             const p = data.partner;

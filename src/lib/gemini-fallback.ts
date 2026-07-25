@@ -3,7 +3,7 @@
  * 주석 및 설명: 한국어 작성 원칙 준수
  */
 import { callAiCaller, getGeminiApiKey } from '@/../egdesk-helpers';
-import { callAI } from './ai-router';
+import { callAI, unwrapAiResponseText } from './ai-router';
 
 /**
  * 텍스트 글자 수를 기반으로 토큰 수를 예측합니다. (폴백용 계산기)
@@ -155,17 +155,7 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
       throw new Error(`[GoogleGenerativeAI Error]: callAI 라우터 및 직접 폴백 호출 모두 실패. (최종 에러: ${callerErr.message || callerErr})`);
     }
 
-    if (callerRes && typeof callerRes === 'object') {
-      if ('content' in callerRes && callerRes.content !== undefined && callerRes.content !== null) {
-        text = String(callerRes.content);
-      } else if ('text' in callerRes) {
-        text = String(callerRes.text);
-      } else {
-        text = JSON.stringify(callerRes);
-      }
-    } else if (typeof callerRes === 'string') {
-      text = callerRes;
-    }
+    text = unwrapAiResponseText(callerRes);
 
     const usage = callerRes?.usage || {};
     promptTokens = usage.promptTokens || callerRes?.promptTokens || estimateTokens(prompt + (systemPrompt || ''));

@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import React, { useState, useRef } from "react";
 import { Upload, X, FileText, CheckCircle2, RefreshCw, AlertCircle } from "lucide-react";
 
@@ -44,7 +45,7 @@ export default function EstimateOcrModal({
   React.useEffect(() => {
     async function fetchUserRole() {
       try {
-        const res = await fetch("/api/auth/me");
+        const res = await apiFetch("/api/auth/me");
         const data = await res.json();
         if (data.success) {
           setUserRole(data.role || "SUB_OPERATOR");
@@ -156,7 +157,7 @@ export default function EstimateOcrModal({
           try {
             // 1단계: 방향 판별 요청
             setOcrScanStep("1단계: 이미지의 텍스트 레이아웃 방향을 자동 판별 중...");
-            const detectRes = await fetch("/api/estimates/ocr", {
+            const detectRes = await apiFetch("/api/estimates/ocr", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -191,7 +192,7 @@ export default function EstimateOcrModal({
 
         // 3단계: 보정된 이미지 데이터로 상세 OCR 요청 진행
         setOcrScanStep("3단계: 정방향 문서를 기반으로 견적서 상세 내역을 추출하는 중...");
-        const res = await fetch("/api/estimates/ocr", {
+        const res = await apiFetch("/api/estimates/ocr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -278,7 +279,7 @@ export default function EstimateOcrModal({
         document_memo: ocrForm.document_memo
       };
 
-      const res = await fetch("/api/estimates", {
+      const res = await apiFetch("/api/estimates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

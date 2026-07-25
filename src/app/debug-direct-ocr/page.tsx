@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import React, { useState, useRef } from 'react';
 import { Upload, Key, Play, FileText, CheckCircle2, RefreshCw } from 'lucide-react';
 import DynamicTitle from '@/components/DynamicTitle';
@@ -47,7 +48,7 @@ export default function DebugDirectOcrPage() {
     setErrorMsg('');
 
     try {
-      const res = await fetch('/api/debug-direct-ocr', {
+      const res = await apiFetch('/api/debug-direct-ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

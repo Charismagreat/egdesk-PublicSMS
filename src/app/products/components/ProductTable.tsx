@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import React from "react";
 import { Search, Pencil, Trash2 } from "lucide-react";
 import { Product, HoverImage } from "../types";
@@ -53,7 +54,7 @@ function DraftRow({
     formData.append('file', file);
 
     try {
-      const res = await fetch('/api/upload', {
+      const res = await apiFetch('/api/upload', {
         method: 'POST',
         body: formData
       });

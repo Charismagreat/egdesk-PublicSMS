@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import React, { useState, useEffect } from "react";
 import { 
   Folder, FileText, Search, Sparkles, Calendar, 
@@ -18,7 +19,7 @@ export function TaskFolderKnowledgeTab() {
   const fetchKnowledgeTasks = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/cert-patent?t=${Date.now()}`, { cache: "no-store" });
+      const res = await apiFetch(`/api/cert-patent?t=${Date.now()}`, { cache: "no-store" });
       const data = await res.json();
       if (data.success) {
         // 오직 실물 지식 문서(folderItems)만 추출하여 최신순(created_at/id) 정렬
@@ -40,7 +41,7 @@ export function TaskFolderKnowledgeTab() {
     if (!window.confirm("현재 등록된 모든 태스크 폴더 지식자산을 완전히 초기화(삭제)하시겠습니까?")) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/cert-patent", {
+      const res = await apiFetch("/api/cert-patent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "clear_task_knowledge" })

@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import { useState, useEffect } from "react";
 import { Calendar } from "lucide-react";
 
@@ -121,7 +122,7 @@ export default function HrAttendancePage() {
   const fetchComprehensiveProfiles = async () => {
     setComprehensiveLoading(true);
     try {
-      const res = await fetch('/api/hr/profiles/comprehensive');
+      const res = await apiFetch('/api/hr/profiles/comprehensive');
       const data = await res.json();
       if (data.success) {
         setComprehensiveProfiles(data.profiles || []);
@@ -144,19 +145,19 @@ export default function HrAttendancePage() {
     setPayrollLoading(true);
     setProfileLoading(true);
     try {
-      const contractsRes = await fetch('/api/hr/contracts');
+      const contractsRes = await apiFetch('/api/hr/contracts');
       const contractsData = await contractsRes.json();
       if (contractsData.success) {
         setContracts(contractsData.contracts || []);
       }
 
-      const payrollRes = await fetch(`/api/hr/contracts/calc?year_month=${targetYM}`);
+      const payrollRes = await apiFetch(`/api/hr/contracts/calc?year_month=${targetYM}`);
       const payrollData = await payrollRes.json();
       if (payrollData.success) {
         setPayroll(payrollData.payroll || []);
       }
 
-      const profilesRes = await fetch('/api/hr/profiles');
+      const profilesRes = await apiFetch('/api/hr/profiles');
       const profilesData = await profilesRes.json();
       if (profilesData.success) {
         setProfiles(profilesData.profiles || []);
@@ -172,7 +173,7 @@ export default function HrAttendancePage() {
   // 일정 분류 유형 조회
   const fetchEventTypes = async () => {
     try {
-      const res = await fetch('/api/hr/events/types');
+      const res = await apiFetch('/api/hr/events/types');
       const data = await res.json();
       if (data.success) {
         setEventTypes(data.types || []);
@@ -185,7 +186,7 @@ export default function HrAttendancePage() {
   // AI 업무 공백 RAG 분석 이력 조회
   const fetchBriefingHistories = async (autoBindFirst: boolean = false) => {
     try {
-      const res = await fetch('/api/hr/ai-briefing');
+      const res = await apiFetch('/api/hr/ai-briefing');
       const data = await res.json();
       if (data.success) {
         const histories = data.histories || [];
@@ -217,7 +218,7 @@ export default function HrAttendancePage() {
     let loadedUser: any = null;
     try {
       const todayStr = new Date().toISOString().split('T')[0];
-      const res = await fetch(`/api/hr/attendance?work_date=${todayStr}`);
+      const res = await apiFetch(`/api/hr/attendance?work_date=${todayStr}`);
       const data = await res.json();
 
       if (data.success) {
@@ -229,7 +230,7 @@ export default function HrAttendancePage() {
         setError(data.error || '인사 데이터를 불러오지 못했습니다.');
       }
 
-      const leavesRes = await fetch('/api/hr/leaves');
+      const leavesRes = await apiFetch('/api/hr/leaves');
       const leavesData = await leavesRes.json();
       if (leavesData.success) {
         setLeaveRequests(leavesData.leaves || []);
@@ -263,7 +264,7 @@ export default function HrAttendancePage() {
   const handleClockStamp = async (action: 'CLOCK_IN' | 'CLOCK_OUT') => {
     setSubmitLoading(true);
     try {
-      const res = await fetch('/api/hr/attendance', {
+      const res = await apiFetch('/api/hr/attendance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })
@@ -291,7 +292,7 @@ export default function HrAttendancePage() {
         body.reject_reason = rejectReason;
       }
       
-      const res = await fetch('/api/hr/leaves', {
+      const res = await apiFetch('/api/hr/leaves', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -316,7 +317,7 @@ export default function HrAttendancePage() {
   const triggerAiBriefing = async () => {
     setAiLoading(true);
     try {
-      const res = await fetch('/api/hr/ai-briefing', { method: 'POST' });
+      const res = await apiFetch('/api/hr/ai-briefing', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         const resultState = {
@@ -374,7 +375,7 @@ export default function HrAttendancePage() {
     setSubmitLoading(true);
     setTypeError(null);
     try {
-      const res = await fetch('/api/hr/events/types', {
+      const res = await apiFetch('/api/hr/events/types', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -404,7 +405,7 @@ export default function HrAttendancePage() {
     setSubmitLoading(true);
     setTypeError(null);
     try {
-      const res = await fetch('/api/hr/events/types', {
+      const res = await apiFetch('/api/hr/events/types', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -430,7 +431,7 @@ export default function HrAttendancePage() {
   const handleDeleteEvent = async (id: string) => {
     if (!confirm('이 일정을 회사 공유 캘린더에서 정말 삭제하시겠습니까?')) return;
     try {
-      const res = await fetch('/api/hr/events', {
+      const res = await apiFetch('/api/hr/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'DELETE', event_id: id })
@@ -497,7 +498,7 @@ export default function HrAttendancePage() {
 
     setSubmitLoading(true);
     try {
-      const res = await fetch('/api/hr/contracts', {
+      const res = await apiFetch('/api/hr/contracts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -534,7 +535,7 @@ export default function HrAttendancePage() {
 
     setSubmitLoading(true);
     try {
-      const res = await fetch('/api/hr/profiles', {
+      const res = await apiFetch('/api/hr/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -564,7 +565,7 @@ export default function HrAttendancePage() {
   const handleSubmit360Upsert = async (tableName: string, operatorId: string, data: Record<string, any>) => {
     setSubmitLoading(true);
     try {
-      const res = await fetch('/api/hr/profiles/comprehensive', {
+      const res = await apiFetch('/api/hr/profiles/comprehensive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -595,7 +596,7 @@ export default function HrAttendancePage() {
 
     setSubmitLoading(true);
     try {
-      const res = await fetch('/api/hr/profiles/comprehensive', {
+      const res = await apiFetch('/api/hr/profiles/comprehensive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

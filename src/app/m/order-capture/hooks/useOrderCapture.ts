@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from '@/lib/api';
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Customer, CaptureForm } from "../types";
@@ -33,7 +34,7 @@ export function useOrderCapture() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch('/api/operators');
+        const res = await apiFetch('/api/operators');
         if (res.status === 401 || res.status === 403) {
           router.replace('/login');
         } else {
@@ -56,7 +57,7 @@ export function useOrderCapture() {
 
   const fetchCustomers = async () => {
     try {
-      const res = await fetch('/api/customers');
+      const res = await apiFetch('/api/customers');
       const data = await res.json();
       if (data.success) {
         setCustomers(data.customers || []);
@@ -101,7 +102,7 @@ export function useOrderCapture() {
       setIsUploading(true);
       const formData = new FormData();
       formData.append('file', file);
-      const uploadRes = await fetch('/api/upload', {
+      const uploadRes = await apiFetch('/api/upload', {
         method: 'POST',
         body: formData
       });
@@ -117,7 +118,7 @@ export function useOrderCapture() {
       const attachmentUrl = uploadData.url;
 
       // 2. Submit Order
-      const orderRes = await fetch('/api/orders', {
+      const orderRes = await apiFetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

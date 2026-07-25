@@ -72,7 +72,7 @@ export default function InventoryPage() {
   useEffect(() => {
     const fetchDbValuationMethod = async () => {
       try {
-        const res = await fetch('/api/settings?key=inventory_valuation_method');
+        const res = await apiFetch('/api/settings?key=inventory_valuation_method');
         const json = await res.json();
         if (json.success && json.value) {
           setValuationMethod(json.value);
@@ -89,7 +89,7 @@ export default function InventoryPage() {
     if (isRestored && valuationMethod) {
       const saveDbValuationMethod = async () => {
         try {
-          await fetch('/api/settings', {
+          await apiFetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
