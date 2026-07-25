@@ -93,7 +93,14 @@ export default async function Home() {
       await setupDatabase();
     }
 
-    const copilotSetting = await queryTable('system_settings', { filters: { key: 'copilot_widget_enabled' } });
+    const { getTenantId } = require("@/lib/tenant");
+    const tenantId = await getTenantId() || 'default';
+    const copilotCompositeKey = `${tenantId}:copilot_widget_enabled`;
+
+    let copilotSetting = await queryTable('system_settings', { filters: { key: copilotCompositeKey } }).catch(() => ({ rows: [] }));
+    if (!copilotSetting.rows || copilotSetting.rows.length === 0) {
+      copilotSetting = await queryTable('system_settings', { filters: { key: 'copilot_widget_enabled' } }).catch(() => ({ rows: [] }));
+    }
     copilotEnabled = copilotSetting.rows && copilotSetting.rows.length > 0 ? copilotSetting.rows[0].value !== 'false' : true;
   } catch (e: any) {
     console.warn("⚠️ 설정 로드 실패:", e.message);
