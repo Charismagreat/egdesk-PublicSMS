@@ -18,8 +18,9 @@ async function verifySuperAdmin() {
   }
 
   const payload = decodeJwt(token);
-  if (payload.role !== 'SUPER_ADMIN') {
-    throw new Error('거래처 AI 분석 권한이 없습니다. 최고관리자 계정으로 로그인해주세요.');
+  const allowedRoles = ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'TENANT_ADMIN', 'EMPLOYEE'];
+  if (!allowedRoles.includes(payload.role as string)) {
+    throw new Error('거래처 AI 분석 권한이 없습니다. 권한이 있는 계정으로 로그인해주세요.');
   }
 }
 
