@@ -20,8 +20,8 @@ export async function GET(req: Request) {
     }
 
     const payload = decodeJwt(token);
-    if (payload.role !== 'SUPER_ADMIN') {
-      return NextResponse.json({ success: false, error: '관제 로그 조회 권한이 없습니다. 최고관리자 계정으로 로그인해주세요.' }, { status: 403 });
+    if (payload.role !== 'SUPER_ADMIN' && payload.role !== 'TENANT_ADMIN') {
+      return NextResponse.json({ success: false, error: '관제 로그 조회 권한이 없습니다. 관리자 계정으로 로그인해주세요.' }, { status: 403 });
     }
 
     // 2. 쿼리 파라미터 파싱

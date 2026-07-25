@@ -16,7 +16,7 @@ async function verifySuperAdmin() {
   }
 
   const payload = decodeJwt(token);
-  if (payload.role !== 'SUPER_ADMIN') {
+  if (payload.role !== 'SUPER_ADMIN' && payload.role !== 'TENANT_ADMIN') {
     throw new Error('최고관리자만 팩스 설정을 변경하고 테스트할 수 있습니다.');
   }
 }

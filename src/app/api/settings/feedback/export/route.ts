@@ -17,8 +17,8 @@ async function verifySuperAdmin() {
   }
 
   const payload = decodeJwt(token);
-  if (payload.role !== 'SUPER_ADMIN') {
-    throw new Error('피드백 내보내기 권한이 없습니다. 최고관리자 계정으로 로그인해주세요.');
+  if (payload.role !== 'SUPER_ADMIN' && payload.role !== 'TENANT_ADMIN') {
+    throw new Error('피드백 내보내기 권한이 없습니다.');
   }
 }
 
