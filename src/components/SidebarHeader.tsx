@@ -6,6 +6,7 @@ import {
   Search, LayoutDashboard, Settings, Database, ShieldAlert, Shield, X, Compass, ExternalLink
 } from "lucide-react";
 import { MENU_METADATA_LIST } from "@/lib/menu-metadata";
+import { apiFetch } from "@/lib/api";
 
 interface SidebarHeaderProps {
   sidebarMainTitle: string;
@@ -23,7 +24,31 @@ export default function SidebarHeader({
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [menuSettings, setMenuSettings] = useState<any[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 💡 DB에서 동적 메뉴 활성/비활성 설정 로드
+  const fetchMenuSettings = async () => {
+    try {
+      const res = await apiFetch("/api/settings/menu");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.menuSettings)) {
+        setMenuSettings(data.menuSettings);
+      }
+    } catch (e) {
+      console.error("SidebarHeader 메뉴 설정 로딩 실패:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchMenuSettings();
+
+    // 메뉴 설정 변경 이벤트 리스너 등록
+    window.addEventListener("menu-settings-updated", fetchMenuSettings);
+    return () => {
+      window.removeEventListener("menu-settings-updated", fetchMenuSettings);
+    };
+  }, []);
 
   // 모달이 열릴 때 자동으로 입력창에 포커스를 줍니다.
   useEffect(() => {
@@ -47,14 +72,30 @@ export default function SidebarHeader({
 
   // 🔍 1. 검색 대상이 될 전체 메뉴 풀 (동적 메뉴 + 하단 고정 메뉴 통합) 구성
   const getFullMenuPool = () => {
-    // 동적 메뉴 리스트 매핑
-    const dynamicItems = MENU_METADATA_LIST.map((item) => ({
-      href: item.href,
-      label: item.label,
-      icon: item.icon,
-      color: item.color,
-      type: "업무 AI 서비스"
-    }));
+    // DB 메뉴 설정을 기반으로 활성화된(is_enabled === 1) href 집합 구성
+    const enabledHrefs = menuSettings !== null
+      ? new Set(
+          menuSettings
+            .filter((item) => Number(item.is_enabled) === 1)
+            .map((item) => (item.menu_href || "").trim())
+        )
+      : null;
+
+    // 동적 메뉴 리스트 매핑 (비활성화 처리된 메뉴는 검색 팝업에서 엄격 제외)
+    const dynamicItems = MENU_METADATA_LIST
+      .filter((item) => {
+        if (enabledHrefs !== null) {
+          return enabledHrefs.has(item.href);
+        }
+        return true;
+      })
+      .map((item) => ({
+        href: item.href,
+        label: item.label,
+        icon: item.icon,
+        color: item.color,
+        type: "업무 AI 서비스"
+      }));
 
     // 하단 고정 메뉴 리스트 동적 권한 매핑
     const staticItems: any[] = [];
