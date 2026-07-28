@@ -45,9 +45,6 @@ export const MobilePortalHeader: React.FC<MobilePortalHeaderProps> = ({
               {userName}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 font-bold mt-0.5">
-            오늘도 활기찬 하루 되세요! ☀️
-          </p>
         </div>
       </div>
 
