@@ -2316,9 +2316,15 @@ export default function GovernanceDashboard() {
                                             ? "bg-white/80 border border-indigo-100 text-slate-800 shadow-2xs font-mono" 
                                             : "bg-slate-50 text-slate-600"
                                         }`}>
-                                          {isAiReport && item.content.length > 250 
-                                            ? item.content.substring(0, 250) + "...\n\n👉 [클릭하여 전체 Gemini 판독 분석 보고서 및 RAG 적재 명세 상세보기]" 
-                                            : item.content}
+                                          {isAiReport ? (
+                                            item.content && item.content.length > 250 
+                                              ? item.content.substring(0, 250) + "...\n\n👉 [클릭하여 전체 Gemini 판독 분석 보고서 및 RAG 적재 명세 상세보기]" 
+                                              : item.content
+                                          ) : (
+                                            item.content && item.content.trim() !== "" 
+                                              ? item.content 
+                                              : <span className="text-slate-400 font-normal italic">(입력된 메모가 없습니다)</span>
+                                          )}
                                         </p>
 
                                         {/* 첨부파일 영역 (클릭 시 모바일 포털 /m 과 동일한 서류 뷰어 모달 열림) */}
