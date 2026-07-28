@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CheckSquare, Square, Search, AlertCircle, Plus, Calendar, Folder } from "lucide-react";
+import { CheckSquare, Square, Search, AlertCircle, Plus, Calendar, Folder, ShieldCheck, Clock } from "lucide-react";
 
 interface MobileTodoListSectionProps {
   todoTab: "active" | "completed" | "folders";
@@ -38,9 +38,19 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
   onOpenNewTaskModal,
   taskFolderContent,
 }) => {
+
+  const handleTaskCheckClick = (t: any) => {
+    if (t.status !== "DONE") {
+      alert("📌 해당 업무는 최고관리자의 컨트롤타워 관제 및 실행 완료 후 '한 일'로 자동 이동됩니다.");
+    } else {
+      // 완료 항목 클릭 안내
+      alert("✅ 최고관리자의 관제 승인에 의해 실행 완료된 업무입니다.");
+    }
+  };
+
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 mb-4 text-left">
-      {/* 3가지 메인 탭 헤더: 진행 중 할 일 (N) / 완료된 한 일 (N) / 태스크 폴더 (N) */}
+      {/* 3가지 메인 탭 헤더: 할 일 (N) / 한 일 (N) / 태스크 폴더 (N) */}
       <div className="flex items-center justify-between pb-3 border-b border-slate-100 overflow-x-auto no-scrollbar">
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl shrink-0">
           <button
@@ -96,7 +106,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
         <div className="pt-2">{taskFolderContent}</div>
       ) : (
         <>
-          {/* 기간별 필터 세그먼트 스위치 바 */}
+          {/* 기간별 필터 세그먼트 스위치 바 (오늘, 내일, 이번주, 이번달, 다음달/지난달, 전체) */}
           <div className="pt-3 pb-2 flex items-center gap-1 overflow-x-auto no-scrollbar">
             {todoTab === "active" ? (
               <>
@@ -150,11 +160,11 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
           </div>
 
           {/* 검색창 */}
-          <div className="relative my-2.5">
+          <div className="relative mt-1">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder={todoTab === "active" ? "진행 중 할 일 검색..." : "완료된 한 일 검색..."}
+              placeholder="업무 검색..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-8 pr-3 py-1.5 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 focus:bg-white transition-all"
@@ -170,7 +180,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                   {searchQuery
                     ? `'${searchQuery}' 검색 결과가 없습니다.`
                     : todoTab === "active"
-                    ? "진행 중인 할 일이 없습니다."
+                    ? "등록된 할 일이 없습니다."
                     : "완료된 한 일이 없습니다."}
                 </p>
               </div>
@@ -182,14 +192,16 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                     key={t.id}
                     className={`p-3 rounded-xl border transition-all flex items-start gap-2.5 text-left ${
                       isDone
-                        ? "bg-slate-50/70 border-slate-200/60 opacity-75"
+                        ? "bg-slate-50/70 border-slate-200/60 opacity-80"
                         : "bg-white border-slate-200 hover:border-indigo-300 shadow-2xs"
                     }`}
                   >
+                    {/* 최고관리자 관제 실행 연동 안내 체크 박스 */}
                     <button
                       type="button"
-                      onClick={() => onToggleTaskStatus(t.id, t.status)}
-                      className="mt-0.5 text-slate-400 hover:text-indigo-600 border-none bg-transparent cursor-pointer shrink-0"
+                      onClick={() => handleTaskCheckClick(t)}
+                      className="mt-0.5 text-slate-400 border-none bg-transparent cursor-pointer shrink-0"
+                      title={isDone ? "최고관리자 관제 실행 완료" : "최고관리자 관제 승인 대기"}
                     >
                       {isDone ? (
                         <CheckSquare className="w-4 h-4 text-emerald-600" />
@@ -197,19 +209,36 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                         <Square className="w-4 h-4 text-slate-400 hover:text-indigo-600" />
                       )}
                     </button>
+
                     <div className="min-w-0 flex-1">
-                      <p
-                        className={`text-xs font-extrabold leading-snug ${
-                          isDone ? "line-through text-slate-400" : "text-slate-800"
-                        }`}
-                      >
-                        {t.title}
-                      </p>
+                      <div className="flex items-center justify-between gap-1">
+                        <p
+                          className={`text-xs font-extrabold leading-snug ${
+                            isDone ? "line-through text-slate-400" : "text-slate-800"
+                          }`}
+                        >
+                          {t.title}
+                        </p>
+                        {/* 관제 상태 뱃지 */}
+                        {isDone ? (
+                          <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center gap-0.5 shrink-0">
+                            <ShieldCheck className="w-3 h-3" />
+                            <span>관제 실행 완료</span>
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center gap-0.5 shrink-0">
+                            <Clock className="w-3 h-3 text-amber-500" />
+                            <span>관제 승인 대기</span>
+                          </span>
+                        )}
+                      </div>
+
                       {t.description && (
                         <p className="text-[11px] font-medium text-slate-500 mt-0.5 line-clamp-2">
                           {t.description}
                         </p>
                       )}
+
                       <div className="flex items-center gap-2 mt-1.5 text-[10px] font-bold text-slate-400">
                         {t.due_date && (
                           <span className="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded-md">
@@ -218,8 +247,8 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                           </span>
                         )}
                         {t.assignee_name && (
-                          <span className="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-md font-extrabold">
-                            담당: {t.assignee_name}
+                          <span className="bg-slate-100 px-1.5 py-0.5 rounded-md text-slate-600 font-extrabold">
+                            👤 {t.assignee_name}
                           </span>
                         )}
                       </div>
