@@ -8,7 +8,7 @@ import {
   Smartphone, Calendar, Camera, ClipboardList, Clock, 
   MapPin, LogOut, CheckCircle, ChevronRight, User, AlertCircle, Sparkles,
   Plus, Mic, FolderOpen, Send, X, FileText, CheckCircle2, AlertTriangle, Play, Square as StopIcon,
-  Loader2, CheckSquare, ListTodo, Award, Trash2, ArrowRight, FolderClosed, Link, Edit2, MoreVertical, Share2
+  Loader2, CheckSquare, ListTodo, Award, Trash2, ArrowRight, FolderClosed, Link, Edit2, MoreVertical, Share2, Paperclip
 } from "lucide-react";
 
 interface SessionInfo {
@@ -126,14 +126,58 @@ export default function MobileHubPage() {
 
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [leaveType, setLeaveType] = useState("ANNUAL");
+  const [halfDaySlot, setHalfDaySlot] = useState<"AM" | "PM">("AM");
   const [leaveStartDate, setLeaveStartDate] = useState("");
   const [leaveEndDate, setLeaveEndDate] = useState("");
   const [leaveDays, setLeaveDays] = useState("1");
   const [leaveReason, setLeaveReason] = useState("");
+  const [leaveFiles, setLeaveFiles] = useState<{ name: string; size: string; type: string; base64: string }[]>([]);
   const [isLeaveSubmitting, setIsLeaveSubmitting] = useState(false);
+
+  // 💡 [신규] 연차/휴가 기간 및 종류에 따른 예상 소요일수 연산 헬퍼
+  const getExpectedLeaveDays = (): number | null => {
+    if (leaveType === "HALF") {
+      return 0.5;
+    }
+    if (!leaveStartDate || !leaveEndDate) return null;
+    try {
+      const start = new Date(leaveStartDate);
+      const end = new Date(leaveEndDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+      if (end < start) return 0;
+
+      const diffTime = end.getTime() - start.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      return diffDays;
+    } catch {
+      return null;
+    }
+  };
+
+  const expectedLeaveDays = getExpectedLeaveDays();
+  const currentDaysNum = parseFloat(leaveDays);
+  const isLeaveDaysMismatched = leaveType !== "HALF" && expectedLeaveDays !== null && expectedLeaveDays > 0 && (isNaN(currentDaysNum) || currentDaysNum !== expectedLeaveDays);
+
+  // 날짜/휴가종류가 입력되거나 변경될 때 자동으로 소요일수 연산 반영
+  useEffect(() => {
+    if (leaveType === "HALF") {
+      setLeaveDays("0.5");
+      if (leaveStartDate) {
+        setLeaveEndDate(leaveStartDate);
+      }
+    } else {
+      if (leaveStartDate && leaveEndDate) {
+        const calculated = getExpectedLeaveDays();
+        if (calculated !== null && calculated > 0) {
+          setLeaveDays(calculated.toString());
+        }
+      }
+    }
+  }, [leaveStartDate, leaveEndDate, leaveType]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const leaveFileInputRef = useRef<HTMLInputElement>(null);
 
   // 📁 모바일 태스크 폴더 관리 상태
   const [mobileFolders, setMobileFolders] = useState<TaskFolder[]>([]);
@@ -1007,13 +1051,47 @@ export default function MobileHubPage() {
     }
   };
 
+  // 💡 [신규] 연차/휴가 증빙 파일 선택 핸들러 (PDF 및 이미지 지원)
+  const handleLeaveFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList = Array.from(files);
+    for (const file of fileList) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`파일 용량이 10MB를 초과합니다: ${file.name}`);
+        continue;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        const sizeFormatted = (file.size / 1024).toFixed(1) + ' KB';
+        setLeaveFiles(prev => [...prev, { name: file.name, size: sizeFormatted, type: file.type, base64 }]);
+      };
+      reader.readAsDataURL(file);
+    }
+    if (e.target) e.target.value = '';
+  };
+
+  const removeLeaveFile = (index: number) => {
+    setLeaveFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   // 💡 [신규] 모바일 간편 연차 신청서 제출 함수
   const handleApplyLeave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!leaveStartDate || !leaveEndDate || !leaveDays || !leaveReason.trim()) {
+
+    const isHalfDay = leaveType === "HALF";
+    const effectiveEndDate = isHalfDay ? leaveStartDate : leaveEndDate;
+    const effectiveDays = isHalfDay ? "0.5" : leaveDays;
+
+    if (!leaveStartDate || (!isHalfDay && !leaveEndDate) || !effectiveDays || !leaveReason.trim()) {
       alert("연차 신청서 항목을 모두 입력해 주십시오.");
       return;
     }
+
+    const leaveSlotLabel = isHalfDay ? (halfDaySlot === "AM" ? "[오전 반차]" : "[오후 반차]") : "";
+    const finalReason = isHalfDay ? `${leaveSlotLabel} ${leaveReason.trim()}` : leaveReason.trim();
 
     setIsLeaveSubmitting(true);
     try {
@@ -1023,9 +1101,10 @@ export default function MobileHubPage() {
         body: JSON.stringify({
           leave_type: leaveType,
           start_date: leaveStartDate,
-          end_date: leaveEndDate,
-          days_spent: leaveDays,
-          reason: leaveReason.trim()
+          end_date: effectiveEndDate,
+          days_spent: effectiveDays,
+          reason: finalReason,
+          attachments: leaveFiles
         })
       });
       const data = await res.json();
@@ -1036,6 +1115,7 @@ export default function MobileHubPage() {
         setLeaveEndDate("");
         setLeaveDays("1");
         setLeaveReason("");
+        setLeaveFiles([]);
       } else {
         alert("신청 실패: " + data.error);
       }
@@ -1603,24 +1683,26 @@ export default function MobileHubPage() {
               </div>
             </div>
           </div>
-          <button 
-            onClick={handleLogout}
-            className="p-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 rounded-lg transition duration-200 shadow-2xs cursor-pointer text-xs flex items-center gap-1 font-bold"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>로그아웃</span>
-          </button>
-        </div>
-
-        {/* 📅 모바일 간편 연차/휴가 상신 단추 바 */}
-        <div className="mb-4 animate-scale-in">
-          <button
-            onClick={() => setIsLeaveModalOpen(true)}
-            className="w-full py-3 bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-650 hover:to-cyan-600 text-white font-black rounded-2xl shadow-xs text-xs border-none cursor-pointer flex items-center justify-center gap-1.5 transition-all active:scale-98 shadow-sm"
-          >
-            <Calendar className="w-4 h-4 animate-pulse" />
-            <span>모바일 간편 연차 / 휴가 신청</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            {/* 📅 모바일 간편 연차/휴가 신청 아이콘 버튼 */}
+            <button
+              onClick={() => setIsLeaveModalOpen(true)}
+              title="모바일 간편 연차 / 휴가 신청"
+              aria-label="모바일 간편 연차 / 휴가 신청"
+              className="p-2 bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white rounded-xl shadow-xs border-none cursor-pointer flex items-center justify-center transition-all active:scale-95"
+            >
+              <Calendar className="w-4 h-4" />
+            </button>
+            {/* 🚪 로그아웃 아이콘 버튼 */}
+            <button 
+              onClick={handleLogout}
+              title="로그아웃"
+              aria-label="로그아웃"
+              className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-rose-600 rounded-xl transition duration-200 shadow-2xs cursor-pointer flex items-center justify-center active:scale-95"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* 2. 콤팩트화된 가로형 실시간 근태 체크 위젯 */}
@@ -3520,13 +3602,13 @@ export default function MobileHubPage() {
 
       {/* 📅 [신규] 모바일 간편 연차/휴가 신청서 모달 */}
       {isLeaveModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-end z-50 animate-fade-in">
-          <div className="bg-white rounded-t-3xl border-t border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto text-left animate-slide-up pb-8">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto text-left animate-scale-in">
             {/* 모달 헤더 */}
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-indigo-600 animate-pulse" />
-                <h3 className="text-sm font-black text-slate-800">📅 간편 연차 / 휴가 신청서 기안</h3>
+                <h3 className="text-sm font-black text-slate-800">간편 연차 신청</h3>
               </div>
               <button 
                 onClick={() => setIsLeaveModalOpen(false)}
@@ -3538,8 +3620,7 @@ export default function MobileHubPage() {
 
             {/* 입력 폼 */}
             <form onSubmit={handleApplyLeave} className="space-y-4 text-xs font-bold text-slate-800">
-              <div className="space-y-1">
-                <label className="text-slate-450 block">휴가 종류 선택</label>
+              <div>
                 <select
                   value={leaveType}
                   onChange={(e) => setLeaveType(e.target.value)}
@@ -3554,43 +3635,105 @@ export default function MobileHubPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-slate-450 block">시작 일자</label>
+                  <label className="text-slate-450 block">{leaveType === "HALF" ? "반차 일자" : "시작 일자"}</label>
                   <input
                     type="date"
                     required
                     value={leaveStartDate}
-                    onChange={(e) => setLeaveStartDate(e.target.value)}
+                    onChange={(e) => {
+                      setLeaveStartDate(e.target.value);
+                      if (leaveType === "HALF") setLeaveEndDate(e.target.value);
+                    }}
                     className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 font-extrabold text-slate-850"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-slate-450 block">종료 일자</label>
-                  <input
-                    type="date"
-                    required
-                    value={leaveEndDate}
-                    onChange={(e) => setLeaveEndDate(e.target.value)}
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 font-extrabold text-slate-855"
-                  />
-                </div>
+
+                {leaveType === "HALF" ? (
+                  <div className="space-y-1">
+                    <label className="text-slate-450 block">반차 구분</label>
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100/80 rounded-xl border border-slate-200/60 h-[46px] items-center">
+                      <button
+                        type="button"
+                        onClick={() => setHalfDaySlot("AM")}
+                        className={`h-full text-[11px] font-black rounded-lg transition border-none cursor-pointer flex items-center justify-center gap-0.5 ${
+                          halfDaySlot === "AM" ? "bg-indigo-600 text-white shadow-2xs" : "text-slate-600 hover:bg-slate-200/60"
+                        }`}
+                      >
+                        오전 반차 ☀️
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setHalfDaySlot("PM")}
+                        className={`h-full text-[11px] font-black rounded-lg transition border-none cursor-pointer flex items-center justify-center gap-0.5 ${
+                          halfDaySlot === "PM" ? "bg-indigo-600 text-white shadow-2xs" : "text-slate-600 hover:bg-slate-200/60"
+                        }`}
+                      >
+                        오후 반차 🌙
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <label className="text-slate-450 block">종료 일자</label>
+                    <input
+                      type="date"
+                      required
+                      value={leaveEndDate}
+                      onChange={(e) => setLeaveEndDate(e.target.value)}
+                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 font-extrabold text-slate-855"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1">
-                <label className="text-slate-450 block">소요 일수 (계산/기재)</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-slate-450 block">소요 일수 (계산/기재)</label>
+                  {isLeaveDaysMismatched && expectedLeaveDays !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setLeaveDays(expectedLeaveDays.toString())}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-extrabold underline cursor-pointer border-none bg-transparent"
+                    >
+                      기간 기준 자동 맞춤 ({expectedLeaveDays}일)
+                    </button>
+                  )}
+                </div>
                 <input
                   type="number"
                   step="0.5"
                   min="0.5"
                   required
-                  value={leaveDays}
-                  onChange={(e) => setLeaveDays(e.target.value)}
+                  readOnly={leaveType === "HALF"}
+                  value={leaveType === "HALF" ? "0.5" : leaveDays}
+                  onChange={(e) => {
+                    if (leaveType !== "HALF") setLeaveDays(e.target.value);
+                  }}
                   placeholder="예: 1 또는 0.5"
-                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 font-extrabold text-slate-855"
+                  className={`w-full p-3 rounded-xl border focus:outline-none font-extrabold transition-all duration-200 ${
+                    leaveType === "HALF"
+                      ? "bg-indigo-50/60 border-indigo-200 text-indigo-900 cursor-not-allowed"
+                      : isLeaveDaysMismatched
+                      ? "border-2 border-rose-500 bg-rose-50/40 text-rose-700 focus:border-rose-600 shadow-xs"
+                      : "bg-slate-50 border-slate-200 text-slate-855 focus:border-indigo-500"
+                  }`}
                 />
+                {isLeaveDaysMismatched && expectedLeaveDays !== null && (
+                  <p className="text-[11px] text-rose-600 font-extrabold flex items-center gap-1 mt-1 leading-tight">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    <span>선택 기간({expectedLeaveDays}일)과 입력 일수({leaveDays || 0}일)가 다릅니다.</span>
+                  </p>
+                )}
+                {expectedLeaveDays === 0 && (
+                  <p className="text-[11px] text-rose-600 font-extrabold flex items-center gap-1 mt-1 leading-tight">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    <span>종료 일자가 시작 일자보다 앞설 수 없습니다.</span>
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1">
-                <label className="text-slate-450 block">휴가 신청 구체적 사유</label>
+                <label className="text-slate-450 block">사유</label>
                 <textarea
                   required
                   rows={3}
@@ -3599,6 +3742,54 @@ export default function MobileHubPage() {
                   placeholder="신청 사유를 작성하세요 (예: 개인 사정으로 인한 연차 신청)"
                   className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 resize-none font-semibold text-slate-800 leading-relaxed bg-white"
                 />
+              </div>
+
+              {/* 📎 증빙 문서 및 사진 첨부 영역 */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex justify-between items-center">
+                  <label className="text-slate-450 block text-[11px]">📎 증빙 문서 및 사진 (PDF, 이미지)</label>
+                  <button
+                    type="button"
+                    onClick={() => leaveFileInputRef.current?.click()}
+                    className="text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold px-2.5 py-1 rounded-lg transition border border-indigo-200/60 cursor-pointer flex items-center gap-1"
+                  >
+                    <Paperclip className="w-3 h-3" />
+                    <span>파일/사진 첨부</span>
+                  </button>
+                  <input
+                    ref={leaveFileInputRef}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    multiple
+                    className="hidden"
+                    onChange={handleLeaveFileSelect}
+                  />
+                </div>
+
+                {leaveFiles.length > 0 && (
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                    {leaveFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-slate-50 p-2 px-2.5 rounded-xl border border-slate-200/80 text-[11px]">
+                        <div className="flex items-center gap-1.5 truncate">
+                          {file.type.includes('pdf') ? (
+                            <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                          ) : (
+                            <Camera className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                          )}
+                          <span className="font-bold text-slate-700 truncate max-w-[180px]">{file.name}</span>
+                          <span className="text-[9px] text-slate-400 font-normal">({file.size})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeLeaveFile(idx)}
+                          className="p-1 text-slate-400 hover:text-rose-500 rounded-md transition cursor-pointer border-none bg-transparent"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* 제출 제어 */}
@@ -3618,7 +3809,7 @@ export default function MobileHubPage() {
                   {isLeaveSubmitting ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <span>결재 상신 기안 📝</span>
+                    <span>제출</span>
                   )}
                 </button>
               </div>

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
-import { queryTable, insertRows, updateRows } from '../../../../../egdesk-helpers';
+import { queryTable, insertRows, updateRows, uploadFile } from '../../../../../egdesk-helpers';
 
 // 🔑 세션 토큰 디코딩 및 격리 컨텍스트 획득 헬퍼
 async function verifyUserRole() {
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
     // 📂 액션 1: 신규 연차 신청 (APPLY)
     // ==========================================
     if (action === 'APPLY') {
-      const { leave_type, start_date, end_date, days_spent, reason } = payload;
+      const { leave_type, start_date, end_date, days_spent, reason, attachments } = payload;
 
       if (!leave_type || !start_date || !end_date || !days_spent) {
         return NextResponse.json({ success: false, error: '연차 신청서 필수 입력 항목이 누락되었습니다.' }, { status: 400 });
@@ -122,8 +122,29 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: `잔여 연차가 부족합니다. (신청: ${days_spent}일, 잔여: ${balance.remaining}일)` }, { status: 400 });
       }
 
+      const newLeaveId = `leave-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const uploadedFileUrls: string[] = [];
+      const attachmentNames: string[] = [];
+
+      // 📂 증빙 서류/사진 업로드 처리 (uploadFile 헬퍼 활용)
+      if (Array.isArray(attachments) && attachments.length > 0) {
+        for (const att of attachments) {
+          if (att.base64 && att.name) {
+            try {
+              const uploadRes = await uploadFile('crm_annual_leaves', newLeaveId as any, 'attachment_url', att.name, att.base64);
+              if (uploadRes && uploadRes.fileUrl) {
+                uploadedFileUrls.push(uploadRes.fileUrl);
+                attachmentNames.push(att.name);
+              }
+            } catch (upErr) {
+              console.error('[Leave API] File upload failed:', upErr);
+            }
+          }
+        }
+      }
+
       const newLeave = {
-        id: `leave-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: newLeaveId,
         operator_id: operatorId,
         leave_type,
         start_date,
@@ -131,6 +152,8 @@ export async function POST(req: Request) {
         days_spent: parseFloat(days_spent),
         status: 'PENDING',
         reason: reason || '',
+        attachment_url: uploadedFileUrls.length > 0 ? uploadedFileUrls.join(',') : null,
+        attachment_name: attachmentNames.length > 0 ? attachmentNames.join(',') : null,
         reject_reason: null,
         approver_id: null,
         tenant_id: tenantId,
