@@ -89,8 +89,8 @@ export const MobileSpeedDialFab: React.FC<MobileSpeedDialFabProps> = ({
 
   return (
     <>
-      {/* 🔮 모바일 퀵 액션 하단 중앙 고정 스피드 다이얼 (FAB) */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center">
+      {/* 🔮 모바일 퀵 액션 하단 중앙 고정 스피드 다이얼 (FAB) - 모달 z-50보다 상위에 배치 z-[60] */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center">
         {/* 서브 액션 단색 순수 아이콘 가로(Horizontal) 나열 */}
         {isOpen && (
           <div className="flex flex-row items-center justify-center gap-3 mb-3 animate-scale-in">
@@ -175,9 +175,9 @@ export const MobileSpeedDialFab: React.FC<MobileSpeedDialFabProps> = ({
         onChange={onFileUpload}
       />
 
-      {/* 🔗 웹 링크 추가 모달 */}
+      {/* 🔗 웹 링크 추가 모달 (z-[70]) */}
       {isLinkModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-[70] p-4 animate-fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-6 space-y-4 text-left animate-scale-in">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -236,9 +236,9 @@ export const MobileSpeedDialFab: React.FC<MobileSpeedDialFabProps> = ({
         </div>
       )}
 
-      {/* 🎤 음성 메모 등록 모달 */}
+      {/* 🎤 음성 메모 등록 모달 (z-[70]) */}
       {isVoiceModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-[70] p-4 animate-fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-6 space-y-4 text-left animate-scale-in">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">

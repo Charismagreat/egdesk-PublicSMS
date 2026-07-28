@@ -875,11 +875,6 @@ export default function MobileHubPage() {
         setVoiceText={setRequestVoiceText}
         onRemovePhoto={(idx) => setRequestPhotos((prev) => prev.filter((_, i) => i !== idx))}
         onRemoveFile={(idx) => setRequestFiles((prev) => prev.filter((_, i) => i !== idx))}
-        onAddPhoto={(photo) => setRequestPhotos((prev) => [...prev, photo])}
-        onAddFile={(file) => setRequestFiles((prev) => [...prev, file])}
-        onAddLink={(title, url) =>
-          setRequestFiles((prev) => [...prev, { name: title, size: "URL 링크", type: "LINK", isLink: true, url }])
-        }
         taskFolders={taskFolders}
         onSendGovernanceRequest={handleSendGovernanceRequest}
         onSaveToTaskFolder={handleSaveToTaskFolder}

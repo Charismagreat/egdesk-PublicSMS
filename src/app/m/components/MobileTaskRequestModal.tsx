@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useRef } from "react";
-import { X, Send, Camera, Mic, Folder, Link as LinkIcon, FileText, Trash2, CheckCircle2, Sparkles, Plus } from "lucide-react";
+import React, { useState } from "react";
+import { X, Send, Sparkles, Link as LinkIcon, FileText, Trash2 } from "lucide-react";
 
 export interface RequestPhoto {
   name: string;
@@ -27,9 +27,6 @@ interface MobileTaskRequestModalProps {
   setVoiceText: (text: string) => void;
   onRemovePhoto: (index: number) => void;
   onRemoveFile: (index: number) => void;
-  onAddPhoto: (photo: RequestPhoto) => void;
-  onAddFile: (file: RequestFile) => void;
-  onAddLink: (title: string, url: string) => void;
   taskFolders: any[];
   onSendGovernanceRequest: (title: string, note: string) => Promise<void>;
   onSaveToTaskFolder: (folderId: string, title: string) => Promise<void>;
@@ -44,9 +41,6 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
   setVoiceText,
   onRemovePhoto,
   onRemoveFile,
-  onAddPhoto,
-  onAddFile,
-  onAddLink,
   taskFolders,
   onSendGovernanceRequest,
   onSaveToTaskFolder,
@@ -57,55 +51,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 모달 내부 인라인 링크 추가 UI 상태
-  const [isAddLinkOpen, setIsAddLinkOpen] = useState(false);
-  const [linkUrl, setLinkUrl] = useState("");
-  const [linkTitle, setLinkTitle] = useState("");
-
-  const photoInputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   if (!isOpen) return null;
-
-  // 인라인 사진 첨부 처리
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      onAddPhoto({
-        name: file.name,
-        preview: event.target?.result as string,
-        base64: event.target?.result as string,
-      });
-    };
-    reader.readAsDataURL(file);
-    if (e.target) e.target.value = "";
-  };
-
-  // 인라인 일반 파일 첨부 처리
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const sizeMb = (file.size / (1024 * 1024)).toFixed(2) + " MB";
-    onAddFile({
-      name: file.name,
-      size: sizeMb,
-      type: file.type.includes("image") ? "IMAGE" : "DOCUMENT",
-      file: file,
-    });
-    if (e.target) e.target.value = "";
-  };
-
-  // 인라인 링크 추가 제출
-  const handleLinkSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!linkUrl.trim()) return;
-    onAddLink(linkTitle || linkUrl, linkUrl);
-    setLinkUrl("");
-    setLinkTitle("");
-    setIsAddLinkOpen(false);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,23 +84,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
-      {/* 숨김 파일/사진 Input */}
-      <input
-        type="file"
-        ref={photoInputRef}
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handlePhotoChange}
-      />
-      <input
-        type="file"
-        ref={fileInputRef}
-        className="hidden"
-        onChange={handleFileChange}
-      />
-
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-5 space-y-4 text-left animate-scale-in max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-5 space-y-4 text-left animate-scale-in max-h-[85vh] overflow-y-auto">
         {/* 헤더 */}
         <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
           <div className="flex items-center gap-2">
@@ -256,71 +186,16 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
             </div>
           )}
 
-          {/* 📦 한 번에 수집된 각종 데이터 목록 & 모달 내 빠른 추가 툴바 */}
+          {/* 📦 수집된 자료 목록 */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-extrabold text-slate-400">
                 수집된 자료 ({photos.length + files.length}건)
               </span>
-
-              {/* 💡 [핵심 UX] 모달 내 연속 추가 수집 툴바 (📷, 🎤, 📄, 🔗) */}
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                  className="p-1.5 text-slate-600 hover:text-indigo-600 hover:bg-white rounded-lg border-none bg-transparent cursor-pointer flex items-center gap-0.5 text-[10px] font-bold"
-                  title="사진 촬영/추가"
-                >
-                  <Camera className="w-3.5 h-3.5 text-slate-700" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-1.5 text-slate-600 hover:text-indigo-600 hover:bg-white rounded-lg border-none bg-transparent cursor-pointer flex items-center gap-0.5 text-[10px] font-bold"
-                  title="문서/파일 추가"
-                >
-                  <FileText className="w-3.5 h-3.5 text-slate-700" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAddLinkOpen(!isAddLinkOpen)}
-                  className="p-1.5 text-slate-600 hover:text-indigo-600 hover:bg-white rounded-lg border-none bg-transparent cursor-pointer flex items-center gap-0.5 text-[10px] font-bold"
-                  title="링크 추가"
-                >
-                  <LinkIcon className="w-3.5 h-3.5 text-slate-700" />
-                </button>
-              </div>
+              <span className="text-[10px] font-bold text-indigo-600">
+                💡 하단 + 버튼으로 계속 추가 가능
+              </span>
             </div>
-
-            {/* 인라인 링크 입력 폼 */}
-            {isAddLinkOpen && (
-              <div className="p-2 bg-slate-100 rounded-xl space-y-1.5 text-left border border-slate-200">
-                <input
-                  type="text"
-                  placeholder="링크 제목 (예: 설계 도면 조감도)"
-                  value={linkTitle}
-                  onChange={(e) => setLinkTitle(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold"
-                />
-                <div className="flex gap-1.5">
-                  <input
-                    type="url"
-                    required
-                    placeholder="https://example.com"
-                    value={linkUrl}
-                    onChange={(e) => setLinkUrl(e.target.value)}
-                    className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleLinkSubmit}
-                    className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-bold border-none cursor-pointer"
-                  >
-                    추가
-                  </button>
-                </div>
-              </div>
-            )}
 
             {photos.length > 0 || files.length > 0 ? (
               <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-2 space-y-1.5 max-h-36 overflow-y-auto">
@@ -356,7 +231,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
                       {f.isLink ? (
                         <LinkIcon className="w-4 h-4 text-amber-500 shrink-0" />
                       ) : (
-                        <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+                        <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
                       )}
                       <span className="font-extrabold text-slate-700 truncate">{f.name}</span>
                     </div>
@@ -372,7 +247,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
               </div>
             ) : (
               <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs font-bold">
-                수집된 사진/음성/문서/링크가 없습니다. 상단 아이콘(📷, 📄, 🔗)을 눌러 추가하세요.
+                수집된 사진/음성/문서/링크가 없습니다. 하단 + 버튼을 눌러 추가하세요.
               </div>
             )}
           </div>
