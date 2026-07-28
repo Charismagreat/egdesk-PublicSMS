@@ -36,7 +36,6 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
           </div>
           <div>
             <h3 className="font-extrabold text-sm text-slate-800">태스크 정보 수집</h3>
-            <p className="text-[10px] text-slate-400 font-bold">태스크별 파일, 메모, 사진, 문서 보관</p>
           </div>
         </div>
         <button
