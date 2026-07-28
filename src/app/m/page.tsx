@@ -165,7 +165,15 @@ export default function MobileHubPage() {
           if (contentType && contentType.includes("application/json")) {
             const json = await res.json();
             if (json.success && json.reports && json.reports.length > 0) {
-              setTodayReport(json.reports[0]);
+              const todayStr = new Date().toISOString().substring(0, 10);
+              // 오늘 날짜(YYYY-MM-DD)와 일치하는 일일 업무 보고서 검색
+              const todayFound = json.reports.find((r: any) => {
+                const reportDate = r.report_date || r.date || (r.created_at ? r.created_at.substring(0, 10) : "");
+                return reportDate === todayStr;
+              });
+              setTodayReport(todayFound || null);
+            } else {
+              setTodayReport(null);
             }
           }
         }
