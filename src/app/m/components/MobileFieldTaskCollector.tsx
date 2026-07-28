@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Folder, Plus, Upload, FileText, Image as ImageIcon, Music, Trash2, Edit3, ArrowRightLeft, Info, Search, X, Eye, MoreHorizontal } from "lucide-react";
+import { Folder, Plus, Upload, FileText, Image as ImageIcon, Music, Trash2, Edit3, ArrowRightLeft, Info, Search, X, Eye, MoreVertical } from "lucide-react";
 import { MobileItemViewerModal } from "./MobileItemViewerModal";
 
 interface MobileFieldTaskCollectorProps {
@@ -155,7 +155,7 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
                     }`}
                     title="폴더 관리 메뉴"
                   >
-                    <MoreHorizontal className="w-3.5 h-3.5" />
+                    <MoreVertical className="w-3.5 h-3.5" />
                   </button>
 
                   {/* ⋯ [...] 클릭 시 노출되는 드롭다운 미니 메뉴 */}
