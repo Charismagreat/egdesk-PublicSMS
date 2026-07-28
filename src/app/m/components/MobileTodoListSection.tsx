@@ -52,7 +52,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                 : "text-slate-500 hover:text-slate-800 bg-transparent"
             }`}
           >
-            진행 중 할 일 ({activeTaskCount})
+            할 일 ({activeTaskCount})
           </button>
           <button
             type="button"
@@ -63,7 +63,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                 : "text-slate-500 hover:text-slate-800 bg-transparent"
             }`}
           >
-            완료된 한 일 ({completedTaskCount})
+            한 일 ({completedTaskCount})
           </button>
           <button
             type="button"
