@@ -197,11 +197,11 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
               </div>
             )}
 
-            {/* 📦 수집된 자료 목록 (파일명 터치 시 미리보기) */}
+            {/* 📦 등록된 자료 목록 (파일명 터치 시 미리보기) */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-extrabold text-slate-400">
-                  수집된 자료 ({photos.length + files.length}건)
+                  등록된 자료 ({photos.length + files.length}건)
                 </span>
                 <span className="text-[10px] font-bold text-indigo-600">
                   💡 하단 + 버튼으로 계속 추가 가능
@@ -313,7 +313,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
                 className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-350 text-white font-black text-xs rounded-xl shadow-xs border-none cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{isSubmitting ? "등록 중..." : targetType === "TODO" ? "할 일로 상신" : "태스크 폴더에 저장"}</span>
+                <span>{isSubmitting ? "등록 중..." : targetType === "TODO" ? "할 일에 등록" : "태스크 폴더에 저장"}</span>
               </button>
             </div>
           </form>
