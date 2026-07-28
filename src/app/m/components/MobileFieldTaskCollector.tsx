@@ -28,29 +28,29 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
 }) => {
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 text-left">
-      {/* 타이틀 바 (태스크 정보 수집) */}
+      {/* 타이틀 바 (태스크 폴더 & 새 폴더 생성) */}
       <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
             <Folder className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-extrabold text-sm text-slate-800">태스크 정보 수집</h3>
+            <h3 className="font-extrabold text-sm text-slate-800">태스크 폴더</h3>
           </div>
         </div>
         <button
           onClick={onOpenNewFolderModal}
-          className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors border-none cursor-pointer flex items-center gap-1"
+          className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors border-none cursor-pointer flex items-center gap-1 active:scale-95"
         >
           <Plus className="w-4 h-4" />
-          <span>새 태스크</span>
+          <span>새 폴더 생성</span>
         </button>
       </div>
 
-      {/* 태스크 폴더 칩 스크롤 바 (📁 태스크명 (N)) */}
+      {/* 태스크 폴더 칩 스크롤 바 (📁 폴더명 (N)) */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
         {folders.length === 0 ? (
-          <div className="text-xs font-bold text-slate-400 py-1">등록된 태스크 폴더가 없습니다.</div>
+          <div className="text-xs font-bold text-slate-400 py-1">생성된 태스크 폴더가 없습니다.</div>
         ) : (
           folders.map((folder) => {
             const isSelected = String(folder.id) === String(selectedFolderId);
@@ -67,7 +67,7 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
               >
                 <Folder className={`w-3.5 h-3.5 ${isSelected ? "text-white" : "text-indigo-600"}`} />
                 <span>
-                  {folder.title || folder.name} ({count})
+                  {folder.name || folder.title} ({count})
                 </span>
               </button>
             );
@@ -81,7 +81,7 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
           <div className="flex items-center gap-2">
             <label className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-extrabold cursor-pointer transition-colors flex items-center gap-1">
               <Upload className="w-3.5 h-3.5" />
-              <span>{isUploading ? "업로드 중..." : "태스크 파일 추가"}</span>
+              <span>{isUploading ? "업로드 중..." : "파일/사진 추가"}</span>
               <input type="file" className="hidden" onChange={onUploadFile} disabled={isUploading} />
             </label>
           </div>
@@ -97,11 +97,11 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
         </div>
       )}
 
-      {/* 수집 데이터 내역 타일 그리드 */}
+      {/* 선택된 태스크 폴더 내 수집 파일 내역 타일 그리드 */}
       <div className="grid grid-cols-2 gap-2.5 mt-3">
         {collectedItems.length === 0 ? (
           <div className="col-span-2 py-6 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-            <p className="text-xs font-bold text-slate-400">수집된 태스크 정보가 없습니다.</p>
+            <p className="text-xs font-bold text-slate-400">선택된 폴더에 수집된 파일이 없습니다.</p>
           </div>
         ) : (
           collectedItems.map((item) => (
@@ -119,7 +119,7 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-extrabold text-slate-800 truncate">
-                  {item.name || item.content || "태스크 첨부파일"}
+                  {item.name || item.title || item.content || "첨부 파일"}
                 </p>
                 <p className="text-[9px] font-semibold text-slate-400 mt-0.5">
                   {item.date || (item.created_at ? item.created_at.substring(0, 10) : "")}

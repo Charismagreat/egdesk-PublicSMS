@@ -79,7 +79,7 @@ export default function MobileHubPage() {
   const [requestFiles, setRequestFiles] = useState<any[]>([]);
   const [requestVoiceText, setRequestVoiceText] = useState("");
 
-  // 스냅태스크 DB 목록 로드
+  // 📋 스냅태스크(할 일 / 한 일) DB 목록 로드
   useEffect(() => {
     async function loadSnapTasks() {
       try {
@@ -90,15 +90,6 @@ export default function MobileHubPage() {
             const json = await res.json();
             if (json.success && json.tasks) {
               setTasks(json.tasks);
-              const folders = json.tasks.map((t: any) => ({
-                id: String(t.id),
-                name: t.title,
-                itemCount: t.items_count || 0,
-              }));
-              setTaskFolders(folders);
-              if (folders.length > 0 && !selectedFolderId) {
-                setSelectedFolderId(String(folders[0].id));
-              }
             }
           }
         }
@@ -109,12 +100,41 @@ export default function MobileHubPage() {
     loadSnapTasks();
   }, []);
 
-  // 선택된 태스크의 수집 아이템 내역 DB 로드
+  // 📂 직원의 실물 태스크 폴더 DB 목록 로드 (/api/task-folders)
+  useEffect(() => {
+    async function loadTaskFolders() {
+      try {
+        const res = await apiFetch("/api/task-folders?action=list");
+        if (res.ok) {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const json = await res.json();
+            if (json.success && json.folders) {
+              const formattedFolders = json.folders.map((f: any) => ({
+                id: String(f.id),
+                name: f.name || f.title,
+                itemCount: f.items_count || f.count || 0,
+              }));
+              setTaskFolders(formattedFolders);
+              if (formattedFolders.length > 0 && !selectedFolderId) {
+                setSelectedFolderId(String(formattedFolders[0].id));
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load task folders:", e);
+      }
+    }
+    loadTaskFolders();
+  }, []);
+
+  // 선택된 태스크 폴더의 수집 아이템 내역 DB 로드 (/api/task-folders)
   useEffect(() => {
     if (!selectedFolderId) return;
-    async function loadTaskItems() {
+    async function loadTaskFolderItems() {
       try {
-        const res = await apiFetch(`/api/snaptasks?action=timeline&task_id=${selectedFolderId}`);
+        const res = await apiFetch(`/api/task-folders?action=items&folder_id=${selectedFolderId}`);
         if (res.ok) {
           const contentType = res.headers.get("content-type");
           if (contentType && contentType.includes("application/json")) {
@@ -123,8 +143,8 @@ export default function MobileHubPage() {
               setCollectedItems(
                 json.items.map((item: any) => ({
                   id: String(item.id),
-                  name: item.content || item.file_name || "태스크 첨부 파일",
-                  type: item.item_type || "DOCUMENT",
+                  name: item.file_name || item.title || item.name || "첨부 파일",
+                  type: item.type || (item.content_type?.includes("image") ? "IMAGE" : "DOCUMENT"),
                   date: item.created_at ? item.created_at.substring(0, 10) : "",
                 }))
               );
@@ -134,10 +154,10 @@ export default function MobileHubPage() {
           }
         }
       } catch (e) {
-        console.error("Failed to load task items:", e);
+        console.error("Failed to load task folder items:", e);
       }
     }
-    loadTaskItems();
+    loadTaskFolderItems();
   }, [selectedFolderId]);
 
   // 시계 및 근무 시간 타이머 갱신
@@ -326,13 +346,6 @@ export default function MobileHubPage() {
           const taskJson = await taskRes.json();
           if (taskJson.success && taskJson.tasks) {
             setTasks(taskJson.tasks);
-            setTaskFolders(
-              taskJson.tasks.map((t: any) => ({
-                id: String(t.id),
-                name: t.title,
-                itemCount: t.items_count || 0,
-              }))
-            );
           }
         }
         setRequestPhotos([]);
@@ -343,6 +356,48 @@ export default function MobileHubPage() {
       }
     } catch (e: any) {
       alert("상신 중 오류가 발생했습니다: " + e.message);
+    }
+  };
+
+  // 📂 신규 태스크 폴더 생성 핸들러
+  const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+
+  const handleCreateNewFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+    try {
+      const res = await apiFetch("/api/task-folders?action=create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newFolderName }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("✨ 새로운 태스크 폴더가 생성되었습니다.");
+        setNewFolderName("");
+        setIsNewFolderModalOpen(false);
+        // 태스크 폴더 DB 목록 재조회
+        const folderRes = await apiFetch("/api/task-folders?action=list");
+        if (folderRes.ok) {
+          const folderJson = await folderRes.json();
+          if (folderJson.success && folderJson.folders) {
+            const formatted = folderJson.folders.map((f: any) => ({
+              id: String(f.id),
+              name: f.name || f.title,
+              itemCount: f.items_count || f.count || 0,
+            }));
+            setTaskFolders(formatted);
+            if (formatted.length > 0) {
+              setSelectedFolderId(String(formatted[0].id));
+            }
+          }
+        }
+      } else {
+        alert("폴더 생성 실패: " + data.error);
+      }
+    } catch (err: any) {
+      alert("폴더 생성 중 오류가 발생했습니다.");
     }
   };
 
@@ -459,18 +514,64 @@ export default function MobileHubPage() {
         onOpenNewTaskModal={() => {}}
       />
 
-      {/* 5. 현장 수집 정보 카드 */}
+      {/* 5. 태스크 폴더 카드 */}
       <MobileFieldTaskCollector
         folders={taskFolders}
         selectedFolderId={selectedFolderId}
         onSelectFolder={(id) => setSelectedFolderId(id)}
-        onOpenNewFolderModal={() => {}}
+        onOpenNewFolderModal={() => setIsNewFolderModalOpen(true)}
         collectedItems={collectedItems}
         onUploadFile={handleUploadCollectedFile}
         onOpenItemViewer={() => {}}
         onClearFolderItems={() => setCollectedItems([])}
         isUploading={isUploading}
       />
+
+      {/* 📂 새 태스크 폴더 생성 모달 */}
+      {isNewFolderModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xs w-full p-5 space-y-4 text-left animate-scale-in">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="font-extrabold text-sm text-slate-800">새 태스크 폴더 생성</h3>
+              <button
+                type="button"
+                onClick={() => setIsNewFolderModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleCreateNewFolder} className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">폴더 이름</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="예: 시흥 본사 통관 서류"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsNewFolderModalOpen(false)}
+                  className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border-none cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl border-none shadow-xs cursor-pointer"
+                >
+                  폴더 생성
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* 🗺️ 근태 지도 팝업 모달 */}
       <MobileLocationMapModal
