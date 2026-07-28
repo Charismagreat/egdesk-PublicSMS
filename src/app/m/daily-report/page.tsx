@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { 
-  FileText, Sparkles, Send, ArrowLeft, Loader2, CheckCircle2, AlertTriangle
+  FileText, Sparkles, Send, ArrowLeft, Loader2, CheckCircle2, AlertTriangle, Clock
 } from "lucide-react";
 
 export default function MobileDailyReportPage() {
@@ -190,8 +190,7 @@ export default function MobileDailyReportPage() {
                   type="date"
                   value={reportDate}
                   onChange={(e) => setReportDate(e.target.value)}
-                  disabled={isLocked}
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 disabled:opacity-60"
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
                 />
               </div>
             </div>
