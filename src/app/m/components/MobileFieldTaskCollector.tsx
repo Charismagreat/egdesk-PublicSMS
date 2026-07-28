@@ -112,8 +112,8 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
           )}
         </div>
 
-        {/* 3. 태스크 폴더 칩 스크롤 바 (📁 폴더명 (N)) */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        {/* 3. 태스크 폴더 칩 스크롤 바 (폴더명 뱃지 내부에 ✏️ 편집 / 🗑️ 삭제 연동) */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar">
           {filteredFolders.length === 0 ? (
             <div className="text-xs font-bold text-slate-400 py-1">
               {searchQuery ? `'${searchQuery}' 검색 결과와 일치하는 폴더가 없습니다.` : "생성된 태스크 폴더가 없습니다."}
@@ -123,11 +123,10 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
               const isSelected = String(folder.id) === String(selectedFolderId);
               const count = folder.itemCount || 0;
               return (
-                <button
+                <div
                   key={folder.id}
-                  type="button"
                   onClick={() => onSelectFolder(String(folder.id))}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border border-transparent cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border border-transparent cursor-pointer flex items-center gap-1.5 shrink-0 ${
                     isSelected
                       ? "bg-indigo-600 text-white shadow-2xs"
                       : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -137,50 +136,53 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
                   <span>
                     {folder.name || folder.title} ({count})
                   </span>
-                </button>
+
+                  {/* 💡 [핵심] 폴더명 뱃지 내부 편집 ✏️ & 삭제 🗑️ 아이콘 */}
+                  <div className="flex items-center gap-0.5 ml-1 border-l border-current/20 pl-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditFolder(folder);
+                      }}
+                      className={`p-0.5 rounded-md border-none bg-transparent cursor-pointer transition-colors ${
+                        isSelected
+                          ? "text-indigo-100 hover:text-white hover:bg-indigo-700"
+                          : "text-slate-400 hover:text-indigo-600 hover:bg-slate-200"
+                      }`}
+                      title="폴더 편집"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`'${folder.name}' 폴더와 수집 항목을 삭제하시겠습니까?`)) {
+                          onDeleteFolder(String(folder.id));
+                        }
+                      }}
+                      className={`p-0.5 rounded-md border-none bg-transparent cursor-pointer transition-colors ${
+                        isSelected
+                          ? "text-indigo-100 hover:text-rose-200 hover:bg-rose-600"
+                          : "text-slate-400 hover:text-rose-600 hover:bg-slate-200"
+                      }`}
+                      title="폴더 삭제"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
               );
             })
           )}
         </div>
 
-        {/* 4. 선택된 폴더 정보 및 관리 도구 (설명, 편집 ✏️, 삭제 🗑️) */}
-        {selectedFolder && (
-          <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 flex items-center justify-between text-xs">
-            <div className="min-w-0 flex-1 pr-2">
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-slate-800 truncate">{selectedFolder.name}</span>
-              </div>
-              {selectedFolder.description && (
-                <p className="text-[11px] font-medium text-slate-500 mt-0.5 flex items-center gap-1">
-                  <Info className="w-3 h-3 text-indigo-500 shrink-0" />
-                  <span className="truncate">{selectedFolder.description}</span>
-                </p>
-              )}
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => onEditFolder(selectedFolder)}
-                className="p-1.5 text-slate-600 hover:bg-slate-200 rounded-lg border-none bg-transparent cursor-pointer flex items-center gap-1 text-[11px] font-bold"
-                title="폴더 편집"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
-                <span>편집</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm(`'${selectedFolder.name}' 폴더와 수집 항목을 삭제하시겠습니까?`)) {
-                    onDeleteFolder(String(selectedFolder.id));
-                  }
-                }}
-                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg border-none bg-transparent cursor-pointer flex items-center gap-1 text-[11px] font-bold"
-                title="폴더 삭제"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>삭제</span>
-              </button>
-            </div>
+        {/* 4. 선택된 폴더 설명 안내 가이드 */}
+        {selectedFolder && selectedFolder.description && (
+          <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-2 flex items-center gap-1.5 text-xs text-slate-600">
+            <Info className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <span className="font-medium truncate">{selectedFolder.description}</span>
           </div>
         )}
 
