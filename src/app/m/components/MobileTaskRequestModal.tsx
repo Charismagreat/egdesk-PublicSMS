@@ -279,7 +279,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
                 </div>
               ) : (
                 <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs font-bold">
-                  수집된 사진/음성/문서/링크가 없습니다. 하단 + 버튼을 눌러 추가하세요.
+                  등록된 사진/음성/문서/링크가 없습니다. 하단 + 버튼을 눌러 추가하세요.
                 </div>
               )}
             </div>
