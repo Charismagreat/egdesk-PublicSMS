@@ -6,10 +6,10 @@ import { CheckSquare, Square, Search, AlertCircle, Plus, Calendar, Folder } from
 interface MobileTodoListSectionProps {
   todoTab: "active" | "completed" | "folders";
   setTodoTab: (tab: "active" | "completed" | "folders") => void;
-  todoPeriod: "ALL" | "TODAY" | "TOMORROW" | "WEEK" | "MONTH";
-  setTodoPeriod: (period: "ALL" | "TODAY" | "TOMORROW" | "WEEK" | "MONTH") => void;
-  completedPeriod: "ALL" | "TODAY" | "YESTERDAY" | "WEEK" | "MONTH";
-  setCompletedPeriod: (period: "ALL" | "TODAY" | "YESTERDAY" | "WEEK" | "MONTH") => void;
+  todoPeriod: "TODAY" | "TOMORROW" | "WEEK" | "MONTH" | "NEXT_MONTH" | "ALL";
+  setTodoPeriod: (period: "TODAY" | "TOMORROW" | "WEEK" | "MONTH" | "NEXT_MONTH" | "ALL") => void;
+  completedPeriod: "TODAY" | "YESTERDAY" | "WEEK" | "MONTH" | "LAST_MONTH" | "ALL";
+  setCompletedPeriod: (period: "TODAY" | "YESTERDAY" | "WEEK" | "MONTH" | "LAST_MONTH" | "ALL") => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   filteredTasks: any[];
@@ -101,11 +101,12 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
             {todoTab === "active" ? (
               <>
                 {[
-                  { id: "ALL", label: "전체" },
                   { id: "TODAY", label: "오늘" },
                   { id: "TOMORROW", label: "내일" },
                   { id: "WEEK", label: "이번 주" },
                   { id: "MONTH", label: "이번 달" },
+                  { id: "NEXT_MONTH", label: "다음달" },
+                  { id: "ALL", label: "전체" },
                 ].map((item) => (
                   <button
                     key={item.id}
@@ -124,11 +125,12 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
             ) : (
               <>
                 {[
-                  { id: "ALL", label: "전체" },
                   { id: "TODAY", label: "오늘" },
                   { id: "YESTERDAY", label: "어제" },
                   { id: "WEEK", label: "이번 주" },
                   { id: "MONTH", label: "이번 달" },
+                  { id: "LAST_MONTH", label: "지난달" },
+                  { id: "ALL", label: "전체" },
                 ].map((item) => (
                   <button
                     key={item.id}

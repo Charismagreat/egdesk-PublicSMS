@@ -62,8 +62,8 @@ export default function MobileHubPage() {
 
   // 📋 할 일 / 한 일 / 태스크 폴더 탭 & 기간 스위치 필터 상태
   const [todoTab, setTodoTab] = usePersistedState<"active" | "completed" | "folders">("m_todoTab", "active");
-  const [todoPeriod, setTodoPeriod] = usePersistedState<"ALL" | "TODAY" | "TOMORROW" | "WEEK" | "MONTH">("m_todoPeriod", "ALL");
-  const [completedPeriod, setCompletedPeriod] = usePersistedState<"ALL" | "TODAY" | "YESTERDAY" | "WEEK" | "MONTH">("m_completedPeriod", "ALL");
+  const [todoPeriod, setTodoPeriod] = usePersistedState<"TODAY" | "TOMORROW" | "WEEK" | "MONTH" | "NEXT_MONTH" | "ALL">("m_todoPeriod", "TODAY");
+  const [completedPeriod, setCompletedPeriod] = usePersistedState<"TODAY" | "YESTERDAY" | "WEEK" | "MONTH" | "LAST_MONTH" | "ALL">("m_completedPeriod", "TODAY");
   const [searchQuery, setSearchQuery] = usePersistedState<string>("m_todoSearch", "");
   const [tasks, setTasks] = useState<any[]>([]);
 
@@ -577,10 +577,52 @@ export default function MobileHubPage() {
   const activeTasks = tasks.filter((t) => t.status !== "DONE");
   const completedTasks = tasks.filter((t) => t.status === "DONE");
 
+  // 📅 기간별 필터링 판별 함수 (오늘, 내일, 어제, 이번 주, 이번 달, 다음달, 지난달, 전체)
+  const isTaskInPeriod = (taskDateStr: string | undefined, period: string, tab: "active" | "completed") => {
+    if (period === "ALL") return true;
+    if (!taskDateStr) return true;
+
+    const taskDate = new Date(taskDateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const taskZero = new Date(taskDate);
+    taskZero.setHours(0, 0, 0, 0);
+
+    const diffDays = Math.round((taskZero.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (tab === "active") {
+      if (period === "TODAY") return diffDays === 0;
+      if (period === "TOMORROW") return diffDays === 1;
+      if (period === "WEEK") return diffDays >= 0 && diffDays <= 7;
+      if (period === "MONTH") {
+        return taskDate.getFullYear() === today.getFullYear() && taskDate.getMonth() === today.getMonth();
+      }
+      if (period === "NEXT_MONTH") {
+        const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        return taskDate.getFullYear() === nextMonth.getFullYear() && taskDate.getMonth() === nextMonth.getMonth();
+      }
+    } else {
+      if (period === "TODAY") return diffDays === 0;
+      if (period === "YESTERDAY") return diffDays === -1;
+      if (period === "WEEK") return diffDays >= -7 && diffDays <= 0;
+      if (period === "MONTH") {
+        return taskDate.getFullYear() === today.getFullYear() && taskDate.getMonth() === today.getMonth();
+      }
+      if (period === "LAST_MONTH") {
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        return taskDate.getFullYear() === lastMonth.getFullYear() && taskDate.getMonth() === lastMonth.getMonth();
+      }
+    }
+    return true;
+  };
+
   const filteredTasks = tasks.filter((t) => {
     const isTabMatch = todoTab === "active" ? t.status !== "DONE" : t.status === "DONE";
     const isSearchMatch = !searchQuery || t.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return isTabMatch && isSearchMatch;
+    const currentPeriod = todoTab === "active" ? todoPeriod : completedPeriod;
+    const isPeriodMatch = isTaskInPeriod(t.due_date || t.date || t.created_at, currentPeriod, todoTab === "active" ? "active" : "completed");
+    return isTabMatch && isSearchMatch && isPeriodMatch;
   });
 
   return (
