@@ -234,14 +234,14 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
                     <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-extrabold text-slate-800 hover:text-indigo-600 truncate underline decoration-dashed">
+                    <p className="text-xs font-extrabold text-slate-800 hover:text-indigo-600 truncate">
                       {item.name || item.title || item.file_name || "첨부 파일"}
                     </p>
                     <p className="text-[9px] font-semibold text-slate-400 mt-0.5">
                       {item.date || (item.created_at ? item.created_at.substring(0, 10) : "")}
                     </p>
                   </div>
-                  <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1" />
+                  <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1 hover:text-indigo-600" />
                 </div>
 
                 {/* 항목 단위 이동 🔄 & 삭제 🗑️ 도구 */}

@@ -225,10 +225,10 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
                           alt="thumb"
                           className="w-7 h-7 rounded-lg object-cover border border-slate-200 shrink-0"
                         />
-                        <span className="font-extrabold text-slate-700 hover:text-indigo-600 truncate underline decoration-dashed">
+                        <span className="font-extrabold text-slate-700 hover:text-indigo-600 truncate">
                           {p.name}
                         </span>
-                        <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
+                        <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1 hover:text-indigo-600" />
                       </div>
                       <button
                         type="button"
@@ -262,7 +262,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
                         ) : (
                           <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
                         )}
-                        <span className="font-extrabold text-slate-700 hover:text-indigo-600 truncate underline decoration-dashed">
+                        <span className="font-extrabold text-slate-700 hover:text-indigo-600 truncate">
                           {f.name}
                         </span>
                         <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
