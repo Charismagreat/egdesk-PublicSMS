@@ -1,11 +1,11 @@
 "use client";
 
-import React from "react";
-import { LogOut } from "lucide-react";
+import React, { useState } from "react";
+import { LogOut, User } from "lucide-react";
 
 interface MobilePortalHeaderProps {
   userName: string;
-  avatarUrl: string;
+  avatarUrl?: string | null;
   onOpenLeaveModal: () => void;
   onLogout: () => void;
 }
@@ -16,16 +16,27 @@ export const MobilePortalHeader: React.FC<MobilePortalHeaderProps> = ({
   onOpenLeaveModal,
   onLogout,
 }) => {
+  const [imageError, setImageError] = useState(false);
+  const initialChar = userName ? userName.substring(0, 1) : "직";
+
   return (
-    <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 mb-4">
+    <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 mb-4 text-left">
       {/* 사용자 프로필 및 아바타 */}
       <div className="flex items-center gap-3">
         <div className="relative">
-          <img
-            src={avatarUrl}
-            alt={userName}
-            className="w-12 h-12 rounded-full object-cover border border-slate-200 shadow-sm ring-2 ring-indigo-50"
-          />
+          {avatarUrl && !imageError ? (
+            <img
+              src={avatarUrl}
+              alt={userName}
+              onError={() => setImageError(true)}
+              className="w-12 h-12 rounded-full object-cover border border-slate-200 shadow-sm ring-2 ring-indigo-50"
+            />
+          ) : (
+            // 실물 프로필 이미지가 없을 때: 이름 첫 글자 이니셜 아바타 (한국형 기본 아바타)
+            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center font-extrabold text-lg shadow-sm ring-2 ring-indigo-50">
+              {initialChar}
+            </div>
+          )}
           <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
         </div>
         <div className="text-left">

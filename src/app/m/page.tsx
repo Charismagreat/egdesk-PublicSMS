@@ -324,8 +324,8 @@ export default function MobileHubPage() {
     <div className="w-full min-h-screen bg-slate-50 p-4 md:p-6 font-sans text-slate-800 text-left">
       {/* 1. 상단 유저 헤더 */}
       <MobilePortalHeader
-        userName={session?.name || "차민수"}
-        avatarUrl={session?.avatar_url || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"}
+        userName={session?.name || "임직원"}
+        avatarUrl={session?.avatar_url}
         onOpenLeaveModal={() => setIsLeaveModalOpen(true)}
         onLogout={handleLogout}
       />
