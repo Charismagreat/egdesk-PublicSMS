@@ -60,8 +60,8 @@ export default function MobileHubPage() {
   const [isLeaveSubmitting, setIsLeaveSubmitting] = useState(false);
   const [leaveErrorMsg, setLeaveErrorMsg] = useState("");
 
-  // 📋 할 일 / 한 일 탭 & 기간 스위치 필터 상태
-  const [todoTab, setTodoTab] = usePersistedState<"active" | "completed">("m_todoTab", "active");
+  // 📋 할 일 / 한 일 / 태스크 폴더 탭 & 기간 스위치 필터 상태
+  const [todoTab, setTodoTab] = usePersistedState<"active" | "completed" | "folders">("m_todoTab", "active");
   const [todoPeriod, setTodoPeriod] = usePersistedState<"ALL" | "TODAY" | "TOMORROW" | "WEEK" | "MONTH">("m_todoPeriod", "ALL");
   const [completedPeriod, setCompletedPeriod] = usePersistedState<"ALL" | "TODAY" | "YESTERDAY" | "WEEK" | "MONTH">("m_completedPeriod", "ALL");
   const [searchQuery, setSearchQuery] = usePersistedState<string>("m_todoSearch", "");
@@ -617,6 +617,7 @@ export default function MobileHubPage() {
       <MobileDailyReportCard todayReport={todayReport} />
 
       {/* 4. 진행 중 / 완료된 할 일 섹션 */}
+      {/* 4. 진행 중 할 일 (N) / 완료된 한 일 (N) / 태스크 폴더 (N) 통합 3탭 섹션 */}
       <MobileTodoListSection
         todoTab={todoTab}
         setTodoTab={setTodoTab}
@@ -629,34 +630,35 @@ export default function MobileHubPage() {
         filteredTasks={filteredTasks}
         activeTaskCount={activeTasks.length}
         completedTaskCount={completedTasks.length}
+        taskFolderCount={taskFolders.length}
         onToggleTaskStatus={handleToggleTaskStatus}
         onOpenNewTaskModal={() => {}}
-      />
-
-      {/* 5. 태스크 폴더 카드 (편집, 삭제, 다른 폴더로 이동 지원) */}
-      <MobileFieldTaskCollector
-        folders={taskFolders}
-        selectedFolderId={selectedFolderId}
-        onSelectFolder={(id) => setSelectedFolderId(id)}
-        onOpenNewFolderModal={() => setIsNewFolderModalOpen(true)}
-        onEditFolder={(folder) => {
-          setEditingFolder(folder);
-          setEditFolderName(folder.name);
-          setEditFolderDesc(folder.description || "");
-          setIsEditFolderModalOpen(true);
-        }}
-        onDeleteFolder={handleDeleteFolder}
-        collectedItems={collectedItems}
-        onUploadFile={handleUploadCollectedFile}
-        onOpenItemViewer={() => {}}
-        onMoveItem={(item) => {
-          setMovingItem(item);
-          setTargetFolderId("");
-          setIsMoveItemModalOpen(true);
-        }}
-        onDeleteItem={handleDeleteItem}
-        onClearFolderItems={() => setCollectedItems([])}
-        isUploading={isUploading}
+        taskFolderContent={
+          <MobileFieldTaskCollector
+            folders={taskFolders}
+            selectedFolderId={selectedFolderId}
+            onSelectFolder={(id) => setSelectedFolderId(id)}
+            onOpenNewFolderModal={() => setIsNewFolderModalOpen(true)}
+            onEditFolder={(folder) => {
+              setEditingFolder(folder);
+              setEditFolderName(folder.name);
+              setEditFolderDesc(folder.description || "");
+              setIsEditFolderModalOpen(true);
+            }}
+            onDeleteFolder={handleDeleteFolder}
+            collectedItems={collectedItems}
+            onUploadFile={handleUploadCollectedFile}
+            onOpenItemViewer={() => {}}
+            onMoveItem={(item) => {
+              setMovingItem(item);
+              setTargetFolderId("");
+              setIsMoveItemModalOpen(true);
+            }}
+            onDeleteItem={handleDeleteItem}
+            onClearFolderItems={() => setCollectedItems([])}
+            isUploading={isUploading}
+          />
+        }
       />
 
       {/* 📂 1. 새 태스크 폴더 생성 모달 (이름 & 설명) */}
