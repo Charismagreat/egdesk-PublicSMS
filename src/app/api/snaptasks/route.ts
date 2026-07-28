@@ -139,6 +139,43 @@ export async function GET(req: Request) {
             partner_company_name: matchedPartner ? matchedPartner.company_name : null
           };
         });
+
+      // 4) crm_governance_logs 완료 건 연동 병합 (최고관리자 관제 완료 처리 건)
+      try {
+        const govLogsRes = await queryTable('crm_governance_logs', { limit: 10000 });
+        const govLogs = govLogsRes.rows || [];
+
+        govLogs.forEach((log: any) => {
+          if (log.deleted_at) return;
+          const isLogApproved = log.status === 'APPROVED' || log.status === 'FORCE_APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED';
+
+          if (isLogApproved) {
+            const logTitleClean = (log.doc_title || '').replace(/^\[상신\]\s*/, '').trim();
+            const existingTask = tasks.find((t: any) => 
+              t.title === log.doc_title || 
+              t.title === `[상신] ${logTitleClean}` || 
+              t.title === logTitleClean ||
+              String(t.id) === String(log.doc_id)
+            );
+
+            if (existingTask) {
+              existingTask.status = 'DONE';
+            } else {
+              tasks.push({
+                id: `gov_done_${log.id}`,
+                title: log.doc_title || '관제 승인 완료 업무',
+                status: 'DONE',
+                description: log.reason || '최고관리자 관제 실행 완료',
+                assignee_name: log.operator || '김직원',
+                created_at: log.updated_at || log.created_at,
+                due_date: log.created_at ? log.created_at.substring(0, 10) : ''
+              });
+            }
+          }
+        });
+      } catch (ge) {
+        console.error('관제 완료 로그 동기화 실패:', ge);
+      }
     } catch (e) {
       console.warn('[snaptasks GET] queryTable 조회 실패, 원시 SQL 조인 폴백 시도:', e);
       // 만약 실패하면 예전 방식의 SQL을 시도하되, 방화벽 방어를 위해 deleted_at 대신 LIKE 우회
