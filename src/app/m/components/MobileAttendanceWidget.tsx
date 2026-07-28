@@ -108,7 +108,7 @@ export const MobileAttendanceWidget: React.FC<MobileAttendanceWidgetProps> = ({
         >
           <div className="flex items-center gap-1.5 mb-2">
             <AlertTriangle className="w-4 h-4 text-amber-600" />
-            <span className="text-xs font-black text-amber-950">금일 지각 근태 사유 상신 요구</span>
+            <span className="text-xs font-black text-amber-950">지각 사유 제출</span>
           </div>
           <div className="flex gap-2">
             <input
