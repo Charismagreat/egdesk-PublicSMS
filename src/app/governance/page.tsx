@@ -410,17 +410,21 @@ export default function GovernanceDashboard() {
   };
 
   // 수집자료 개별 삭제 처리
-  const handleDeleteItem = async (itemId: any) => {
+  const handleDeleteItem = async (itemParam: any) => {
     if (!window.confirm("정말로 이 수집 자료(또는 AI 리포트)를 삭제하시겠습니까?")) return;
     
+    const targetId = typeof itemParam === 'object' ? itemParam.id : itemParam;
+    const targetTitle = typeof itemParam === 'object' ? itemParam.title : '';
+    const targetFileName = typeof itemParam === 'object' ? itemParam.file_name : '';
+
     // 💡 즉각적인 로컬 UI 제거 (Optimistic State Update)
-    setFolderItems(prev => prev.filter(i => String(i.id) !== String(itemId)));
+    setFolderItems(prev => prev.filter(i => String(i.id) !== String(targetId) && (!targetTitle || i.title !== targetTitle)));
 
     try {
       const res = await apiFetch("/api/task-folders?action=delete_item", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: itemId, itemId })
+        body: JSON.stringify({ id: targetId, itemId: targetId, title: targetTitle, file_name: targetFileName })
       });
       const data = await res.json();
       if (data.success) {
@@ -2298,7 +2302,7 @@ export default function GovernanceDashboard() {
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              handleDeleteItem(item.id);
+                                              handleDeleteItem(item);
                                             }}
                                             className="p-1 rounded-lg border-none bg-transparent hover:bg-rose-500/10 text-rose-500 hover:text-rose-600 transition opacity-0 group-hover/item:opacity-100 cursor-pointer"
                                             title="자료 삭제"

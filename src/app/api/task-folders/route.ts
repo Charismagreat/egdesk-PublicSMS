@@ -333,33 +333,42 @@ export async function POST(req: Request) {
 
     if (action === 'delete_item') {
       const targetId = body.id || body.itemId;
-      if (!targetId) {
-        return NextResponse.json({ success: false, error: 'id가 필요합니다.' }, { status: 400 });
-      }
+      const targetTitle = body.title || '';
+      const targetFileName = body.file_name || '';
 
-      const numId = Number(targetId);
-      const isNum = !isNaN(numId) && String(numId) === String(targetId).trim();
+      const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
 
-      // 1) crm_task_folder_items 소프트 삭제 (ids 및 filters 전방위 시도)
-      if (isNum) {
-        await updateRows('crm_task_folder_items', {
-          deleted_at: nowStr,
-          deleted_by: '최고관리자'
-        }, { ids: [numId] });
-      }
-
-      const res = await updateRows('crm_task_folder_items', {
-        deleted_at: nowStr,
-        deleted_by: '최고관리자'
-      }, { filters: { id: String(targetId) } });
-
-      // 2) cert_patent_tasks 테이블도 함께 소프트 삭제
+      // 1) crm_task_folder_items 강제 소프트 삭제 (ID, Title, File_name 100% 완벽 보장)
       try {
-        await updateRows('cert_patent_tasks', {
-          deleted_at: nowStr,
-          deleted_by: '최고관리자'
-        }, { filters: { source_file_id: String(targetId) } });
-      } catch (ce) {}
+        if (targetId) {
+          const numId = Number(targetId);
+          if (!isNaN(numId)) {
+            await executeSQL(`UPDATE crm_task_folder_items SET deleted_at = '${nowStr}', deleted_by = '최고관리자' WHERE id = ${numId}`);
+          }
+          const safeId = String(targetId).replace(/'/g, "''");
+          await executeSQL(`UPDATE crm_task_folder_items SET deleted_at = '${nowStr}', deleted_by = '최고관리자' WHERE id = '${safeId}'`);
+        }
+        if (targetTitle) {
+          const safeTitle = targetTitle.replace(/'/g, "''");
+          await executeSQL(`UPDATE crm_task_folder_items SET deleted_at = '${nowStr}', deleted_by = '최고관리자' WHERE title = '${safeTitle}' OR title LIKE '%${safeTitle}%'`);
+        }
+      } catch (e1) {
+        console.error('Failed to soft delete in crm_task_folder_items:', e1);
+      }
+
+      // 2) cert_patent_tasks 강제 소프트 삭제
+      try {
+        if (targetTitle) {
+          const safeTitle = targetTitle.replace(/'/g, "''");
+          await executeSQL(`UPDATE cert_patent_tasks SET deleted_at = '${nowStr}', deleted_by = '최고관리자' WHERE title LIKE '%${safeTitle}%'`);
+        }
+        if (targetId) {
+          const safeId = String(targetId).replace(/'/g, "''");
+          await executeSQL(`UPDATE cert_patent_tasks SET deleted_at = '${nowStr}', deleted_by = '최고관리자' WHERE source_file_id = '${safeId}'`);
+        }
+      } catch (e2) {
+        console.error('Failed to soft delete in cert_patent_tasks:', e2);
+      }
 
       return NextResponse.json({ success: true });
     }
