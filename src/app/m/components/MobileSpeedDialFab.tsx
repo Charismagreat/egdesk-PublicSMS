@@ -90,56 +90,56 @@ export const MobileSpeedDialFab: React.FC<MobileSpeedDialFabProps> = ({
   return (
     <>
       {/* 🔮 모바일 퀵 액션 하단 중앙 고정 스피드 다이얼 (FAB) */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-3">
-        {/* 서브 액션 순수 아이콘 단추 리스트 (열렸을 때 수직 배치) */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center">
+        {/* 서브 액션 단색 순수 아이콘 가로(Horizontal) 나열 */}
         {isOpen && (
-          <div className="flex flex-col items-center gap-3 animate-scale-in mb-1">
-            {/* 📷 1. 카메라 아이콘 (현장 사진 촬영) */}
+          <div className="flex flex-row items-center justify-center gap-3 mb-3 animate-scale-in">
+            {/* 📷 1. 카메라 단색 아이콘 */}
             <button
               onClick={() => {
                 cameraInputRef.current?.click();
                 setIsOpen(false);
               }}
               title="현장 사진 촬영"
-              className="w-12 h-12 rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-90"
+              className="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-900 text-white shadow-xl flex items-center justify-center border border-slate-700/80 cursor-pointer transition-all active:scale-90"
             >
               <Camera className="w-5 h-5 text-white" />
             </button>
 
-            {/* 🎤 2. 스피커 / 음성 아이콘 */}
+            {/* 🎤 2. 음성/스피커 단색 아이콘 */}
             <button
               onClick={() => {
                 setIsVoiceModalOpen(true);
                 setIsOpen(false);
               }}
               title="음성 메모 등록"
-              className="w-12 h-12 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-90"
+              className="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-900 text-white shadow-xl flex items-center justify-center border border-slate-700/80 cursor-pointer transition-all active:scale-90"
             >
               <Mic className="w-5 h-5 text-white" />
             </button>
 
-            {/* 📁 3. 폴더 / 파일 아이콘 */}
+            {/* 📁 3. 폴더/파일 단색 아이콘 */}
             <button
               onClick={() => {
                 fileInputRef.current?.click();
                 setIsOpen(false);
               }}
               title="파일/문서 첨부"
-              className="w-12 h-12 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-90"
+              className="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-900 text-white shadow-xl flex items-center justify-center border border-slate-700/80 cursor-pointer transition-all active:scale-90"
             >
               <Folder className="w-5 h-5 text-white" />
             </button>
 
-            {/* 🔗 4. 웹 링크 아이콘 */}
+            {/* 🔗 4. 웹 링크 단색 아이콘 */}
             <button
               onClick={() => {
                 setIsLinkModalOpen(true);
                 setIsOpen(false);
               }}
               title="웹 링크 추가"
-              className="w-12 h-12 rounded-full bg-amber-500 hover:bg-amber-600 text-slate-900 shadow-xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-90"
+              className="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-900 text-white shadow-xl flex items-center justify-center border border-slate-700/80 cursor-pointer transition-all active:scale-90"
             >
-              <Link className="w-5 h-5 text-slate-900" />
+              <Link className="w-5 h-5 text-white" />
             </button>
           </div>
         )}
@@ -149,7 +149,7 @@ export const MobileSpeedDialFab: React.FC<MobileSpeedDialFabProps> = ({
           onClick={() => setIsOpen(!isOpen)}
           className={`w-14 h-14 rounded-full text-white shadow-2xl flex items-center justify-center transition-all duration-300 border-none cursor-pointer active:scale-90 ${
             isOpen
-              ? "bg-slate-800 rotate-45 ring-4 ring-slate-300"
+              ? "bg-slate-900 rotate-45 ring-4 ring-slate-300"
               : "bg-gradient-to-tr from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 ring-4 ring-indigo-100 shadow-indigo-300/50"
           }`}
           title="빠른 태스크 등록 메뉴"
