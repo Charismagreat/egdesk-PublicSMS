@@ -8,7 +8,7 @@ import {
   Smartphone, Calendar, Camera, ClipboardList, Clock, 
   MapPin, LogOut, CheckCircle, ChevronRight, User, AlertCircle, Sparkles,
   Plus, Mic, FolderOpen, Send, X, FileText, CheckCircle2, AlertTriangle, Play, Square as StopIcon,
-  Loader2, CheckSquare, ListTodo, Award, Trash2, ArrowRight, FolderClosed, Link, Edit2, MoreVertical, Share2, Paperclip
+  Loader2, CheckSquare, ListTodo, Award, Trash2, ArrowRight, FolderClosed, Link, Edit2, MoreVertical, Share2, Paperclip, Palmtree
 } from "lucide-react";
 
 interface SessionInfo {
@@ -1677,28 +1677,25 @@ export default function MobileHubPage() {
             <div>
               <div className="flex items-center gap-1">
                 <span className="font-extrabold text-slate-800 text-sm">{session.name}</span>
-                <span className="text-[9px] bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.2 rounded-md shrink-0">
-                  {session.role === "SUPER_ADMIN" ? "관리자" : "현장"}
-                </span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            {/* 📅 모바일 간편 연차/휴가 신청 아이콘 버튼 */}
+          <div className="flex items-center gap-3">
+            {/* 📅 모바일 간편 연차신청 텍스트 버튼 */}
             <button
               onClick={() => setIsLeaveModalOpen(true)}
-              title="모바일 간편 연차 / 휴가 신청"
-              aria-label="모바일 간편 연차 / 휴가 신청"
-              className="p-2 bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white rounded-xl shadow-xs border-none cursor-pointer flex items-center justify-center transition-all active:scale-95"
+              title="간편 연차 신청"
+              aria-label="간편 연차 신청"
+              className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white rounded-xl shadow-xs border-none cursor-pointer flex items-center gap-1 text-xs font-black transition-all active:scale-95 shrink-0"
             >
-              <Calendar className="w-4 h-4" />
+              <span>연차신청</span>
             </button>
             {/* 🚪 로그아웃 아이콘 버튼 */}
             <button 
               onClick={handleLogout}
               title="로그아웃"
               aria-label="로그아웃"
-              className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-rose-600 rounded-xl transition duration-200 shadow-2xs cursor-pointer flex items-center justify-center active:scale-95"
+              className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-rose-600 rounded-xl transition duration-200 shadow-2xs cursor-pointer flex items-center justify-center active:scale-95 shrink-0"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -1789,9 +1786,8 @@ export default function MobileHubPage() {
               <div className="w-8 h-8 bg-indigo-50 text-indigo-650 rounded-xl flex items-center justify-center shadow-3xs shrink-0">
                 <FileText className="w-4 h-4 text-indigo-600 animate-pulse" />
               </div>
-              <div className="text-left space-y-0.5">
-                <span className="font-extrabold text-slate-800 text-xs block leading-tight">오늘의 일일 업무 보고서</span>
-                <span className="text-[9px] text-slate-405 font-bold block">AI 요약 기반으로 간편하게 오늘 일보를 상신하세요.</span>
+              <div className="text-left">
+                <span className="font-extrabold text-slate-800 text-xs block leading-tight">일일 업무 보고서</span>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-slate-400" />
@@ -1968,7 +1964,7 @@ export default function MobileHubPage() {
               ) : activeTasks.length === 0 ? (
                 <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-500 shadow-xs">
                   <CheckCircle2 className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                  <span className="text-xs font-bold block">남아있는 진행 중 업무가 없습니다.</span>
+                  <span className="text-xs font-bold block">할 일에 등록된 업무가 없습니다.</span>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-2.5">
@@ -2044,7 +2040,7 @@ export default function MobileHubPage() {
               ) : filteredCompletedTasks.length === 0 ? (
                 <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-500 shadow-xs">
                   <AlertTriangle className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                  <span className="text-xs font-bold block">선택한 기간 내에 완료된 업무가 없습니다.</span>
+                  <span className="text-xs font-bold block">해당 기간에 &apos;한 일&apos;에 등록된 업무가 없습니다.</span>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-2.5">
@@ -2101,7 +2097,6 @@ export default function MobileHubPage() {
                       <span>태스크 폴더 목록 ({mobileFolders.length})</span>
                       <Edit2 className="w-2.5 h-2.5 text-slate-400 shrink-0" />
                     </span>
-                    <span className="text-[10px] text-slate-400 font-bold block mt-0.5">영업/현장 마케팅 수집 보관함 (클릭 시 검색)</span>
                   </div>
                 </div>
                 <button
@@ -2156,6 +2151,9 @@ export default function MobileHubPage() {
                         <span className="flex flex-col items-start gap-0.5">
                           <span className="flex items-center gap-1 font-extrabold text-xs">
                             📁 {f.name.length > 8 ? `${f.name.slice(0, 8)}...` : f.name}
+                            <span className={isSelected ? 'text-indigo-300 font-bold' : 'text-slate-400 font-bold'}>
+                              ({isSelected ? mobileFolderItems.length : (f as any).item_count ?? 0})
+                            </span>
                           </span>
                           {session?.role === 'SUPER_ADMIN' && f.created_by && (
                             <span className={`text-[8px] px-1 py-0.2 rounded font-black tracking-tight ${
@@ -2237,7 +2235,6 @@ export default function MobileHubPage() {
 
                   {/* 수집된 자료 리스트 */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-3">
-                    <span className="text-xs font-black text-slate-800 block">수집된 현장 정보 목록 ({mobileFolderItems.length})</span>
                     {mobileItemsLoading ? (
                       <div className="py-8 flex flex-col items-center justify-center gap-1.5 text-slate-400">
                         <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />

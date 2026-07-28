@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Sparkles, X, Send, RotateCcw, Bot, Terminal, ShieldAlert, Maximize2, Minimize2, Mic, MicOff, Volume2, VolumeX, Camera, Mail, CheckCircle2, User, Phone, Briefcase, RefreshCw, Calendar, DollarSign, Check, FileText, Plus, Layers, MousePointerClick, Video, VideoOff, Scale, ArrowRight, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePathname, useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/api';
 import html2canvas from 'html2canvas';
 
 // 📂 외부 분기 처리된 AI 프리뷰 카드 컴포넌트 임포트
@@ -412,6 +413,27 @@ export default function EasyBot() {
     }
   }, [chat.inputVal]);
 
+  // 🔑 세션 사용자 역할(Role) 조회를 통한 모바일 및 최고관리자 전용 노출 제어
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const res = await apiFetch('/api/auth/me');
+        const data = await res.json();
+        if (data.success && data.role) {
+          setUserRole(data.role);
+        }
+      } catch (e) {
+        console.error('Failed to fetch user role for EasyBot:', e);
+      }
+    };
+    fetchUserRole();
+  }, []);
+
+  const isSuperAdmin = userRole ? ['SUPER_ADMIN', 'PRESIDENT', 'SYSTEM_ADMIN', 'TENANT_ADMIN'].includes(userRole.toUpperCase()) : false;
+  const isMobilePath = pathname.startsWith('/m');
+
   if (
     pathname === '/login' || 
     pathname.startsWith('/interpretation-ai') || 
@@ -421,6 +443,7 @@ export default function EasyBot() {
     pathname.startsWith('/table-order') || 
     pathname.startsWith('/booking') || 
     pathname.startsWith('/m/') || 
+    (isMobilePath && !isSuperAdmin) ||
     pathname.startsWith('/expenses/mobile-approve') ||
     pathname.startsWith('/employee') ||
     pathname.startsWith('/estimates/web-view') ||

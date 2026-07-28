@@ -344,6 +344,8 @@ export default function AIHelpManager() {
     fetchUserRole();
   }, []);
 
+  const isMobilePath = pathname.startsWith('/m');
+
   if (
     pathname === '/login' || 
     pathname.startsWith('/interpretation-ai') || 
@@ -353,6 +355,7 @@ export default function AIHelpManager() {
     pathname.startsWith('/table-order') || 
     pathname.startsWith('/booking') || 
     pathname.startsWith('/m/') || 
+    (isMobilePath && !hasAdminAccess) ||
     pathname.startsWith('/expenses/mobile-approve') ||
     pathname.startsWith('/employee') ||
     pathname.startsWith('/estimates/web-view') ||
