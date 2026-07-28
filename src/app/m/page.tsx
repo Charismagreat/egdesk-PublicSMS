@@ -15,6 +15,7 @@ import { MobileDailyReportCard } from "./components/MobileDailyReportCard";
 import { MobileTodoListSection } from "./components/MobileTodoListSection";
 import { MobileFieldTaskCollector } from "./components/MobileFieldTaskCollector";
 import { MobileSpeedDialFab } from "./components/MobileSpeedDialFab";
+import { MobileTaskRequestModal } from "./components/MobileTaskRequestModal";
 
 export default function MobileHubPage() {
   const router = useRouter();
@@ -71,6 +72,12 @@ export default function MobileHubPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [collectedItems, setCollectedItems] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+
+  // 🤖 AI 관제 상신 & 태스크 발급 모달 상태
+  const [isTaskRequestModalOpen, setIsTaskRequestModalOpen] = useState(false);
+  const [requestPhotos, setRequestPhotos] = useState<any[]>([]);
+  const [requestFiles, setRequestFiles] = useState<any[]>([]);
+  const [requestVoiceText, setRequestVoiceText] = useState("");
 
   // 스냅태스크 DB 목록 로드
   useEffect(() => {
@@ -295,6 +302,78 @@ export default function MobileHubPage() {
     }
   };
 
+  // AI 관제 상신 & 스냅태스크 발급 처리 함수
+  const handleSendGovernanceRequest = async (title: string, note: string) => {
+    try {
+      const formattedTitle = title.startsWith("[상신]") ? title : `[상신] ${title}`;
+      const res = await apiFetch("/api/governance?action=create_log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doc_title: formattedTitle,
+          doc_type: "FIELD_COLLECTION",
+          note: note,
+          photos: requestPhotos,
+          files: requestFiles,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("🎉 업무 요청이 성공적으로 상신되었으며, 새로운 태스크가 발급되었습니다!");
+        // 태스크 목록 DB 재조회
+        const taskRes = await apiFetch("/api/snaptasks");
+        if (taskRes.ok) {
+          const taskJson = await taskRes.json();
+          if (taskJson.success && taskJson.tasks) {
+            setTasks(taskJson.tasks);
+            setTaskFolders(
+              taskJson.tasks.map((t: any) => ({
+                id: String(t.id),
+                name: t.title,
+                itemCount: t.items_count || 0,
+              }))
+            );
+          }
+        }
+        setRequestPhotos([]);
+        setRequestFiles([]);
+        setRequestVoiceText("");
+      } else {
+        throw new Error(data.error || "상신 실패");
+      }
+    } catch (e: any) {
+      alert("상신 중 오류가 발생했습니다: " + e.message);
+    }
+  };
+
+  // 태스크 폴더에 자료 직접 보관 처리
+  const handleSaveToTaskFolder = async (folderId: string, itemTitle: string) => {
+    try {
+      const res = await apiFetch("/api/snaptasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add_item",
+          task_id: folderId,
+          title: itemTitle,
+          photos: requestPhotos,
+          files: requestFiles,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("선택한 태스크 폴더에 자료가 보관되었습니다.");
+        setSelectedFolderId(folderId);
+        setRequestPhotos([]);
+        setRequestFiles([]);
+      } else {
+        throw new Error(data.error || "보관 실패");
+      }
+    } catch (e: any) {
+      alert("보관 중 오류가 발생했습니다: " + e.message);
+    }
+  };
+
   // 할 일 상태 토글
   const handleToggleTaskStatus = (taskId: string, currentStatus: string) => {
     setTasks((prev) =>
@@ -427,27 +506,57 @@ export default function MobileHubPage() {
         onSubmit={handleSubmitLeave}
       />
 
+      {/* 🤖 AI 관제 상신 & 태스크 자동 발급 모달 */}
+      <MobileTaskRequestModal
+        isOpen={isTaskRequestModalOpen}
+        onClose={() => setIsTaskRequestModalOpen(false)}
+        photos={requestPhotos}
+        files={requestFiles}
+        voiceText={requestVoiceText}
+        setVoiceText={setRequestVoiceText}
+        onRemovePhoto={(idx) => setRequestPhotos((prev) => prev.filter((_, i) => i !== idx))}
+        onRemoveFile={(idx) => setRequestFiles((prev) => prev.filter((_, i) => i !== idx))}
+        taskFolders={taskFolders}
+        onSendGovernanceRequest={handleSendGovernanceRequest}
+        onSaveToTaskFolder={handleSaveToTaskFolder}
+      />
+
       {/* 🔮 스피드 다이얼 + FAB 버튼 (카메라, 스피커/음성, 폴더, 링크) */}
       <MobileSpeedDialFab
-        onPhotoCapture={handleUploadCollectedFile}
-        onFileUpload={handleUploadCollectedFile}
-        onAddVoiceTask={(audioBlob, note) => {
-          const newDoc = {
-            id: "VOICE-" + Date.now(),
-            name: note || "현장 음성 녹음 메모.webm",
-            type: "AUDIO",
-            date: new Date().toISOString().substring(0, 10),
+        onPhotoCapture={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            setRequestPhotos((prev) => [
+              ...prev,
+              { name: file.name, preview: reader.result as string, base64: reader.result as string },
+            ]);
+            setIsTaskRequestModalOpen(true);
           };
-          setCollectedItems((prev) => [newDoc, ...prev]);
+          reader.readAsDataURL(file);
+          if (e.target) e.target.value = "";
+        }}
+        onFileUpload={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          setRequestFiles((prev) => [
+            ...prev,
+            { name: file.name, size: (file.size / 1024).toFixed(1) + " KB", type: file.type, file },
+          ]);
+          setIsTaskRequestModalOpen(true);
+          if (e.target) e.target.value = "";
+        }}
+        onAddVoiceTask={(audioBlob, note) => {
+          setRequestVoiceText(note || "현장 음성 녹음 메모");
+          setIsTaskRequestModalOpen(true);
         }}
         onAddLinkTask={(title, url) => {
-          const newLink = {
-            id: "LINK-" + Date.now(),
-            name: title || url,
-            type: "DOCUMENT",
-            date: new Date().toISOString().substring(0, 10),
-          };
-          setCollectedItems((prev) => [newLink, ...prev]);
+          setRequestFiles((prev) => [
+            ...prev,
+            { name: title || url, size: "URL 링크", type: "LINK", isLink: true, url },
+          ]);
+          setIsTaskRequestModalOpen(true);
         }}
       />
     </div>
