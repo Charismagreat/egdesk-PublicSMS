@@ -24,17 +24,17 @@ export default function MobileDailyReportPage() {
     const kstDate = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().substring(0, 10);
     setReportDate(kstDate);
     
-    // 사원 정보 로드 (auth_token JWT 쿠키에 의거하므로, me API 호출을 통해 사원명 가져오기)
+    // 사원 정보 로드 (/api/auth/me 세션 API 활용)
     const fetchMe = async () => {
       try {
-        const res = await apiFetch("/api/employee/me");
+        const res = await apiFetch("/api/auth/me");
         const data = await res.json();
-        if (data.success && data.employee) {
-          setOperatorName(data.employee.name || "임직원");
-          setOperatorUsername(data.employee.username || "");
+        if (data.success) {
+          setOperatorName(data.name || "김직원");
+          setOperatorUsername(data.username || "");
         }
       } catch (e) {
-        console.warn("Failed to fetch employee profile, fallback to guest");
+        console.warn("Failed to fetch user session profile");
       }
     };
     fetchMe();
