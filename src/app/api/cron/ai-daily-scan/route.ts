@@ -73,21 +73,45 @@ ${realContents}
   - 파싱 신뢰도: 99% (사내 RAG 지식베이스 자동 적재 완료)
 ■ 이지봇 RAG 안내: 본 자정 배치 파싱 서류를 기반으로 이지봇 질의 시 실시간 자동 답변이 제공됩니다.`;
 
-      // 1) 개별 서류 1:1 판독 보고서 생성
-      const aiReportItem = {
-        folder_id: Number(folder.id),
-        type: 'AI_ANALYSIS_REPORT',
-        tags: `자정배치,${docCategory.replace(/\s+/g, '')},개별판독`,
-        title: `[AI Daily 판독 리포트] ${realTitles.substring(0, 20)}`,
-        content: reportContent,
-        file_name: realFileNames,
-        file_size: '300 KB',
-        created_at: nowStr
-      };
+      // 1) 개별 서류 1:1 판독 보고서 중복 생성 방지 (Smart Upsert / Dedup)
+      const existingScanReportsRes = await queryTable('crm_task_folder_items', { limit: 1000 });
+      const existingScanReports = (existingScanReportsRes.rows || []).filter((i: any) =>
+        !i.deleted_at &&
+        String(i.folder_id) === String(folder.id) &&
+        i.type === 'AI_ANALYSIS_REPORT' &&
+        (i.file_name === realFileNames || i.title?.includes(realTitles.substring(0, 15)))
+      );
 
-      await insertRows('crm_task_folder_items', [aiReportItem]);
+      if (existingScanReports.length > 0) {
+        const targetScan = existingScanReports[0];
+        await updateRows('crm_task_folder_items', {
+          content: reportContent,
+          created_at: nowStr
+        }, { filters: { id: String(targetScan.id) } });
+
+        // 🧹 과거 누적 중복 리포트 자동 정돈 (Soft Delete)
+        if (existingScanReports.length > 1) {
+          const duplicates = existingScanReports.slice(1);
+          for (const dup of duplicates) {
+            await updateRows('crm_task_folder_items', { deleted_at: nowStr }, { filters: { id: String(dup.id) } });
+          }
+        }
+      } else {
+        const aiReportItem = {
+          folder_id: Number(folder.id),
+          type: 'AI_ANALYSIS_REPORT',
+          tags: `자정배치,${docCategory.replace(/\s+/g, '')},개별판독`,
+          title: `[AI Daily 판독 리포트] ${realTitles.substring(0, 20)}`,
+          content: reportContent,
+          file_name: realFileNames,
+          file_size: '300 KB',
+          created_at: nowStr
+        };
+
+        await insertRows('crm_task_folder_items', [aiReportItem]);
+        reportCount++;
+      }
       processedCount += unparsedItems.length;
-      reportCount++;
 
       // 2) 🌟 [자정 배치 폴더 종합 보고서 UPSERT 자동 갱신] 폴더 내 미삭제 서류 2개 이상 시 오토 갱신
       try {

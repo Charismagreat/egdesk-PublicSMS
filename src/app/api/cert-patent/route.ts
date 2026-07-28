@@ -541,7 +541,7 @@ ${realContents.substring(0, 450)}...
 
       const resTask = await insertRows('cert_patent_tasks', [aiSuggestedTask]);
 
-      // E. 태스크 폴더에 실제 업로드된 자료 및 AI API 분석 결과를 결합한 종합 분석 보고서 문서(crm_task_folder_items) 생성 및 저장
+      // E. 태스크 폴더에 실제 업로드된 자료 및 AI API 분석 결과를 결합한 종합 분석 보고서 문서(crm_task_folder_items) 중복 차단 및 스마트 갱신 (Smart Cache/Upsert)
       let reportItem = null;
       if (folderId) {
         const reportContent = `[${systemSettingModel} 멀티모달 Vision 판독 보고서]
@@ -558,18 +558,52 @@ ${realContents}
 ================================================================================
 ■ 이지봇 RAG 지식 학습 완료: 본 서류 판독 내용이 사내 RAG 벡터 지식베이스에 실시간 적재되어 질문 시 자동 답변됩니다.`;
 
-        const aiAnalysisReport = {
-          folder_id: Number(folderId),
-          type: 'AI_ANALYSIS_REPORT',
-          tags: `AI파서,${docCategory.replace(/\s+/g, '')},AI지식자산`,
-          title: `[AI Daily 파싱 리포트] ${realTitles.substring(0, 25)} 종합 분석 보고서`,
-          content: reportContent,
-          file_name: realFileNames,
-          file_size: '310 KB',
-          created_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
-        };
-        await insertRows('crm_task_folder_items', [aiAnalysisReport]);
-        reportItem = aiAnalysisReport;
+        try {
+          // 💡 동일 폴더 내 기존 AI_ANALYSIS_REPORT 중복 존재 여부 체크
+          const existingReportsRes = await queryTable('crm_task_folder_items', { limit: 1000 });
+          const existingReports = (existingReportsRes.rows || []).filter((r: any) => 
+            !r.deleted_at && 
+            String(r.folder_id) === String(folderId) && 
+            r.type === 'AI_ANALYSIS_REPORT' &&
+            (r.file_name === realFileNames || r.title?.includes(realTitles.substring(0, 15)))
+          );
+
+          if (existingReports.length > 0) {
+            // 이미 분석 보고서가 존재하면 중복 생성하지 않고 최신 보고서 1개만 갱신(UPDATE)
+            const targetReport = existingReports[0];
+            await updateRows('crm_task_folder_items', {
+              content: reportContent,
+              created_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
+            }, { filters: { id: String(targetReport.id) } });
+            reportItem = { ...targetReport, content: reportContent };
+            console.log(`[AI SCAN CACHE HIT] 기존 리포트(ID: ${targetReport.id})가 최신 내용으로 갱신되었습니다. 중복 생성이 방지되었습니다.`);
+
+            // 🧹 이전에 중복으로 쌓인 보고서가 2건 이상 존재하면 최신 1건을 제외하고 자동 정돈(Soft Delete)
+            if (existingReports.length > 1) {
+              const duplicates = existingReports.slice(1);
+              for (const dup of duplicates) {
+                await updateRows('crm_task_folder_items', { deleted_at: new Date().toISOString() }, { filters: { id: String(dup.id) } });
+              }
+              console.log(`[AI SCAN DEDUP DONE] 과거 중복 생성 리포트 ${duplicates.length}건을 자동 정리했습니다.`);
+            }
+          } else {
+            // 🆕 신규 분석 보고서 1건 생성 (INSERT)
+            const aiAnalysisReport = {
+              folder_id: Number(folderId),
+              type: 'AI_ANALYSIS_REPORT',
+              tags: `AI파서,${docCategory.replace(/\s+/g, '')},AI지식자산`,
+              title: `[AI Daily 파싱 리포트] ${realTitles.substring(0, 25)} 종합 분석 보고서`,
+              content: reportContent,
+              file_name: realFileNames,
+              file_size: '310 KB',
+              created_at: new Date().toISOString().replace('T', ' ').substring(0, 19)
+            };
+            await insertRows('crm_task_folder_items', [aiAnalysisReport]);
+            reportItem = aiAnalysisReport;
+          }
+        } catch (repErr: any) {
+          console.warn('[AI REPORT DEDUP EXCEPTION]:', repErr.message);
+        }
       }
 
       return NextResponse.json({ 

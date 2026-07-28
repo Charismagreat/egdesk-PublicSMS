@@ -2241,8 +2241,18 @@ export default function GovernanceDashboard() {
                               </div>
                             ) : (
                               <div className="relative border-l-2 border-slate-100 pl-4 space-y-6 ml-3">
-                                {folderItems.map(item => {
-                                  const isAiReport = item.type === 'AI_ANALYSIS_REPORT';
+                                {folderItems
+                                  .filter((item, idx, arr) => {
+                                    if (item.type === 'AI_ANALYSIS_REPORT' || item.type === 'AI_FOLDER_SUMMARY_REPORT') {
+                                      return arr.findIndex(other => 
+                                        (other.type === 'AI_ANALYSIS_REPORT' || other.type === 'AI_FOLDER_SUMMARY_REPORT') &&
+                                        (other.file_name === item.file_name || other.title === item.title)
+                                      ) === idx;
+                                    }
+                                    return true;
+                                  })
+                                  .map(item => {
+                                  const isAiReport = item.type === 'AI_ANALYSIS_REPORT' || item.type === 'AI_FOLDER_SUMMARY_REPORT';
                                   return (
                                     <div 
                                       key={item.id} 
