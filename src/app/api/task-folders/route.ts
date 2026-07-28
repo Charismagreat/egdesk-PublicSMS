@@ -337,10 +337,18 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: 'id가 필요합니다.' }, { status: 400 });
       }
 
-      const res = await updateRows('crm_task_folder_items', {
-        deleted_at: nowStr,
-        deleted_by: '최고관리자'
-      }, { ids: [Number(targetId)] });
+      const numId = Number(targetId);
+      const isNum = !isNaN(numId) && String(numId) === String(targetId).trim();
+
+      const res = isNum
+        ? await updateRows('crm_task_folder_items', {
+            deleted_at: nowStr,
+            deleted_by: '최고관리자'
+          }, { ids: [numId] })
+        : await updateRows('crm_task_folder_items', {
+            deleted_at: nowStr,
+            deleted_by: '최고관리자'
+          }, { filters: { id: String(targetId) } });
 
       if (res.success) {
         return NextResponse.json({ success: true });
