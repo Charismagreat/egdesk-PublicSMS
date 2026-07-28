@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Folder, Plus, Upload, FileText, Image as ImageIcon, Music, Trash2, Edit3, ArrowRightLeft, Info, Search, X, Eye } from "lucide-react";
+import { Folder, Plus, Upload, FileText, Image as ImageIcon, Music, Trash2, Edit3, ArrowRightLeft, Info, Search, X, Eye, MoreHorizontal } from "lucide-react";
 import { MobileItemViewerModal } from "./MobileItemViewerModal";
 
 interface MobileFieldTaskCollectorProps {
@@ -41,6 +41,9 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
   // 👁️ 미리보기 팝업 모달 상태
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  // ⋯ [...] 더보기 메뉴가 열려있는 폴더 ID 상태
+  const [activeMenuFolderId, setActiveMenuFolderId] = useState<string | null>(null);
 
   const selectedFolder = folders.find((f) => String(f.id) === String(selectedFolderId));
 
@@ -112,8 +115,8 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
           )}
         </div>
 
-        {/* 3. 태스크 폴더 칩 스크롤 바 (폴더명 뱃지 내부에 ✏️ 편집 / 🗑️ 삭제 연동) */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar">
+        {/* 3. 태스크 폴더 칩 스크롤 바 (폴더 뱃지 내 [...] 터치 시 편집/삭제 메뉴 오픈) */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-0.5 no-scrollbar relative">
           {filteredFolders.length === 0 ? (
             <div className="text-xs font-bold text-slate-400 py-1">
               {searchQuery ? `'${searchQuery}' 검색 결과와 일치하는 폴더가 없습니다.` : "생성된 태스크 폴더가 없습니다."}
@@ -121,12 +124,13 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
           ) : (
             filteredFolders.map((folder) => {
               const isSelected = String(folder.id) === String(selectedFolderId);
+              const isMenuOpen = String(folder.id) === String(activeMenuFolderId);
               const count = folder.itemCount || 0;
               return (
                 <div
                   key={folder.id}
                   onClick={() => onSelectFolder(String(folder.id))}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border border-transparent cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border border-transparent cursor-pointer flex items-center gap-1.5 shrink-0 relative ${
                     isSelected
                       ? "bg-indigo-600 text-white shadow-2xs"
                       : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -137,41 +141,55 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
                     {folder.name || folder.title} ({count})
                   </span>
 
-                  {/* 💡 [핵심] 폴더명 뱃지 내부 편집 ✏️ & 삭제 🗑️ 아이콘 */}
-                  <div className="flex items-center gap-0.5 ml-1 border-l border-current/20 pl-1.5">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditFolder(folder);
-                      }}
-                      className={`p-0.5 rounded-md border-none bg-transparent cursor-pointer transition-colors ${
-                        isSelected
-                          ? "text-indigo-100 hover:text-white hover:bg-indigo-700"
-                          : "text-slate-400 hover:text-indigo-600 hover:bg-slate-200"
-                      }`}
-                      title="폴더 편집"
+                  {/* 💡 [...] 더보기 버튼 (숨겨진 편집/삭제 메뉴) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveMenuFolderId(isMenuOpen ? null : String(folder.id));
+                    }}
+                    className={`p-0.5 rounded-md border-none bg-transparent cursor-pointer transition-colors ml-0.5 ${
+                      isSelected
+                        ? "text-indigo-100 hover:text-white hover:bg-indigo-700"
+                        : "text-slate-400 hover:text-slate-800 hover:bg-slate-200"
+                    }`}
+                    title="폴더 관리 메뉴"
+                  >
+                    <MoreHorizontal className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* ⋯ [...] 클릭 시 노출되는 드롭다운 미니 메뉴 */}
+                  {isMenuOpen && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-full mt-1 left-0 bg-white border border-slate-200 shadow-xl rounded-xl p-1 z-30 flex flex-col gap-1 min-w-[90px] animate-scale-in text-slate-800"
                     >
-                      <Edit3 className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`'${folder.name}' 폴더와 수집 항목을 삭제하시겠습니까?`)) {
-                          onDeleteFolder(String(folder.id));
-                        }
-                      }}
-                      className={`p-0.5 rounded-md border-none bg-transparent cursor-pointer transition-colors ${
-                        isSelected
-                          ? "text-indigo-100 hover:text-rose-200 hover:bg-rose-600"
-                          : "text-slate-400 hover:text-rose-600 hover:bg-slate-200"
-                      }`}
-                      title="폴더 삭제"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveMenuFolderId(null);
+                          onEditFolder(folder);
+                        }}
+                        className="w-full text-left px-2 py-1.5 hover:bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border-none bg-transparent cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>편집</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveMenuFolderId(null);
+                          if (confirm(`'${folder.name}' 폴더와 수집 항목을 삭제하시겠습니까?`)) {
+                            onDeleteFolder(String(folder.id));
+                          }
+                        }}
+                        className="w-full text-left px-2 py-1.5 hover:bg-rose-50 text-rose-600 rounded-lg text-xs font-bold border-none bg-transparent cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                        <span>삭제</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })
