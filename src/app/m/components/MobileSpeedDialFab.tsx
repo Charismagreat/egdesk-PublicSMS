@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Plus, Camera, Mic, Folder, Link, X, Send, Square } from "lucide-react";
+import { Plus, Camera, Mic, Folder, Link, X, Square } from "lucide-react";
 
 interface MobileSpeedDialFabProps {
   onPhotoCapture: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -89,78 +89,70 @@ export const MobileSpeedDialFab: React.FC<MobileSpeedDialFabProps> = ({
 
   return (
     <>
-      {/* 🔮 모바일 퀵 액션 플로팅 스피드 다이얼 (FAB) */}
-      <div className="fixed bottom-6 right-5 z-40 flex flex-col items-end gap-3">
-        {/* 서브 액션 단추 리스트 (열렸을 때) */}
+      {/* 🔮 모바일 퀵 액션 하단 중앙 고정 스피드 다이얼 (FAB) */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-3">
+        {/* 서브 액션 순수 아이콘 단추 리스트 (열렸을 때 수직 배치) */}
         {isOpen && (
-          <div className="flex flex-col items-end gap-2.5 animate-scale-in">
-            {/* 📷 1. 카메라 버튼 (현장 사진 촬영) */}
+          <div className="flex flex-col items-center gap-3 animate-scale-in mb-1">
+            {/* 📷 1. 카메라 아이콘 (현장 사진 촬영) */}
             <button
               onClick={() => {
                 cameraInputRef.current?.click();
                 setIsOpen(false);
               }}
-              className="flex items-center gap-2 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-lg border-none cursor-pointer transition-all active:scale-95 text-xs font-black"
+              title="현장 사진 촬영"
+              className="w-12 h-12 rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-90"
             >
-              <span>현장 사진 촬영</span>
-              <div className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center">
-                <Camera className="w-4 h-4 text-white" />
-              </div>
+              <Camera className="w-5 h-5 text-white" />
             </button>
 
-            {/* 🎤 2. 스피커 / 음성 녹음 버튼 */}
+            {/* 🎤 2. 스피커 / 음성 아이콘 */}
             <button
               onClick={() => {
                 setIsVoiceModalOpen(true);
                 setIsOpen(false);
               }}
-              className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full shadow-lg border-none cursor-pointer transition-all active:scale-95 text-xs font-black"
+              title="음성 메모 등록"
+              className="w-12 h-12 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-90"
             >
-              <span>음성 메모 등록</span>
-              <div className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center">
-                <Mic className="w-4 h-4 text-white" />
-              </div>
+              <Mic className="w-5 h-5 text-white" />
             </button>
 
-            {/* 📁 3. 폴더 / 파일 선택 버튼 */}
+            {/* 📁 3. 폴더 / 파일 아이콘 */}
             <button
               onClick={() => {
                 fileInputRef.current?.click();
                 setIsOpen(false);
               }}
-              className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg border-none cursor-pointer transition-all active:scale-95 text-xs font-black"
+              title="파일/문서 첨부"
+              className="w-12 h-12 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-90"
             >
-              <span>파일/문서 첨부</span>
-              <div className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center">
-                <Folder className="w-4 h-4 text-white" />
-              </div>
+              <Folder className="w-5 h-5 text-white" />
             </button>
 
-            {/* 🔗 4. 웹 링크 등록 버튼 */}
+            {/* 🔗 4. 웹 링크 아이콘 */}
             <button
               onClick={() => {
                 setIsLinkModalOpen(true);
                 setIsOpen(false);
               }}
-              className="flex items-center gap-2 px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded-full shadow-lg border-none cursor-pointer transition-all active:scale-95 text-xs font-black"
+              title="웹 링크 추가"
+              className="w-12 h-12 rounded-full bg-amber-500 hover:bg-amber-600 text-slate-900 shadow-xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-90"
             >
-              <span>웹 링크 추가</span>
-              <div className="w-7 h-7 bg-black/10 rounded-full flex items-center justify-center">
-                <Link className="w-4 h-4 text-slate-900" />
-              </div>
+              <Link className="w-5 h-5 text-slate-900" />
             </button>
           </div>
         )}
 
-        {/* ➕ 메인 + FAB 플로팅 버튼 */}
+        {/* ➕ 메인 하단 중앙 + FAB 플로팅 버튼 */}
         <button
           onClick={() => setIsOpen(!isOpen)}
           className={`w-14 h-14 rounded-full text-white shadow-2xl flex items-center justify-center transition-all duration-300 border-none cursor-pointer active:scale-90 ${
             isOpen
-              ? "bg-slate-800 rotate-45"
-              : "bg-gradient-to-tr from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 ring-4 ring-indigo-100"
+              ? "bg-slate-800 rotate-45 ring-4 ring-slate-300"
+              : "bg-gradient-to-tr from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 ring-4 ring-indigo-100 shadow-indigo-300/50"
           }`}
-          title="빠른 태스크 / 현장 수집 등록"
+          title="빠른 태스크 등록 메뉴"
         >
           <Plus className="w-7 h-7" />
         </button>
