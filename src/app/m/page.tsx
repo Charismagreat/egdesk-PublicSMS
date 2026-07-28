@@ -14,6 +14,7 @@ import { MobileLeaveRequestModal } from "./components/MobileLeaveRequestModal";
 import { MobileDailyReportCard } from "./components/MobileDailyReportCard";
 import { MobileTodoListSection } from "./components/MobileTodoListSection";
 import { MobileFieldTaskCollector } from "./components/MobileFieldTaskCollector";
+import { MobileSpeedDialFab } from "./components/MobileSpeedDialFab";
 
 export default function MobileHubPage() {
   const router = useRouter();
@@ -416,6 +417,30 @@ export default function MobileHubPage() {
         isSubmitting={isLeaveSubmitting}
         errorMessage={leaveErrorMsg}
         onSubmit={handleSubmitLeave}
+      />
+
+      {/* 🔮 스피드 다이얼 + FAB 버튼 (카메라, 스피커/음성, 폴더, 링크) */}
+      <MobileSpeedDialFab
+        onPhotoCapture={handleUploadCollectedFile}
+        onFileUpload={handleUploadCollectedFile}
+        onAddVoiceTask={(audioBlob, note) => {
+          const newDoc = {
+            id: "VOICE-" + Date.now(),
+            name: note || "현장 음성 녹음 메모.webm",
+            type: "AUDIO",
+            date: new Date().toISOString().substring(0, 10),
+          };
+          setCollectedItems((prev) => [newDoc, ...prev]);
+        }}
+        onAddLinkTask={(title, url) => {
+          const newLink = {
+            id: "LINK-" + Date.now(),
+            name: title || url,
+            type: "DOCUMENT",
+            date: new Date().toISOString().substring(0, 10),
+          };
+          setCollectedItems((prev) => [newLink, ...prev]);
+        }}
       />
     </div>
   );

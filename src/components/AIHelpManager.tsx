@@ -354,7 +354,6 @@ export default function AIHelpManager() {
     pathname.startsWith('/store') || 
     pathname.startsWith('/table-order') || 
     pathname.startsWith('/booking') || 
-    pathname.startsWith('/m/') || 
     (isMobilePath && !hasAdminAccess) ||
     pathname.startsWith('/expenses/mobile-approve') ||
     pathname.startsWith('/employee') ||

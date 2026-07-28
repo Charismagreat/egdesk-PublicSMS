@@ -442,7 +442,6 @@ export default function EasyBot() {
     pathname.startsWith('/store') || 
     pathname.startsWith('/table-order') || 
     pathname.startsWith('/booking') || 
-    pathname.startsWith('/m/') || 
     (isMobilePath && !isSuperAdmin) ||
     pathname.startsWith('/expenses/mobile-approve') ||
     pathname.startsWith('/employee') ||
