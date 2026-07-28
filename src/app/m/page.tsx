@@ -54,6 +54,7 @@ export default function MobileHubPage() {
   const [leaveStartDate, setLeaveStartDate] = useState(new Date().toISOString().substring(0, 10));
   const [leaveEndDate, setLeaveEndDate] = useState(new Date().toISOString().substring(0, 10));
   const [leaveReason, setLeaveReason] = useState("");
+  const [leaveFiles, setLeaveFiles] = useState<any[]>([]);
   const [isLeaveSubmitting, setIsLeaveSubmitting] = useState(false);
   const [leaveErrorMsg, setLeaveErrorMsg] = useState("");
 
@@ -409,6 +410,9 @@ export default function MobileHubPage() {
         setEndDate={setLeaveEndDate}
         reason={leaveReason}
         setReason={setLeaveReason}
+        leaveFiles={leaveFiles}
+        onAddLeaveFiles={(newItems) => setLeaveFiles((prev) => [...prev, ...newItems])}
+        onRemoveLeaveFile={(index) => setLeaveFiles((prev) => prev.filter((_, i) => i !== index))}
         isSubmitting={isLeaveSubmitting}
         errorMessage={leaveErrorMsg}
         onSubmit={handleSubmitLeave}
