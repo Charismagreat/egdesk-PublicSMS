@@ -1,16 +1,20 @@
 "use client";
 
-import React from "react";
-import { Folder, Plus, Upload, FileText, Image as ImageIcon, Music, Trash2 } from "lucide-react";
+import React, { useState } from "react";
+import { Folder, Plus, Upload, FileText, Image as ImageIcon, Music, Trash2, Edit3, ArrowRightLeft, Info, X, Check } from "lucide-react";
 
 interface MobileFieldTaskCollectorProps {
   folders: any[];
   selectedFolderId: string | null;
   onSelectFolder: (folderId: string) => void;
   onOpenNewFolderModal: () => void;
+  onEditFolder: (folder: any) => void;
+  onDeleteFolder: (folderId: string) => void;
   collectedItems: any[];
   onUploadFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpenItemViewer: (item: any) => void;
+  onMoveItem: (item: any) => void;
+  onDeleteItem: (itemId: string) => void;
   onClearFolderItems: () => void;
   isUploading: boolean;
 }
@@ -20,16 +24,22 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
   selectedFolderId,
   onSelectFolder,
   onOpenNewFolderModal,
+  onEditFolder,
+  onDeleteFolder,
   collectedItems,
   onUploadFile,
   onOpenItemViewer,
+  onMoveItem,
+  onDeleteItem,
   onClearFolderItems,
   isUploading,
 }) => {
+  const selectedFolder = folders.find((f) => String(f.id) === String(selectedFolderId));
+
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 text-left">
-      {/* 타이틀 바 (태스크 폴더 & 새 폴더 생성) */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 text-left space-y-3">
+      {/* 1. 타이틀 바 (태스크 폴더 & 새 폴더 생성) */}
+      <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
             <Folder className="w-5 h-5" />
@@ -39,6 +49,7 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
           </div>
         </div>
         <button
+          type="button"
           onClick={onOpenNewFolderModal}
           className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors border-none cursor-pointer flex items-center gap-1 active:scale-95"
         >
@@ -47,8 +58,8 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
         </button>
       </div>
 
-      {/* 태스크 폴더 칩 스크롤 바 (📁 폴더명 (N)) */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
+      {/* 2. 태스크 폴더 칩 스크롤 바 (📁 폴더명 (N)) */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
         {folders.length === 0 ? (
           <div className="text-xs font-bold text-slate-400 py-1">생성된 태스크 폴더가 없습니다.</div>
         ) : (
@@ -58,6 +69,7 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
             return (
               <button
                 key={folder.id}
+                type="button"
                 onClick={() => onSelectFolder(String(folder.id))}
                 className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border border-transparent cursor-pointer flex items-center gap-1.5 ${
                   isSelected
@@ -75,9 +87,50 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
         )}
       </div>
 
-      {/* 업로드 & 수집 내역 관리 액션 바 */}
+      {/* 3. 선택된 폴더 정보 및 관리 도구 (설명, 편집 ✏️, 삭제 🗑️) */}
+      {selectedFolder && (
+        <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 flex items-center justify-between text-xs">
+          <div className="min-w-0 flex-1 pr-2">
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-slate-800 truncate">{selectedFolder.name}</span>
+            </div>
+            {selectedFolder.description && (
+              <p className="text-[11px] font-medium text-slate-500 mt-0.5 flex items-center gap-1">
+                <Info className="w-3 h-3 text-indigo-500 shrink-0" />
+                <span className="truncate">{selectedFolder.description}</span>
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => onEditFolder(selectedFolder)}
+              className="p-1.5 text-slate-600 hover:bg-slate-200 rounded-lg border-none bg-transparent cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+              title="폴더 편집"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+              <span>편집</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`'${selectedFolder.name}' 폴더와 수집 항목을 삭제하시겠습니까?`)) {
+                  onDeleteFolder(String(selectedFolder.id));
+                }
+              }}
+              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg border-none bg-transparent cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+              title="폴더 삭제"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>삭제</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 4. 업로드 & 수집 내역 비우기 액션 바 */}
       {selectedFolderId && (
-        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+        <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <label className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-extrabold cursor-pointer transition-colors flex items-center gap-1">
               <Upload className="w-3.5 h-3.5" />
@@ -87,43 +140,68 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
           </div>
           {collectedItems.length > 0 && (
             <button
+              type="button"
               onClick={onClearFolderItems}
               className="text-[11px] font-bold text-rose-500 hover:underline bg-transparent border-none cursor-pointer flex items-center gap-1"
             >
               <Trash2 className="w-3 h-3" />
-              <span>비우기</span>
+              <span>전체 비우기</span>
             </button>
           )}
         </div>
       )}
 
-      {/* 선택된 태스크 폴더 내 수집 파일 내역 타일 그리드 */}
-      <div className="grid grid-cols-2 gap-2.5 mt-3">
+      {/* 5. 선택된 태스크 폴더 내 수집 파일 내역 (이동 🔄 및 삭제 🗑️ 액션 제공) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
         {collectedItems.length === 0 ? (
-          <div className="col-span-2 py-6 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+          <div className="col-span-full py-6 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
             <p className="text-xs font-bold text-slate-400">선택된 폴더에 수집된 파일이 없습니다.</p>
           </div>
         ) : (
           collectedItems.map((item) => (
             <div
               key={item.id}
-              onClick={() => onOpenItemViewer(item)}
-              className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/70 rounded-xl cursor-pointer transition-all flex items-center gap-2 text-left"
+              className="p-2.5 bg-slate-50 hover:bg-indigo-50/40 border border-slate-200/70 rounded-xl transition-all flex items-center justify-between text-left group"
             >
-              {item.type === "IMAGE" || item.content_type?.includes("image") ? (
-                <ImageIcon className="w-4 h-4 text-purple-600 shrink-0" />
-              ) : item.type === "AUDIO" || item.content_type?.includes("audio") ? (
-                <Music className="w-4 h-4 text-emerald-600 shrink-0" />
-              ) : (
-                <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-extrabold text-slate-800 truncate">
-                  {item.name || item.title || item.content || "첨부 파일"}
-                </p>
-                <p className="text-[9px] font-semibold text-slate-400 mt-0.5">
-                  {item.date || (item.created_at ? item.created_at.substring(0, 10) : "")}
-                </p>
+              <div
+                onClick={() => onOpenItemViewer(item)}
+                className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer"
+              >
+                {item.type === "IMAGE" || item.content_type?.includes("image") ? (
+                  <ImageIcon className="w-4 h-4 text-purple-600 shrink-0" />
+                ) : item.type === "AUDIO" || item.content_type?.includes("audio") ? (
+                  <Music className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-extrabold text-slate-800 truncate">
+                    {item.name || item.title || item.file_name || "첨부 파일"}
+                  </p>
+                  <p className="text-[9px] font-semibold text-slate-400 mt-0.5">
+                    {item.date || (item.created_at ? item.created_at.substring(0, 10) : "")}
+                  </p>
+                </div>
+              </div>
+
+              {/* 항목 단위 이동 🔄 & 삭제 🗑️ 도구 */}
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                <button
+                  type="button"
+                  onClick={() => onMoveItem(item)}
+                  className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-white rounded-lg border-none bg-transparent cursor-pointer"
+                  title="다른 폴더로 이동"
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDeleteItem(String(item.id))}
+                  className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-white rounded-lg border-none bg-transparent cursor-pointer"
+                  title="항목 삭제"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           ))

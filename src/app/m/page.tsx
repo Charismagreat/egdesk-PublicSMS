@@ -359,45 +359,164 @@ export default function MobileHubPage() {
     }
   };
 
-  // 📂 신규 태스크 폴더 생성 핸들러
+  // 📂 태스크 폴더 관리 확장 상태 및 헬퍼
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderDesc, setNewFolderDesc] = useState("");
 
+  const [isEditFolderModalOpen, setIsEditFolderModalOpen] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<any>(null);
+  const [editFolderName, setEditFolderName] = useState("");
+  const [editFolderDesc, setEditFolderDesc] = useState("");
+
+  const [isMoveItemModalOpen, setIsMoveItemModalOpen] = useState(false);
+  const [movingItem, setMovingItem] = useState<any>(null);
+  const [targetFolderId, setTargetFolderId] = useState("");
+
+  const reloadTaskFolders = async () => {
+    try {
+      const folderRes = await apiFetch("/api/task-folders?action=list");
+      if (folderRes.ok) {
+        const folderJson = await folderRes.json();
+        if (folderJson.success && folderJson.folders) {
+          const formatted = folderJson.folders.map((f: any) => ({
+            id: String(f.id),
+            name: f.name || f.title,
+            description: f.description || "",
+            itemCount: f.items_count || f.count || 0,
+          }));
+          setTaskFolders(formatted);
+          return formatted;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  };
+
+  // 1) 신규 태스크 폴더 생성 (이름 & 설명)
   const handleCreateNewFolder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
     try {
-      const res = await apiFetch("/api/task-folders?action=create", {
+      const res = await apiFetch("/api/task-folders?action=create_folder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newFolderName }),
+        body: JSON.stringify({ name: newFolderName, description: newFolderDesc }),
       });
       const data = await res.json();
       if (data.success) {
         alert("✨ 새로운 태스크 폴더가 생성되었습니다.");
         setNewFolderName("");
+        setNewFolderDesc("");
         setIsNewFolderModalOpen(false);
-        // 태스크 폴더 DB 목록 재조회
-        const folderRes = await apiFetch("/api/task-folders?action=list");
-        if (folderRes.ok) {
-          const folderJson = await folderRes.json();
-          if (folderJson.success && folderJson.folders) {
-            const formatted = folderJson.folders.map((f: any) => ({
-              id: String(f.id),
-              name: f.name || f.title,
-              itemCount: f.items_count || f.count || 0,
-            }));
-            setTaskFolders(formatted);
-            if (formatted.length > 0) {
-              setSelectedFolderId(String(formatted[0].id));
-            }
-          }
-        }
+        const updated = await reloadTaskFolders();
+        if (updated.length > 0) setSelectedFolderId(String(updated[0].id));
       } else {
         alert("폴더 생성 실패: " + data.error);
       }
     } catch (err: any) {
       alert("폴더 생성 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 2) 태스크 폴더 수정 (이름 & 설명)
+  const handleUpdateFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFolder || !editFolderName.trim()) return;
+    try {
+      const res = await apiFetch("/api/task-folders?action=update_folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingFolder.id, name: editFolderName, description: editFolderDesc }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("✏️ 폴더 정보가 수정되었습니다.");
+        setIsEditFolderModalOpen(false);
+        await reloadTaskFolders();
+      } else {
+        alert("폴더 수정 실패: " + data.error);
+      }
+    } catch (err) {
+      alert("폴더 수정 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 3) 태스크 폴더 삭제
+  const handleDeleteFolder = async (folderId: string) => {
+    try {
+      const res = await apiFetch("/api/task-folders?action=delete_folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: folderId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("🗑️ 태스크 폴더가 삭제되었습니다.");
+        const updated = await reloadTaskFolders();
+        if (updated.length > 0) {
+          setSelectedFolderId(String(updated[0].id));
+        } else {
+          setSelectedFolderId(null);
+        }
+      } else {
+        alert("폴더 삭제 실패: " + data.error);
+      }
+    } catch (err) {
+      alert("폴더 삭제 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 4) 항목 다른 폴더로 이동
+  const handleMoveItemSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!movingItem || !targetFolderId) return;
+    try {
+      const res = await apiFetch("/api/task-folders?action=update_item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: movingItem.id, folder_id: targetFolderId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("🔄 항목이 선택한 폴더로 이동되었습니다.");
+        setIsMoveItemModalOpen(false);
+        setMovingItem(null);
+        if (selectedFolderId) {
+          const itemsRes = await apiFetch(`/api/task-folders?action=items&folder_id=${selectedFolderId}`);
+          if (itemsRes.ok) {
+            const itemsJson = await itemsRes.json();
+            setCollectedItems(itemsJson.items || []);
+          }
+        }
+        await reloadTaskFolders();
+      } else {
+        alert("항목 이동 실패: " + data.error);
+      }
+    } catch (err) {
+      alert("항목 이동 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 5) 수집 항목 단건 삭제
+  const handleDeleteItem = async (itemId: string) => {
+    try {
+      const res = await apiFetch("/api/task-folders?action=delete_item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: itemId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCollectedItems((prev) => prev.filter((i) => String(i.id) !== String(itemId)));
+        await reloadTaskFolders();
+      } else {
+        alert("삭제 실패: " + data.error);
+      }
+    } catch (err) {
+      alert("항목 삭제 중 오류가 발생했습니다.");
     }
   };
 
@@ -514,20 +633,33 @@ export default function MobileHubPage() {
         onOpenNewTaskModal={() => {}}
       />
 
-      {/* 5. 태스크 폴더 카드 */}
+      {/* 5. 태스크 폴더 카드 (편집, 삭제, 다른 폴더로 이동 지원) */}
       <MobileFieldTaskCollector
         folders={taskFolders}
         selectedFolderId={selectedFolderId}
         onSelectFolder={(id) => setSelectedFolderId(id)}
         onOpenNewFolderModal={() => setIsNewFolderModalOpen(true)}
+        onEditFolder={(folder) => {
+          setEditingFolder(folder);
+          setEditFolderName(folder.name);
+          setEditFolderDesc(folder.description || "");
+          setIsEditFolderModalOpen(true);
+        }}
+        onDeleteFolder={handleDeleteFolder}
         collectedItems={collectedItems}
         onUploadFile={handleUploadCollectedFile}
         onOpenItemViewer={() => {}}
+        onMoveItem={(item) => {
+          setMovingItem(item);
+          setTargetFolderId("");
+          setIsMoveItemModalOpen(true);
+        }}
+        onDeleteItem={handleDeleteItem}
         onClearFolderItems={() => setCollectedItems([])}
         isUploading={isUploading}
       />
 
-      {/* 📂 새 태스크 폴더 생성 모달 */}
+      {/* 📂 1. 새 태스크 폴더 생성 모달 (이름 & 설명) */}
       {isNewFolderModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xs w-full p-5 space-y-4 text-left animate-scale-in">
@@ -553,6 +685,16 @@ export default function MobileHubPage() {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"
                 />
               </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">폴더 설명 (선택)</label>
+                <textarea
+                  rows={2}
+                  placeholder="폴더에 대한 간단한 설명을 입력하세요."
+                  value={newFolderDesc}
+                  onChange={(e) => setNewFolderDesc(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-medium outline-none focus:border-indigo-500 resize-none"
+                />
+              </div>
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
@@ -566,6 +708,120 @@ export default function MobileHubPage() {
                   className="flex-1 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl border-none shadow-xs cursor-pointer"
                 >
                   폴더 생성
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ✏️ 2. 태스크 폴더 편집 모달 (이름 & 설명 수정) */}
+      {isEditFolderModalOpen && editingFolder && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xs w-full p-5 space-y-4 text-left animate-scale-in">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="font-extrabold text-sm text-slate-800">태스크 폴더 편집</h3>
+              <button
+                type="button"
+                onClick={() => setIsEditFolderModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleUpdateFolder} className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">폴더 이름</label>
+                <input
+                  type="text"
+                  required
+                  value={editFolderName}
+                  onChange={(e) => setEditFolderName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">폴더 설명</label>
+                <textarea
+                  rows={2}
+                  value={editFolderDesc}
+                  onChange={(e) => setEditFolderDesc(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-medium outline-none focus:border-indigo-500 resize-none"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditFolderModalOpen(false)}
+                  className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border-none cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl border-none shadow-xs cursor-pointer"
+                >
+                  수정 저장
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🔄 3. 항목 다른 폴더로 이동 모달 */}
+      {isMoveItemModalOpen && movingItem && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xs w-full p-5 space-y-4 text-left animate-scale-in">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="font-extrabold text-sm text-slate-800">다른 태스크 폴더로 이동</h3>
+              <button
+                type="button"
+                onClick={() => setIsMoveItemModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleMoveItemSubmit} className="space-y-3">
+              <div className="p-2 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                <span className="text-slate-400 block text-[10px] font-bold">선택된 항목</span>
+                <span className="font-extrabold text-slate-800 truncate block">
+                  {movingItem.name || movingItem.title || "첨부 파일"}
+                </span>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">이동할 목적지 폴더</label>
+                <select
+                  required
+                  value={targetFolderId}
+                  onChange={(e) => setTargetFolderId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                >
+                  <option value="">이동할 폴더를 선택하세요</option>
+                  {taskFolders
+                    .filter((f) => String(f.id) !== String(selectedFolderId))
+                    .map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMoveItemModalOpen(false)}
+                  className="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border-none cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={!targetFolderId}
+                  className="flex-1 py-2 bg-indigo-600 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl border-none shadow-xs cursor-pointer"
+                >
+                  이동 실행
                 </button>
               </div>
             </form>
