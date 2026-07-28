@@ -2236,7 +2236,7 @@ export default function GovernanceDashboard() {
                           {/* 내부 수집 아이템 목록 */}
                           <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs text-left">
                             <h3 className="text-sm font-black text-slate-800 mb-6 flex items-center gap-1.5">
-                              <span>수집 자료 목록</span>
+                              <span>등록 자료 목록</span>
                               <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md">{folderItems.length}</span>
                             </h3>
 
@@ -2345,7 +2345,7 @@ export default function GovernanceDashboard() {
 
                                         <div className="text-[9px] text-slate-400 font-bold pt-1.5 flex items-center gap-1">
                                           <Clock className="w-3 h-3 text-slate-350" />
-                                          <span>수집일: {item.created_at}</span>
+                                          <span>등록일시: {item.created_at}</span>
                                         </div>
                                       </div>
                                     </div>
@@ -3240,7 +3240,7 @@ export default function GovernanceDashboard() {
                 </div>
                 <div>
                   <h3 className="text-base font-black tracking-tight text-white flex items-center gap-2">
-                    📁 {filePreviewItem.title || "현장 수집 자료"}
+                    📁 {filePreviewItem.title || "등록 자료"}
                   </h3>
                   <p className="text-xs text-slate-400 font-bold truncate max-w-md">
                     파일명: {filePreviewItem.file_name || "수집서류.pdf"} ({filePreviewItem.file_size || "284 KB"})
