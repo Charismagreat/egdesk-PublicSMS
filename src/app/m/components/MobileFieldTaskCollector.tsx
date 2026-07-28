@@ -26,8 +26,6 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
   onClearFolderItems,
   isUploading,
 }) => {
-  const currentFolder = folders.find((f) => String(f.id) === String(selectedFolderId));
-
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 text-left">
       {/* 타이틀 바 */}
@@ -37,8 +35,7 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
             <Folder className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-extrabold text-sm text-slate-800">현장 정보 수집 폴더</h3>
-            <p className="text-[10px] text-slate-400 font-bold">사진, 메모, 음성, 문서 업로드</p>
+            <h3 className="font-extrabold text-sm text-slate-800">현장 정보 수집</h3>
           </div>
         </div>
         <button
@@ -50,10 +47,11 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
         </button>
       </div>
 
-      {/* 폴더 칩 스크롤 바 */}
+      {/* 폴더 칩 스크롤 바 (📁 폴더명 (N)) */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
         {folders.map((folder) => {
           const isSelected = String(folder.id) === String(selectedFolderId);
+          const count = folder.itemCount || 0;
           return (
             <button
               key={folder.id}
@@ -65,7 +63,9 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
               }`}
             >
               <Folder className={`w-3.5 h-3.5 ${isSelected ? "text-white" : "text-indigo-600"}`} />
-              <span>{folder.name}</span>
+              <span>
+                {folder.name} ({count})
+              </span>
             </button>
           );
         })}
@@ -104,7 +104,7 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
             <div
               key={item.id}
               onClick={() => onOpenItemViewer(item)}
-              className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/70 rounded-xl cursor-pointer transition-all flex items-center gap-2"
+              className="p-2.5 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/70 rounded-xl cursor-pointer transition-all flex items-center gap-2 text-left"
             >
               {item.type === "IMAGE" ? (
                 <ImageIcon className="w-4 h-4 text-purple-600 shrink-0" />

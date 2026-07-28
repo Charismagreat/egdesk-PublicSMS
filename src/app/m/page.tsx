@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { usePersistedState } from "@/hooks/usePersistedState";
 
-// 분리된 리팩토링 컴포넌트 & 커스텀 훅 Import
+// 분리된 1:1 복원 컴포넌트 & 커스텀 훅 Import
 import { useMobilePortalData, getDistanceMeters } from "./hooks/useMobilePortalData";
 import { MobilePortalHeader } from "./components/MobilePortalHeader";
 import { MobileAttendanceWidget } from "./components/MobileAttendanceWidget";
@@ -25,12 +25,22 @@ export default function MobileHubPage() {
     leaveBalance,
   } = useMobilePortalData();
 
-  // ⏰ 실시간 시계 & 출퇴근 상태
+  // ⏰ 실시간 시계 & 근태 스탬프 상태
   const [currentTime, setCurrentTime] = useState("");
-  const [attendanceStatus, setAttendanceStatus] = useState<"CHECKED_IN" | "CHECKED_OUT" | "NOT_YET">("NOT_YET");
-  const [checkInTime, setCheckInTime] = useState<string | null>(null);
-  const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
-  const [isClocking, setIsClocking] = useState(false);
+  const [attendanceStatus, setAttendanceStatus] = useState<"before" | "working" | "done">("before");
+  const [clockInTime, setClockInTime] = useState<string | null>(null);
+  const [clockOutTime, setClockOutTime] = useState<string | null>(null);
+  const [workStartTime, setWorkStartTime] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // ⚠️ 지각 여부 및 지각 사유 상신 상태
+  const [isTodayLate, setIsTodayLate] = useState(false);
+  const [isLateReasonReported, setIsLateReasonReported] = useState(false);
+  const [lateReason, setLateReason] = useState("");
+  const [isReportingLateReason, setIsReportingLateReason] = useState(false);
+
+  // 📄 금일 작성된 일일 업무 보고서 상태
+  const [todayReport, setTodayReport] = useState<any>(null);
 
   // 🗺️ 근태 지도 모달 상태
   const [isLocationMapModalOpen, setIsLocationMapModalOpen] = useState(false);
@@ -47,38 +57,69 @@ export default function MobileHubPage() {
   const [isLeaveSubmitting, setIsLeaveSubmitting] = useState(false);
   const [leaveErrorMsg, setLeaveErrorMsg] = useState("");
 
-  // 📁 일일 업무 보고서 모달 상태
-  const [isDailyReportModalOpen, setIsDailyReportModalOpen] = useState(false);
-  const [reportContent, setReportContent] = useState("");
-  const [isReportSubmitting, setIsReportSubmitting] = useState(false);
-  const [isAiSummarizing, setIsAiSummarizing] = useState(false);
-
-  // 📋 할 일 / 한 일 상태 및 필터
+  // 📋 할 일 / 한 일 탭 & 기간 스위치 필터 상태
   const [todoTab, setTodoTab] = usePersistedState<"active" | "completed">("m_todoTab", "active");
   const [todoPeriod, setTodoPeriod] = usePersistedState<"ALL" | "TODAY" | "TOMORROW" | "WEEK" | "MONTH">("m_todoPeriod", "ALL");
   const [completedPeriod, setCompletedPeriod] = usePersistedState<"ALL" | "TODAY" | "YESTERDAY" | "WEEK" | "MONTH">("m_completedPeriod", "ALL");
   const [searchQuery, setSearchQuery] = usePersistedState<string>("m_todoSearch", "");
   const [tasks, setTasks] = useState<any[]>([]);
 
-  // 📂 현장 정보 수집 폴더 및 데이터 상태
+  // 📂 현장 정보 수집 폴더 및 파일 내역 상태
   const [taskFolders, setTaskFolders] = useState<any[]>([
-    { id: "F-1", name: "시흥 본사 설치 현장" },
-    { id: "F-2", name: "강남 지사 마케팅 정보" },
+    { id: "F-1", name: "시흥 본사 설치 현장", itemCount: 2 },
+    { id: "F-2", name: "강남 지사 마케팅 수집", itemCount: 1 },
   ]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>("F-1");
-  const [collectedItems, setCollectedItems] = useState<any[]>([]);
+  const [collectedItems, setCollectedItems] = useState<any[]>([
+    { id: "ITEM-1", name: "현장 전경 사진.jpg", type: "IMAGE", date: "2026-07-28" },
+    { id: "ITEM-2", name: "설치 시방서 검토.pdf", type: "DOCUMENT", date: "2026-07-28" },
+  ]);
   const [isUploading, setIsUploading] = useState(false);
 
-  // 시계 라이브 갱신
+  // 시계 및 근무 시간 타이머 갱신
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
       setCurrentTime(now.toLocaleTimeString("ko-KR", { hour12: false }));
+
+      if (attendanceStatus === "working" && workStartTime) {
+        const diff = Math.floor((now.getTime() - workStartTime) / 1000);
+        setElapsedSeconds(diff > 0 ? diff : 0);
+      }
     }, 1000);
     return () => clearInterval(timer);
+  }, [attendanceStatus, workStartTime]);
+
+  // 경과 근무 시간 포맷
+  const getElapsedWorkTimeStr = () => {
+    const hrs = Math.floor(elapsedSeconds / 3600);
+    const mins = Math.floor((elapsedSeconds % 3600) / 60);
+    const secs = elapsedSeconds % 60;
+    return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  };
+
+  // 금일 작성된 일보 상태 조회
+  useEffect(() => {
+    async function fetchTodayReport() {
+      try {
+        const res = await apiFetch("/api/governance?action=daily_reports");
+        if (res.ok) {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const json = await res.json();
+            if (json.success && json.reports && json.reports.length > 0) {
+              setTodayReport(json.reports[0]);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch today report:", e);
+      }
+    }
+    fetchTodayReport();
   }, []);
 
-  // 로그아웃 핸들러
+  // 로그아웃
   const handleLogout = async () => {
     try {
       await apiFetch("/api/auth/logout", { method: "POST" });
@@ -90,26 +131,34 @@ export default function MobileHubPage() {
 
   // 출근 등록
   const handleClockIn = async () => {
-    setIsClocking(true);
-    try {
-      const nowStr = new Date().toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit" });
-      setCheckInTime(nowStr);
-      setAttendanceStatus("CHECKED_IN");
-    } finally {
-      setIsClocking(false);
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setClockInTime(timeStr);
+    setWorkStartTime(now.getTime());
+    setAttendanceStatus("working");
+
+    // 09:00 초과 출근 시 지각 판정
+    if (now.getHours() >= 9 && (now.getHours() > 9 || now.getMinutes() > 0)) {
+      setIsTodayLate(true);
     }
   };
 
   // 퇴근 등록
   const handleClockOut = async () => {
-    setIsClocking(true);
-    try {
-      const nowStr = new Date().toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit" });
-      setCheckOutTime(nowStr);
-      setAttendanceStatus("CHECKED_OUT");
-    } finally {
-      setIsClocking(false);
-    }
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setClockOutTime(timeStr);
+    setAttendanceStatus("done");
+  };
+
+  // 지각 사유 제출
+  const handleReportLateReason = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsReportingLateReason(true);
+    setTimeout(() => {
+      setIsLateReasonReported(true);
+      setIsReportingLateReason(false);
+    }, 600);
   };
 
   // 지도 위치 측정 실행
@@ -136,7 +185,7 @@ export default function MobileHubPage() {
             });
             if (nearestWp) {
               setSelectedWorkplace(nearestWp);
-              setLocationAddress(`GPS 감지: 인접 사업장 [${nearestWp.name}] (약 ${Math.round(minDistance)}m)`);
+              setLocationAddress(`GPS 감지: 가장 인접한 [${nearestWp.name}] (약 ${Math.round(minDistance)}m)`);
             }
           }
           setLocationLoading(false);
@@ -152,15 +201,7 @@ export default function MobileHubPage() {
     }
   };
 
-  const safeJson = async (res: Response) => {
-    const contentType = res.headers.get("content-type");
-    if (res.ok && contentType && contentType.includes("application/json")) {
-      return await res.json();
-    }
-    return null;
-  };
-
-  // 연차 상신 제출
+  // 연차 제출
   const handleSubmitLeave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLeaveSubmitting(true);
@@ -176,63 +217,27 @@ export default function MobileHubPage() {
           reason: leaveReason,
         }),
       });
-      const json = await safeJson(res);
-      if (json && json.success) {
+      if (res.ok) {
         setIsLeaveModalOpen(false);
         setLeaveReason("");
       } else {
-        setLeaveErrorMsg(json?.error || "신청 도중 오류가 발생했습니다.");
+        setLeaveErrorMsg("연차 신청 실패");
       }
     } catch (err: any) {
-      setLeaveErrorMsg("서버와의 요청 처리 실패");
+      setLeaveErrorMsg("서버 통신 실패");
     } finally {
       setIsLeaveSubmitting(false);
     }
   };
 
-  // 일일 업무 보고서 상신
-  const handleSubmitReport = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsReportSubmitting(true);
-    try {
-      await apiFetch("/api/daily-reports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json text/plain" },
-        body: JSON.stringify({ content: reportContent }),
-      });
-      setIsDailyReportModalOpen(false);
-      setReportContent("");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsReportSubmitting(false);
-    }
-  };
-
-  // AI 일보 요약 생성
-  const handleAiSummarizeReport = async () => {
-    setIsAiSummarizing(true);
-    try {
-      const res = await apiFetch("/api/daily-reports/ai-summary");
-      const json = await safeJson(res);
-      if (json && json.success && json.summary) {
-        setReportContent(json.summary);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsAiSummarizing(false);
-    }
-  };
-
-  // 할 일 토글
+  // 할 일 상태 토글
   const handleToggleTaskStatus = (taskId: string, currentStatus: string) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, status: currentStatus === "DONE" ? "TODO" : "DONE" } : t))
     );
   };
 
-  // 현장 수집 파일 업로드
+  // 현장 정보 파일 업로드
   const handleUploadCollectedFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -248,8 +253,11 @@ export default function MobileHubPage() {
         },
       ]);
       setIsUploading(false);
-    }, 800);
+    }, 700);
   };
+
+  const activeTasks = tasks.filter((t) => t.status !== "DONE");
+  const completedTasks = tasks.filter((t) => t.status === "DONE");
 
   const filteredTasks = tasks.filter((t) => {
     const isTabMatch = todoTab === "active" ? t.status !== "DONE" : t.status === "DONE";
@@ -259,42 +267,38 @@ export default function MobileHubPage() {
 
   return (
     <div className="w-full min-h-screen bg-slate-50 p-4 md:p-6 font-sans text-slate-800 text-left">
-      {/* 1. 상단 프로필 헤더 */}
+      {/* 1. 상단 유저 헤더 */}
       <MobilePortalHeader
-        userName={session?.name || "임직원"}
-        userRole={session?.role || "직원"}
+        userName={session?.name || "차민수"}
         avatarUrl={session?.avatar_url || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"}
         onOpenLeaveModal={() => setIsLeaveModalOpen(true)}
         onLogout={handleLogout}
       />
 
-      {/* 2. 출퇴근 실시간 위젯 */}
+      {/* 2. 실시간 근태 위젯 */}
       <MobileAttendanceWidget
         currentTime={currentTime}
         workplaceName={selectedWorkplace?.name || "본사"}
         attendanceStatus={attendanceStatus}
-        checkInTime={checkInTime}
-        checkOutTime={checkOutTime}
-        isClocking={isClocking}
+        checkInTime={clockInTime}
+        checkOutTime={clockOutTime}
+        elapsedTimeStr={getElapsedWorkTimeStr()}
+        totalWorkTimeStr="8시간 00분"
+        isTodayLate={isTodayLate}
+        isLateReasonReported={isLateReasonReported}
+        lateReason={lateReason}
+        setLateReason={setLateReason}
+        isReportingLateReason={isReportingLateReason}
+        onReportLateReason={handleReportLateReason}
         onClockIn={handleClockIn}
         onClockOut={handleClockOut}
         onOpenLocationMap={handleOpenLocationMap}
       />
 
-      {/* 3. 일일 업무 보고서 카드 */}
-      <MobileDailyReportCard
-        isDailyReportModalOpen={isDailyReportModalOpen}
-        onOpenModal={() => setIsDailyReportModalOpen(true)}
-        onCloseModal={() => setIsDailyReportModalOpen(false)}
-        reportContent={reportContent}
-        setReportContent={setReportContent}
-        isSubmitting={isReportSubmitting}
-        isAiSummarizing={isAiSummarizing}
-        onAiSummarize={handleAiSummarizeReport}
-        onSubmitReport={handleSubmitReport}
-      />
+      {/* 3. 일일 업무 보고서 카드 (미제출/제출완료/승인완료 상태 반영) */}
+      <MobileDailyReportCard todayReport={todayReport} />
 
-      {/* 4. 진행 중 / 완료된 할 일 세그먼트 섹션 */}
+      {/* 4. 진행 중 / 완료된 할 일 섹션 */}
       <MobileTodoListSection
         todoTab={todoTab}
         setTodoTab={setTodoTab}
@@ -305,11 +309,13 @@ export default function MobileHubPage() {
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         filteredTasks={filteredTasks}
+        activeTaskCount={activeTasks.length}
+        completedTaskCount={completedTasks.length}
         onToggleTaskStatus={handleToggleTaskStatus}
         onOpenNewTaskModal={() => {}}
       />
 
-      {/* 5. 현장 정보 수집 폴더 및 파일 관리 */}
+      {/* 5. 현장 수집 정보 카드 */}
       <MobileFieldTaskCollector
         folders={taskFolders}
         selectedFolderId={selectedFolderId}
@@ -322,7 +328,7 @@ export default function MobileHubPage() {
         isUploading={isUploading}
       />
 
-      {/* 🗺️ 위치 지도 모달 */}
+      {/* 🗺️ 근태 지도 팝업 모달 */}
       <MobileLocationMapModal
         isOpen={isLocationMapModalOpen}
         onClose={() => setIsLocationMapModalOpen(false)}
@@ -335,7 +341,7 @@ export default function MobileHubPage() {
         onReMeasureLocation={handleOpenLocationMap}
       />
 
-      {/* 📅 연차 신청 모달 */}
+      {/* 📅 간편 연차 신청 모달 */}
       <MobileLeaveRequestModal
         isOpen={isLeaveModalOpen}
         onClose={() => setIsLeaveModalOpen(false)}

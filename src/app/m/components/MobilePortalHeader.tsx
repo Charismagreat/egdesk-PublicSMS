@@ -5,7 +5,6 @@ import { LogOut } from "lucide-react";
 
 interface MobilePortalHeaderProps {
   userName: string;
-  userRole: string;
   avatarUrl: string;
   onOpenLeaveModal: () => void;
   onLogout: () => void;
@@ -13,14 +12,13 @@ interface MobilePortalHeaderProps {
 
 export const MobilePortalHeader: React.FC<MobilePortalHeaderProps> = ({
   userName,
-  userRole,
   avatarUrl,
   onOpenLeaveModal,
   onLogout,
 }) => {
   return (
     <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 mb-4">
-      {/* 사용자 아바타 & 프로필 */}
+      {/* 사용자 프로필 및 아바타 */}
       <div className="flex items-center gap-3">
         <div className="relative">
           <img
@@ -42,9 +40,8 @@ export const MobilePortalHeader: React.FC<MobilePortalHeaderProps> = ({
         </div>
       </div>
 
-      {/* 우측 버튼 액션 바 */}
+      {/* 우측 연차 신청 및 로그아웃 버튼 */}
       <div className="flex items-center gap-3">
-        {/* 📅 간편 연차신청 버튼 */}
         <button
           onClick={onOpenLeaveModal}
           title="간편 연차 신청"
@@ -54,7 +51,6 @@ export const MobilePortalHeader: React.FC<MobilePortalHeaderProps> = ({
           <span>연차신청</span>
         </button>
 
-        {/* 🚪 로그아웃 아이콘 버튼 */}
         <button
           onClick={onLogout}
           title="로그아웃"

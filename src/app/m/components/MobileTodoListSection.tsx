@@ -13,6 +13,8 @@ interface MobileTodoListSectionProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   filteredTasks: any[];
+  activeTaskCount: number;
+  completedTaskCount: number;
   onToggleTaskStatus: (taskId: string, currentStatus: string) => void;
   onOpenNewTaskModal: () => void;
 }
@@ -27,12 +29,14 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
   searchQuery,
   setSearchQuery,
   filteredTasks,
+  activeTaskCount,
+  completedTaskCount,
   onToggleTaskStatus,
   onOpenNewTaskModal,
 }) => {
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 mb-4 text-left">
-      {/* 상단 탭 헤더 */}
+      {/* 탭 헤더 */}
       <div className="flex items-center justify-between pb-3 border-b border-slate-100">
         <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
           <button
@@ -43,7 +47,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                 : "text-slate-500 hover:text-slate-800 bg-transparent"
             }`}
           >
-            진행 중 할 일
+            진행 중 할 일 ({activeTaskCount})
           </button>
           <button
             onClick={() => setTodoTab("completed")}
@@ -53,14 +57,13 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                 : "text-slate-500 hover:text-slate-800 bg-transparent"
             }`}
           >
-            완료된 한 일
+            완료된 한 일 ({completedTaskCount})
           </button>
         </div>
 
-        {/* 신규 할 일 추가 버튼 */}
         <button
           onClick={onOpenNewTaskModal}
-          className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-colors border-none cursor-pointer flex items-center justify-center"
+          className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-colors border-none cursor-pointer flex items-center justify-center shadow-3xs"
           title="새 할 일 추가"
         >
           <Plus className="w-4 h-4" />
@@ -116,7 +119,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
         )}
       </div>
 
-      {/* 검색 창 */}
+      {/* 검색 바 */}
       <div className="my-2.5 relative">
         <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
         <input
@@ -128,7 +131,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
         />
       </div>
 
-      {/* 태스크 목록 */}
+      {/* 목록 / 빈 안내 */}
       <div className="space-y-2 mt-3">
         {filteredTasks.length === 0 ? (
           <div className="py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
