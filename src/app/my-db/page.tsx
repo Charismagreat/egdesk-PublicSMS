@@ -42,6 +42,7 @@ export default function MyDBManagementPage() {
   const {
     isStandalone,
     tables,
+    isTablesLoading,
     selectedTable,
     setSelectedTable,
     tableSchema,
@@ -208,6 +209,7 @@ export default function MyDBManagementPage() {
         {/* 📁 좌측 영역: 테이블 스캐너 리스트 */}
         <LeftTableList
           tables={tables}
+          isTablesLoading={isTablesLoading}
           selectedTable={selectedTable}
           setSelectedTable={setSelectedTable}
           tableSearchQuery={tableSearchQuery}

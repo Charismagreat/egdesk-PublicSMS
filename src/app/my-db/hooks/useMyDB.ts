@@ -18,6 +18,7 @@ export function useMyDB() {
 
   // DB 관련 핵심 상태 변수
   const [tables, setTables] = React.useState<any[]>([]);
+  const [isTablesLoading, setIsTablesLoading] = React.useState<boolean>(true);
   const [selectedTable, setSelectedTable] = React.useState<string>("");
   const [tableSchema, setTableSchema] = React.useState<ColumnSchema[]>([]);
   const [tableDDL, setTableDDL] = React.useState<string>("");
@@ -658,6 +659,7 @@ export function useMyDB() {
   // 1. 서버 내 전체 테이블 목록 스캔
   const fetchTables = async () => {
     setIsLoading(true);
+    setIsTablesLoading(true);
     try {
       const res = await apiFetch("/api/db?action=list");
       const data = await res.json();
@@ -674,6 +676,7 @@ export function useMyDB() {
       showToast("서버와 통신할 수 없습니다.", "error");
     } finally {
       setIsLoading(false);
+      setIsTablesLoading(false);
     }
   };
 
@@ -1227,6 +1230,7 @@ export function useMyDB() {
   return {
     isStandalone,
     tables,
+    isTablesLoading,
     selectedTable,
     setSelectedTable,
     tableSchema,
