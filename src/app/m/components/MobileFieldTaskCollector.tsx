@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Folder, Plus, Upload, FileText, Image as ImageIcon, Music, Trash2, Edit3, ArrowRightLeft, Info, X, Check } from "lucide-react";
+import { Folder, Plus, Upload, FileText, Image as ImageIcon, Music, Trash2, Edit3, ArrowRightLeft, Info, Search, X } from "lucide-react";
 
 interface MobileFieldTaskCollectorProps {
   folders: any[];
@@ -34,7 +34,28 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
   onClearFolderItems,
   isUploading,
 }) => {
+  // 🔍 태스크 폴더 및 수집 항목 실시간 검색어 상태
+  const [searchQuery, setSearchQuery] = useState("");
+
   const selectedFolder = folders.find((f) => String(f.id) === String(selectedFolderId));
+
+  // 검색어에 따른 폴더 필터링 (폴더 이름 및 폴더 설명 검색)
+  const filteredFolders = folders.filter((f) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const nameMatch = f.name?.toLowerCase().includes(q) || f.title?.toLowerCase().includes(q);
+    const descMatch = f.description?.toLowerCase().includes(q);
+    return nameMatch || descMatch;
+  });
+
+  // 검색어에 따른 수집 항목 필터링 (파일명, 제목, 내용 검색)
+  const filteredItems = collectedItems.filter((item) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const nameMatch = item.name?.toLowerCase().includes(q) || item.title?.toLowerCase().includes(q) || item.file_name?.toLowerCase().includes(q);
+    const contentMatch = item.content?.toLowerCase().includes(q);
+    return nameMatch || contentMatch;
+  });
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 text-left space-y-3">
@@ -58,12 +79,35 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
         </button>
       </div>
 
-      {/* 2. 태스크 폴더 칩 스크롤 바 (📁 폴더명 (N)) */}
+      {/* 🔍 2. 태스크 폴더 & 수집 항목 검색 입력창 */}
+      <div className="relative">
+        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        <input
+          type="text"
+          placeholder="폴더 이름, 설명, 수집 파일명 검색..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-8 pr-8 py-1.5 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 focus:bg-white transition-all"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* 3. 태스크 폴더 칩 스크롤 바 (📁 폴더명 (N)) */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-        {folders.length === 0 ? (
-          <div className="text-xs font-bold text-slate-400 py-1">생성된 태스크 폴더가 없습니다.</div>
+        {filteredFolders.length === 0 ? (
+          <div className="text-xs font-bold text-slate-400 py-1">
+            {searchQuery ? `'${searchQuery}' 검색 결과와 일치하는 폴더가 없습니다.` : "생성된 태스크 폴더가 없습니다."}
+          </div>
         ) : (
-          folders.map((folder) => {
+          filteredFolders.map((folder) => {
             const isSelected = String(folder.id) === String(selectedFolderId);
             const count = folder.itemCount || 0;
             return (
@@ -87,7 +131,7 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
         )}
       </div>
 
-      {/* 3. 선택된 폴더 정보 및 관리 도구 (설명, 편집 ✏️, 삭제 🗑️) */}
+      {/* 4. 선택된 폴더 정보 및 관리 도구 (설명, 편집 ✏️, 삭제 🗑️) */}
       {selectedFolder && (
         <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 flex items-center justify-between text-xs">
           <div className="min-w-0 flex-1 pr-2">
@@ -128,7 +172,7 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
         </div>
       )}
 
-      {/* 4. 업로드 & 수집 내역 비우기 액션 바 */}
+      {/* 5. 업로드 & 수집 내역 비우기 액션 바 */}
       {selectedFolderId && (
         <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -151,14 +195,16 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
         </div>
       )}
 
-      {/* 5. 선택된 태스크 폴더 내 수집 파일 내역 (이동 🔄 및 삭제 🗑️ 액션 제공) */}
+      {/* 6. 선택된 태스크 폴더 내 수집 파일 내역 (실시간 검색 필터링 반영) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-        {collectedItems.length === 0 ? (
+        {filteredItems.length === 0 ? (
           <div className="col-span-full py-6 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-            <p className="text-xs font-bold text-slate-400">선택된 폴더에 수집된 파일이 없습니다.</p>
+            <p className="text-xs font-bold text-slate-400">
+              {searchQuery ? `'${searchQuery}' 검색 결과와 일치하는 수집 파일이 없습니다.` : "선택된 폴더에 수집된 파일이 없습니다."}
+            </p>
           </div>
         ) : (
-          collectedItems.map((item) => (
+          filteredItems.map((item) => (
             <div
               key={item.id}
               className="p-2.5 bg-slate-50 hover:bg-indigo-50/40 border border-slate-200/70 rounded-xl transition-all flex items-center justify-between text-left group"
