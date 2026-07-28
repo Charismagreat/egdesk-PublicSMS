@@ -87,6 +87,9 @@ export default function MobileHubPage() {
   // 영속화된 완료 업무 기간별 필터 (오늘, 어제, 1주일, 1달)
   const [completedPeriod, setCompletedPeriod, isPeriodRestored] = usePersistedState<'today' | 'yesterday' | 'week' | 'month'>('egdesk_mobile_completed_period', 'today');
 
+  // 영속화된 진행 중 '할 일' 기간별 필터 (전체, 오늘, 내일, 1주일, 1달)
+  const [todoPeriod, setTodoPeriod] = usePersistedState<'all' | 'today' | 'tomorrow' | 'week' | 'month'>('egdesk_mobile_todo_period', 'all');
+
   // FAB 및 현장 요청 등록 모달 상태
   const [isFabOpen, setIsFabOpen] = useState(false);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
@@ -1300,6 +1303,43 @@ export default function MobileHubPage() {
     }
   };
 
+  // 진행 중 '할 일' 기간별 필터링 연산 (전체, 오늘, 내일, 1주일, 1달)
+  const filteredActiveTasks = activeTasks.filter(t => {
+    if (todoPeriod === 'all') return true;
+
+    const targetDateStr = (t as any).due_date || (t as any).target_date || t.created_at;
+    if (!targetDateStr) return true;
+
+    const taskDate = getKstDate(targetDateStr);
+    const now = new Date();
+    
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const dayAfterTomorrow = new Date(today);
+    dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
+
+    const sevenDaysLater = new Date(today);
+    sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+    
+    const thirtyDaysLater = new Date(today);
+    thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+
+    const tTime = taskDate.getTime();
+
+    if (todoPeriod === 'today') {
+      return tTime < tomorrow.getTime();
+    } else if (todoPeriod === 'tomorrow') {
+      return tTime >= tomorrow.getTime() && tTime < dayAfterTomorrow.getTime();
+    } else if (todoPeriod === 'week') {
+      return tTime >= today.getTime() && tTime < sevenDaysLater.getTime();
+    } else if (todoPeriod === 'month') {
+      return tTime >= today.getTime() && tTime < thirtyDaysLater.getTime();
+    }
+    return true;
+  });
+
   // 한 일 (완료) 기간별 필터링 연산
   const filteredCompletedTasks = completedTasksRaw.filter(t => {
     // 💡 완료된 업무는 최초 상신일(created_at)이 아닌, 실제 완료일(updated_at) 기준으로 필터링하는 것이 타당합니다.
@@ -1671,8 +1711,8 @@ export default function MobileHubPage() {
         {/* 1. 상단 프로필 헤더 (콤팩트화) */}
         <div className="flex items-center justify-between mb-4 bg-white/60 backdrop-blur-xs border border-slate-200/40 rounded-2xl p-3 shadow-xs">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-tr from-indigo-50 to-cyan-500 rounded-lg flex items-center justify-center text-white font-bold shadow-xs shrink-0">
-              <User className="w-4 h-4" />
+            <div className="w-8.5 h-8.5 bg-gradient-to-tr from-indigo-500 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold shadow-xs shrink-0 ring-2 ring-indigo-50">
+              <User className="w-4.5 h-4.5" />
             </div>
             <div>
               <div className="flex items-center gap-1">
@@ -1881,7 +1921,7 @@ export default function MobileHubPage() {
             }`}
           >
             <ListTodo className="w-3.5 h-3.5" />
-            <span>할 일 ({activeTasks.length})</span>
+            <span>할 일 ({filteredActiveTasks.length})</span>
           </button>
           <button
             onClick={() => setActiveSubTab('done')}
@@ -1892,7 +1932,7 @@ export default function MobileHubPage() {
             }`}
           >
             <Award className="w-3.5 h-3.5" />
-            <span>한 일 ({completedTasksRaw.length})</span>
+            <span>한 일 ({filteredCompletedTasks.length})</span>
           </button>
           <button
             onClick={() => setActiveSubTab('folder')}
@@ -1913,6 +1953,40 @@ export default function MobileHubPage() {
           {/* A. 할 일 리스트 영역 */}
           {activeSubTab === 'todo' && (
             <div className="space-y-3">
+              {/* 진행중 할 일 기간별 필터 스위치 */}
+              <div className="flex gap-1 bg-slate-200/60 p-1 rounded-xl text-[10px] font-black text-slate-600 shadow-2xs border border-slate-200/30">
+                <button 
+                  onClick={() => setTodoPeriod('all')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${todoPeriod === 'all' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  전체
+                </button>
+                <button 
+                  onClick={() => setTodoPeriod('today')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${todoPeriod === 'today' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  오늘
+                </button>
+                <button 
+                  onClick={() => setTodoPeriod('tomorrow')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${todoPeriod === 'tomorrow' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  내일
+                </button>
+                <button 
+                  onClick={() => setTodoPeriod('week')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${todoPeriod === 'week' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  1주일
+                </button>
+                <button 
+                  onClick={() => setTodoPeriod('month')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${todoPeriod === 'month' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  1달
+                </button>
+              </div>
+
               {/* 🛡️ 인증서·특허 AI 기한 배정 할 일 섹션 */}
               {certPatentTasks.length > 0 && (
                 <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white rounded-3xl p-4 shadow-md mb-2">
@@ -1961,14 +2035,16 @@ export default function MobileHubPage() {
                   <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
                   <span className="text-xs font-bold">할 일 목록 불러오는 중...</span>
                 </div>
-              ) : activeTasks.length === 0 ? (
+              ) : filteredActiveTasks.length === 0 ? (
                 <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-500 shadow-xs">
                   <CheckCircle2 className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                  <span className="text-xs font-bold block">할 일에 등록된 업무가 없습니다.</span>
+                  <span className="text-xs font-bold block">
+                    {todoPeriod === 'all' ? '할 일에 등록된 업무가 없습니다.' : "해당 기간에 '할 일'에 등록된 업무가 없습니다."}
+                  </span>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-2.5">
-                  {activeTasks.map(t => (
+                  {filteredActiveTasks.map(t => (
                     <div 
                       key={t.id}
                       onClick={() => handleOpenTaskDetail(t.id)}
