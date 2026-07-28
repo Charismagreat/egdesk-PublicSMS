@@ -246,13 +246,15 @@ export async function GET(request: Request) {
         const itemsRows = itemsRes.rows || [];
 
         logs.forEach((log: any) => {
+          const isLogResolved = log.status === 'APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED';
+
           if (log.doc_type === 'TASK_CANCEL_REQUEST') {
             events.push({
               id: `cancel_req_${log.id}`,
               type: 'TASK_CANCEL_REQUEST',
               title: `업무 취소 승인 요청: ${log.doc_title || '취소 요청 건'}`,
               subtitle: `요청자: ${log.operator || '임직원'} / 업무 ID: ${log.doc_id || '-'}`,
-              status: log.status === 'PENDING_APPROVAL' ? 'WAITING' : 'RESOLVED',
+              status: isLogResolved ? 'RESOLVED' : 'WAITING',
               created_at: log.created_at || nowStr,
               data: log
             });
@@ -290,7 +292,7 @@ export async function GET(request: Request) {
               type: 'RAG_HOLD',
               title: `AI 결재 보류: ${log.doc_title || '보류 건'}`,
               subtitle: subtitleText,
-              status: log.status === 'PENDING_APPROVAL' ? 'WAITING' : 'RESOLVED',
+              status: isLogResolved ? 'RESOLVED' : 'WAITING',
               created_at: log.created_at || nowStr,
               data: extendedLog
             });
