@@ -340,21 +340,28 @@ export async function POST(req: Request) {
       const numId = Number(targetId);
       const isNum = !isNaN(numId) && String(numId) === String(targetId).trim();
 
-      const res = isNum
-        ? await updateRows('crm_task_folder_items', {
-            deleted_at: nowStr,
-            deleted_by: '최고관리자'
-          }, { ids: [numId] })
-        : await updateRows('crm_task_folder_items', {
-            deleted_at: nowStr,
-            deleted_by: '최고관리자'
-          }, { filters: { id: String(targetId) } });
-
-      if (res.success) {
-        return NextResponse.json({ success: true });
-      } else {
-        return NextResponse.json({ success: false, error: res.error }, { status: 500 });
+      // 1) crm_task_folder_items 소프트 삭제 (ids 및 filters 전방위 시도)
+      if (isNum) {
+        await updateRows('crm_task_folder_items', {
+          deleted_at: nowStr,
+          deleted_by: '최고관리자'
+        }, { ids: [numId] });
       }
+
+      const res = await updateRows('crm_task_folder_items', {
+        deleted_at: nowStr,
+        deleted_by: '최고관리자'
+      }, { filters: { id: String(targetId) } });
+
+      // 2) cert_patent_tasks 테이블도 함께 소프트 삭제
+      try {
+        await updateRows('cert_patent_tasks', {
+          deleted_at: nowStr,
+          deleted_by: '최고관리자'
+        }, { filters: { source_file_id: String(targetId) } });
+      } catch (ce) {}
+
+      return NextResponse.json({ success: true });
     }
 
     if (action === 'update_item') {

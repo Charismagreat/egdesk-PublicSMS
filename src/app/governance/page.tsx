@@ -410,8 +410,12 @@ export default function GovernanceDashboard() {
   };
 
   // 수집자료 개별 삭제 처리
-  const handleDeleteItem = async (itemId: number) => {
-    if (!window.confirm("정말로 이 수집 자료를 삭제하시겠습니까?")) return;
+  const handleDeleteItem = async (itemId: any) => {
+    if (!window.confirm("정말로 이 수집 자료(또는 AI 리포트)를 삭제하시겠습니까?")) return;
+    
+    // 💡 즉각적인 로컬 UI 제거 (Optimistic State Update)
+    setFolderItems(prev => prev.filter(i => String(i.id) !== String(itemId)));
+
     try {
       const res = await apiFetch("/api/task-folders?action=delete_item", {
         method: "POST",
@@ -425,6 +429,9 @@ export default function GovernanceDashboard() {
         }
       } else {
         alert("자료 삭제 실패: " + data.error);
+        if (activeFolderId) {
+          fetchFolderItems(activeFolderId);
+        }
       }
     } catch (e) {
       alert("서버 연결 실패");
