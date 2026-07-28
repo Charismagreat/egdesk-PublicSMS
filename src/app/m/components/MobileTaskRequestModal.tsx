@@ -103,7 +103,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-extrabold text-base text-slate-800">현장 수집 & 업무 등록</h3>
+                <h3 className="font-extrabold text-base text-slate-800">자료 & 업무 등록</h3>
               </div>
             </div>
             <button
