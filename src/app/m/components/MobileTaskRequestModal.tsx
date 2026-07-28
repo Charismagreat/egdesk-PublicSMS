@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, Send, Sparkles, Link as LinkIcon, FileText, Trash2, Eye } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { X, Send, Sparkles, Link as LinkIcon, FileText, Trash2, Eye, Mic } from "lucide-react";
 import { MobileItemViewerModal } from "./MobileItemViewerModal";
 
 export interface RequestPhoto {
@@ -25,7 +25,7 @@ interface MobileTaskRequestModalProps {
   photos: RequestPhoto[];
   files: RequestFile[];
   voiceText: string;
-  setVoiceText: (text: string) => void;
+  setVoiceText: (text: string | ((prev: string) => string)) => void;
   onRemovePhoto: (index: number) => void;
   onRemoveFile: (index: number) => void;
   taskFolders: any[];
@@ -56,7 +56,61 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
   const [viewerItem, setViewerItem] = useState<any>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
+  // 🎤 실시간 음성-텍스트(STT) 인식 상태
+  const [isSTTListening, setIsSTTListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
   if (!isOpen) return null;
+
+  // Web Speech API 실시간 음성-텍스트 받아쓰기 시작
+  const startSTT = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("현재 브라우저에서 음성 인식을 지원하지 않습니다. 마이크 입력을 허용해 주세요.");
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "ko-KR";
+      recognition.interimResults = false;
+      recognition.continuous = false;
+
+      recognition.onstart = () => {
+        setIsSTTListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          setVoiceText((prev: string) => (prev ? `${prev} ${transcript}` : transcript));
+        }
+      };
+
+      recognition.onerror = (err: any) => {
+        console.error("STT Error:", err);
+        setIsSTTListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsSTTListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (e) {
+      console.error(e);
+      setIsSTTListening(false);
+    }
+  };
+
+  // 음성 인식 중지
+  const stopSTT = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsSTTListening(false);
+    }
+  };
 
   const handleOpenPreview = (item: any) => {
     setViewerItem(item);
@@ -197,7 +251,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
               </div>
             )}
 
-            {/* 📦 등록된 자료 목록 (파일명 터치 시 미리보기) */}
+            {/* 📦 등록된 자료 목록 */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-extrabold text-slate-400">
@@ -284,17 +338,41 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
               )}
             </div>
 
-            {/* 음성 및 추가 텍스트 메모 */}
+            {/* 🎤 음성 및 추가 텍스트 메모 (실시간 음성-텍스트 변환 STT 연동) */}
             <div>
-              <label className="text-[10px] font-extrabold text-slate-400 block mb-1">
-                음성 / 추가 메모
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-extrabold text-slate-400">
+                  음성 / 추가 메모
+                </label>
+                <button
+                  type="button"
+                  onClick={isSTTListening ? stopSTT : startSTT}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border-none cursor-pointer flex items-center gap-1 transition-all ${
+                    isSTTListening
+                      ? "bg-rose-500 text-white animate-pulse"
+                      : "bg-indigo-50 hover:bg-indigo-100 text-indigo-600"
+                  }`}
+                  title="음성으로 말하여 입력"
+                >
+                  <Mic className="w-3 h-3" />
+                  <span>{isSTTListening ? "🔴 음성 인식 중 (터치 시 정지)" : "🎤 음성으로 입력"}</span>
+                </button>
+              </div>
               <textarea
                 rows={2}
-                placeholder="음성 인식 문장이나 추가 메모를 기입하세요."
+                onFocus={() => {
+                  if (!isSTTListening && !voiceText) {
+                    startSTT();
+                  }
+                }}
+                placeholder="입력 박스를 선택하거나 🎤 음성으로 입력 버튼을 누르고 말씀하시면 텍스트로 자동 변환됩니다."
                 value={voiceText}
                 onChange={(e) => setVoiceText(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium text-slate-800 outline-none focus:border-indigo-500 focus:bg-white resize-none"
+                className={`w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-medium text-slate-800 outline-none resize-none transition-all ${
+                  isSTTListening
+                    ? "border-rose-400 ring-2 ring-rose-100 bg-rose-50/30"
+                    : "border-slate-200 focus:border-indigo-500 focus:bg-white"
+                }`}
               />
             </div>
 
