@@ -338,36 +338,48 @@ export async function POST(req: Request) {
 
       const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
 
-      // 1) crm_task_folder_items 강제 소프트 삭제 (ID, Title, File_name 100% 완벽 보장)
+      // 🌟 [egdesk-helpers.ts 의무 준수] updateRows 공통 API 함수만을 활용한 전사 소프트 삭제(Soft-Delete)
       try {
         if (targetId) {
           const numId = Number(targetId);
-          if (!isNaN(numId)) {
-            await executeSQL(`UPDATE crm_task_folder_items SET deleted_at = '${nowStr}', deleted_by = '최고관리자' WHERE id = ${numId}`);
+          if (!isNaN(numId) && String(numId) === String(targetId).trim()) {
+            await updateRows('crm_task_folder_items', {
+              deleted_at: nowStr,
+              deleted_by: '최고관리자'
+            }, { ids: [numId] });
           }
-          const safeId = String(targetId).replace(/'/g, "''");
-          await executeSQL(`UPDATE crm_task_folder_items SET deleted_at = '${nowStr}', deleted_by = '최고관리자' WHERE id = '${safeId}'`);
+          await updateRows('crm_task_folder_items', {
+            deleted_at: nowStr,
+            deleted_by: '최고관리자'
+          }, { filters: { id: String(targetId) } });
         }
+
         if (targetTitle) {
-          const safeTitle = targetTitle.replace(/'/g, "''");
-          await executeSQL(`UPDATE crm_task_folder_items SET deleted_at = '${nowStr}', deleted_by = '최고관리자' WHERE title = '${safeTitle}' OR title LIKE '%${safeTitle}%'`);
+          await updateRows('crm_task_folder_items', {
+            deleted_at: nowStr,
+            deleted_by: '최고관리자'
+          }, { filters: { title: targetTitle } });
         }
-      } catch (e1) {
-        console.error('Failed to soft delete in crm_task_folder_items:', e1);
+      } catch (e1: any) {
+        console.error('[egdesk-helpers updateRows] crm_task_folder_items 삭제 처리 예외:', e1.message);
       }
 
-      // 2) cert_patent_tasks 강제 소프트 삭제
+      // 연동 cert_patent_tasks 에 대한 egdesk-helpers.ts updateRows 적용
       try {
         if (targetTitle) {
-          const safeTitle = targetTitle.replace(/'/g, "''");
-          await executeSQL(`UPDATE cert_patent_tasks SET deleted_at = '${nowStr}', deleted_by = '최고관리자' WHERE title LIKE '%${safeTitle}%'`);
+          await updateRows('cert_patent_tasks', {
+            deleted_at: nowStr,
+            deleted_by: '최고관리자'
+          }, { filters: { title: targetTitle } });
         }
         if (targetId) {
-          const safeId = String(targetId).replace(/'/g, "''");
-          await executeSQL(`UPDATE cert_patent_tasks SET deleted_at = '${nowStr}', deleted_by = '최고관리자' WHERE source_file_id = '${safeId}'`);
+          await updateRows('cert_patent_tasks', {
+            deleted_at: nowStr,
+            deleted_by: '최고관리자'
+          }, { filters: { source_file_id: String(targetId) } });
         }
-      } catch (e2) {
-        console.error('Failed to soft delete in cert_patent_tasks:', e2);
+      } catch (e2: any) {
+        console.error('[egdesk-helpers updateRows] cert_patent_tasks 삭제 처리 예외:', e2.message);
       }
 
       return NextResponse.json({ success: true });
