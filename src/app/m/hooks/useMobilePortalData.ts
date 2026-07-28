@@ -27,13 +27,22 @@ export function useMobilePortalData() {
     remaining: 15,
   });
 
+  // 안전한 JSON 파싱 헬퍼
+  const safeJson = async (res: Response) => {
+    const contentType = res.headers.get("content-type");
+    if (res.ok && contentType && contentType.includes("application/json")) {
+      return await res.json();
+    }
+    return null;
+  };
+
   // 사업장 목록 페칭
   useEffect(() => {
     async function loadWorkplaces() {
       try {
         const res = await apiFetch("/api/workplaces?action=list");
-        const json = await res.json();
-        if (json.success && json.workplaces) {
+        const json = await safeJson(res);
+        if (json && json.success && json.workplaces) {
           setAllWorkplaces(json.workplaces);
         }
       } catch (e) {
@@ -48,8 +57,8 @@ export function useMobilePortalData() {
     async function loadSession() {
       try {
         const res = await apiFetch("/api/auth/me");
-        const json = await res.json();
-        if (json.success) {
+        const json = await safeJson(res);
+        if (json && json.success) {
           setSession(json);
         }
       } catch (e) {
@@ -79,8 +88,8 @@ export function useMobilePortalData() {
     async function fetchLeaveBalance() {
       try {
         const res = await apiFetch("/api/hr/leaves/balance");
-        const json = await res.json();
-        if (json.success && json.balance) {
+        const json = await safeJson(res);
+        if (json && json.success && json.balance) {
           setLeaveBalance({
             total: json.balance.total_allowed ?? 15,
             used: json.balance.used ?? 0,

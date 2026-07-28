@@ -152,6 +152,14 @@ export default function MobileHubPage() {
     }
   };
 
+  const safeJson = async (res: Response) => {
+    const contentType = res.headers.get("content-type");
+    if (res.ok && contentType && contentType.includes("application/json")) {
+      return await res.json();
+    }
+    return null;
+  };
+
   // 연차 상신 제출
   const handleSubmitLeave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,12 +176,12 @@ export default function MobileHubPage() {
           reason: leaveReason,
         }),
       });
-      const json = await res.json();
-      if (json.success) {
+      const json = await safeJson(res);
+      if (json && json.success) {
         setIsLeaveModalOpen(false);
         setLeaveReason("");
       } else {
-        setLeaveErrorMsg(json.error || "신청 도중 오류가 발생했습니다.");
+        setLeaveErrorMsg(json?.error || "신청 도중 오류가 발생했습니다.");
       }
     } catch (err: any) {
       setLeaveErrorMsg("서버와의 요청 처리 실패");
@@ -206,8 +214,8 @@ export default function MobileHubPage() {
     setIsAiSummarizing(true);
     try {
       const res = await apiFetch("/api/daily-reports/ai-summary");
-      const json = await res.json();
-      if (json.success && json.summary) {
+      const json = await safeJson(res);
+      if (json && json.success && json.summary) {
         setReportContent(json.summary);
       }
     } catch (e) {
