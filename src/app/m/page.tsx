@@ -64,17 +64,72 @@ export default function MobileHubPage() {
   const [searchQuery, setSearchQuery] = usePersistedState<string>("m_todoSearch", "");
   const [tasks, setTasks] = useState<any[]>([]);
 
-  // 📂 현장 정보 수집 폴더 및 파일 내역 상태
-  const [taskFolders, setTaskFolders] = useState<any[]>([
-    { id: "F-1", name: "시흥 본사 설치 현장", itemCount: 2 },
-    { id: "F-2", name: "강남 지사 마케팅 수집", itemCount: 1 },
-  ]);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>("F-1");
-  const [collectedItems, setCollectedItems] = useState<any[]>([
-    { id: "ITEM-1", name: "현장 전경 사진.jpg", type: "IMAGE", date: "2026-07-28" },
-    { id: "ITEM-2", name: "설치 시방서 검토.pdf", type: "DOCUMENT", date: "2026-07-28" },
-  ]);
+  // 📂 태스크 정보 수집 폴더 및 파일 내역 실시간 DB 연동
+  const [taskFolders, setTaskFolders] = useState<any[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [collectedItems, setCollectedItems] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+
+  // 스냅태스크 DB 목록 로드
+  useEffect(() => {
+    async function loadSnapTasks() {
+      try {
+        const res = await apiFetch("/api/snaptasks");
+        if (res.ok) {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const json = await res.json();
+            if (json.success && json.tasks) {
+              setTasks(json.tasks);
+              const folders = json.tasks.map((t: any) => ({
+                id: String(t.id),
+                name: t.title,
+                itemCount: t.items_count || 0,
+              }));
+              setTaskFolders(folders);
+              if (folders.length > 0 && !selectedFolderId) {
+                setSelectedFolderId(String(folders[0].id));
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load snaptasks:", e);
+      }
+    }
+    loadSnapTasks();
+  }, []);
+
+  // 선택된 태스크의 수집 아이템 내역 DB 로드
+  useEffect(() => {
+    if (!selectedFolderId) return;
+    async function loadTaskItems() {
+      try {
+        const res = await apiFetch(`/api/snaptasks?action=timeline&task_id=${selectedFolderId}`);
+        if (res.ok) {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const json = await res.json();
+            if (json.success && json.items) {
+              setCollectedItems(
+                json.items.map((item: any) => ({
+                  id: String(item.id),
+                  name: item.content || item.file_name || "태스크 첨부 파일",
+                  type: item.item_type || "DOCUMENT",
+                  date: item.created_at ? item.created_at.substring(0, 10) : "",
+                }))
+              );
+            } else {
+              setCollectedItems([]);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load task items:", e);
+      }
+    }
+    loadTaskItems();
+  }, [selectedFolderId]);
 
   // 시계 및 근무 시간 타이머 갱신
   useEffect(() => {
