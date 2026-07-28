@@ -210,25 +210,23 @@ export default function SidebarHeader({
 
   return (
     <>
-      {/* 로고 영역 (클릭 가능한 포인터 적용) */}
+      {/* 브랜드 로고 전체 영역 (통합 퀵 검색 터치 패널) */}
       <div 
         onClick={() => setIsOpen(true)}
-        className="p-6 border-b border-slate-800 w-full min-w-0 cursor-pointer hover:bg-slate-800/40 transition-colors group flex flex-col justify-center select-none"
-        title="전체 메뉴 실시간 검색 팝업 열기 🔍"
+        className="p-5 border-b border-slate-800/80 w-full min-w-0 cursor-pointer hover:bg-slate-800/50 active:scale-[0.99] transition-all group flex flex-col justify-center select-none relative"
+        title="EGDESK전사 메뉴 신속 검색 (클릭)"
       >
         <div className="flex items-center justify-between">
           <h1 
-            className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400 truncate whitespace-nowrap group-hover:scale-[1.01] transition-transform"
+            className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-indigo-400 truncate whitespace-nowrap group-hover:scale-[1.01] transition-transform tracking-tight"
             title={sidebarMainTitle}
           >
             {sidebarMainTitle}
           </h1>
-          <span className="text-[10px] text-slate-500 font-bold bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 opacity-60 group-hover:opacity-100 transition-opacity">
-            🔍 검색
-          </span>
+          <Search className="w-4 h-4 text-blue-400 opacity-0 group-hover:opacity-100 transition-all shrink-0 ml-2 animate-pulse" />
         </div>
         <p 
-          className="text-sm text-slate-400 mt-1 truncate whitespace-nowrap"
+          className="text-xs text-slate-400 mt-1 truncate whitespace-nowrap font-medium group-hover:text-slate-300 transition-colors"
           title={sidebarSubTitle}
         >
           {sidebarSubTitle}
