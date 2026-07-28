@@ -48,7 +48,10 @@ export default function EmployeeManagementTabContent() {
     }, 3000);
   };
 
-  // 1. 현재 로그인 세션 사용자 조회
+  // 1. 현재 로그인 세션 및 사업장 목록 조회
+  const [workplaces, setWorkplaces] = useState<any[]>([]);
+  const [formWorkplaceId, setFormWorkplaceId] = useState<string>("");
+
   useEffect(() => {
     async function loadCurrentUser() {
       try {
@@ -57,8 +60,14 @@ export default function EmployeeManagementTabContent() {
         if (json.success) {
           setCurrentUser(json);
         }
+
+        const wpRes = await apiFetch("/api/workplaces?action=list");
+        const wpJson = await wpRes.json();
+        if (wpJson.success) {
+          setWorkplaces(wpJson.workplaces || []);
+        }
       } catch (err) {
-        console.error("❌ 현재 유저 확인 에러:", err);
+        console.error("❌ 유저 및 사업장 확인 에러:", err);
       }
     }
     loadCurrentUser();
@@ -100,6 +109,8 @@ export default function EmployeeManagementTabContent() {
     setFormEmpNumber("");
     setFormPhone("");
     setFormDepartment("");
+    const mainWp = workplaces.find(w => w.is_main === 'Y') || workplaces[0];
+    setFormWorkplaceId(mainWp ? String(mainWp.id) : "");
     setFormWorkStartTime("09:00");
     setFormWorkEndTime("18:00");
     setFormError("");
@@ -115,6 +126,7 @@ export default function EmployeeManagementTabContent() {
     setFormEmpNumber(emp.employee_number || "");
     setFormPhone(emp.phone || "");
     setFormDepartment(emp.department || "");
+    setFormWorkplaceId(emp.workplace_id ? String(emp.workplace_id) : "");
     setFormWorkStartTime((emp.work_start_time || "09:00:00").substring(0, 5));
     setFormWorkEndTime((emp.work_end_time || "18:00:00").substring(0, 5));
     setFormError("");
@@ -137,6 +149,7 @@ export default function EmployeeManagementTabContent() {
       employee_number: formEmpNumber.trim(),
       phone: formPhone.trim(),
       department: formDepartment.trim(),
+      workplace_id: formWorkplaceId ? parseInt(formWorkplaceId) : null,
       work_start_time: formWorkStartTime ? `${formWorkStartTime}:00` : "09:00:00",
       work_end_time: formWorkEndTime ? `${formWorkEndTime}:00` : "18:00:00",
     };
@@ -548,6 +561,23 @@ export default function EmployeeManagementTabContent() {
                   onChange={(e) => setFormDepartment(e.target.value)}
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                 />
+              </div>
+
+              {/* 소속 사업장 / 현장 선택 */}
+              <div>
+                <label className="block text-xs font-extrabold text-slate-600 mb-1.5">소속 사업장 / 현장</label>
+                <select
+                  value={formWorkplaceId}
+                  onChange={(e) => setFormWorkplaceId(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 focus:bg-white transition-colors font-bold text-slate-700"
+                >
+                  <option value="">-- 소속 사업장 미지정 (기본 본사) --</option>
+                  {workplaces.map((wp) => (
+                    <option key={wp.id} value={wp.id}>
+                      {wp.name} {wp.is_main === 'Y' ? '(본사)' : ''} - {wp.address || '주소 미입력'}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* 5. 전화번호 입력 */}

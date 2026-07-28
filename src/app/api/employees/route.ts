@@ -71,7 +71,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
-    const { username, password, name, newRole, employee_number, phone, department, work_start_time, work_end_time } = await req.json();
+    const { username, password, name, newRole, employee_number, phone, department, workplace_id, work_start_time, work_end_time } = await req.json();
 
     if (!username || !password || !name) {
       return NextResponse.json({ success: false, error: '모든 필드를 입력해주세요.' }, { status: 400 });
@@ -105,7 +105,7 @@ export async function POST(req: Request) {
     const dateStr = new Date().toISOString();
     const newOpId = Date.now();
 
-    // 3. 임직원 마스터 등록 (tenantId 연동 주입)
+    // 3. 임직원 마스터 등록 (tenantId 및 workplace_id 연동 주입)
     await insertRows('crm_operators', [{
       id: newOpId,
       username,
@@ -115,6 +115,7 @@ export async function POST(req: Request) {
       employee_number: finalEmpNumber,
       phone: (phone || '').trim(),
       department: (department || '').trim(),
+      workplace_id: workplace_id ? Number(workplace_id) : null,
       work_start_time: work_start_time || '09:00:00',
       work_end_time: work_end_time || '18:00:00',
       created_at: dateStr,
@@ -213,7 +214,7 @@ export async function PUT(req: Request) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
-    const { id, password, name, newRole, employee_number, phone, department, work_start_time, work_end_time } = await req.json();
+    const { id, password, name, newRole, employee_number, phone, department, workplace_id, work_start_time, work_end_time } = await req.json();
 
     if (!id || !name) {
       return NextResponse.json({ success: false, error: '필수 항목(id, 이름)이 누락되었습니다.' }, { status: 400 });
@@ -261,6 +262,7 @@ export async function PUT(req: Request) {
       employee_number: finalEmpNumber,
       phone: phone !== undefined ? (phone || '').trim() : currentOp.phone,
       department: department !== undefined ? (department || '').trim() : currentOp.department,
+      workplace_id: workplace_id !== undefined ? (workplace_id ? Number(workplace_id) : null) : currentOp.workplace_id,
       work_start_time: work_start_time !== undefined ? work_start_time : currentOp.work_start_time,
       work_end_time: work_end_time !== undefined ? work_end_time : currentOp.work_end_time
     };

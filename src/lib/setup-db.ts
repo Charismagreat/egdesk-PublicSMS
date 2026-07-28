@@ -639,6 +639,42 @@ export async function setupDatabase() {
     console.error('⚠️ AI 인증특허 태스크 테이블 생성 에러:', err.message);
   }
 
+  // 🏢 사업장/현장 마스터 테이블 생성 (7종 감사 컬럼 주입)
+  try {
+    await safeCreateTable('사업장/현장 마스터', [
+      { name: 'id', type: 'INTEGER', notNull: true },
+      { name: 'name', type: 'TEXT', notNull: true },
+      { name: 'address', type: 'TEXT' },
+      { name: 'latitude', type: 'REAL' },
+      { name: 'longitude', type: 'REAL' },
+      { name: 'radius_meters', type: 'INTEGER' },
+      { name: 'is_main', type: 'TEXT' },
+      { name: 'created_at', type: 'TEXT' }
+    ], { tableName: 'crm_workplaces', uniqueKeyColumns: ['id'] });
+    console.log('✓ 사업장 마스터 테이블 신설 완료.');
+  } catch (err: any) {
+    console.error('⚠️ 사업장 마스터 테이블 생성 에러:', err.message);
+  }
+
+  // 👔 임직원 마스터 테이블 소속 사업장 컬럼 보정
+  try {
+    await safeCreateTable('임직원 마스터', [
+      { name: 'id', type: 'INTEGER', notNull: true },
+      { name: 'name', type: 'TEXT', notNull: true },
+      { name: 'email', type: 'TEXT' },
+      { name: 'phone', type: 'TEXT' },
+      { name: 'department', type: 'TEXT' },
+      { name: 'position', type: 'TEXT' },
+      { name: 'workplace_id', type: 'INTEGER' },
+      { name: 'workplace_name', type: 'TEXT' },
+      { name: 'role', type: 'TEXT' },
+      { name: 'created_at', type: 'TEXT' }
+    ], { tableName: 'crm_employees', uniqueKeyColumns: ['id'] });
+    console.log('✓ 임직원 마스터 소속 사업장 컬럼 보정 완료.');
+  } catch (err: any) {
+    console.error('⚠️ 임직원 마스터 컬럼 보정 에러:', err.message);
+  }
+
   console.log('Database setup complete.');
 }
 

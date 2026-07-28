@@ -3,6 +3,7 @@
 import { apiFetch } from '@/lib/api';
 import React, { useState, useEffect } from 'react';
 import { Building2, Save, CheckCircle2, AlertCircle, RefreshCw, Sparkles, Plus } from 'lucide-react';
+import { WorkplaceSettingsCard } from '../ai-settings/components/WorkplaceSettingsCard';
 
 interface CompanyProfile {
   companyName: string;
@@ -627,6 +628,9 @@ export default function CompanySettingsCard() {
           </div>
 
         </div>
+
+        {/* 🏢 테넌트 사업장 / 현장 마스터 관리 카드 */}
+        <WorkplaceSettingsCard />
 
         {/* 🏢 회사 도장 이미지 관리 (최대 3개) */}
         <div className="bg-slate-50/50 border border-slate-100 p-4.5 rounded-2xl space-y-3 shrink-0">

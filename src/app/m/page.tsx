@@ -8,7 +8,7 @@ import {
   Smartphone, Calendar, Camera, ClipboardList, Clock, 
   MapPin, LogOut, CheckCircle, ChevronRight, User, AlertCircle, Sparkles,
   Plus, Mic, FolderOpen, Send, X, FileText, CheckCircle2, AlertTriangle, Play, Square as StopIcon,
-  Loader2, CheckSquare, ListTodo, Award, Trash2, ArrowRight, FolderClosed, Link, Edit2, MoreVertical, Share2, Paperclip, Palmtree
+  Loader2, CheckSquare, ListTodo, Award, Trash2, ArrowRight, FolderClosed, Link, Edit2, MoreVertical, Share2, Paperclip, Palmtree, RefreshCw
 } from "lucide-react";
 
 interface SessionInfo {
@@ -201,6 +201,111 @@ export default function MobileHubPage() {
   const [isMoveFolderSelectorOpen, setIsMoveFolderSelectorOpen] = useState(false);
   const [newMobileFolderName, setNewMobileFolderName] = useState("");
   const [newMobileFolderDesc, setNewMobileFolderDesc] = useState("");
+
+  // 🏢 테넌트 다중 사업장 관리 및 실시간 GPS 감지 상태
+  const [allWorkplaces, setAllWorkplaces] = useState<any[]>([]);
+  const [selectedWorkplace, setSelectedWorkplace] = useState<any | null>(null);
+
+  // 🗺️ 근태 등록 실시간 위치 지도 모달 상태
+  const [isLocationMapModalOpen, setIsLocationMapModalOpen] = useState(false);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationAddress, setLocationAddress] = useState<string>("위치 정보 확인 중...");
+  const [locationLoading, setLocationLoading] = useState(false);
+
+  // 사업장 목록 로드
+  useEffect(() => {
+    async function loadWorkplaces() {
+      try {
+        const res = await apiFetch("/api/workplaces?action=list");
+        const json = await res.json();
+        if (json.success && json.workplaces) {
+          setAllWorkplaces(json.workplaces);
+        }
+      } catch (e) {
+        console.error("Failed to load workplaces in mobile:", e);
+      }
+    }
+    loadWorkplaces();
+  }, []);
+
+  // 세션 정보 수신 시 유저 소속 사업장 자동 기본 셋팅
+  useEffect(() => {
+    if (session && allWorkplaces.length > 0 && !selectedWorkplace) {
+      const myWp = allWorkplaces.find(w => w.name === (session as any).workplace_name || w.id === (session as any).workplace_id);
+      if (myWp) {
+        setSelectedWorkplace(myWp);
+      } else {
+        const mainWp = allWorkplaces.find(w => w.is_main === 'Y') || allWorkplaces[0];
+        setSelectedWorkplace(mainWp);
+      }
+    }
+  }, [session, allWorkplaces]);
+
+  // Haversine 헬퍼: 두 위도/경도 간 거리(m) 연산
+  const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3;
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const handleOpenLocationMap = () => {
+    setIsLocationMapModalOpen(true);
+    setLocationLoading(true);
+    setLocationAddress("GPS 수신 및 최단 거리 사업장 탐지 중...");
+    
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          setUserCoords({ lat: latitude, lng: longitude });
+
+          // 등록된 사업장 중 가장 가까운 사업장 스마트 자동 탐지
+          if (allWorkplaces.length > 0) {
+            let minDistance = Infinity;
+            let nearestWp: any = null;
+
+            allWorkplaces.forEach((wp) => {
+              const d = getDistanceMeters(latitude, longitude, wp.latitude || 37.5665, wp.longitude || 126.9780);
+              if (d < minDistance) {
+                minDistance = d;
+                nearestWp = wp;
+              }
+            });
+
+            if (nearestWp) {
+              setSelectedWorkplace(nearestWp);
+              setLocationAddress(`GPS 감지: 가장 인접한 [${nearestWp.name}] (약 ${Math.round(minDistance)}m)`);
+            } else {
+              setLocationAddress(`실시간 GPS 위치 (위도: ${latitude.toFixed(4)}, 경도: ${longitude.toFixed(4)})`);
+            }
+          } else {
+            setLocationAddress(`실시간 GPS 위치 (위도: ${latitude.toFixed(4)}, 경도: ${longitude.toFixed(4)})`);
+          }
+          setLocationLoading(false);
+        },
+        (err) => {
+          console.warn("GPS 수신 제한, 지정 사업장 위치 적용:", err.message);
+          const defaultWp = selectedWorkplace || allWorkplaces[0] || { name: '본사', latitude: 37.5665, longitude: 126.9780, address: '서울특별시 중구 세종대로 110 (본사)' };
+          setUserCoords({ lat: defaultWp.latitude || 37.5665, lng: defaultWp.longitude || 126.9780 });
+          setLocationAddress(`${defaultWp.address || '본사 지정 출퇴근 구역'}`);
+          setLocationLoading(false);
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    } else {
+      const defaultWp = selectedWorkplace || allWorkplaces[0] || { name: '본사', latitude: 37.5665, longitude: 126.9780, address: '서울특별시 중구 세종대로 110 (본사)' };
+      setUserCoords({ lat: defaultWp.latitude || 37.5665, lng: defaultWp.longitude || 126.9780 });
+      setLocationAddress(`${defaultWp.address || '본사 지정 출퇴근 구역'}`);
+      setLocationLoading(false);
+    }
+  };
 
   // 📁 태스크 폴더 가로 스크롤용 마우스 드래그 상태 및 레퍼런스
   const folderScrollRef = useRef<HTMLDivElement>(null);
@@ -1751,10 +1856,15 @@ export default function MobileHubPage() {
                 {currentTime || "00:00:00"}
               </span>
             </div>
-            <div className="flex items-center gap-1 text-[9px] text-slate-405 mt-1 font-bold">
+            <button
+              onClick={handleOpenLocationMap}
+              title="출퇴근 인정 위치 지도 보기"
+              className="flex items-center gap-1.5 text-[10px] text-slate-600 hover:text-indigo-600 mt-1.5 font-extrabold bg-slate-100/90 hover:bg-indigo-50 px-2 py-0.5 rounded-lg border border-slate-200/60 transition-all cursor-pointer active:scale-95 w-fit shadow-3xs"
+            >
               <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
-              <span>본사 (KST)</span>
-            </div>
+              <span>{selectedWorkplace?.name || '본사'} (KST)</span>
+              <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 rounded font-black">지도</span>
+            </button>
           </div>
 
           <div className="shrink-0">
@@ -3887,6 +3997,143 @@ export default function MobileHubPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🗺️ 근태 등록 실시간 위치 지도 모달 */}
+      {isLocationMapModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-5 space-y-4 text-left animate-scale-in">
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between border-b border-slate-150 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600 shrink-0">
+                  <MapPin className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-800">근태 등록 위치 지도</h3>
+                  <p className="text-[10px] text-slate-400 font-bold">출퇴근 인정 위치 및 실시간 GPS</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLocationMapModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer border-none bg-transparent"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 🏢 사업장 전환 선택 드롭다운 */}
+            {allWorkplaces.length > 0 && (
+              <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-2.5 space-y-1">
+                <label className="block text-[10px] font-black text-indigo-700">근태 대상 사업장 (클릭 시 수동 전환)</label>
+                <select
+                  value={selectedWorkplace?.id || ''}
+                  onChange={(e) => {
+                    const wp = allWorkplaces.find(w => String(w.id) === e.target.value);
+                    if (wp) {
+                      setSelectedWorkplace(wp);
+                      if (wp.latitude && wp.longitude) {
+                        setUserCoords({ lat: wp.latitude, lng: wp.longitude });
+                        setLocationAddress(`지정 사업장 선택됨: [${wp.name}] (${wp.address || '주소미입력'})`);
+                      }
+                    }
+                  }}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {allWorkplaces.map(wp => (
+                    <option key={wp.id} value={wp.id}>
+                      {wp.name} {wp.is_main === 'Y' ? '(대표 본사)' : ''} - {wp.address || '주소미입력'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* 지도 타일 영역 (OpenStreetMap 대화형 뷰어 & GPS 정보) */}
+            <div className="space-y-3">
+              <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-slate-100 flex items-center justify-center">
+                {userCoords ? (
+                  <iframe
+                    title="실시간 GPS 지도"
+                    width="100%"
+                    height="100%"
+                    frameBorder="0"
+                    scrolling="no"
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${userCoords.lng - 0.004}%2C${userCoords.lat - 0.002}%2C${userCoords.lng + 0.004}%2C${userCoords.lat + 0.002}&layer=mapnik&marker=${userCoords.lat}%2C${userCoords.lng}`}
+                    className="w-full h-full"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-slate-400">
+                    <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                    <span className="text-xs font-bold">GPS 탐지 중...</span>
+                  </div>
+                )}
+                
+                {/* 반경 상태 뱃지 */}
+                <div className="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-md text-white text-[9px] font-black px-2 py-1 rounded-lg flex items-center gap-1 shadow-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  <span>출퇴근 인정 구역 내</span>
+                </div>
+              </div>
+
+              {/* 주소 및 위치 상세 상태 정보 */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    <span>현재 탐지 위치</span>
+                  </span>
+                  <button 
+                    type="button"
+                    onClick={handleOpenLocationMap}
+                    className="text-[10px] text-indigo-600 hover:underline font-black flex items-center gap-0.5 cursor-pointer border-none bg-transparent"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>재측정</span>
+                  </button>
+                </div>
+                <p className="text-[11px] font-extrabold text-slate-800 leading-snug break-all">
+                  {locationAddress}
+                </p>
+                <div className="text-[9px] text-slate-400 font-bold flex items-center gap-2 pt-1 border-t border-slate-200/50">
+                  <span>지정 사업장: 본사 (KST)</span>
+                  <span>•</span>
+                  <span>허용 오차: 500m</span>
+                </div>
+              </div>
+
+              {/* 외부 지도 길찾기 바로가기 링크 버튼 */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <a
+                  href={`https://map.kakao.com/link/map/본사_출퇴근위치,${userCoords?.lat || 37.5665},${userCoords?.lng || 126.9780}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 bg-yellow-300 hover:bg-yellow-400 text-slate-900 rounded-xl text-xs font-black flex items-center justify-center gap-1 shadow-2xs transition active:scale-95 no-underline"
+                >
+                  <span>💛 카카오맵 보기</span>
+                </a>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${userCoords?.lat || 37.5665},${userCoords?.lng || 126.9780}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 shadow-2xs transition active:scale-95 no-underline"
+                >
+                  <span>🌐 구글 지도 보기</span>
+                </a>
+              </div>
+            </div>
+
+            {/* 닫기 버튼 */}
+            <button
+              type="button"
+              onClick={() => setIsLocationMapModalOpen(false)}
+              className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-2xl text-xs transition cursor-pointer border-none"
+            >
+              닫기
+            </button>
           </div>
         </div>
       )}

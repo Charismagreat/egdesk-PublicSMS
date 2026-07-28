@@ -20,11 +20,62 @@ export async function GET() {
 
     // JWT 토큰 디코딩하여 페이로드 추출
     const payload = decodeJwt(token);
+    const username = payload.username as string || '';
+    const name = payload.name as string || '운영자';
+
+    // DB에서 직원의 소속 사업장 정보 조인 조회 시도
+    let workplaceId = (payload as any).workplace_id || null;
+    let workplaceName = (payload as any).workplace_name || null;
+    let workplaceLat = null;
+    let workplaceLng = null;
+
+    try {
+      const { executeSQL } = await import('../../../../../egdesk-helpers');
+      // 1. crm_employees에서 workplace_id 조회
+      const empRes = await executeSQL(`
+        SELECT e.workplace_id, w.name as workplace_name, w.latitude, w.longitude, w.radius_meters
+        FROM crm_employees e
+        LEFT JOIN crm_workplaces w ON e.workplace_id = w.id AND w.deleted_at IS NULL
+        WHERE e.deleted_at IS NULL AND (e.name = '${name}' OR e.email = '${username}')
+        LIMIT 1
+      `);
+      if (empRes.rows && empRes.rows.length > 0) {
+        const emp = empRes.rows[0];
+        if (emp.workplace_name) {
+          workplaceId = emp.workplace_id;
+          workplaceName = emp.workplace_name;
+          workplaceLat = emp.latitude;
+          workplaceLng = emp.longitude;
+        }
+      }
+
+      // 2. 만약 소속 사업장이 없으면 기본 '본사' 지정
+      if (!workplaceName) {
+        const mainWpRes = await executeSQL(`
+          SELECT id, name, latitude, longitude FROM crm_workplaces WHERE deleted_at IS NULL AND is_main = 'Y' LIMIT 1
+        `);
+        if (mainWpRes.rows && mainWpRes.rows.length > 0) {
+          workplaceId = mainWpRes.rows[0].id;
+          workplaceName = mainWpRes.rows[0].name;
+          workplaceLat = mainWpRes.rows[0].latitude;
+          workplaceLng = mainWpRes.rows[0].longitude;
+        } else {
+          workplaceName = '본사';
+        }
+      }
+    } catch (e) {
+      console.warn("Workplace info lookup warning in /api/auth/me:", e);
+    }
+
     return NextResponse.json({
       success: true,
       role: payload.role as string || 'SUB_OPERATOR',
-      name: payload.name as string || '운영자',
-      username: payload.username as string || ''
+      name: name,
+      username: username,
+      workplace_id: workplaceId,
+      workplace_name: workplaceName || '본사',
+      latitude: workplaceLat,
+      longitude: workplaceLng
     });
   } catch (error: any) {
     console.error("JWT decoding failed in /api/auth/me:", error);
