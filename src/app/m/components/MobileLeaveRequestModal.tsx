@@ -49,7 +49,6 @@ export const MobileLeaveRequestModal: React.FC<MobileLeaveRequestModalProps> = (
             </div>
             <div>
               <h3 className="font-extrabold text-base text-slate-800">간편 연차 신청</h3>
-              <p className="text-[10px] text-slate-400 font-bold">모바일 빠른 결재 상신</p>
             </div>
           </div>
           <button
