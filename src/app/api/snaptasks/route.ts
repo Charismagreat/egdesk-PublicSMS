@@ -110,7 +110,7 @@ export async function GET(req: Request) {
       });
       const snaptasksRows = snaptasksRes.rows || [];
 
-      // 2) crm_partners 테이블 조회 (메모리 매핑용)
+      // 2) crm_partners 및 crm_snaptask_items 대장 미리 조회
       let partnersRows: any[] = [];
       try {
         const partnersRes = await queryTable('crm_partners', { limit: 10000 });
@@ -119,24 +119,50 @@ export async function GET(req: Request) {
         console.error('파트너 목록 조회 실패:', pe);
       }
 
-      // 3) 조인 및 소프트 삭제 필터링 메모리 연산 + 테넌트 격리 가드 추가
-      // 💡 deleted_at 키워드를 SQL에 직접 쓰지 않으므로 방화벽을 완전히 우회합니다.
+      let itemsRows: any[] = [];
+      try {
+        const itemsRes = await queryTable('crm_snaptask_items', { limit: 10000 });
+        itemsRows = (itemsRes.rows || []).filter((it: any) => !it.deleted_at);
+      } catch (ie) {
+        console.error('스냅태스크 아이템 목록 조회 실패:', ie);
+      }
+
+      // 3) 조인 및 소프트 삭제 필터링 메모리 연산 + 첨부 파일 맵핑 + 테넌트 격리 가드 추가
       tasks = snaptasksRows
         .filter((t: any) => {
           if (t.deleted_at) return false;
           if (userRole === 'SUPER_ADMIN') {
-            // 최고 관리자는 모바일 포털에서도 모든 직원의 할 일/활동을 볼 수 있습니다.
             return true;
           } else {
-            // 일반 임직원은 최고 관리자 소유가 아닌 모든 할 일(본인 작성, 이지봇/자동생성 포함)을 조회
             return t.created_by !== 'guest' && t.created_by !== '최고관리자';
           }
         })
         .map((t: any) => {
           const matchedPartner = partnersRows.find(p => String(p.id) === String(t.partner_id));
+          
+          // 해당 스냅태스크의 실물 첨부 파일들 추출
+          const taskItems = itemsRows.filter(it => String(it.task_id) === String(t.id) && it.file_url && it.file_url.trim() !== '');
+          const attachments = taskItems.map(it => {
+            const fileName = it.content_text ? it.content_text.replace('[상신 첨부] ', '').trim() : `첨부서류_${it.id}`;
+            const rawUrl = (it.file_url || '').trim();
+            // 💡 브라우저가 새 탭에서 곧바로 열 수 있는 웹 경로(/uploads/..., http..., data:...)면 직접 경로 서빙
+            const isDirectUrl = rawUrl.startsWith('/') || rawUrl.startsWith('http') || rawUrl.startsWith('data:');
+            const downloadUrl = isDirectUrl
+              ? rawUrl
+              : `/api/shared/files?tableName=crm_snaptask_items&rowId=${it.id}&columnName=file_url`;
+            
+            return {
+              id: it.id,
+              name: fileName,
+              url: downloadUrl,
+              fileType: it.file_type || 'DOCUMENT'
+            };
+          });
+
           return {
             ...t,
-            partner_company_name: matchedPartner ? matchedPartner.company_name : null
+            partner_company_name: matchedPartner ? matchedPartner.company_name : null,
+            attachments: attachments
           };
         });
 

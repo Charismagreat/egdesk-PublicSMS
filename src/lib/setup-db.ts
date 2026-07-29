@@ -213,6 +213,28 @@ export async function setupDatabase() {
     { name: 'result_detail', type: 'TEXT' }
   ], { tableName: 'crm_governance_subtasks', uniqueKeyColumns: ['id'] });
 
+  // 💡 [신규] 자금/원가 제품 기초 데이터 테이블 생성
+  await safeCreateTable('제품 표준 원가 분석 기초 데이터', [
+    { name: 'id', type: 'TEXT', notNull: true },
+    { name: 'productName', type: 'TEXT', notNull: true },
+    { name: 'materialCost', type: 'INTEGER' },
+    { name: 'laborCost', type: 'INTEGER' },
+    { name: 'expenseCost', type: 'INTEGER' },
+    { name: 'sellingPrice', type: 'INTEGER' }
+  ], { tableName: 'crm_finance_products', uniqueKeyColumns: ['id'] });
+
+  // 💡 [신규] 자금/수금 지출 예후 시계열 테이블 생성
+  await safeCreateTable('자금 수금 지출 예후 시계열 대장', [
+    { name: 'id', type: 'TEXT', notNull: true },
+    { name: 'date', type: 'TEXT', notNull: true },
+    { name: 'type', type: 'TEXT', notNull: true },
+    { name: 'title', type: 'TEXT' },
+    { name: 'partnerName', type: 'TEXT' },
+    { name: 'amount', type: 'INTEGER' },
+    { name: 'isOverdue', type: 'INTEGER' },
+    { name: 'contact', type: 'TEXT' }
+  ], { tableName: 'crm_finance_forecasts', uniqueKeyColumns: ['id'] });
+
   // 💡 [신규] 맞춤형 커스텀 페이지 마스터 테이블 생성
   await safeCreateTable('맞춤형 커스텀 페이지 마스터', [
     { name: 'id', type: 'TEXT', notNull: true },
@@ -321,6 +343,25 @@ export async function setupDatabase() {
       }]);
 
       console.log('✓ 수입 통관 실제 레퍼런스 데이터 시딩 완료.');
+    }
+
+    // 55. 자금/원가 시뮬레이션 기초 데이터 시딩
+    const finProdCheck = await queryTable('crm_finance_products', {});
+    if (!finProdCheck.rows || finProdCheck.rows.length === 0) {
+      await insertRows('crm_finance_products', [
+        { id: 'PROD-01', productName: '고정밀 전자 커넥터 모듈 A', materialCost: 12000, laborCost: 8000, expenseCost: 4000, sellingPrice: 32000 },
+        { id: 'PROD-02', productName: '자동차용 와이어링 하네스 B', materialCost: 25000, laborCost: 15000, expenseCost: 7000, sellingPrice: 65000 },
+        { id: 'PROD-03', productName: '반도체 검사 소켓 소모품 C', materialCost: 45000, laborCost: 28000, expenseCost: 12000, sellingPrice: 110000 }
+      ]);
+    }
+
+    const finForecastCheck = await queryTable('crm_finance_forecasts', {});
+    if (!finForecastCheck.rows || finForecastCheck.rows.length === 0) {
+      await insertRows('crm_finance_forecasts', [
+        { id: 'FC-01', date: '2026-06-10', type: 'INCOME', title: '동우일렉트릭 수주 잔금 입금', partnerName: '동우일렉트릭', amount: 45000000, isOverdue: 0, contact: '010-1234-5678' },
+        { id: 'FC-02', date: '2026-06-15', type: 'EXPENSE', title: '원자재 수입 통관 관세/부가세 납부', partnerName: '인천세관', amount: 12500000, isOverdue: 0, contact: '02-123-4567' },
+        { id: 'FC-03', date: '2026-06-20', type: 'INCOME', title: '아시아세미콘 2분기 공급 수금', partnerName: '아시아세미콘', amount: 32000000, isOverdue: 0, contact: '010-9876-5432' }
+      ]);
     }
 
     // 기존 데이터에 file_path가 비어 있을 경우 백필 갱신

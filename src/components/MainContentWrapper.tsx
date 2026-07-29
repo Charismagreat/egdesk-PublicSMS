@@ -26,6 +26,15 @@ export default function MainContentWrapper({ children }: { children: React.React
     pathname.startsWith('/ai-settings') ||
     pathname.startsWith('/estimates/manufacture-webview') ||
     pathname.startsWith('/import-customs') ||
+    pathname.startsWith('/scm-management') ||
+    pathname.startsWith('/labor-management') ||
+    pathname.startsWith('/password-ai') ||
+    pathname.startsWith('/production-plan') ||
+    pathname.startsWith('/facility-management') ||
+    pathname.startsWith('/energy-management') ||
+    pathname.startsWith('/rnd-management') ||
+    pathname.startsWith('/quality-control') ||
+    pathname.startsWith('/safety-detection') ||
     pathname.startsWith('/import-customs/web-view') ||
     pathname.startsWith('/admin/members') ||
     pathname.startsWith('/my-db') ||

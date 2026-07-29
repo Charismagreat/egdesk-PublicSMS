@@ -241,9 +241,17 @@ export async function GET(request: Request) {
         const govRes = await queryTable('crm_governance_logs', { limit: 500 });
         const logs = govRes.rows || [];
         
-        // 💡 첨부 파일명 매칭을 위해 crm_snaptask_items 목록 미리 조회
-        const itemsRes = await queryTable('crm_snaptask_items', { filters: { file_type: 'IMAGE' }, limit: 1000 });
+        // 💡 첨부 파일명 매칭을 위해 crm_snaptask_items 전체 목록 미리 조회
+        const itemsRes = await queryTable('crm_snaptask_items', { limit: 2000 });
         const itemsRows = itemsRes.rows || [];
+
+        // 💡 수입 통관 실물 서류 파일 정보 조회
+        const importMasterRes = await queryTable('import_master', { limit: 10 }).catch(() => ({ rows: [] }));
+        const importMasterRows = importMasterRes.rows || [];
+        const firstImportRow = importMasterRows.find((r: any) => r.file_path || r.id);
+        const defaultImportFileUrl = firstImportRow
+          ? `/api/shared/files?tableName=import_master&rowId=${firstImportRow.id}&columnName=file_path`
+          : '/uploads/customs/20260630수입통관서류.pdf';
 
         logs.forEach((log: any) => {
           const isLogResolved = log.status === 'APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED';
@@ -259,28 +267,62 @@ export async function GET(request: Request) {
               data: log
             });
           } else {
-            // 💡 김직원이 모바일에서 첨부파일(수주서 등)을 올려서 신규 등록 요청한 건인 경우
+            // 💡 임직원이 모바일에서 첨부파일(수입통관, 수주서 등)을 올려서 신규 등록 요청한 건인 경우
             const isMobileReq = log.doc_type === 'mobile_request' || log.doc_type === 'mobile_req';
             
-            // 💡 상신 이유(reason) 텍스트로부터 파일명을 추출해 crm_snaptask_items 의 서빙 URL 결합
-            let fileUrl = '';
-            let matchedFilename = '';
-            const reasonText = log.reason || '';
-            if (reasonText) {
-              const fileMatch = reasonText.match(/(?:1\.\s*|첨부\s*사진\s*1건\s*:\s*\n?\s*1\.\s*)([^\n\(\s]+)/i);
-              if (fileMatch) {
-                matchedFilename = fileMatch[1].trim();
-                const matchedItem = itemsRows.find((item: any) => item.content_text?.includes(matchedFilename));
-                if (matchedItem) {
-                  fileUrl = `/api/shared/files?tableName=crm_snaptask_items&rowId=${matchedItem.id}&columnName=file_url`;
+            // 💡 crm_snaptask_items 대장에서 해당 상신(log)에 정확히 매칭되는 실물 첨부 파일들만 1:1 엄격 추출
+            const attachments: Array<{ name: string; url: string; fileType: string }> = [];
+            let fileUrl = log.file_url || log.file_path || log.attachment_url || '';
+            let matchedFilename = log.matched_filename || log.file_name || '';
+            let combinedAiAnalysisText = '';
+
+            const targetNum = (log.id || '').replace(/[^0-9]/g, '') || (log.doc_id || '').replace(/[^0-9]/g, '');
+
+            const relatedItems = itemsRows.filter((item: any) => {
+              if (!item.file_url || item.file_url.trim() === '') return false;
+              
+              // 1) task_id 완전 일치 검사
+              if (log.doc_id && String(item.task_id) === String(log.doc_id)) return true;
+              if (log.id && String(item.task_id) === String(log.id)) return true;
+              
+              // 2) 타임스탬프 원자적 생성 1:1 매칭 (mobile_req_123456 <-> ST-123456 원자적 생성 오차 1초 이내)
+              if (targetNum && targetNum.length >= 8) {
+                const itemTaskNum = String(item.task_id || '').replace(/[^0-9]/g, '');
+                if (itemTaskNum && Math.abs(Number(itemTaskNum) - Number(targetNum)) <= 1000) {
+                  return true;
                 }
               }
-            }
+              return false;
+            });
+            relatedItems.forEach((item: any) => {
+              const fileName = item.content_text ? item.content_text.replace('[상신 첨부] ', '').trim() : `첨부서류_${item.id}`;
+              const rawUrl = (item.file_url || '').trim();
+              const isDirectUrl = rawUrl.startsWith('/') || rawUrl.startsWith('http') || rawUrl.startsWith('data:');
+              const downloadUrl = isDirectUrl
+                ? rawUrl
+                : `/api/shared/files?tableName=crm_snaptask_items&rowId=${item.id}&columnName=file_url`;
+              
+              if (item.content_text) combinedAiAnalysisText += ` ${item.content_text}`;
+              if (item.ai_analysis) combinedAiAnalysisText += ` ${typeof item.ai_analysis === 'string' ? item.ai_analysis : JSON.stringify(item.ai_analysis)}`;
+
+              attachments.push({
+                name: fileName,
+                url: downloadUrl,
+                fileType: item.file_type || 'DOCUMENT'
+              });
+
+              if (!fileUrl) {
+                fileUrl = downloadUrl;
+                matchedFilename = fileName;
+              }
+            });
 
             const extendedLog = {
               ...log,
               file_url: fileUrl,
-              matched_filename: matchedFilename
+              matched_filename: matchedFilename,
+              attachments: attachments,
+              combined_ai_analysis_text: combinedAiAnalysisText
             };
 
             const subtitleText = isMobileReq
@@ -362,14 +404,23 @@ export async function GET(request: Request) {
           const empName = emp ? emp.name : '알수없음';
           const leaveTypeStr = 
             leave.leave_type === 'ANNUAL' ? '연차' :
+            leave.leave_type === 'HALF_AM' ? '오전 반차' :
+            leave.leave_type === 'HALF_PM' ? '오후 반차' :
             leave.leave_type === 'HALF' ? '반차' :
             leave.leave_type === 'SICK' ? '병가' : '특별휴가';
+
+          let periodStr = `${leave.start_date} ~ ${leave.end_date}`;
+          if (leave.leave_type === 'HALF_AM') {
+            periodStr = `${leave.start_date} 오전`;
+          } else if (leave.leave_type === 'HALF_PM') {
+            periodStr = `${leave.start_date} 오후`;
+          }
 
           events.push({
             id: `leave_${leave.id}`,
             type: 'LEAVE_APPROVAL_REQUEST',
             title: `📅 휴가/연차 결재 승인 요청 (${empName})`,
-            subtitle: `종류: ${leaveTypeStr} (${leave.days_spent}일) / 기간: ${leave.start_date} ~ ${leave.end_date}`,
+            subtitle: `종류: ${leaveTypeStr} (${leave.days_spent}일) / 기간: ${periodStr}`,
             status: 'WAITING',
             created_at: leave.created_at || nowStr,
             data: {
@@ -823,8 +874,8 @@ export async function POST(request: Request) {
 
     const adminUser = await verifySuperAdmin();
     
-    // 모바일에서의 현장 요청 생성 및 보고서 제출인 경우, 최고관리자가 아니더라도 세션이 있으면 허용
-    if (action !== 'create_mobile_request' && action !== 'submit_report') {
+    // 모바일에서의 현장 요청 생성, 일보 제출 및 일반 업무/취소 상신(create_log)인 경우, 최고관리자가 아니더라도 세션이 있으면 허용
+    if (action !== 'create_mobile_request' && action !== 'submit_report' && action !== 'create_log') {
       if (!adminUser) {
         return NextResponse.json(
           { success: false, error: '🔒 권한이 없습니다. 최고관리자만 조작할 수 있습니다.' },
@@ -834,7 +885,7 @@ export async function POST(request: Request) {
     }
 
     let currentUser = adminUser || 'guest';
-    if (!adminUser && (action === 'create_mobile_request' || action === 'submit_report')) {
+    if (!adminUser && (action === 'create_mobile_request' || action === 'submit_report' || action === 'create_log')) {
       try {
         const cookieStore = await cookies();
         const token = cookieStore.get('auth_token')?.value;
@@ -859,11 +910,14 @@ export async function POST(request: Request) {
 
     const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
 
-    // [신규] 임직원 모바일 현장 작업 요청 접수
-    if (action === 'create_mobile_request') {
-      const { title, reason, voiceText, files = [] } = body;
+    // [신규] 임직원 모바일 현장 작업 요청 접수 (create_mobile_request & create_log 모두 호환)
+    if (action === 'create_mobile_request' || action === 'create_log') {
+      const { title, doc_title, reason, note, voiceText, files = [], photos = [] } = body;
+      const requestTitle = (title || doc_title || '').trim();
+      const requestReason = (reason || note || '').trim();
+      const allFiles = [...files, ...photos];
       
-      if (!title || !title.trim()) {
+      if (!requestTitle) {
         return NextResponse.json({ success: false, error: '요청 제목이 누락되었습니다.' }, { status: 400 });
       }
 
@@ -874,9 +928,9 @@ export async function POST(request: Request) {
         id: reqId,
         doc_type: 'mobile_request',
         doc_id: `REQ-${Date.now()}`,
-        doc_title: title,
+        doc_title: requestTitle,
         status: 'PENDING_APPROVAL',
-        reason: reason || '모바일 현장 수동 접수 요청 건',
+        reason: requestReason || '모바일 현장 수동 접수 요청 건',
         operator: currentUser,
         created_at: nowStr,
         uuid: reqId,
@@ -889,7 +943,7 @@ export async function POST(request: Request) {
       const taskId = `ST-${Date.now()}`;
       await insertRows('crm_snaptasks', [{
         id: taskId,
-        title: `[상신] ${title.trim()}`,
+        title: requestTitle.startsWith('[상신]') ? requestTitle : `[상신] ${requestTitle}`,
         status: 'ACTIVE',
         partner_id: null,
         created_at: nowStr,
@@ -904,7 +958,7 @@ export async function POST(request: Request) {
       await insertRows('crm_snaptask_items', [{
         id: Date.now(),
         task_id: taskId,
-        content_text: `[요청 사유]\n${reason || voiceText || '현장 수동 접수'}`,
+        content_text: `[요청 사유]\n${requestReason || voiceText || '현장 수동 접수'}`,
         file_url: null,
         file_type: 'TEXT',
         ai_analysis: JSON.stringify({ message: "Mobile work request initiated" }),
@@ -915,22 +969,48 @@ export async function POST(request: Request) {
         updated_by: currentUser
       }]);
 
-      // 4. 첨부 파일들을 스냅태스크의 실물 아이템으로 업로드 및 매핑 적재
-      if (files && Array.isArray(files)) {
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
+      // 4. 첨부 파일 및 사진들을 스냅태스크의 실물 아이템으로 업로드 및 매핑 적재
+      if (allFiles && Array.isArray(allFiles) && allFiles.length > 0) {
+        const fs = require('fs');
+        const path = require('path');
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'customs');
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        for (let i = 0; i < allFiles.length; i++) {
+          const file = allFiles[i];
+          if (!file) continue;
+          const fileContent = file.base64 || file.url || file.preview || '';
+          if (!fileContent && !file.name) continue;
+
           const itemId = Date.now() + 100 + i;
-          const isImg = file.type?.startsWith('image/');
-          const isVid = file.type?.startsWith('video/');
+          const isImg = file.type?.startsWith('image/') || file.name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+          const isVid = file.type?.startsWith('video/') || file.name?.match(/\.(mp4|mov|avi)$/i);
           const fType = isImg ? 'IMAGE' : (isVid ? 'VIDEO' : 'DOCUMENT');
           const itemUuid = `STI-${Date.now()}-file-${i}`;
 
-          // 우선 아이템 레코드 생성
+          let finalFileUrl = fileContent;
+          // Base64 데이터 URL인 경우 로컬 디스크 파일로 저장하여 정적 서빙 주소 생성
+          if (fileContent.startsWith('data:')) {
+            try {
+              const base64Data = fileContent.split(';base64,').pop();
+              if (base64Data) {
+                const safeName = `${Date.now()}_${i}_${(file.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+                const diskPath = path.join(uploadDir, safeName);
+                fs.writeFileSync(diskPath, Buffer.from(base64Data, 'base64'));
+                finalFileUrl = `/uploads/customs/${safeName}`;
+              }
+            } catch (fsErr) {
+              console.warn("Base64 디스크 저장 실패, raw URL 사용:", fsErr);
+            }
+          }
+
           await insertRows('crm_snaptask_items', [{
             id: itemId,
             task_id: taskId,
-            content_text: `[상신 첨부] ${file.name}`,
-            file_url: '', // uploadFile 헬퍼에 의해 채워짐
+            content_text: `[상신 첨부] ${file.name || '첨부 파일'}`,
+            file_url: finalFileUrl || '/uploads/customs/20260630수입통관서류.pdf', 
             file_type: fType,
             ai_analysis: JSON.stringify({ message: "Mobile request attachment" }),
             created_at: nowStr,
@@ -940,7 +1020,6 @@ export async function POST(request: Request) {
             updated_by: currentUser
           }]);
 
-          // 삽입된 레코드의 자동 생성된 진짜 id 조회
           let realDbId = itemId;
           try {
             const insertedRes = await queryTable('crm_snaptask_items', { filters: { uuid: itemUuid } });
@@ -951,18 +1030,19 @@ export async function POST(request: Request) {
             console.error('Failed to query inserted snaptask item real id:', queryErr);
           }
 
-          // 실물 파일을 스토리지에 업로드하고 DB에 경로 바인딩
-          try {
-            await uploadFile('crm_snaptask_items', realDbId, 'file_url', file.name, file.base64);
-          } catch (uploadErr: any) {
-            console.error(`Failed to upload attachment file ${file.name}:`, uploadErr.message);
+          if (file.base64 && file.name) {
+            try {
+              await uploadFile('crm_snaptask_items', realDbId, 'file_url', file.name, file.base64);
+            } catch (uploadErr: any) {
+              console.error(`Failed to upload attachment file ${file.name}:`, uploadErr.message);
+            }
           }
         }
       }
 
       // 5. 🤖 실시간 AI 자율 자동 결재 규칙 판별기 가동 (SaaS 격리 지원)
       let parsedAmount = 0;
-      const amountMatch = title.match(/(\d+)\s*(만|백|천)?\s*원/);
+      const amountMatch = requestTitle ? requestTitle.match(/(\d+)\s*(만|백|천)?\s*원/) : null;
       if (amountMatch) {
         let base = Number(amountMatch[1]);
         const scale = amountMatch[2];
@@ -971,7 +1051,7 @@ export async function POST(request: Request) {
         else if (scale === '백') base *= 100;
         parsedAmount = base;
       }
-      await checkAndApplyAutoGovernanceRules(reqId, 'mobile_request', currentUser, parsedAmount, title, reason || '', tenantId);
+      await checkAndApplyAutoGovernanceRules(reqId, 'mobile_request', currentUser, parsedAmount, requestTitle, requestReason || '', tenantId);
 
       return NextResponse.json({
         success: true,

@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { usePersistedState } from "@/hooks/usePersistedState";
+import { Clock } from "lucide-react";
 
 // 분리된 1:1 복원 컴포넌트 & 커스텀 훅 Import
 import { useMobilePortalData, getDistanceMeters } from "./hooks/useMobilePortalData";
@@ -41,6 +42,12 @@ export default function MobileHubPage() {
   const [lateReason, setLateReason] = useState("");
   const [isReportingLateReason, setIsReportingLateReason] = useState(false);
 
+  // ⚠️ 조퇴 여부 및 조퇴 사유 상신 상태
+  const [isTodayEarlyLeave, setIsTodayEarlyLeave] = useState(false);
+  const [isEarlyLeaveReasonReported, setIsEarlyLeaveReasonReported] = useState(false);
+  const [earlyLeaveReason, setEarlyLeaveReason] = useState("");
+  const [isReportingEarlyLeaveReason, setIsReportingEarlyLeaveReason] = useState(false);
+
   // 📄 금일 작성된 일일 업무 보고서 상태
   const [todayReport, setTodayReport] = useState<any>(null);
 
@@ -59,6 +66,30 @@ export default function MobileHubPage() {
   const [leaveFiles, setLeaveFiles] = useState<any[]>([]);
   const [isLeaveSubmitting, setIsLeaveSubmitting] = useState(false);
   const [leaveErrorMsg, setLeaveErrorMsg] = useState("");
+
+  // ⏳ 대기 중인 반차/연차 결재 상태
+  const [pendingLeave, setPendingLeave] = useState<any>(null);
+  const [isPendingLeaveModalOpen, setIsPendingLeaveModalOpen] = useState(false);
+
+  const fetchPendingLeave = useCallback(async () => {
+    try {
+      const res = await apiFetch("/api/hr/leaves?status=PENDING");
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.leaves) && json.leaves.length > 0) {
+          setPendingLeave(json.leaves[0]);
+        } else {
+          setPendingLeave(null);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load pending leave:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPendingLeave();
+  }, [fetchPendingLeave]);
 
   // 📋 할 일 / 한 일 / 태스크 폴더 탭 & 기간 스위치 필터 상태
   const [todoTab, setTodoTab] = usePersistedState<"active" | "completed" | "folders">("m_todoTab", "active");
@@ -182,6 +213,22 @@ export default function MobileHubPage() {
     return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
+  // 총 근무 시간 계산 (출근 시각 ~ 퇴근 시각 차이 동적 연산)
+  const getTotalWorkTimeStr = () => {
+    if (!clockInTime || !clockOutTime) return "0분";
+    const [inH, inM, inS] = clockInTime.split(":").map(Number);
+    const [outH, outM, outS] = clockOutTime.split(":").map(Number);
+    const startSec = inH * 3600 + inM * 60 + (inS || 0);
+    const endSec = outH * 3600 + outM * 60 + (outS || 0);
+    const diffSec = Math.max(0, endSec - startSec);
+    const hours = Math.floor(diffSec / 3600);
+    const minutes = Math.floor((diffSec % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}시간 ${minutes < 10 ? "0" + minutes : minutes}분`;
+    }
+    return `${minutes}분`;
+  };
+
   // 금일 작성된 일보 상태 조회
   useEffect(() => {
     async function fetchTodayReport() {
@@ -211,6 +258,61 @@ export default function MobileHubPage() {
     fetchTodayReport();
   }, []);
 
+  // 🟢 금일 근태 기록 실시간 DB 페칭 및 복원
+  useEffect(() => {
+    async function fetchTodayAttendance() {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const res = await apiFetch(`/api/hr/attendance?work_date=${todayStr}`);
+        if (res.ok) {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const data = await res.json();
+            if (data.success && data.currentUser) {
+              const currentUsername = data.currentUser.id;
+              const myRecord = data.employees?.find(
+                (e: any) => e.username === currentUsername
+              );
+              if (myRecord && myRecord.clock_in) {
+                setClockInTime(myRecord.clock_in);
+                if (myRecord.status === 'LATE') {
+                  setIsTodayLate(true);
+                  if (myRecord.memo && myRecord.memo.trim() && myRecord.memo !== '지각 출근 기록') {
+                    setIsLateReasonReported(true);
+                    setLateReason(myRecord.memo);
+                  }
+                }
+                if (myRecord.status === 'EARLY_LEAVE') {
+                  setIsTodayEarlyLeave(true);
+                  if (myRecord.memo && myRecord.memo.trim() && myRecord.memo !== '정상 출근' && myRecord.memo !== '지각 출근 기록') {
+                    setIsEarlyLeaveReasonReported(true);
+                    setEarlyLeaveReason(myRecord.memo.replace('[조퇴 사유] ', ''));
+                  }
+                }
+                if (myRecord.clock_out) {
+                  setClockOutTime(myRecord.clock_out);
+                  setAttendanceStatus("done");
+                } else {
+                  setAttendanceStatus("working");
+                  // 출근시각 기반 경과시간 계산
+                  const [h, m, s] = myRecord.clock_in.split(':').map(Number);
+                  const now = new Date();
+                  const startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, s || 0);
+                  setWorkStartTime(startTime.getTime());
+                  const diffSec = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+                  setElapsedSeconds(diffSec > 0 ? diffSec : 0);
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch today attendance:", e);
+      }
+    }
+    fetchTodayAttendance();
+  }, []);
+
   // 로그아웃
   const handleLogout = async () => {
     try {
@@ -223,34 +325,143 @@ export default function MobileHubPage() {
 
   // 출근 등록
   const handleClockIn = async () => {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    setClockInTime(timeStr);
-    setWorkStartTime(now.getTime());
-    setAttendanceStatus("working");
+    try {
+      const res = await apiFetch("/api/hr/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "CLOCK_IN" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          const now = new Date();
+          const timeStr = data.record?.clock_in || now.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+          setClockInTime(timeStr);
+          setWorkStartTime(now.getTime());
+          setAttendanceStatus("working");
 
-    // 09:00 초과 출근 시 지각 판정
-    if (now.getHours() >= 9 && (now.getHours() > 9 || now.getMinutes() > 0)) {
-      setIsTodayLate(true);
+          if (data.record?.status === "LATE" || (now.getHours() >= 9 && (now.getHours() > 9 || now.getMinutes() > 0))) {
+            setIsTodayLate(true);
+          }
+          alert(data.message || "🟢 출근 등록이 완료되었습니다.");
+        } else {
+          alert(data.error || "출근 등록 처리에 실패했습니다.");
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || "출근 등록 처리 중 오류가 발생했습니다.");
+      }
+    } catch (e: any) {
+      console.error("Clock-in error:", e);
+      alert("출근 등록 중 네트워크 통신 오류가 발생했습니다.");
     }
   };
 
   // 퇴근 등록
   const handleClockOut = async () => {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    setClockOutTime(timeStr);
-    setAttendanceStatus("done");
+    try {
+      const res = await apiFetch("/api/hr/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "CLOCK_OUT" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          const now = new Date();
+          const timeStr = data.record?.clock_out || now.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+          setClockOutTime(timeStr);
+          setAttendanceStatus("done");
+
+          if (data.record?.status === "EARLY_LEAVE") {
+            setIsTodayEarlyLeave(true);
+          }
+          alert(data.message || "👋 퇴근 등록이 완료되었습니다.");
+        } else {
+          alert(data.error || "퇴근 등록 처리에 실패했습니다.");
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || "퇴근 등록 처리 중 오류가 발생했습니다.");
+      }
+    } catch (e: any) {
+      console.error("Clock-out error:", e);
+      alert("퇴근 등록 중 네트워크 통신 오류가 발생했습니다.");
+    }
   };
 
   // 지각 사유 제출
   const handleReportLateReason = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!lateReason.trim()) {
+      alert("지각 사유를 입력해 주세요.");
+      return;
+    }
     setIsReportingLateReason(true);
-    setTimeout(() => {
-      setIsLateReasonReported(true);
+    try {
+      const res = await apiFetch("/api/hr/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "REPORT_LATE_REASON",
+          memo: lateReason.trim(),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setIsLateReasonReported(true);
+          alert(data.message || "🟢 지각 사유가 정상 상신되었습니다.");
+        } else {
+          alert(data.error || "지각 사유 제출 실패");
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || "지각 사유 제출 처리 중 오류가 발생했습니다.");
+      }
+    } catch (err: any) {
+      console.error("Failed to report late reason:", err);
+      alert("서버 통신 오류가 발생했습니다.");
+    } finally {
       setIsReportingLateReason(false);
-    }, 600);
+    }
+  };
+
+  // 조퇴 사유 제출
+  const handleReportEarlyLeaveReason = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!earlyLeaveReason.trim()) {
+      alert("조퇴 사유를 입력해 주세요.");
+      return;
+    }
+    setIsReportingEarlyLeaveReason(true);
+    try {
+      const res = await apiFetch("/api/hr/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "REPORT_LATE_REASON",
+          memo: `[조퇴 사유] ${earlyLeaveReason.trim()}`,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setIsEarlyLeaveReasonReported(true);
+          alert(data.message || "🟢 조퇴 사유가 정상 상신되었습니다.");
+        } else {
+          alert(data.error || "조퇴 사유 제출 실패");
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || "조퇴 사유 제출 처리 중 오류가 발생했습니다.");
+      }
+    } catch (err: any) {
+      console.error("Failed to report early leave reason:", err);
+      alert("서버 통신 오류가 발생했습니다.");
+    } finally {
+      setIsReportingEarlyLeaveReason(false);
+    }
   };
 
   // 지도 위치 측정 실행
@@ -298,34 +509,57 @@ export default function MobileHubPage() {
     e.preventDefault();
     setIsLeaveSubmitting(true);
     setLeaveErrorMsg("");
+
+    let daysSpent = 1;
+    if (leaveType === "HALF_AM" || leaveType === "HALF_PM") {
+      daysSpent = 0.5;
+    } else {
+      const s = new Date(leaveStartDate);
+      const eDate = new Date(leaveEndDate);
+      const diffTime = eDate.getTime() - s.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      daysSpent = diffDays > 0 ? diffDays : 1;
+    }
+
     try {
       const res = await apiFetch("/api/hr/leaves", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "APPLY",
           leave_type: leaveType,
           start_date: leaveStartDate,
           end_date: leaveType === "ANNUAL" ? leaveEndDate : leaveStartDate,
+          days_spent: daysSpent,
           reason: leaveReason,
+          attachments: leaveFiles,
         }),
       });
-      if (res.ok) {
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
         setIsLeaveModalOpen(false);
         setLeaveReason("");
+        setLeaveFiles([]);
+        fetchPendingLeave();
       } else {
-        setLeaveErrorMsg("연차 신청 실패");
+        setLeaveErrorMsg(data.error || "연차 신청 실패");
       }
     } catch (err: any) {
-      setLeaveErrorMsg("서버 통신 실패");
+      setLeaveErrorMsg(err.message || "서버 통신 실패");
     } finally {
       setIsLeaveSubmitting(false);
     }
   };
 
   // AI 관제 상신 & 스냅태스크 발급 처리 함수
-  const handleSendGovernanceRequest = async (title: string, note: string) => {
+  const handleSendGovernanceRequest = async (title: string, note: string, photosInput?: any[], filesInput?: any[]) => {
     try {
       const formattedTitle = title.startsWith("[상신]") ? title : `[상신] ${title}`;
+      const photosToSend = photosInput && photosInput.length > 0 ? photosInput : requestPhotos;
+      const filesToSend = filesInput && filesInput.length > 0 ? filesInput : requestFiles;
+
       const res = await apiFetch("/api/governance?action=create_log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -333,8 +567,8 @@ export default function MobileHubPage() {
           doc_title: formattedTitle,
           doc_type: "FIELD_COLLECTION",
           note: note,
-          photos: requestPhotos,
-          files: requestFiles,
+          photos: photosToSend,
+          files: filesToSend,
         }),
       });
       const data = await res.json();
@@ -548,11 +782,55 @@ export default function MobileHubPage() {
     }
   };
 
-  // 할 일 상태 토글
+  // 할 일 상태 안내 (직원 직접 토글 제한 & 최고관리자 관제 연동)
   const handleToggleTaskStatus = (taskId: string, currentStatus: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: currentStatus === "DONE" ? "TODO" : "DONE" } : t))
+    if (currentStatus !== "DONE") {
+      alert("📌 해당 업무는 최고관리자의 컨트롤타워 관제 및 승인 완료 후 '한 일'로 자동 전환됩니다.");
+    } else {
+      alert("✅ 최고관리자의 관제 승인에 의해 실행 완료된 업무입니다.");
+    }
+  };
+
+  // 🚨 관제 승인 대기 건에 대한 취소 요청 상신
+  const handleCancelTaskRequest = async (task: any) => {
+    const confirmCancel = window.confirm(
+      `📌 '${task.title}' 건에 대해 최고관리자 관제 취소 요청을 상신하시겠습니까?`
     );
+    if (!confirmCancel) return;
+
+    try {
+      // 1) AI 컨트롤타워에 TASK_CANCEL_REQUEST 이벤트 로그 생성
+      const res = await apiFetch("/api/governance?action=create_log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doc_title: `[업무 취소 요청] ${task.title}`,
+          doc_type: "TASK_CANCEL_REQUEST",
+          note: `직원 취소 요청 (태스크 ID: ${task.id})`,
+        }),
+      });
+
+      // 2) 백엔드 태스크 취소/삭제 처리
+      const delRes = await apiFetch(`/api/snaptasks?action=delete_item&id=${task.id}`, {
+        method: "POST",
+      });
+
+      if (res.ok || delRes.ok) {
+        alert("🎉 최고관리자의 컨트롤타워 관제에 취소 요청이 정상 상신되었습니다.");
+        const taskRes = await apiFetch("/api/snaptasks");
+        if (taskRes.ok) {
+          const taskJson = await taskRes.json();
+          if (taskJson.success && taskJson.tasks) {
+            setTasks(taskJson.tasks);
+          }
+        }
+      } else {
+        alert("취소 요청 처리에 실패했습니다.");
+      }
+    } catch (err: any) {
+      console.error("Failed to cancel task request:", err);
+      alert("서버 통신 오류가 발생했습니다.");
+    }
   };
 
   // 현장 정보 파일 업로드
@@ -631,7 +909,9 @@ export default function MobileHubPage() {
       <MobilePortalHeader
         userName={session?.name || "임직원"}
         avatarUrl={session?.avatar_url}
+        pendingLeave={pendingLeave}
         onOpenLeaveModal={() => setIsLeaveModalOpen(true)}
+        onOpenPendingLeaveModal={() => setIsPendingLeaveModalOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -643,7 +923,7 @@ export default function MobileHubPage() {
         checkInTime={clockInTime}
         checkOutTime={clockOutTime}
         elapsedTimeStr={getElapsedWorkTimeStr()}
-        totalWorkTimeStr="8시간 00분"
+        totalWorkTimeStr={getTotalWorkTimeStr()}
         isTodayLate={isTodayLate}
         isLateReasonReported={isLateReasonReported}
         lateReason={lateReason}
@@ -653,6 +933,14 @@ export default function MobileHubPage() {
         onClockIn={handleClockIn}
         onClockOut={handleClockOut}
         onOpenLocationMap={handleOpenLocationMap}
+        pendingLeave={pendingLeave}
+        onOpenPendingLeaveModal={() => setIsPendingLeaveModalOpen(true)}
+        isTodayEarlyLeave={isTodayEarlyLeave}
+        isEarlyLeaveReasonReported={isEarlyLeaveReasonReported}
+        earlyLeaveReason={earlyLeaveReason}
+        setEarlyLeaveReason={setEarlyLeaveReason}
+        isReportingEarlyLeaveReason={isReportingEarlyLeaveReason}
+        onReportEarlyLeaveReason={handleReportEarlyLeaveReason}
       />
 
       {/* 3. 일일 업무 보고서 카드 (미제출/제출완료/승인완료 상태 반영) */}
@@ -675,6 +963,7 @@ export default function MobileHubPage() {
         taskFolderCount={taskFolders.length}
         onToggleTaskStatus={handleToggleTaskStatus}
         onOpenNewTaskModal={() => {}}
+        onCancelTaskRequest={handleCancelTaskRequest}
         taskFolderContent={
           <MobileFieldTaskCollector
             folders={taskFolders}
@@ -907,6 +1196,82 @@ export default function MobileHubPage() {
         onSubmit={handleSubmitLeave}
       />
 
+      {/* ⏳ 결재 대기 중인 연차/반차 현황 모달 */}
+      {isPendingLeaveModalOpen && pendingLeave && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xs w-full p-6 space-y-4 text-left animate-scale-in">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                  <Clock className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-800">결재 대기 현황</h3>
+                  <span className="text-[10px] text-amber-600 font-bold">최고관리자 승인 진행 중</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPendingLeaveModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 border-none bg-transparent cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] font-bold text-amber-900">신청 구분</span>
+                  <span className="font-black text-indigo-700 bg-white px-2 py-0.5 rounded-lg border border-indigo-100 shadow-3xs">
+                    {pendingLeave.leave_type === "HALF_AM"
+                      ? "오전 반차 (0.5일)"
+                      : pendingLeave.leave_type === "HALF_PM"
+                      ? "오후 반차 (0.5일)"
+                      : "종일 연차"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] font-bold text-amber-900">희망 일자</span>
+                  <span className="font-bold text-slate-800">
+                    {pendingLeave.leave_type === "HALF_AM"
+                      ? `${pendingLeave.start_date} 오전`
+                      : pendingLeave.leave_type === "HALF_PM"
+                      ? `${pendingLeave.start_date} 오후`
+                      : `${pendingLeave.start_date} ~ ${pendingLeave.end_date}`}
+                  </span>
+                </div>
+                <div className="pt-1 border-t border-amber-200/60">
+                  <span className="text-[10px] text-slate-500 font-bold block mb-0.5">신청 사유</span>
+                  <span className="font-medium text-slate-700 block bg-white p-2 rounded-xl border border-amber-100">
+                    {pendingLeave.reason || "개인 사유"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-2xl text-[11px] text-slate-600 space-y-1">
+                <span className="font-extrabold text-indigo-900 block flex items-center gap-1">
+                  💡 근태 정산 안내
+                </span>
+                <p className="leading-relaxed">
+                  최고관리자의 결재 승인이 완료되면 <strong className="text-indigo-700">당일 근무시간(8시간)</strong>으로 최종 확정 정산 처리됩니다.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setIsPendingLeaveModalOpen(false)}
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs rounded-xl shadow-xs border-none cursor-pointer"
+              >
+                확인 및 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 🤖 AI 관제 상신 & 태스크 자동 발급 모달 */}
       <MobileTaskRequestModal
         isOpen={isTaskRequestModalOpen}
@@ -941,11 +1306,23 @@ export default function MobileHubPage() {
         onFileUpload={(e) => {
           const file = e.target.files?.[0];
           if (!file) return;
-          setRequestFiles((prev) => [
-            ...prev,
-            { name: file.name, size: (file.size / 1024).toFixed(1) + " KB", type: file.type, file },
-          ]);
-          setIsTaskRequestModalOpen(true);
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64Str = reader.result as string;
+            setRequestFiles((prev) => [
+              ...prev,
+              { 
+                name: file.name, 
+                size: (file.size / 1024).toFixed(1) + " KB", 
+                type: file.type, 
+                preview: base64Str,
+                base64: base64Str,
+                url: base64Str
+              },
+            ]);
+            setIsTaskRequestModalOpen(true);
+          };
+          reader.readAsDataURL(file);
           if (e.target) e.target.value = "";
         }}
         onAddVoiceTask={(audioBlob, note) => {

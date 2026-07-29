@@ -29,8 +29,8 @@ interface MobileTaskRequestModalProps {
   onRemovePhoto: (index: number) => void;
   onRemoveFile: (index: number) => void;
   taskFolders: any[];
-  onSendGovernanceRequest: (title: string, note: string) => Promise<void>;
-  onSaveToTaskFolder: (folderId: string, title: string) => Promise<void>;
+  onSendGovernanceRequest: (title: string, note: string, photos?: RequestPhoto[], files?: RequestFile[]) => Promise<void>;
+  onSaveToTaskFolder: (folderId: string, title: string, photos?: RequestPhoto[], files?: RequestFile[]) => Promise<void>;
 }
 
 export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
@@ -88,8 +88,14 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
       };
 
       recognition.onerror = (err: any) => {
-        console.error("STT Error:", err);
+        const errorType = err?.error || err?.message || "unknown";
+        console.warn(`[STT] Speech recognition notice: ${errorType}`);
         setIsSTTListening(false);
+        if (errorType === "not-allowed" || errorType === "service-not-allowed") {
+          alert("🎤 마이크 접근 권한이 거부되었습니다. 브라우저 주소창 마이크 권한을 허용해 주세요.");
+        } else if (errorType === "audio-capture") {
+          alert("🎤 마이크 장치를 찾을 수 없습니다. 마이크 연결 상태를 확인해 주세요.");
+        }
       };
 
       recognition.onend = () => {
@@ -127,14 +133,14 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
     setIsSubmitting(true);
     try {
       if (targetType === "TODO") {
-        await onSendGovernanceRequest(title || "자료 & 업무 등록 상신", voiceText);
+        await onSendGovernanceRequest(title || "자료 & 업무 등록 상신", voiceText, photos, files);
       } else {
         if (!selectedFolderId) {
           alert("보관할 태스크 폴더를 선택해 주세요.");
           setIsSubmitting(false);
           return;
         }
-        await onSaveToTaskFolder(selectedFolderId, title || "등록 자료");
+        await onSaveToTaskFolder(selectedFolderId, title || "등록 자료", photos, files);
       }
       setTitle("");
       setVoiceText("");

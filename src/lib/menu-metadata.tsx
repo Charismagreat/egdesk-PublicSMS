@@ -85,6 +85,7 @@ export const MENU_METADATA_LIST: MenuMetadata[] = [
   { href: "/mail-management-ai", label: "메일 관리 AI", icon: Mail, color: "text-cyan-400", category: 2 },
   { href: "/form-management-new", label: "양식 관리 AI", icon: ClipboardList, color: "text-emerald-500", category: 2 },
   { href: "/import-customs", label: "수입 통관 AI", icon: Truck, color: "text-indigo-600", category: 2 },
+  { href: "/scm-management", label: "공급망 관리 AI", icon: Truck, color: "text-indigo-500", category: 2 },
   { href: "/products", label: "상품 관리 AI", icon: PackageSearch, color: "text-amber-600", category: 2 },
 
   // 3. 생산/재고/안전 (공장/물류/제조 현장)

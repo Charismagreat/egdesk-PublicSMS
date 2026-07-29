@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CheckSquare, Square, Search, AlertCircle, Plus, Calendar, Folder, ShieldCheck, Clock } from "lucide-react";
+import { CheckSquare, Square, Search, AlertCircle, Plus, Calendar, Folder, ShieldCheck, Clock, FileText, ExternalLink } from "lucide-react";
 
 interface MobileTodoListSectionProps {
   todoTab: "active" | "completed" | "folders";
@@ -18,6 +18,7 @@ interface MobileTodoListSectionProps {
   taskFolderCount: number;
   onToggleTaskStatus: (taskId: string, currentStatus: string) => void;
   onOpenNewTaskModal: () => void;
+  onCancelTaskRequest?: (task: any) => void;
   taskFolderContent?: React.ReactNode;
 }
 
@@ -36,6 +37,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
   taskFolderCount,
   onToggleTaskStatus,
   onOpenNewTaskModal,
+  onCancelTaskRequest,
   taskFolderContent,
 }) => {
 
@@ -219,17 +221,29 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                         >
                           {t.title}
                         </p>
-                        {/* 관제 상태 뱃지 */}
+                        {/* 관제 상태 뱃지 및 취소 요청 버튼 */}
                         {isDone ? (
                           <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center gap-0.5 shrink-0">
                             <ShieldCheck className="w-3 h-3" />
                             <span>관제 실행 완료</span>
                           </span>
                         ) : (
-                          <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center gap-0.5 shrink-0">
-                            <Clock className="w-3 h-3 text-amber-500" />
-                            <span>관제 승인 대기</span>
-                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center gap-0.5">
+                              <Clock className="w-3 h-3 text-amber-500" />
+                              <span>관제 승인 대기</span>
+                            </span>
+                            {onCancelTaskRequest && (
+                              <button
+                                type="button"
+                                onClick={() => onCancelTaskRequest(t)}
+                                className="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-md text-[9px] font-black cursor-pointer transition-all active:scale-95"
+                                title="최고관리자의 관제에 취소 요청 상신"
+                              >
+                                취소 요청
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
 
@@ -237,6 +251,26 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                         <p className="text-[11px] font-medium text-slate-500 mt-0.5 line-clamp-2">
                           {t.description}
                         </p>
+                      )}
+
+                      {/* 📎 [상신 실물 첨부파일/서류 미리보기 & 다운로드 뱃지 목록] */}
+                      {t.attachments && t.attachments.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
+                          {t.attachments.map((att: any, attIdx: number) => (
+                            <a
+                              key={attIdx}
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] px-2 py-1 rounded-lg border border-indigo-200/80 transition-all text-decoration-none cursor-pointer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                              <span className="truncate max-w-[180px]">{att.name}</span>
+                              <ExternalLink className="w-3 h-3 text-indigo-400 shrink-0" />
+                            </a>
+                          ))}
+                        </div>
                       )}
 
                       <div className="flex items-center gap-2 mt-1.5 text-[10px] font-bold text-slate-400">

@@ -192,7 +192,7 @@ export default async function Home() {
 
     // 2) 활성화된 자율 규칙 수
     const activeRulesRes = await queryTable('crm_governance_rules', {
-      filters: { is_active: 1, deleted_at: null },
+      filters: { is_active: '1', deleted_at: null },
       limit: 1000
     }).catch(() => ({ rows: [] }));
     activeRules = activeRulesRes.rows?.length || 0;

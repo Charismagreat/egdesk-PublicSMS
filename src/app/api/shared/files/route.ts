@@ -20,16 +20,65 @@ export async function GET(req: Request) {
     }
 
     // egdesk-helpers의 downloadFile API 호출
-    const res = await downloadFile({
-      fileId,
-      tableName,
-      rowId,
-      columnName
-    });
+    let res: any = null;
+    try {
+      res = await downloadFile({
+        fileId,
+        tableName,
+        rowId,
+        columnName
+      });
+    } catch (e: any) {
+      console.warn("downloadFile 호출 예외 방어막 작동:", e.message);
+    }
 
-    if (!res || !res.data) {
+    if (!res || !res.data || res.success === false) {
+      // 💡 [DB 레코드 경로 파일 직접 서빙 폴백] 스토리지 ID가 아닌 DB 컬럼 파일 경로(/uploads/...)인 경우 로컬 실물 파일 서빙
+      if (tableName && rowId && columnName) {
+        try {
+          const { queryTable } = require('@/../egdesk-helpers');
+          const fs = require('fs');
+          const path = require('path');
+          
+          const dbRes = await queryTable(tableName, { filters: { id: rowId } });
+          if (dbRes.rows && dbRes.rows.length > 0) {
+            const rowData = dbRes.rows[0];
+            const rawFilePath = rowData[columnName];
+
+            if (rawFilePath && typeof rawFilePath === 'string') {
+              const cleanPath = rawFilePath.startsWith('/') ? rawFilePath.substring(1) : rawFilePath;
+              const absPath = path.join(process.cwd(), 'public', cleanPath);
+
+              if (fs.existsSync(absPath)) {
+                const fileBuffer = fs.readFileSync(absPath);
+                const filename = path.basename(absPath);
+                const ext = filename.split('.').pop()?.toLowerCase();
+                
+                let mimeType = 'application/pdf';
+                if (ext === 'png') mimeType = 'image/png';
+                else if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+                else if (ext === 'gif') mimeType = 'image/gif';
+                else if (ext === 'pdf') mimeType = 'application/pdf';
+
+                const headers = new Headers();
+                headers.set('Content-Type', mimeType);
+                headers.set('Content-Length', fileBuffer.length.toString());
+                headers.set('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+
+                return new Response(fileBuffer, {
+                  status: 200,
+                  headers
+                });
+              }
+            }
+          }
+        } catch (dbErr) {
+          console.warn("DB 레코드 경로 폴백 처리 예외:", dbErr);
+        }
+      }
+
       return NextResponse.json(
-        { success: false, error: res?.error || '스토리지에서 파일을 찾을 수 없습니다.' },
+        { success: false, error: res?.error || '스토리지 및 로컬 스토리지에서 업로드 파일 데이터를 찾을 수 없습니다.' },
         { status: 404 }
       );
     }

@@ -11,12 +11,12 @@ import {
   Sparkles, User, Clock, ToggleLeft, ToggleRight, ListTodo,
   ExternalLink, FileText, ChevronRight, X, Loader2, CheckSquare, Square,
   Search, SlidersHorizontal, UserCheck, Cpu, Database, FolderOpen,
-  Camera, Receipt, MessageSquare, Send, Calendar, ArrowRight, Paperclip, Zap, Bot
+  Camera, Receipt, MessageSquare, Send, Calendar, ArrowRight, Paperclip, Zap, Bot, Plus
 } from "lucide-react";
 
 interface ControlEvent {
   id: string;
-  type: 'STORE_ORDER' | 'RAG_HOLD' | 'LOW_STOCK' | 'TASK_CANCEL_REQUEST';
+  type: 'STORE_ORDER' | 'RAG_HOLD' | 'LOW_STOCK' | 'TASK_CANCEL_REQUEST' | 'LEAVE_APPROVAL_REQUEST';
   title: string;
   subtitle: string;
   status: 'WAITING' | 'RESOLVED';
@@ -925,13 +925,59 @@ export default function GovernanceDashboard() {
           { code: 'notify_operator', label: '조치 이력 영구 감사 아카이빙', description: '최고관리자의 개입 이력을 통제 감사록에 상세 기록합니다.' }
         ];
       case 'RAG_HOLD':
-        // 💡 모바일 임직원 현장 상신 건인 경우, 전용 발주서 스캔 및 수주 등록 자율 대행 제공
+        // 💡 모바일 임직원 현장 상신 건인 경우: 키워드 + 업로드된 모든 실물 파일의 AI 분석 내용 통합 파싱
         if (evt.data?.doc_type === 'mobile_request' || evt.data?.doc_type === 'mobile_req') {
+          const docTitle = (evt.data?.doc_title || '').toLowerCase();
+          const reason = (evt.data?.reason || '').toLowerCase();
+          const matchedFilename = (evt.data?.matched_filename || '').toLowerCase();
+          const combinedAiText = (evt.data?.combined_ai_analysis_text || '').toLowerCase();
+          const attachmentsNames = (evt.data?.attachments || []).map((a: any) => a.name || '').join(' ').toLowerCase();
+
+          // 전체 문서 및 파일 AI 판독 텍스트 결합
+          const fullText = `${docTitle} ${reason} ${matchedFilename} ${attachmentsNames} ${combinedAiText}`;
+
+          // 1) 수입통관 / 관세 / 선적 / B/L / 통관 서류 감지 시
+          if (
+            fullText.includes('통관') || fullText.includes('수입') || fullText.includes('선적') || 
+            fullText.includes('관세') || fullText.includes('해외') || fullText.includes('customs') || 
+            fullText.includes('clearance') || fullText.includes('import') || fullText.includes('b/l')
+          ) {
+            return [
+              { code: 'scan_import_customs', label: "상신 파일 '수입통관 및 관세 명세 서류' AI OCR 자동 분석", description: '업로드된 모든 서류(PDF/이미지)의 품목, 관가, 수량, 부대비용 및 입고 일자를 AI로 종합 판독합니다.' },
+              { code: 'register_customs_expense', label: '지출/비용 대장(crm_expenses) 수입 통관 관세/부대비용 자율 적재', description: '추출된 수입 관세 및 물류 통관 부대비용을 회계 지출 대장에 자율 등록합니다.' },
+              { code: 'sync_import_inventory', label: '재고 대장(inventory_items) 수입 품목 입고 검수 및 수량 즉시 반영', description: '통관 완료된 수입 물품을 입고 검수하여 물류 창고 재고 대장에 수량을 즉시 추가 반영합니다.' },
+              { code: 'notify_operator', label: '상신 임직원에게 수입통관 처리 완료 알림 통보', description: '수입통관 처리 결과를 담당자 피드로 즉시 피드백 전송합니다.' }
+            ];
+          }
+
+          // 2) 발주서 / 수주서 / B2B 주문 서류 감지 시
+          if (
+            fullText.includes('발주') || fullText.includes('수주') || fullText.includes('주문') || 
+            fullText.includes('po') || fullText.includes('purchase order') || fullText.includes('order')
+          ) {
+            return [
+              { code: 'scan_received_order', label: "상신 파일 '받은 발주서 서류' AI OCR 스캔 및 항목 파싱", description: '업로드된 발주 서류(PDF/이미지)를 AI OCR로 판독하여 품목, 단가, 수량 정보를 추출합니다.' },
+              { code: 'auto_register_sales_order', label: '수주 대장(crm_sales_orders) 신규 수주 자동 등록 적재', description: '판독 완료된 B2B 발주 데이터를 기반으로 수주 대장에 즉시 신규 행으로 자동 등록(적재)합니다.' },
+              { code: 'notify_operator', label: '최초 조작 신청 임직원에게 처리 통보', description: '승인 결과를 시스템 알림 피드로 피드백합니다.' }
+            ];
+          }
+
+          // 3) 견적서 / 계약서 / 영수증 / 회계 증빙 서류 감지 시
+          if (
+            fullText.includes('견적') || fullText.includes('계약') || fullText.includes('영수증') || 
+            fullText.includes('quotation') || fullText.includes('contract') || fullText.includes('tax')
+          ) {
+            return [
+              { code: 'scan_document_ocr', label: "상신 파일 '견적/계약/증빙 서류' AI OCR 전체 내용 종합 분석", description: '첨부된 파일의 전체 텍스트, 금액, 공급가액, 거래처 및 계약 조건을 자동 파싱합니다.' },
+              { code: 'sync_partner_ledger', label: '거래처 대장(crm_partners) 및 결제 내역 자동 연동 적재', description: '분석된 거래처 정보를 대장에 매핑하고 적재합니다.' },
+              { code: 'notify_operator', label: '조치 이력 영구 감사 아카이빙', description: '최고관리자의 개입 이력을 통제 감사록에 상세 기록합니다.' }
+            ];
+          }
+
+          // 4) 일반 모바일 현장 작업 기본 시나리오
           return [
-            { code: 'scan_received_order', label: "상신 파일 '받은 발주서 스캔 등록' 및 AI OCR 판독 실행", description: '현장에서 첨부한 발주서 이미지 실물 파일을 AI OCR로 스캔하여 품목, 단가, 수량 정보를 추출합니다.' },
-            { code: 'auto_register_sales_order', label: '수주 대장(crm_sales_orders) 신규 수주 자동 등록 적재', description: '판독 완료된 B2B 발주 데이터를 기반으로 수주 대장에 즉시 신규 행으로 자동 등록(적재)합니다.' },
-            { code: 'notify_operator', label: '최초 조작 신청 임직원에게 처리 통보', description: '강제 승인 결과를 시스템 알림 피드로 피드백합니다.' },
-            { code: 'notify_operator', label: '조치 이력 영구 감사 아카이빙', description: '최고관리자의 개입 이력을 통제 감사록에 상세 기록합니다.' }
+            { code: 'process_mobile_task', label: '모바일 상신 파일 AI 내용 파악 및 관련 부서 업무 가이드 발급', description: '업로드된 파일 전체 내용 분석 결과를 바탕으로 관련 부서 스냅태스크로 자동 전송합니다.' },
+            { code: 'notify_operator', label: '최초 조작 신청 임직원에게 처리 통보', description: '강제 승인 결과를 시스템 알림 피드로 피드백합니다.' }
           ];
         }
         return [
@@ -955,17 +1001,65 @@ export default function GovernanceDashboard() {
     }
   };
 
+  // 💡 최고관리자 추천 작업 시나리오 직접 추가/제거 상태
+  const [customActionsMap, setCustomActionsMap] = useState<{ [eventId: string]: ActionRecommendation[] }>({});
+  const [newActionLabel, setNewActionLabel] = useState("");
+  const [newActionDesc, setNewActionDesc] = useState("");
+  const [showAddActionForm, setShowAddActionForm] = useState(false);
+
+  const getAllActionsForEvent = (evt: ControlEvent): ActionRecommendation[] => {
+    const base = getRecommendedActions(evt);
+    const custom = customActionsMap[evt.id] || [];
+    return [...base, ...custom];
+  };
+
   const handleOpenDetail = (evt: ControlEvent) => {
     setSelectedEvent(evt);
     setActionReports(null);
-    const defaults = getRecommendedActions(evt).map(a => a.code);
-    setSelectedActions(defaults); // 기본값 전체 선택
+    setShowAddActionForm(false);
+    const actions = getAllActionsForEvent(evt);
+    setSelectedActions(actions.map(a => a.code)); // 기본값 및 추가항목 전체 선택
   };
 
   const handleCloseDetail = () => {
     setSelectedEvent(null);
     setActionReports(null);
     setSelectedActions([]);
+    setShowAddActionForm(false);
+  };
+
+  const handleAddCustomAction = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newActionLabel.trim() || !selectedEvent) return;
+
+    const newCode = `custom_${Date.now()}`;
+    const newAct: ActionRecommendation = {
+      code: newCode,
+      label: newActionLabel.trim(),
+      description: newActionDesc.trim() || '최고관리자가 직접 추가한 맞춤 자율 대행 작업입니다.'
+    };
+
+    setCustomActionsMap(prev => {
+      const existing = prev[selectedEvent.id] || [];
+      return { ...prev, [selectedEvent.id]: [...existing, newAct] };
+    });
+
+    setSelectedActions(prev => [...prev, newCode]);
+    setNewActionLabel("");
+    setNewActionDesc("");
+    setShowAddActionForm(false);
+  };
+
+  const handleRemoveAction = (e: React.MouseEvent, codeToRemove: string) => {
+    e.stopPropagation();
+    if (!selectedEvent) return;
+
+    setSelectedActions(prev => prev.filter(c => c !== codeToRemove));
+
+    setCustomActionsMap(prev => {
+      const existing = prev[selectedEvent.id] || [];
+      return { ...prev, [selectedEvent.id]: existing.filter(a => a.code !== codeToRemove) };
+    });
   };
 
   const toggleActionSelection = (code: string) => {
@@ -1756,7 +1850,7 @@ export default function GovernanceDashboard() {
                                           ? 'bg-indigo-50 text-indigo-700'
                                           : 'bg-amber-50 text-amber-700'
                                   }`}>
-                                    {evt.type === 'STORE_ORDER' ? '스토어 주문' : evt.type === 'RAG_HOLD' ? 'AI 결재 보류' : evt.type === 'TASK_CANCEL_REQUEST' ? '업무 취소 요청' : '재고 부족 경보'}
+                                    {evt.type === 'STORE_ORDER' ? '스토어 주문' : evt.type === 'RAG_HOLD' ? 'AI 결재 보류' : evt.type === 'TASK_CANCEL_REQUEST' ? '업무 취소 요청' : evt.type === 'LEAVE_APPROVAL_REQUEST' ? '휴가/연차 결재' : '재고 부족 경보'}
                                   </span>
                                   <span className="text-[9px] bg-rose-50 text-rose-700 px-1.5 py-0.2 rounded font-black border border-rose-100 shrink-0">
                                     🚨 관제 알림
@@ -1773,6 +1867,7 @@ export default function GovernanceDashboard() {
                                   evt.data?.operator || 
                                   evt.data?.created_by || 
                                   evt.data?.updated_by ||
+                                  evt.data?.employee_name ||
                                   (evt.type === 'STORE_ORDER' ? evt.data?.customer_name : null);
                                   
                                 if (!operator) return null;
@@ -2546,7 +2641,7 @@ export default function GovernanceDashboard() {
                 {selectedEvent.type === 'RAG_HOLD' && (
                   <>
                     <div className="col-span-2 border-t border-slate-100 my-1"></div>
-                    {selectedEvent.data.doc_type === 'mobile_request' ? (
+                    {(selectedEvent.data.doc_type === 'mobile_request' || selectedEvent.data.doc_type === 'mobile_req') ? (
                       <>
                         <div>
                           <span className="text-slate-400 font-semibold block">요청 종류</span>
@@ -2561,18 +2656,41 @@ export default function GovernanceDashboard() {
                           <span className="font-semibold text-indigo-950 bg-indigo-50/50 p-3 rounded-2xl block mt-1 leading-relaxed border border-indigo-100/60 whitespace-pre-wrap">
                             {selectedEvent.data.reason}
                           </span>
-                          {/* 📎 [상신 첨부 파일 열기 버튼] */}
-                          {selectedEvent.data.file_url && (
-                            <div className="mt-2.5 flex items-center">
-                              <a
-                                href={selectedEvent.data.file_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 font-extrabold text-[11px] px-3.5 py-2.5 rounded-xl border border-indigo-100 transition-all shadow-3xs hover:shadow-xs decoration-none cursor-pointer"
-                              >
-                                <Paperclip className="w-3.5 h-3.5 text-indigo-650" />
-                                <span>상신 첨부 파일 열기: {selectedEvent.data.matched_filename || '동우일렉트릭.jpg'}</span>
-                              </a>
+                          {/* 📎 [상신 첨부 파일 / 서류 미리보기 & 열기 리스트] */}
+                          {((selectedEvent.data.attachments && selectedEvent.data.attachments.length > 0) || selectedEvent.data.file_url) && (
+                            <div className="mt-3 space-y-1.5 border-t border-indigo-100/60 pt-2.5">
+                              <span className="text-[11px] font-black text-indigo-700 flex items-center gap-1">
+                                <Paperclip className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>상신 첨부 서류 및 실물 파일 ({selectedEvent.data.attachments?.length || 1}건)</span>
+                              </span>
+                              <div className="flex flex-wrap gap-2 pt-1">
+                                {selectedEvent.data.attachments && selectedEvent.data.attachments.length > 0 ? (
+                                  selectedEvent.data.attachments.map((att: any, attIdx: number) => (
+                                    <a
+                                      key={attIdx}
+                                      href={att.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-2 bg-white hover:bg-indigo-50 text-indigo-700 font-extrabold text-[11px] px-3.5 py-2.5 rounded-xl border border-indigo-200 transition-all shadow-2xs hover:shadow-xs text-decoration-none cursor-pointer"
+                                    >
+                                      <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                                      <span className="truncate max-w-[260px]">{att.name}</span>
+                                      <ExternalLink className="w-3 h-3 text-indigo-400 shrink-0" />
+                                    </a>
+                                  ))
+                                ) : selectedEvent.data.file_url ? (
+                                  <a
+                                    href={selectedEvent.data.file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 bg-white hover:bg-indigo-50 text-indigo-700 font-extrabold text-[11px] px-3.5 py-2.5 rounded-xl border border-indigo-200 transition-all shadow-2xs hover:shadow-xs text-decoration-none cursor-pointer"
+                                  >
+                                    <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                                    <span className="truncate max-w-[260px]">{selectedEvent.data.matched_filename || '상신 첨부 서류 열기'}</span>
+                                    <ExternalLink className="w-3 h-3 text-indigo-400 shrink-0" />
+                                  </a>
+                                ) : null}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -2656,7 +2774,13 @@ export default function GovernanceDashboard() {
                     </div>
                     <div>
                       <span className="text-slate-400 font-semibold block">휴가 희망 기간</span>
-                      <span className="font-bold text-slate-800">{selectedEvent.data.start_date} ~ {selectedEvent.data.end_date}</span>
+                      <span className="font-bold text-slate-800">
+                        {selectedEvent.data.leave_type === 'HALF_AM'
+                          ? `${selectedEvent.data.start_date} 오전`
+                          : selectedEvent.data.leave_type === 'HALF_PM'
+                          ? `${selectedEvent.data.start_date} 오후`
+                          : `${selectedEvent.data.start_date} ~ ${selectedEvent.data.end_date}`}
+                      </span>
                     </div>
                     <div className="col-span-2">
                       <span className="text-slate-400 font-semibold block">휴가 신청 상세 사유</span>
@@ -2669,33 +2793,104 @@ export default function GovernanceDashboard() {
               </div>
             </div>
 
-            {/* AI 추천 자율 대행 액션 리스트 */}
+            {/* AI 추천 자율 대행 액션 리스트 및 최고관리자 항목 추가/제거 */}
             {!actionReports && selectedEvent.type !== 'LEAVE_APPROVAL_REQUEST' && (
               <div className="space-y-3">
-                <div className="flex items-center gap-1.5">
-                  <ListTodo className="w-4 h-4 text-indigo-650" />
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">AI 추천 다음 작업 시나리오</h4>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <ListTodo className="w-4 h-4 text-indigo-650" />
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">AI 추천 및 자율 대행 시나리오</h4>
+                  </div>
+                  {!showAddActionForm && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddActionForm(true)}
+                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-black transition-all border border-indigo-100 cursor-pointer flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>추가 자율 작업 직접 입력</span>
+                    </button>
+                  )}
                 </div>
+
+                {/* 시나리오 직접 추가 폼 */}
+                {showAddActionForm && (
+                  <form onSubmit={handleAddCustomAction} className="bg-indigo-50/60 border border-indigo-200/80 rounded-2xl p-3.5 space-y-2 text-left animate-scale-in">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-indigo-900">➕ 최고관리자 자율 작업 추가</span>
+                      <button type="button" onClick={() => setShowAddActionForm(false)} className="text-slate-400 hover:text-slate-700 border-none bg-transparent cursor-pointer">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="수행할 작업 제목 (예: 관세사 서류 원본 최종 검인 및 보관)"
+                      value={newActionLabel}
+                      onChange={(e) => setNewActionLabel(e.target.value)}
+                      className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="작업 설명 (선택 사항)"
+                      value={newActionDesc}
+                      onChange={(e) => setNewActionDesc(e.target.value)}
+                      className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500"
+                    />
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button type="button" onClick={() => setShowAddActionForm(false)} className="px-3 py-1.5 bg-white text-slate-600 text-xs font-bold rounded-lg border border-slate-200 cursor-pointer">
+                        취소
+                      </button>
+                      <button type="submit" className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg border-none cursor-pointer shadow-3xs">
+                        시나리오에 추가
+                      </button>
+                    </div>
+                  </form>
+                )}
+
                 <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-white">
-                  {getRecommendedActions(selectedEvent).map((act, idx) => {
+                  {getAllActionsForEvent(selectedEvent).map((act, idx) => {
                     const isSelected = selectedActions.includes(act.code);
+                    const isCustom = act.code.startsWith("custom_");
                     return (
                       <div 
                         key={`${act.code}-${idx}`}
                         onClick={() => toggleActionSelection(act.code)}
-                        className="p-4 flex gap-3 hover:bg-slate-50 cursor-pointer transition-colors text-left"
+                        className={`p-4 flex items-start justify-between gap-3 cursor-pointer transition-colors text-left ${
+                          isSelected ? "bg-indigo-50/20" : "bg-white hover:bg-slate-50"
+                        }`}
                       >
-                        <div className="pt-0.5 shrink-0">
-                          {isSelected ? (
-                            <CheckSquare className="w-5 h-5 text-indigo-600" />
-                          ) : (
-                            <Square className="w-5 h-5 text-slate-300" />
-                          )}
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div className="pt-0.5 shrink-0">
+                            {isSelected ? (
+                              <CheckSquare className="w-5 h-5 text-indigo-600" />
+                            ) : (
+                              <Square className="w-5 h-5 text-slate-300" />
+                            )}
+                          </div>
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-xs font-bold block ${isSelected ? "text-indigo-950 font-black" : "text-slate-800"}`}>
+                                {act.label}
+                              </span>
+                              {isCustom && (
+                                <span className="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 text-[9px] font-black shrink-0">
+                                  직접 추가됨
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-400 font-medium leading-relaxed block">{act.description}</span>
+                          </div>
                         </div>
-                        <div className="space-y-1">
-                          <span className="text-xs font-bold text-slate-800 block">{act.label}</span>
-                          <span className="text-[11px] text-slate-400 font-medium leading-relaxed block">{act.description}</span>
-                        </div>
+
+                        {/* ❌ 항목 삭제/해제 버튼 */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleRemoveAction(e, act.code)}
+                          className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all border-none bg-transparent cursor-pointer shrink-0"
+                          title="해당 작업 항목 제거/해제"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
                     );
                   })}

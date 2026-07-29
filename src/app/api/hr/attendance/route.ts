@@ -344,12 +344,30 @@ export async function POST(req: Request) {
     const existingRes = await queryTable('crm_attendance', { filters: existingFilters });
     const records = existingRes.rows || [];
 
+    // 💡 [신규 방식 1] 당일 승인된 오전 반차(HALF_AM)가 존재하는 경우
+    // 개인별 기준 출근시각(workStartTime)에 +4시간을 가산하여 오후 출근 인정시각 자동 연산
+    try {
+      const leaveRes = await queryTable('crm_annual_leaves', {
+        filters: { operator_id: operatorId, tenant_id: tenantId, status: 'APPROVED', leave_type: 'HALF_AM' }
+      });
+      const approvedHalfAm = (leaveRes.rows || []).find((l: any) => {
+        return l.start_date <= workDate && l.end_date >= workDate;
+      });
+      if (approvedHalfAm) {
+        const [h, m, s] = workStartTime.split(':').map(Number);
+        const halfAmHour = (h + 4) % 24;
+        workStartTime = `${String(halfAmHour).padStart(2, '0')}:${String(m || 0).padStart(2, '0')}:${String(s || 0).padStart(2, '0')}`;
+      }
+    } catch (lErr) {
+      console.warn("오전 반차 승인 여부 및 동적 출근시간 계산 실패:", lErr);
+    }
+
     if (action === 'CLOCK_IN') {
       if (records.length > 0 && records[0].clock_in) {
         return NextResponse.json({ success: false, error: '이미 오늘의 출근 스탬프가 찍혀 있습니다.' }, { status: 400 });
       }
 
-      // 출근 시간 판별 기준 (사원 설정 기준 시각 동적 적용)
+      // 출근 시간 판별 기준 (오전 반차 승인 시 13:00 기준, 일반 시 사원 설정 기준 시각 적용)
       const isLate = timeStr > workStartTime;
       const status = isLate ? 'LATE' : 'NORMAL';
 
@@ -397,7 +415,7 @@ export async function POST(req: Request) {
 
       // 조퇴 판별 기준 (사원 설정 퇴근 시각 이전 퇴근 시 동적 적용)
       let currentStatus = attRecord.status;
-      if (timeStr < workEndTime && currentStatus === 'NORMAL') {
+      if (timeStr < workEndTime) {
         currentStatus = 'EARLY_LEAVE';
       }
 
