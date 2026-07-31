@@ -24,6 +24,7 @@ import { CalendarEventModal } from "./components/CalendarEventModal";
 import { LeaveRejectModal } from "./components/LeaveRejectModal";
 import { EventTypeMasterModal } from "./components/EventTypeMasterModal";
 import { BriefingZoomModal } from "./components/BriefingZoomModal";
+import HrBatchUploadModal from "./components/HrBatchUploadModal";
 
 export default function HrAttendancePage() {
   // 1. 데이터 리스트 및 세션 상태
@@ -46,6 +47,7 @@ export default function HrAttendancePage() {
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isTypeManagerOpen, setIsTypeManagerOpen] = useState(false);
   const [isBriefingZoomed, setIsBriefingZoomed] = useState(false);
+  const [isHrBatchModalOpen, setIsHrBatchModalOpen] = useState(false);
 
   // 4. 선택 식별자(ID) 상태
   const [selectedLeaveId, setSelectedLeaveId] = useState<string | null>(null);
@@ -791,10 +793,19 @@ export default function HrAttendancePage() {
       <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
-            <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
-              <Bot className="w-5 h-5 text-indigo-600" />
-              <span>🏛️ 전사 인사 관제 센터 (서브 탭 서식)</span>
-            </h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                <Bot className="w-5 h-5 text-indigo-600" />
+                <span>🏛️ 전사 인사 관제 센터 (서브 탭 서식)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsHrBatchModalOpen(true)}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95 flex items-center gap-1.5"
+              >
+                <span>📊 HR 인사 엑셀 일괄 등록</span>
+              </button>
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">
               360도 Dynamic 프로필, 근로계약 및 실시간 급여 정산, 임직원 인적사항을 각각의 별도 탭으로 분개하여 관리합니다.
             </p>
@@ -925,6 +936,13 @@ export default function HrAttendancePage() {
           🏛️ 팝업 모달 목록 마운트
           ========================================== */}
       
+      {/* 모달 0: HR 인사 종합 엑셀 일괄 등록 모달 */}
+      <HrBatchUploadModal
+        isOpen={isHrBatchModalOpen}
+        onClose={() => setIsHrBatchModalOpen(false)}
+        onSuccess={fetchHrData}
+      />
+
       {/* 모달 1: 휴가 신청서 작성 모달 */}
       <LeaveRequestModal
         isOpen={isLeaveModalOpen}
