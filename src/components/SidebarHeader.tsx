@@ -217,12 +217,15 @@ export default function SidebarHeader({
         title="EGDESK전사 메뉴 신속 검색 (클릭)"
       >
         <div className="flex items-center justify-between">
-          <h1 
-            className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-indigo-400 truncate whitespace-nowrap group-hover:scale-[1.01] transition-transform tracking-tight"
-            title={sidebarMainTitle}
-          >
-            {sidebarMainTitle}
-          </h1>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <img src="/icon.svg" alt="EGDESK Logo" className="w-6 h-6 rounded-lg shrink-0 shadow-md" />
+            <h1 
+              className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-indigo-400 truncate whitespace-nowrap group-hover:scale-[1.01] transition-transform tracking-tight"
+              title={sidebarMainTitle}
+            >
+              {sidebarMainTitle}
+            </h1>
+          </div>
           <Search className="w-4 h-4 text-blue-400 opacity-0 group-hover:opacity-100 transition-all shrink-0 ml-2 animate-pulse" />
         </div>
         <p 
