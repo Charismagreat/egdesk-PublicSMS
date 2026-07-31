@@ -903,12 +903,13 @@ export default function MobileHubPage() {
       return false;
     }
 
-    // 2) 관제 지정일(due_date)이 없는 일반 오늘 등록건 -> '오늘' 탭(및 '전체')에만 표시!
+    // 2) 관제 지정일(due_date)이 없는 일반 오늘 등록건
     if (tab === "active") {
       if (period === "TODAY") return true;
-      return false; // 내일, 이번주, 이번달, 다음달 탭에서는 노출 제외
+      return false;
     } else {
-      if (period === "TODAY") return true;
+      // 한 일 (completed) 탭: 오늘 완결 건은 '오늘', '이번 주', '이번 달' 탭에도 포함 표시!
+      if (period === "TODAY" || period === "WEEK" || period === "MONTH") return true;
       return false;
     }
   };

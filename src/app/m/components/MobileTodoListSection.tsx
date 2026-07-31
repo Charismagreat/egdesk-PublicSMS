@@ -96,7 +96,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
         }
         return false;
       }
-      return periodId === "TODAY";
+      return tabType === "active" ? periodId === "TODAY" : (periodId === "TODAY" || periodId === "WEEK" || periodId === "MONTH");
     }).length;
   };
 
