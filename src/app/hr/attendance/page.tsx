@@ -2,7 +2,8 @@
 
 import { apiFetch } from '@/lib/api';
 import { useState, useEffect } from "react";
-import { Calendar } from "lucide-react";
+import { Calendar, Bot, Sparkles, FileText, UserCheck } from "lucide-react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 
 // 공통 타입 임포트
 import { Employee, CompanyEvent, LeaveRequest, Contract, Payroll, EmployeeProfile, BriefingHistory, EventType } from "./types";
@@ -51,6 +52,12 @@ export default function HrAttendancePage() {
   const [selected360OperatorId, setSelected360OperatorId] = useState<string>("");
   const [selectedProfileOperatorId, setSelectedProfileOperatorId] = useState("");
   const [selectedContractOperatorId, setSelectedContractOperatorId] = useState("");
+
+  // 🏛️ 인사 관제 3대 전용 서브 탭 persistence (360 | CONTRACT | PROFILE)
+  const [activeAdminTab, setActiveAdminTab] = usePersistedState<"360" | "CONTRACT" | "PROFILE">(
+    "hr_admin_active_tab",
+    "360"
+  );
 
   // 5. AI 업무 공백 모니터링 상태
   const [aiBriefing, setAiBriefing] = useState<any>({
@@ -716,18 +723,7 @@ export default function HrAttendancePage() {
         pendingLeavesCount={pendingLeavesCount}
       />
 
-      {/* 7. 🏛️ 임직원 360도 Dynamic 프로필 관제 보드 */}
-      <ComprehensiveProfile360
-        currentUser={currentUser}
-        employees={employees}
-        comprehensiveProfiles={comprehensiveProfiles}
-        selected360OperatorId={selected360OperatorId}
-        handleSelect360Employee={setSelected360OperatorId}
-        handleDelete360Record={handleDelete360Record}
-        handleSubmit360Upsert={handleSubmit360Upsert}
-        submitLoading={submitLoading}
-        comprehensiveLoading={comprehensiveLoading}
-      />
+
 
       {/* 4. 메인 관제 보드 (캘린더 + AI 예보) */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
@@ -791,56 +787,137 @@ export default function HrAttendancePage() {
         </div>
       </div>
 
-      {/* 5. 근로계약 & 실시간 급여 정산 관제 (관리자 전용) */}
-      <PayrollContractCenter
-        currentUser={currentUser}
-        payrollYearMonth={payrollYearMonth}
-        setPayrollYearMonth={setPayrollYearMonth}
-        employees={employees}
-        contracts={contracts}
-        payroll={payroll}
-        selectedContractOperatorId={selectedContractOperatorId}
-        handleSelectEmployeeContract={handleSelectEmployeeContract}
-        hourlyWage={hourlyWage}
-        setHourlyWage={setHourlyWage}
-        weeklyHours={weeklyHours}
-        setWeeklyHours={setWeeklyHours}
-        allowHolidayPay={allowHolidayPay}
-        setAllowHolidayPay={setAllowHolidayPay}
-        allowOvertimePaid={allowOvertimePaid}
-        setAllowOvertimePaid={setAllowOvertimePaid}
-        workDays={workDays}
-        setWorkDays={setWorkDays}
-        contractMemo={contractMemo}
-        setContractMemo={setContractMemo}
-        handleSubmitContract={handleSubmitContract}
-        getIsContractModified={getIsContractModified}
-        submitLoading={submitLoading}
-        payrollLoading={payrollLoading}
-      />
+      {/* 🏛️ 인사 관제 3대 전용 서브 탭 (360도 프로필 / 근로계약·급여정산 / 인적사항 명부) */}
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+              <Bot className="w-5 h-5 text-indigo-600" />
+              <span>🏛️ 전사 인사 관제 센터 (서브 탭 서식)</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              360도 Dynamic 프로필, 근로계약 및 실시간 급여 정산, 임직원 인적사항을 각각의 별도 탭으로 분개하여 관리합니다.
+            </p>
+          </div>
 
-      {/* 6. 임직원 상세 인적사항 명부 대장 (관리자 전용) */}
-      <BasicProfileEditor
-        currentUser={currentUser}
-        employees={employees}
-        profiles={profiles}
-        selectedProfileOperatorId={selectedProfileOperatorId}
-        handleSelectEmployeeProfile={handleSelectEmployeeProfile}
-        profileDept={profileDept}
-        setProfileDept={setProfileDept}
-        profileHireDate={profileHireDate}
-        setProfileHireDate={setProfileHireDate}
-        profileCommute={profileCommute}
-        setProfileCommute={setProfileCommute}
-        profileSkills={profileSkills}
-        setProfileSkills={setProfileSkills}
-        profileBackup={profileBackup}
-        setProfileBackup={setProfileBackup}
-        handleSubmitProfile={handleSubmitProfile}
-        getIsProfileModified={getIsProfileModified}
-        submitLoading={submitLoading}
-        profileLoading={profileLoading}
-      />
+          <div className="flex items-center gap-1.5 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/60 overflow-x-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab("360")}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === "360"
+                  ? "bg-white text-indigo-700 shadow-2xs border border-slate-200/80"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span>🏛️ 1. 360도 Dynamic 프로필 관제</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab("CONTRACT")}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === "CONTRACT"
+                  ? "bg-white text-indigo-700 shadow-2xs border border-slate-200/80"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5 text-emerald-600" />
+              <span>📑 2. 근로계약 & 급여 정산 AI 관제</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab("PROFILE")}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === "PROFILE"
+                  ? "bg-white text-indigo-700 shadow-2xs border border-slate-200/80"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+              }`}
+            >
+              <UserCheck className="w-3.5 h-3.5 text-purple-600" />
+              <span>👥 3. 임직원 상세 인적사항 명부 대장</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 탭 1: 🏛️ 임직원 360도 Dynamic 프로필 관제 보드 */}
+        {activeAdminTab === "360" && (
+          <div className="animate-fade-in">
+            <ComprehensiveProfile360
+              currentUser={currentUser}
+              employees={employees}
+              comprehensiveProfiles={comprehensiveProfiles}
+              selected360OperatorId={selected360OperatorId}
+              handleSelect360Employee={setSelected360OperatorId}
+              handleDelete360Record={handleDelete360Record}
+              handleSubmit360Upsert={handleSubmit360Upsert}
+              submitLoading={submitLoading}
+              comprehensiveLoading={comprehensiveLoading}
+            />
+          </div>
+        )}
+
+        {/* 탭 2: 📑 근로계약 & 실시간 급여 정산 AI 관제 */}
+        {activeAdminTab === "CONTRACT" && (
+          <div className="animate-fade-in">
+            <PayrollContractCenter
+              currentUser={currentUser}
+              payrollYearMonth={payrollYearMonth}
+              setPayrollYearMonth={setPayrollYearMonth}
+              employees={employees}
+              contracts={contracts}
+              payroll={payroll}
+              selectedContractOperatorId={selectedContractOperatorId}
+              handleSelectEmployeeContract={handleSelectEmployeeContract}
+              hourlyWage={hourlyWage}
+              setHourlyWage={setHourlyWage}
+              weeklyHours={weeklyHours}
+              setWeeklyHours={setWeeklyHours}
+              allowHolidayPay={allowHolidayPay}
+              setAllowHolidayPay={setAllowHolidayPay}
+              allowOvertimePaid={allowOvertimePaid}
+              setAllowOvertimePaid={setAllowOvertimePaid}
+              workDays={workDays}
+              setWorkDays={setWorkDays}
+              contractMemo={contractMemo}
+              setContractMemo={setContractMemo}
+              handleSubmitContract={handleSubmitContract}
+              getIsContractModified={getIsContractModified}
+              submitLoading={submitLoading}
+              payrollLoading={payrollLoading}
+            />
+          </div>
+        )}
+
+        {/* 탭 3: 👥 임직원 상세 인적사항 명부 대장 */}
+        {activeAdminTab === "PROFILE" && (
+          <div className="animate-fade-in">
+            <BasicProfileEditor
+              currentUser={currentUser}
+              employees={employees}
+              profiles={profiles}
+              selectedProfileOperatorId={selectedProfileOperatorId}
+              handleSelectEmployeeProfile={handleSelectEmployeeProfile}
+              profileDept={profileDept}
+              setProfileDept={setProfileDept}
+              profileHireDate={profileHireDate}
+              setProfileHireDate={setProfileHireDate}
+              profileCommute={profileCommute}
+              setProfileCommute={setProfileCommute}
+              profileSkills={profileSkills}
+              setProfileSkills={setProfileSkills}
+              profileBackup={profileBackup}
+              setProfileBackup={setProfileBackup}
+              handleSubmitProfile={handleSubmitProfile}
+              getIsProfileModified={getIsProfileModified}
+              submitLoading={submitLoading}
+              profileLoading={profileLoading}
+            />
+          </div>
+        )}
+      </div>
 
 
 
