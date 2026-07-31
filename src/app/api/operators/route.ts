@@ -173,9 +173,11 @@ export async function PUT(req: Request) {
       return NextResponse.json({ success: false, error: '기본 관리자 계정의 권한 등급은 변경할 수 없습니다.' }, { status: 400 });
     }
 
-    // 사원번호 검증
-    const finalEmpNumber = (employee_number || '').trim();
-    if (!finalEmpNumber) {
+    // 사원번호 검증 (admin 계정은 EMP-ADMIN 자동 보정)
+    let finalEmpNumber = (employee_number || '').trim();
+    if (currentOp.username === 'admin' && !finalEmpNumber) {
+      finalEmpNumber = 'EMP-ADMIN';
+    } else if (!finalEmpNumber) {
       return NextResponse.json({ success: false, error: '사원번호를 입력해주세요.' }, { status: 400 });
     }
 

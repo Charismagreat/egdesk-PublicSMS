@@ -256,7 +256,7 @@ export default function MemberManagementPage() {
     setSelectedMember(member);
     setFormName(member.name);
     setFormRole(member.role as any);
-    setFormEmployeeNumber(member.employee_number || "");
+    setFormEmployeeNumber(member.employee_number || (member.username === "admin" ? "EMP-ADMIN" : ""));
     setFormPhone(member.phone || "");
     setFormTenantId(member.tenant_id || "");
     setFormPassword("");
@@ -745,6 +745,12 @@ export default function MemberManagementPage() {
             )}
 
             <form onSubmit={handleEditMemberSubmit} className="space-y-4">
+              {selectedMember.username === "admin" && (
+                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl text-[11px] font-bold flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>🔑 시스템 최고 운영자(`admin`) 계정 정보를 수정 중입니다.</span>
+                </div>
+              )}
               <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-[11px] text-slate-500 font-semibold space-y-1">
                 <p>계정 아이디: <span className="font-mono text-slate-800 font-bold">{selectedMember.username}</span></p>
                 <p>테넌트 식별자: <span className="font-mono text-slate-800 font-bold">{selectedMember.tenant_id || "default"}</span></p>
