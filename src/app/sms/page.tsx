@@ -1,248 +1,226 @@
 "use client";
 
-import React from "react";
-import { MessageSquare } from "lucide-react";
+import React, { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { MessageSquare, Send, BarChart3, Zap } from "lucide-react";
+import { usePersistedState } from "@/hooks/usePersistedState";
 
-// 커스텀 훅 및 모달 컴포넌트 임포트
+// 1. 발송 탭 훅 & 컴포넌트
 import { useSms } from "@/hooks/useSms";
 import SmsTestSendModal from "@/components/sms/SmsTestSendModal";
 import SmsTemplateEditModal from "@/components/sms/SmsTemplateEditModal";
 import SmsDeviceAddModal from "@/components/sms/SmsDeviceAddModal";
-
-// 격리 신설한 5종 프레젠테이션 컴포넌트 임포트
 import { AiPanel } from "./components/AiPanel";
 import { MessageForm } from "./components/MessageForm";
 import { TargetSelector } from "./components/TargetSelector";
 import { DeviceHub } from "./components/DeviceHub";
 import { TemplateLibrary } from "./components/TemplateLibrary";
 
+// 2. 발송 내역 탭 훅 & 컴포넌트
+import { useMessageLogs } from "../message-logs/hooks/useMessageLogs";
+import { MessageLogsFilter } from "../message-logs/components/MessageLogsFilter";
+import { MessageLogsTable } from "../message-logs/components/MessageLogsTable";
+import { MessageLogsPagination } from "../message-logs/components/MessageLogsPagination";
+
+// 3. 자동 발송 탭 훅 & 컴포넌트
+import { useAutomation } from "../automation/hooks/useAutomation";
+import { AutomationHeader } from "../automation/components/AutomationHeader";
+import { AutomationInfo } from "../automation/components/AutomationInfo";
+import { AutomationGrid } from "../automation/components/AutomationGrid";
+
 export default function SmsPage() {
-  const {
-    message, setMessage,
-    messageBytes, messageType,
-    isConnected,
-    isPairing,
-    smsDevices,
-    selectedDeviceId, setSelectedDeviceId,
-    newDevicePhone, setNewDevicePhone,
-    newDeviceName, setNewDeviceName,
-    showAddDeviceModal, setShowAddDeviceModal,
-    isAddingDevice,
-    customers,
-    selectedIds,
-    targetMode, setTargetMode,
-    excelCustomers,
-    selectedExcelIds,
-    fileInputRef,
-    isAd, setIsAd,
-    adHeader, setAdHeader,
-    adFooter, setAdFooter,
-    optOutPhone, setOptOutPhone,
-    spamRisk,
-    adTemplates,
-    selectedTemplateId,
-    products,
-    selectedProductId, setSelectedProductId,
-    messageTemplates, setMessageTemplates,
-    editingTemplate, setEditingTemplate,
-    isSending,
-    sendProgress,
-    showTestModal, setShowTestModal,
-    testPhone, setTestPhone,
-    testDeviceId, setTestDeviceId,
-    aiPrompt, setAiPrompt,
-    isAiLoading,
-    aiError,
-    dbSearchQuery, setDbSearchQuery,
-    dbCurrentPage, setDbCurrentPage,
-    dbItemsPerPage, setDbItemsPerPage,
-    excelSearchQuery, setExcelSearchQuery,
-    excelCurrentPage, setExcelCurrentPage,
-    excelItemsPerPage, setExcelItemsPerPage,
-    filteredDbCustomers, totalDbPages, startDbIndex, endDbIndex, paginatedDbCustomers,
-    filteredExcelCustomers, totalExcelPages, startExcelIndex, endExcelIndex, paginatedExcelCustomers,
-    fetchCustomers,
-    loadDevicesAndStatus,
-    handleUpdateDeviceLimit,
-    handleAiGenerate,
-    handlePairing,
-    handleAddDevice,
-    handleDeleteDevice,
-    toggleSelectAll,
-    toggleSelect,
-    handleExcelUpload,
-    handleDeleteSelectedExcel,
-    downloadSampleExcel,
-    insertVariable,
-    saveAdTemplate,
-    loadAdTemplate,
-    deleteAdTemplate,
-    saveProduct,
-    deleteProduct,
-    generateFinalMessage,
-    handleTestSend,
-    handleSend
-  } = useSms();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab")?.toUpperCase();
+
+  // 브라우저 탭 보존 상태 (SEND | LOGS | AUTO)
+  const [activeTab, setActiveTab] = usePersistedState<"SEND" | "LOGS" | "AUTO">("active_sms_tab", "SEND");
+
+  useEffect(() => {
+    if (tabParam === "LOGS" || tabParam === "AUTO" || tabParam === "SEND") {
+      setActiveTab(tabParam as "SEND" | "LOGS" | "AUTO");
+    }
+  }, [tabParam, setActiveTab]);
+
+  // 1. 발송 탭 데이터 & 바인딩
+  const smsHook = useSms();
+
+  // 2. 발송 내역 탭 데이터 & 바인딩
+  const logsHook = useMessageLogs();
+
+  // 3. 자동 발송 탭 데이터 & 바인딩
+  const autoHook = useAutomation();
 
   return (
-    <div className="space-y-6 pb-20 w-full min-w-0 font-sans text-slate-800" data-easybot-hint="무료 문자 발송 AI: SMS/LMS 발송, AI 본문 생성 및 수신 고객 관리를 수행하는 통합 메시징 센터입니다.">
-      <h1 className="text-3xl font-bold text-slate-800 flex items-center tracking-tight">
-        <MessageSquare className="w-8 h-8 text-purple-500 mr-3" />
-        무료 문자 발송 AI
-      </h1>
-
-      {/* PC 전용 3열 고정 레이아웃 (반응형 접두사 디톡스 적용) */}
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 space-y-6">
-          
-          {/* AI Panel (AiPanel 컴포넌트로 분리) */}
-          <AiPanel
-            aiPrompt={aiPrompt}
-            setAiPrompt={setAiPrompt}
-            isAiLoading={isAiLoading}
-            aiError={aiError}
-            onAiGenerate={handleAiGenerate}
-          />
-
-          {/* 메시지 작성 센터 (MessageForm 컴포넌트로 분리) */}
-          <MessageForm
-            message={message}
-            setMessage={setMessage}
-            messageBytes={messageBytes}
-            messageType={messageType}
-            isConnected={isConnected}
-            products={products}
-            selectedProductId={selectedProductId}
-            setSelectedProductId={setSelectedProductId}
-            deleteProduct={deleteProduct}
-            saveProduct={saveProduct}
-            insertVariable={insertVariable}
-            isAd={isAd}
-            setIsAd={setIsAd}
-            adHeader={adHeader}
-            setAdHeader={setAdHeader}
-            adFooter={adFooter}
-            setAdFooter={setAdFooter}
-            optOutPhone={optOutPhone}
-            setOptOutPhone={setOptOutPhone}
-            selectedTemplateId={selectedTemplateId}
-            adTemplates={adTemplates}
-            loadAdTemplate={loadAdTemplate}
-            deleteAdTemplate={deleteAdTemplate}
-            saveAdTemplate={saveAdTemplate}
-            generateFinalMessage={generateFinalMessage}
-            spamRisk={spamRisk}
-            messageTemplates={messageTemplates}
-            setMessageTemplates={setMessageTemplates}
-            isSending={isSending}
-            sendProgress={sendProgress}
-            selectedDeviceId={selectedDeviceId}
-            setTestDeviceId={setTestDeviceId}
-            setShowTestModal={setShowTestModal}
-            handleSend={handleSend}
-          />
-
-          {/* 발송 대상 선택 영역 (TargetSelector 컴포넌트로 분리) */}
-          <TargetSelector
-            targetMode={targetMode}
-            setTargetMode={setTargetMode}
-            dbSearchQuery={dbSearchQuery}
-            setDbSearchQuery={setDbSearchQuery}
-            excelSearchQuery={excelSearchQuery}
-            setExcelSearchQuery={setExcelSearchQuery}
-            fetchCustomers={fetchCustomers}
-            paginatedDbCustomers={paginatedDbCustomers}
-            selectedIds={selectedIds}
-            toggleSelectAll={toggleSelectAll}
-            toggleSelect={toggleSelect}
-            dbItemsPerPage={dbItemsPerPage}
-            setDbItemsPerPage={setDbItemsPerPage}
-            dbCurrentPage={dbCurrentPage}
-            setDbCurrentPage={setDbCurrentPage}
-            filteredDbCustomers={filteredDbCustomers}
-            totalDbPages={totalDbPages}
-            startDbIndex={startDbIndex}
-            endDbIndex={endDbIndex}
-            downloadSampleExcel={downloadSampleExcel}
-            fileInputRef={fileInputRef}
-            handleExcelUpload={handleExcelUpload}
-            paginatedExcelCustomers={paginatedExcelCustomers}
-            selectedExcelIds={selectedExcelIds}
-            excelItemsPerPage={excelItemsPerPage}
-            setExcelItemsPerPage={setExcelItemsPerPage}
-            excelCurrentPage={excelCurrentPage}
-            setExcelCurrentPage={setExcelCurrentPage}
-            filteredExcelCustomers={filteredExcelCustomers}
-            totalExcelPages={totalExcelPages}
-            startExcelIndex={startExcelIndex}
-            endExcelIndex={endExcelIndex}
-            handleDeleteSelectedExcel={handleDeleteSelectedExcel}
-          />
+    <div className="space-y-6 pb-20" data-easybot-hint="통합 SMS 문자 관제 센터: 무료 SMS/LMS 문자 생성 및 발송, 실시간 발송 로그 모니터링, AI 자동 발송 규칙을 한곳에서 원스톱으로 관리합니다.">
+      {/* 📱 메인 서브 타이틀 헤더 바 */}
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+              <MessageSquare className="w-7 h-7 text-indigo-600" />
+              <span>📱 통합 SMS 문자 관제 센터</span>
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/80 text-[10px] font-black">
+              All-in-One 원스톱 관리
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            무료 AI 문자 생성·발송, 실시간 발송 내역 조회, AI 자동 발송 규칙 설정을 한 화면에서 유기적으로 처리합니다.
+          </p>
         </div>
 
-        {/* 우측 3번째 열 (기기관리 및 개인 템플릿 모음) */}
-        <div className="space-y-6">
-          {/* 발송 기기 멀티 허브 (DeviceHub 컴포넌트로 분리) */}
-          <DeviceHub
-            setShowAddDeviceModal={setShowAddDeviceModal}
-            selectedDeviceId={selectedDeviceId}
-            setSelectedDeviceId={setSelectedDeviceId}
-            smsDevices={smsDevices}
-            isPairing={isPairing}
-            handlePairing={handlePairing}
-            handleDeleteDevice={handleDeleteDevice}
-            handleUpdateDeviceLimit={handleUpdateDeviceLimit}
-          />
-          
-          {/* 내 템플릿 모음 (TemplateLibrary 컴포넌트로 분리) */}
-          <TemplateLibrary
-            messageTemplates={messageTemplates}
-            setMessageTemplates={setMessageTemplates}
-            setEditingTemplate={setEditingTemplate}
-            setMessage={setMessage}
-          />
+        {/* 서브 탭 컨트롤러 */}
+        <div className="flex items-center gap-1.5 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/60 shrink-0 w-full md:w-auto overflow-x-auto scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setActiveTab("SEND")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "SEND"
+                ? "bg-white text-indigo-700 shadow-2xs border border-slate-200/80"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+            }`}
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>💬 문자 즉시 & AI 발송</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("LOGS")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "LOGS"
+                ? "bg-white text-indigo-700 shadow-2xs border border-slate-200/80"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>📊 발송 내역 & 모니터링</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("AUTO")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "AUTO"
+                ? "bg-white text-indigo-700 shadow-2xs border border-slate-200/80"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-500" />
+            <span>⚡ AI 자동 발송 규칙</span>
+          </button>
         </div>
       </div>
 
-      {/* ============================================================ */}
-      {/* 3대 분리된 모달 컴포넌트 렌더링 영역 */}
-      {/* ============================================================ */}
+      {/* 탭 1: 💬 문자 즉시 & AI 발송 */}
+      {activeTab === "SEND" && (
+        <div className="space-y-6 animate-fade-in">
+          <AiPanel {...(smsHook as any)} />
+          <TemplateLibrary {...(smsHook as any)} />
 
-      {/* SmsTestSendModal: 테스트 문자 미리보기 및 전송 모달 */}
-      <SmsTestSendModal
-        isOpen={showTestModal}
-        onClose={() => setShowTestModal(false)}
-        testPhone={testPhone}
-        setTestPhone={setTestPhone}
-        testDeviceId={testDeviceId}
-        setTestDeviceId={setTestDeviceId}
-        smsDevices={smsDevices}
-        isSending={isSending}
-        handleTestSend={handleTestSend}
-      />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-6 space-y-6">
+              <MessageForm {...(smsHook as any)} />
+              <DeviceHub {...(smsHook as any)} />
+            </div>
 
-      {/* SmsTemplateEditModal: 템플릿 작성 및 편집 모달 */}
-      <SmsTemplateEditModal
-        isOpen={!!editingTemplate}
-        onClose={() => setEditingTemplate(null)}
-        editingTemplate={editingTemplate}
-        setEditingTemplate={setEditingTemplate}
-        messageTemplates={messageTemplates}
-        setMessageTemplates={setMessageTemplates}
-      />
+            <div className="lg:col-span-6 space-y-6">
+              <TargetSelector {...(smsHook as any)} />
+            </div>
+          </div>
 
-      {/* SmsDeviceAddModal: 발송 기기 추가 모달 */}
-      <SmsDeviceAddModal
-        isOpen={showAddDeviceModal}
-        onClose={() => setShowAddDeviceModal(false)}
-        newDeviceName={newDeviceName}
-        setNewDeviceName={setNewDeviceName}
-        newDevicePhone={newDevicePhone}
-        setNewDevicePhone={setNewDevicePhone}
-        isAddingDevice={isAddingDevice}
-        handleAddDevice={handleAddDevice}
-      />
+          {/* 모달 3종 */}
+          <SmsTestSendModal
+            isOpen={smsHook.showTestModal}
+            onClose={() => smsHook.setShowTestModal(false)}
+            testPhone={smsHook.testPhone}
+            setTestPhone={smsHook.setTestPhone}
+            testDeviceId={smsHook.testDeviceId}
+            setTestDeviceId={smsHook.setTestDeviceId}
+            smsDevices={smsHook.smsDevices}
+            isSending={smsHook.isSending}
+            handleTestSend={smsHook.handleTestSend}
+          />
 
+          <SmsTemplateEditModal
+            isOpen={!!smsHook.editingTemplate}
+            editingTemplate={smsHook.editingTemplate}
+            setEditingTemplate={smsHook.setEditingTemplate}
+            messageTemplates={smsHook.messageTemplates}
+            setMessageTemplates={smsHook.setMessageTemplates}
+            onClose={() => smsHook.setEditingTemplate(null)}
+          />
+
+          <SmsDeviceAddModal
+            isOpen={smsHook.showAddDeviceModal}
+            onClose={() => smsHook.setShowAddDeviceModal(false)}
+            newDevicePhone={smsHook.newDevicePhone}
+            setNewDevicePhone={smsHook.setNewDevicePhone}
+            newDeviceName={smsHook.newDeviceName}
+            setNewDeviceName={smsHook.setNewDeviceName}
+            isAddingDevice={smsHook.isAddingDevice}
+            handleAddDevice={smsHook.handleAddDevice}
+          />
+        </div>
+      )}
+
+      {/* 탭 2: 📊 발송 내역 & 모니터링 */}
+      {activeTab === "LOGS" && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <MessageLogsFilter 
+              filteredCount={logsHook.filteredData.length}
+              searchQuery={logsHook.searchQuery}
+              setSearchQuery={logsHook.setSearchQuery}
+              isMounted={logsHook.isMounted}
+              activePreset={logsHook.activePreset}
+              setPreset={logsHook.setPreset}
+              startDate={logsHook.startDate}
+              setStartDate={logsHook.setStartDate}
+              endDate={logsHook.endDate}
+              setEndDate={logsHook.setEndDate}
+              setActivePreset={logsHook.setActivePreset}
+            />
+
+            <MessageLogsTable 
+              data={logsHook.filteredData}
+              paginatedData={logsHook.paginatedData}
+              formatKoreanTime={logsHook.formatKoreanTime}
+              parseSenderDevice={logsHook.parseSenderDevice}
+            />
+
+            <MessageLogsPagination 
+              filteredDataLength={logsHook.filteredData.length}
+              currentPage={logsHook.currentPage}
+              totalPages={logsHook.totalPages}
+              itemsPerPage={logsHook.itemsPerPage}
+              setCurrentPage={logsHook.setCurrentPage}
+              setItemsPerPage={logsHook.setItemsPerPage}
+              startIndex={logsHook.startIndex}
+              endIndex={logsHook.endIndex}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 탭 3: ⚡ AI 자동 발송 규칙 */}
+      {activeTab === "AUTO" && (
+        <div className="space-y-6 animate-fade-in">
+          <AutomationHeader 
+            isSaving={autoHook.isSaving}
+            onSave={autoHook.saveRules}
+          />
+
+          <AutomationInfo />
+
+          <AutomationGrid 
+            rules={autoHook.rules}
+            templates={autoHook.templates}
+            toggleRule={autoHook.toggleRule}
+            changeTemplate={autoHook.changeTemplate}
+          />
+        </div>
+      )}
     </div>
   );
 }

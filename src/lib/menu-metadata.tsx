@@ -65,9 +65,7 @@ export interface MenuMetadata {
 // 💡 마스터 메뉴 명세 리스트 (SSOT)
 export const MENU_METADATA_LIST: MenuMetadata[] = [
   // 1. 마케팅/채널/소통 (대고객 접점 및 채널)
-  { href: "/sms", label: "무료 문자 발송 AI", icon: MessageSquare, color: "text-purple-550", category: 1 },
-  { href: "/message-logs", label: "발송 내역 조회", icon: Send, color: "text-purple-550", category: 1 },
-  { href: "/automation", label: "자동 발송 설정", icon: Zap, color: "text-yellow-600", category: 1 },
+  { href: "/sms", label: "통합 SMS 문자 관제 AI", icon: MessageSquare, color: "text-purple-550", category: 1 },
   { href: "/instagram", label: "인스타그램 마케팅 AI", icon: InstagramIcon, color: "text-[#ff007f]", category: 1 },
   { href: "/naver-blog", label: "N-BLOG 포스팅 AI", icon: NaverIcon, color: "text-[#2db400]", category: 1 },
   { href: "/youtube-shorts", label: "YOUTUBE 쇼츠 AI", icon: YoutubeIcon, color: "text-[#FF0000]", category: 1 },
