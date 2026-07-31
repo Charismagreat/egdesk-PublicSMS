@@ -72,7 +72,7 @@ export default function DashboardCardSections({
           </span>
         </div>
 
-        <div ref={section1Ref} className="flex items-stretch gap-4 overflow-x-auto pb-4 pt-1 scrollbar-thin snap-x">
+        <div ref={section1Ref} className="flex items-stretch gap-4 overflow-x-auto pb-4 pt-1 scrollbar-thin select-none">
           
           {/* 맨 앞: ➕ 새 카드 추가 버튼 */}
           <button
@@ -278,7 +278,7 @@ export default function DashboardCardSections({
           </span>
         </div>
 
-        <div ref={section2Ref} className="flex items-stretch gap-4 overflow-x-auto pb-4 pt-1 scrollbar-thin snap-x">
+        <div ref={section2Ref} className="flex items-stretch gap-4 overflow-x-auto pb-4 pt-1 scrollbar-thin select-none">
 
           {/* 맨 앞: ➕ 새 카드 추가 버튼 */}
           <button
