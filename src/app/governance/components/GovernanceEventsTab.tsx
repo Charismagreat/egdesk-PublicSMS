@@ -253,7 +253,17 @@ export default function GovernanceEventsTab({
                     <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3.5 min-w-0 text-left">
                       <div className="flex items-center flex-wrap gap-2 shrink-0">
                         <span className="text-sm font-black text-slate-800">{(evt.title || '').replace(/^AI 결재 보류:\s*/g, '').trim()}</span>
-                        {evt.type !== 'RAG_HOLD' && (
+                        {evt.data?.doc_type?.includes('folder_file_task') && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/80 flex items-center gap-1">
+                            <span>📁 태스크 폴더 추출</span>
+                            {evt.data?.doc_type === 'folder_file_task_auto' ? (
+                              <span className="text-emerald-600 font-extrabold">⚡ AI자율대행</span>
+                            ) : (
+                              <span className="text-indigo-600 font-extrabold">👤 담당자할일</span>
+                            )}
+                          </span>
+                        )}
+                        {evt.type !== 'RAG_HOLD' && !evt.data?.doc_type?.includes('folder_file_task') && (
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
                             evt.type === 'STORE_ORDER' 
                               ? 'bg-blue-50 text-blue-700' 

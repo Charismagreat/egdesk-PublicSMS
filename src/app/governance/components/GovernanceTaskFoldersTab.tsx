@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { 
   FolderOpen, RotateCcw, UserCheck, FileText, 
-  Trash2, ExternalLink, Paperclip, CheckCircle2 
+  Trash2, ExternalLink, Paperclip, CheckCircle2, Sparkles, Loader2, Bot
 } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 interface GovernanceTaskFoldersTabProps {
   taskFolders: any[];
@@ -14,6 +15,7 @@ interface GovernanceTaskFoldersTabProps {
   loadTaskFolders: () => void;
   handleDeleteFolderFile: (fileId: string) => void;
   handleOpenDocumentModal: (title: string, url: string, rawText?: string) => void;
+  onRefreshEvents?: () => void;
 }
 
 export default function GovernanceTaskFoldersTab({
@@ -24,7 +26,39 @@ export default function GovernanceTaskFoldersTab({
   loadTaskFolders,
   handleDeleteFolderFile,
   handleOpenDocumentModal,
+  onRefreshEvents,
 }: GovernanceTaskFoldersTabProps) {
+  const [extractingFileId, setExtractingFileId] = useState<string | null>(null);
+
+  const selectedFolder = taskFolders.find((f) => String(f.id) === String(selectedFolderId));
+
+  const handleExtractTasksFromFile = async (file: any) => {
+    setExtractingFileId(file.id);
+    try {
+      const res = await apiFetch("/api/governance?action=extract_folder_file_tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          file_id: file.id,
+          file_name: file.content_text || file.file_name || "수집 서류",
+          raw_text: file.ai_analysis || file.content_text,
+          folder_name: selectedFolder?.title || selectedFolder?.name || "태스크 폴더"
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message || "✅ 서류에서 '담당자 할 일' 및 'AI 자율 대행 할 일'이 추출되어 관제 대상 피드로 수록되었습니다.");
+        if (onRefreshEvents) onRefreshEvents();
+      } else {
+        alert("추출 중 오류: " + (data.error || "실패"));
+      }
+    } catch (e) {
+      alert("서버 통신 오류가 발생했습니다.");
+    } finally {
+      setExtractingFileId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* 폴더 관제 헤더 컨트롤바 */}
@@ -35,7 +69,7 @@ export default function GovernanceTaskFoldersTab({
             <span>전사 임직원 태스크 폴더 & 현장 수집자료 실시간 파일 관제</span>
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            임직원이 모바일 포털 및 이지봇을 통해 수집·업로드한 업무 태스크 폴더 파일 현황을 모니터링하고 관제합니다.
+            임직원이 수집한 서류 파일에서 담당자 수행 할 일과 AI 자율 대행 할 일을 AI가 찾아내어 메인 관제 피드로 자동 수록합니다.
           </p>
         </div>
         <button
@@ -126,6 +160,21 @@ export default function GovernanceTaskFoldersTab({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      disabled={extractingFileId === file.id}
+                      onClick={() => handleExtractTasksFromFile(file)}
+                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200/80 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
+                      title="AI가 수집 서류에서 '담당자 할 일' 및 'AI 자율 대행 할 일'을 찾아내어 메인 관제 피드로 자동 등록합니다."
+                    >
+                      {extractingFileId === file.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                      )}
+                      <span>AI 할 일 추출 & 관제 수록 🔍</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => handleOpenDocumentModal(

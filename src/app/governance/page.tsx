@@ -830,6 +830,7 @@ export default function GovernanceDashboard() {
           loadTaskFolders={loadTaskFolders}
           handleDeleteFolderFile={handleDeleteFolderFile}
           handleOpenDocumentModal={handleOpenDocumentModal}
+          onRefreshEvents={loadData}
         />
       )}
 

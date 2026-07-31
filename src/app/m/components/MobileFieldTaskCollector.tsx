@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Folder, Plus, Upload, FileText, Image as ImageIcon, Music, Trash2, Edit3, ArrowRightLeft, Info, Search, X, Eye, MoreVertical, Sparkles, Loader2 } from "lucide-react";
+import { Folder, Plus, Upload, FileText, Image as ImageIcon, Music, Trash2, Edit3, ArrowRightLeft, Info, Search, X, Eye, MoreVertical } from "lucide-react";
 import { MobileItemViewerModal } from "./MobileItemViewerModal";
-import { apiFetch } from "@/lib/api";
 
 interface MobileFieldTaskCollectorProps {
   folders: any[];
@@ -36,30 +35,6 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
   onClearFolderItems,
   isUploading,
 }) => {
-  // 🔮 AI 수집 분석 진행 상태
-  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
-
-  const handleRunFolderAiAnalysis = async () => {
-    if (!selectedFolderId) return;
-    setIsAiAnalyzing(true);
-    try {
-      const res = await apiFetch("/api/governance?action=analyze_folder_files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder_id: selectedFolderId }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(data.message);
-      } else {
-        alert(data.message || "AI 분석 실패");
-      }
-    } catch (e) {
-      alert("AI 분석 중 네트워크 통신 오류가 발생했습니다.");
-    } finally {
-      setIsAiAnalyzing(false);
-    }
-  };
   // 🔍 태스크 폴더 및 수집 항목 실시간 검색어 상태
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -232,27 +207,12 @@ export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> =
         {/* 5. 업로드 & 수집 내역 비우기 액션 바 */}
         {selectedFolderId && (
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
               <label className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-extrabold cursor-pointer transition-colors flex items-center gap-1">
                 <Upload className="w-3.5 h-3.5" />
                 <span>{isUploading ? "업로드 중..." : "파일/사진 추가"}</span>
                 <input type="file" className="hidden" onChange={onUploadFile} disabled={isUploading} />
               </label>
-
-              <button
-                type="button"
-                onClick={handleRunFolderAiAnalysis}
-                disabled={isAiAnalyzing || collectedItems.length === 0}
-                className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1 shadow-2xs border-none active:scale-95 disabled:opacity-50"
-                title="수집 서류/파일을 AI가 전수 스캔하여 사람이 할 일과 자율 실행 할 일을 분류하여 최고관리자 관제 리스트에 자동 반영"
-              >
-                {isAiAnalyzing ? (
-                  <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5 text-white" />
-                )}
-                <span>AI 할 일/자율 분석 🔮</span>
-              </button>
             </div>
             {collectedItems.length > 0 && (
               <button

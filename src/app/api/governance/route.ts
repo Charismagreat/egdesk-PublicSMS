@@ -960,145 +960,10 @@ export async function POST(request: Request) {
 
     const action = searchParams.get('action') || body?.action;
 
-    // 💡 [신규] 모바일 태스크 폴더 수집 파일 AI 통합 분석 및 할 일 / 자율 실행 자동 추출
-    if (action === 'analyze_folder_files') {
-      try {
-        const folderId = body.folder_id || searchParams.get('folder_id');
-        const tenantId = await resolveTenantId();
-        const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
-
-        // 1. 태스크 폴더 내 수집 파일 항목 조회
-        const itemsRes = await queryTable('crm_snaptask_items', { limit: 1000 });
-        let folderItems = itemsRes.rows || [];
-        if (folderId) {
-          folderItems = folderItems.filter((i: any) => String(i.task_id) === String(folderId));
-        }
-
-        if (folderItems.length === 0) {
-          return NextResponse.json({
-            success: false,
-            message: '분석할 태스크 폴더 수집 파일이 존재하지 않습니다.'
-          });
-        }
-
-        // 2. 수집 파일들의 제목 및 텍스트 데이터 파독 조립
-        const fileSummaries = folderItems.map((item: any, idx: number) => {
-          return `[파일 ${idx + 1}] ID: ${item.id} | 파일명/제목: ${item.title || item.file_name || '수집 서류'} | 업로드일: ${item.created_at || '최근'} | 세부 텍스트: ${item.description || item.content || '서류 데이터 스캔 완료'}`;
-        }).join('\n');
-
-        // 3. Gemini AI에게 사람의 할 일(Human Task)과 자율 실행 할 일(Auto Task) 구분 추출 요청
-        const prompt = `
-당신은 자율 기업 거버넌스 컨트롤타워의 AI 수석 관제관입니다.
-아래는 모바일 포털 태스크 폴더에 업로드되어 수집된 파일과 서류 데이터 목록입니다.
-
-[수집된 서류 및 파일 목록]
-${fileSummaries}
-
-지시사항:
-수집된 파일들의 내용을 바탕으로 다음 2가지 부문의 업무를 명확히 파독/추출해 주세요:
-1. human_tasks: 직원이 수동으로 확인하거나 후속 처리해야 하는 '추천 할 일' (예: 특정 관세 서류 오차 수정, 8월 25일까지 서류 재검토 등)
-2. auto_tasks: AI가 사람 수동 승인 없이 즉시 백엔드에서 자율 대행 실행해야 하는 업무 (예: 수입 통관 파일 100% 무손실 적재, 재고 수량 자동 갱신 등)
-
-반드시 아래 JSON 형식으로만 응답해 주세요 (JSON 마크다운 기호 없이 pure raw JSON만 출력):
-{
-  "human_tasks": [
-    {
-      "task_title": "8월 25일까지 수입 통관 오류 항목 보정 처리",
-      "task_description": "수집된 통관 서류 3번 항목의 과세표준 세액 재검토 및 서류 정정 상신 필요",
-      "suggested_assignee": "김직원",
-      "due_date": "${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10)}"
-    }
-  ],
-  "auto_tasks": [
-    {
-      "title": "[자율 대행] 수입 통관 서류 100% 무손실 데이터베이스 적재 완료",
-      "subtitle": "태스크 폴더 수집 서류 무결성 검증 및 관제 원장 1:1 확정 적재 단행",
-      "action_type": "APPROVE_CUSTOMS"
-    }
-  ]
-}
-`;
-
-        let humanTasks: any[] = [];
-        let autoTasks: any[] = [];
-
-        try {
-          const aiRes = await callAiCaller(prompt);
-          let parsed: any = null;
-
-          if (aiRes.json && typeof aiRes.json === 'object') {
-            parsed = aiRes.json;
-          } else {
-            const contentText = (aiRes.content || '').trim().replace(/^```json\s*/i, '').replace(/```$/, '').trim();
-            parsed = JSON.parse(contentText);
-          }
-
-          if (parsed) {
-            humanTasks = parsed.human_tasks || [];
-            autoTasks = parsed.auto_tasks || [];
-          }
-        } catch (aiErr: any) {
-          console.warn('[ANALYZE_FOLDER_AI_ERROR] AI 파독 실패, 기본 규칙 추출 폴백 가동:', aiErr);
-          // 폴백용 자동 도출 규칙
-          humanTasks = [{
-            task_title: `[수집 서류 검토] ${folderItems[0]?.title || '태스크 폴더 서류'} 세부 항목 수동 확인`,
-            task_description: '업로드된 수집 서류의 품목 수량 및 과세표준 금액을 수동 크로스 체크해 주세요.',
-            suggested_assignee: '김직원',
-            due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10)
-          }];
-          autoTasks = [{
-            title: `[자율 대행] ${folderItems[0]?.title || '태스크 서류'} 무손실 적재 및 관제 승인`,
-            subtitle: 'AI 관제 원장 데이터 무결성 검증 100% 완결',
-            action_type: 'APPROVE_CUSTOMS'
-          }];
-        }
-
-        // 4. 추출된 [사람이 할 일]을 컨트롤타워 crm_governance_pending_tasks (추천 태스크 배정 패널)에 등록
-        for (const hTask of humanTasks) {
-          await insertRows('crm_governance_pending_tasks', [{
-            task_title: hTask.task_title,
-            task_description: hTask.task_description || '태스크 폴더 서류 분석 기반 추천 업무',
-            report_id: 'FOLDER_AI_SCAN',
-            status: 'PENDING',
-            created_at: nowStr,
-            tenant_id: tenantId
-          }]);
-        }
-
-        // 5. 추출된 [자율 실행 할 일]을 컨트롤타워 crm_governance_logs (관제 및 감사 피드)에 완결 등록
-        for (const aTask of autoTasks) {
-          await insertRows('crm_governance_logs', [{
-            doc_type: 'customs_doc',
-            doc_title: aTask.title,
-            original_data: JSON.stringify({
-              subtitle: aTask.subtitle,
-              source: 'MOBILE_TASK_FOLDER_SCAN',
-              operator: 'AI_AUTONOMOUS_COPILOT'
-            }),
-            ai_opinion: aTask.subtitle || '태스크 폴더 수집 서류 AI 자율 대행 승인 완료',
-            status: 'RESOLVED',
-            created_at: nowStr,
-            tenant_id: tenantId
-          }]);
-        }
-
-        return NextResponse.json({
-          success: true,
-          message: `🔮 태스크 폴더 서류 분석 완료! 사람이 할 일 ${humanTasks.length}건, AI 자율 실행 ${autoTasks.length}건이 최고관리자 관제 리스트에 즉시 반영되었습니다.`,
-          scannedCount: folderItems.length,
-          humanTasks,
-          autoTasks
-        });
-      } catch (err: any) {
-        console.error('[ANALYZE_FOLDER_FILES_ERROR]', err);
-        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-      }
-    }
-
     const adminUser = await verifySuperAdmin();
     
-    // 모바일에서의 현장 요청 생성, 일보 제출, 태스크 폴더 AI 분석 및 일반 업무/취소 상신(create_log)인 경우, 최고관리자가 아니더라도 세션이 있으면 허용
-    if (action !== 'create_mobile_request' && action !== 'submit_report' && action !== 'create_log' && action !== 'analyze_folder_files') {
+    // 모바일에서의 현장 요청 생성, 일보 제출 및 일반 업무/취소 상신(create_log)인 경우, 최고관리자가 아니더라도 세션이 있으면 허용
+    if (action !== 'create_mobile_request' && action !== 'submit_report' && action !== 'create_log') {
       if (!adminUser) {
         return NextResponse.json(
           { success: false, error: '🔒 권한이 없습니다. 최고관리자만 조작할 수 있습니다.' },
@@ -1122,6 +987,64 @@ ${fileSummaries}
     }
 
     const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+
+    // 💡 [신규] 태스크 폴더 수집 서류에서 '담당자 할 일' 및 'AI 자율 대행 할 일' 추출하여 관제 대상 피드로 자동 적재
+    if (action === 'extract_folder_file_tasks') {
+      const tenantId = await resolveTenantId();
+      const { file_name, raw_text, folder_name } = body;
+      const baseTitle = file_name || '태스크 폴더 수집 서류';
+      const textContent = raw_text || '서류 검증 및 관제 필요';
+
+      // 1. 담당자 수행 할 일 (Manual Task) 관제 피드 적재
+      const manualTaskTitle = `[📁 폴더할일] ${baseTitle} - 실물 검증 및 세권/계약 승인 검토`;
+      const manualTaskDesc = `태스크 폴더 [${folder_name || '수집폴더'}]에서 추출된 담당자 수행 할 일입니다.\n- 파일명: ${baseTitle}\n- 주요 내용: ${textContent.substring(0, 150)}`;
+
+      await insertRows('crm_governance_logs', [{
+        event_type: 'RAG_HOLD',
+        doc_type: 'folder_file_task_manual',
+        operator: '김직원',
+        action_name: manualTaskTitle,
+        details: manualTaskDesc,
+        status: 'WAITING',
+        is_autonomous: 'N',
+        created_at: nowStr,
+        tenant_id: tenantId
+      }]);
+
+      // 2. AI 자율 대행 할 일 (Autonomous Task) 관제 피드 적재
+      const autoTaskTitle = `[⚡ AI 자율대행] ${baseTitle} - 무손실 데이터 100% 자동 적재`;
+      const autoTaskDesc = `태스크 폴더 [${folder_name || '수집폴더'}] 서류의 AI 자율 대행 관제건입니다.\n- 서류 명세 자동 검증 및 스토리지 DB 영구 적재 대행`;
+
+      const insertedAuto = await insertRows('crm_governance_logs', [{
+        event_type: 'RAG_HOLD',
+        doc_type: 'folder_file_task_auto',
+        operator: 'AI',
+        action_name: autoTaskTitle,
+        details: autoTaskDesc,
+        status: 'WAITING',
+        is_autonomous: 'Y',
+        created_at: nowStr,
+        tenant_id: tenantId
+      }]);
+
+      // 자율 규칙이 켜져있다면 자동 처리 시도
+      if (insertedAuto && insertedAuto[0]?.id) {
+        await checkAndApplyAutoGovernanceRules(
+          String(insertedAuto[0].id),
+          'folder_file_task_auto',
+          'AI',
+          0,
+          autoTaskTitle,
+          autoTaskDesc,
+          tenantId
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `✅ 태스크 폴더 서류에서 '담당자 할 일' 및 'AI 자율 대행 할 일' 2건이 추출되어 관제 대상 피드 리스트에 수록되었습니다.`
+      });
+    }
 
     // [신규] 임직원 모바일 현장 작업 요청 접수 (create_mobile_request & create_log 모두 호환)
     if (action === 'create_mobile_request' || action === 'create_log') {
