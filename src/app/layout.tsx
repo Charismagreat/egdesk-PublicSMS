@@ -15,7 +15,12 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "EGDESK SMS",
-  description: "평생 무료 문자 발송 시스템",
+  description: "중소기업을 위한 AI 기반 자율 경영 플랫폼",
+  icons: {
+    icon: "/icon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/icon.ico",
+  },
 };
 
 export default function RootLayout({
