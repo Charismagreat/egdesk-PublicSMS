@@ -110,7 +110,7 @@ export default function GovernanceRulesTab({
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
               <Bot className="w-4.5 h-4.5 text-indigo-600" />
-              <span>최고관리자 정의 AI 자율 통제 및 자동 승인 규칙 대장</span>
+              <span>AI 자율 실행 규칙 승인 대장</span>
             </h3>
             <span className="text-[10px] font-black bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full border border-indigo-200/60">
               총 {autoRules.length}건 수록 중 (모달 연동 {modalAutoRulesCount}건)

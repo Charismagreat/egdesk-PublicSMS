@@ -734,7 +734,7 @@ export default function GovernanceDashboard() {
           }`}
         >
           <Bot className="w-4 h-4" />
-          <span>자율 규칙 제어 ({autoRules.length})</span>
+          <span>자율 실행 규칙 ({autoRules.length})</span>
         </button>
 
         <button
