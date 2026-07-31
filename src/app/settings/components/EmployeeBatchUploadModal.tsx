@@ -64,7 +64,7 @@ export default function EmployeeBatchUploadModal({
     document.body.removeChild(link);
   };
 
-  // 2. 파일 파독 (CSV 및 텍스트 엑셀 포맷 파싱)
+  // 2. 파일 판독 (CSV 및 텍스트 엑셀 포맷 파싱)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -249,13 +249,13 @@ export default function EmployeeBatchUploadModal({
             </div>
           </div>
 
-          {/* 미리보기 및 유효성 결과 파독 테이블 */}
+          {/* 미리보기 및 유효성 결과 판독 테이블 */}
           {parsedData.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                   <Users className="w-4 h-4 text-indigo-600" />
-                  <span>파독 검증 결과 (총 {parsedData.length}건)</span>
+                  <span>판독 검증 결과 (총 {parsedData.length}건)</span>
                 </h4>
                 <div className="flex items-center gap-2 text-[11px] font-bold">
                   <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">정상: {validCount}건</span>
