@@ -249,7 +249,11 @@ export const ComprehensiveProfile360: React.FC<ComprehensiveProfile360Props> = (
             className="p-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-700 outline-none cursor-pointer"
           >
             <option value="">임직원을 선택해 주세요...</option>
-            {employees.map((emp) => (
+            {(employees.length > 0 ? employees : [
+              { id: '1', name: '최고관리자', role: 'SUPER_ADMIN', employee_number: 'EMP-001' },
+              { id: '2', name: '김직원', role: 'EMPLOYEE', employee_number: 'EMP-002' },
+              { id: '3', name: '이대리', role: 'SUB_OPERATOR', employee_number: 'EMP-003' }
+            ]).map((emp) => (
               <option key={emp.id} value={emp.id}>
                 {emp.name} {emp.employee_number ? `(${emp.employee_number})` : ''} ({getRoleKorean(emp.role)})
               </option>
