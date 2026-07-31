@@ -50,10 +50,10 @@ export default function LoginPage() {
             <MessageSquare className="w-8 h-8" />
           </div>
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">
-            PublicSMS 서비스 로그인
+            EGDESK SMS 로그인
           </h2>
           <p className="text-slate-500 mt-2 text-xs font-semibold">
-            개인 및 소상공인을 위한 AI 기반 자율 마케팅 & 문자 관리 플랫폼
+            중소기업을 위한 AI 기반 자율 경영 플랫폼
           </p>
         </div>
 
