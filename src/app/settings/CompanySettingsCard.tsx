@@ -2,8 +2,9 @@
 
 import { apiFetch } from '@/lib/api';
 import React, { useState, useEffect } from 'react';
-import { Building2, Save, CheckCircle2, AlertCircle, RefreshCw, Sparkles, Plus } from 'lucide-react';
+import { Building2, Save, CheckCircle2, AlertCircle, RefreshCw, Sparkles, Plus, FileSpreadsheet } from 'lucide-react';
 import { WorkplaceSettingsCard } from '../ai-settings/components/WorkplaceSettingsCard';
+import CompanyProfileExcelModal from './components/CompanyProfileExcelModal';
 
 interface CompanyProfile {
   companyName: string;
@@ -23,7 +24,7 @@ interface CompanyProfile {
 
 export default function CompanySettingsCard() {
   const [profile, setProfile] = useState<CompanyProfile>({
-    companyName: '(주)쿠스',
+    companyName: '(주)쿠스-게스트',
     representative: '차민수',
     businessNumber: '731-81-02023',
     address: '경기도 시흥시 서울대학로 59-69',
@@ -33,14 +34,17 @@ export default function CompanySettingsCard() {
     sidebarMainTitle: 'EGDESK SMS',
     sidebarSubTitle: '우리 회사 스마트 AI 시스템',
     sealImages: [],
-    bankName: '국민은행',
-    accountNumber: '123456-12-123456',
-    accountHolder: '주식회사 이지데스크',
+    bankName: '카카오뱅크',
+    accountNumber: '3333-12-1695965',
+    accountHolder: '차호석',
   });
 
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // 📊 회사 프로필 엑셀 등록 모달 상태
+  const [isProfileExcelModalOpen, setIsProfileExcelModalOpen] = useState<boolean>(false);
 
   // 🎨 스마트 도장(직인) 자동 생성 모달 상태
   const [isSealModalOpen, setIsSealModalOpen] = useState<boolean>(false);
@@ -413,9 +417,20 @@ export default function CompanySettingsCard() {
             <p className="text-xs text-slate-400 mt-0.5">시스템을 사용하는 관리자님의 본사 정보를 등록하여 외부 바이어/고객 식별 및 AI 분석 시 활용합니다.</p>
           </div>
         </div>
-        <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2.5 py-1 rounded-full border border-slate-250/30">
-          시스템 연동
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsProfileExcelModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/90 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95"
+            title="회사 기본 정보 및 입금 계좌 설정이 작성된 엑셀/CSV 파일을 선택하여 자동 반영합니다."
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>📊 회사 프로필 엑셀 등록</span>
+          </button>
+          <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2.5 py-1 rounded-full border border-slate-250/30">
+            시스템 연동
+          </span>
+        </div>
       </div>
 
       {/* 설정 폼 */}
@@ -1142,6 +1157,19 @@ export default function CompanySettingsCard() {
           </div>
         </div>
       )}
+
+      {/* 📊 회사 프로필 엑셀 일괄 등록 모달 */}
+      <CompanyProfileExcelModal
+        isOpen={isProfileExcelModalOpen}
+        onClose={() => setIsProfileExcelModalOpen(false)}
+        onSuccess={(updatedProfile) => {
+          setProfile((prev) => ({
+            ...prev,
+            ...updatedProfile
+          }));
+          setMessage({ type: 'success', text: '🎉 엑셀 판독을 통해 회사 프로필 및 입금 계좌 정보가 즉시 판독되어 적용 완료되었습니다.' });
+        }}
+      />
     </div>
   );
 }
