@@ -674,7 +674,7 @@ export default function GovernanceDashboard() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-                <span>AI 자율 거버넌스 컨트롤타워 관제 센터</span>
+                <span>AI 컨트롤타워</span>
                 <span className="text-xs bg-rose-100 text-rose-700 font-extrabold px-2.5 py-0.5 rounded-full border border-rose-200">
                   실시간 자율 통제 활성
                 </span>
