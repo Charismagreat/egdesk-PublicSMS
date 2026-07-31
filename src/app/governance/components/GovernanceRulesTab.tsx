@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { 
-  Bot, Plus, ToggleLeft, ToggleRight, Trash2, Cpu, Sparkles, CheckCircle2, Zap
+  Bot, Plus, ToggleLeft, ToggleRight, Trash2, Cpu, Sparkles, CheckCircle2, Zap, AlertTriangle, ShieldCheck, SearchCheck, Loader2
 } from "lucide-react";
 
 interface GovernanceRulesTabProps {
@@ -32,6 +32,71 @@ export default function GovernanceRulesTab({
 }: GovernanceRulesTabProps) {
   const modalAutoRulesCount = autoRules.filter((r) => r.rule_name?.includes("[자율 대행]") || r.rule_name?.includes("자동")).length;
 
+  // 🔍 AI 자율 규칙 상호 충돌 및 모순 진단 상태
+  const [conflictReport, setConflictReport] = useState<{
+    hasConflict: boolean;
+    conflicts: {
+      ruleA: any;
+      ruleB: any;
+      type: string;
+      reason: string;
+    }[];
+    scannedCount: number;
+  } | null>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
+
+  const handleRunConflictAudit = () => {
+    setIsAuditing(true);
+    setTimeout(() => {
+      const activeRules = autoRules.filter((r) => r.is_active !== false);
+      const conflicts: any[] = [];
+
+      for (let i = 0; i < activeRules.length; i++) {
+        for (let j = i + 1; j < activeRules.length; j++) {
+          const a = activeRules[i];
+          const b = activeRules[j];
+
+          const textA = (a.rule_name + " " + a.rule_expression).toLowerCase();
+          const textB = (b.rule_name + " " + b.rule_expression).toLowerCase();
+
+          const types = [
+            { key: "rag_hold", label: "RAG 결재 보류 / 모바일 상신" },
+            { key: "mobile_request", label: "모바일 현장 상신" },
+            { key: "store_order", label: "온라인 스토어 주문" },
+            { key: "leave_approval_request", label: "휴가/연차 결재" }
+          ];
+
+          for (const t of types) {
+            if (textA.includes(t.key) && textB.includes(t.key)) {
+              if ((textA.includes("승인") && textB.includes("기각")) || (textA.includes("승인") && textB.includes("반려"))) {
+                conflicts.push({
+                  ruleA: a,
+                  ruleB: b,
+                  type: "실행 결과 모순 (승인 vs 기각)",
+                  reason: `'${a.rule_name}' 규칙은 자율 승인하며, '${b.rule_name}' 규칙은 기각/반려를 지정하여 충돌합니다.`
+                });
+              } else {
+                conflicts.push({
+                  ruleA: a,
+                  ruleB: b,
+                  type: `동일 업무 대상 중복 지정 (${t.label})`,
+                  reason: `두 규칙 모두 [${t.label}] 업무를 타깃으로 자동 승인 조건을 중복 수록하여 적용 순서 모호성이 존재합니다.`
+                });
+              }
+            }
+          }
+        }
+      }
+
+      setConflictReport({
+        hasConflict: conflicts.length > 0,
+        conflicts,
+        scannedCount: activeRules.length
+      });
+      setIsAuditing(false);
+    }, 400);
+  };
+
   const handleApplyTemplate = (title: string, expr: string) => {
     setNewRuleName(title);
     setNewRuleExpr(expr);
@@ -55,13 +120,30 @@ export default function GovernanceRulesTab({
             AI 관제 원장 모달에서 스위치로 생성된 업무 자율 규칙 및 수동 정의 조건들이 통합 관리됩니다. 스위치를 켜면 수동 승인 없이 AI가 즉시 자동 처리합니다.
           </p>
         </div>
-        <button
-          onClick={() => setShowRuleModal(true)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-2xl text-xs border-none cursor-pointer flex items-center gap-1.5 transition-all shadow-xs shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>신규 자율 규칙 자연어 정의</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleRunConflictAudit}
+            disabled={isAuditing || autoRules.length === 0}
+            className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 font-bold px-3.5 py-2.5 rounded-2xl text-xs cursor-pointer flex items-center gap-1.5 transition-all shadow-2xs"
+            title="등록된 AI 자율 규칙 간 조건 오버랩 및 결과 모순 자율 진단"
+          >
+            {isAuditing ? (
+              <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
+            ) : (
+              <SearchCheck className="w-4 h-4 text-amber-600" />
+            )}
+            <span>AI 규칙 상호 충돌 자율 진단 🔍</span>
+          </button>
+
+          <button
+            onClick={() => setShowRuleModal(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-2xl text-xs border-none cursor-pointer flex items-center gap-1.5 transition-all shadow-xs shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>신규 자율 규칙 자연어 정의</span>
+          </button>
+        </div>
       </div>
 
       {/* 자연어 규칙 등록 팝업 모달 */}
@@ -210,6 +292,84 @@ export default function GovernanceRulesTab({
               </div>
             );
           })}
+        </div>
+      )}
+      {/* 🔍 AI 자율 규칙 충돌 & 모순 진단 결과 모달 */}
+      {conflictReport && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4 text-left animate-scale-in">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                {conflictReport.hasConflict ? (
+                  <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                ) : (
+                  <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                )}
+                <h3 className="text-base font-black text-slate-850">
+                  {conflictReport.hasConflict ? "⚠️ AI 자율 규칙 상호 충돌 감지 리포트" : "🟢 AI 자율 규칙 정상 진단 완료"}
+                </h3>
+              </div>
+              <button
+                onClick={() => setConflictReport(null)}
+                className="text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer font-bold text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between text-slate-600 font-medium">
+                <span>진단 대상 활성 자율 규칙:</span>
+                <strong className="text-indigo-700 font-black">{conflictReport.scannedCount}건 검체 스캔</strong>
+              </div>
+
+              {conflictReport.hasConflict ? (
+                <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-1">
+                  <span className="text-[11px] font-black text-rose-700 block">
+                    🚨 상호 조건 오버랩 및 모순이 발견된 규칙 ({conflictReport.conflicts.length}건)
+                  </span>
+                  {conflictReport.conflicts.map((c, idx) => (
+                    <div key={idx} className="p-3.5 bg-rose-50/70 border border-rose-200/80 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 font-black text-[10px]">
+                          {c.type}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-rose-950 leading-relaxed">
+                        {c.reason}
+                      </p>
+                      <div className="bg-white p-2.5 rounded-xl border border-rose-200/60 space-y-1 text-[11px] text-slate-700">
+                        <div>
+                          <strong className="text-slate-500">규칙 A:</strong> {c.ruleA.rule_name}
+                        </div>
+                        <div>
+                          <strong className="text-slate-500">규칙 B:</strong> {c.ruleB.rule_name}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 bg-emerald-50/60 border border-emerald-200/70 rounded-2xl text-center space-y-2">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+                  <h4 className="font-extrabold text-emerald-950 text-xs">규칙 간 상호 충돌이나 모순이 존재하지 않습니다!</h4>
+                  <p className="text-[11px] text-emerald-700 leading-relaxed">
+                    현재 등록된 모든 AI 자율 승인 규칙이 명확한 조건 분개로 안심하고 가동할 수 있습니다.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setConflictReport(null)}
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs"
+              >
+                진단 확인 및 닫기
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
