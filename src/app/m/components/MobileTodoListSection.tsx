@@ -19,6 +19,7 @@ interface MobileTodoListSectionProps {
   onToggleTaskStatus: (taskId: string, currentStatus: string) => void;
   onOpenNewTaskModal: () => void;
   onCancelTaskRequest?: (task: any) => void;
+  onSelectTask?: (task: any) => void;
   taskFolderContent?: React.ReactNode;
 }
 
@@ -38,6 +39,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
   onToggleTaskStatus,
   onOpenNewTaskModal,
   onCancelTaskRequest,
+  onSelectTask,
   taskFolderContent,
 }) => {
 
@@ -192,7 +194,8 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                 return (
                   <div
                     key={t.id}
-                    className={`p-3 rounded-xl border transition-all flex items-start gap-2.5 text-left ${
+                    onClick={() => onSelectTask && onSelectTask(t)}
+                    className={`p-3 rounded-xl border transition-all flex items-start gap-2.5 text-left cursor-pointer active:scale-[0.99] ${
                       isDone
                         ? "bg-slate-50/70 border-slate-200/60 opacity-80"
                         : "bg-white border-slate-200 hover:border-indigo-300 shadow-2xs"
@@ -201,7 +204,10 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                     {/* 최고관리자 관제 실행 연동 안내 체크 박스 */}
                     <button
                       type="button"
-                      onClick={() => handleTaskCheckClick(t)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTaskCheckClick(t);
+                      }}
                       className="mt-0.5 text-slate-400 border-none bg-transparent cursor-pointer shrink-0"
                       title={isDone ? "최고관리자 관제 실행 완료" : "최고관리자 관제 승인 대기"}
                     >
@@ -241,7 +247,10 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                             {onCancelTaskRequest && (
                               <button
                                 type="button"
-                                onClick={() => onCancelTaskRequest(t)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onCancelTaskRequest(t);
+                                }}
                                 className="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-md text-[9px] font-black cursor-pointer transition-all active:scale-95"
                                 title="최고관리자의 관제에 취소 요청 상신"
                               >

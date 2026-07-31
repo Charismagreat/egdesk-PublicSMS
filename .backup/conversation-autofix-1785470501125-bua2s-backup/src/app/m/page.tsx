@@ -1355,8 +1355,6 @@ export default function MobileHubPage() {
           ]);
           setIsTaskRequestModalOpen(true);
         }}
-      />
-
       {/* 📱 모바일 할 일 상세 모달 */}
       <MobileTaskDetailModal
         task={selectedTask}
