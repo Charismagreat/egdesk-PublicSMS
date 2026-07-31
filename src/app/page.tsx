@@ -8,6 +8,7 @@ import AiCopilotWidget from "@/components/AiCopilotWidget";
 import DashboardCertPatentWidget from "@/components/DashboardCertPatentWidget";
 import ExcelPageBuilderWidget from "@/components/ExcelPageBuilderWidget";
 import AssetControlTowerWidget from "@/components/AssetControlTowerWidget";
+import DashboardCardSections from "@/components/DashboardCardSections";
 
 // Next.js 캐싱 비활성화 (항상 실시간 최신 금융/근태 데이터 유지)
 export const dynamic = 'force-dynamic';
@@ -431,391 +432,48 @@ export default async function Home() {
       {/* AI 자율 마케팅 파트너 어시스턴트 위젯 */}
       {copilotEnabled && <AiCopilotWidget />}
 
-      {/* 1구역: 전사 6대 핵심 비즈니스 지표 카드 그리드 (가용자금, 수주, 발주, 매출, 매입, 생산현황) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      {/* 🔴 [상/하단 2단 가로 스크롤 영역 & AI 맞춤 카드 스튜디오] */}
+      <DashboardCardSections
+        availableFunds={totalAvailableCash}
+        totalAccountCount={bankAccountCount}
+        orderStats={orderStats}
+        purchaseStats={purchaseStats}
+        salesStats={salesStats}
+        costStats={costStats}
+        productionStats={{
+          today: productionStats.today.volume,
+          month: productionStats.month.volume,
+          year: productionStats.year.volume,
+          complianceRate: productionStats.year.onTimeRate
+        }}
+        attendanceStats={{
+          total: totalOperators,
+          present: attendanceCount - lateCount - earlyLeaveCount,
+          late: lateCount,
+          early: earlyLeaveCount,
+          absent: absentCount,
+          rate: attendanceRate
+        }}
+        inventoryStats={{
+          totalValue: totalInventoryValue,
+          materialValue: totalMaterialValue,
+          subMaterialValue: totalProductValue
+        }}
+        financeStats={{
+          ar: totalUncollected,
+          ap: totalUnpaidCost,
+          suspense: totalTemporaryPay
+        }}
+        cashflowStats={{
+          today: cashRequirementForecast.today,
+          week: cashRequirementForecast.week,
+          month: cashRequirementForecast.month,
+          q3: cashRequirementForecast.month3,
+          q6: cashRequirementForecast.month6,
+          year: cashRequirementForecast.year1
+        }}
+      />
 
-        {/* 0. 가용자금 (은행계좌 거래내역 최종 잔액 합산) */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-black text-slate-800">가용자금</h3>
-            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
-              <Landmark className="w-5 h-5 text-emerald-600" />
-            </div>
-          </div>
-          <div className="space-y-2.5">
-            <div className="bg-emerald-50/50 border border-emerald-100/50 p-2.5 rounded-2xl flex flex-col justify-center text-center">
-              <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider block mb-0.5">최종 잔액 합계</span>
-              <span className="text-xl font-black text-emerald-950 truncate">
-                ₩ {totalAvailableCash.toLocaleString()}
-              </span>
-            </div>
-            <div className="border-t border-slate-100 pt-2 flex justify-between items-center text-xs font-black">
-              <span className="text-slate-500 font-bold">등록 은행 계좌</span>
-              <span className="text-emerald-700">{bankAccountCount} 개 계좌</span>
-            </div>
-          </div>
-        </div>
-        
-        {/* 1. 수주액 */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-black text-slate-800">총 수주액</h3>
-            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-indigo-650" />
-            </div>
-          </div>
-          <div className="space-y-2.5">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500 font-bold">금일 수주</span>
-              <span className="font-extrabold text-slate-800">₩ {orderStats.today.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500 font-bold">금월 누적</span>
-              <span className="font-extrabold text-slate-800">₩ {orderStats.month.toLocaleString()}</span>
-            </div>
-            <div className="border-t border-slate-100 pt-2 flex justify-between items-center text-xs font-black">
-              <span className="text-indigo-600">금년도 합계</span>
-              <span className="text-indigo-750">₩ {orderStats.year.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. 발주액 */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-black text-slate-800">총 발주액</h3>
-            <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">
-              <ShoppingBag className="w-5 h-5 text-rose-600" />
-            </div>
-          </div>
-          <div className="space-y-2.5">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500 font-bold">금일 발주</span>
-              <span className="font-extrabold text-slate-800">₩ {purchaseStats.today.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500 font-bold">금월 누적</span>
-              <span className="font-extrabold text-slate-800">₩ {purchaseStats.month.toLocaleString()}</span>
-            </div>
-            <div className="border-t border-slate-100 pt-2 flex justify-between items-center text-xs font-black">
-              <span className="text-rose-600">금년도 합계</span>
-              <span className="text-rose-750">₩ {purchaseStats.year.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. 매출액 */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-black text-slate-800">총 매출액</h3>
-            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-emerald-600" />
-            </div>
-          </div>
-          <div className="space-y-2.5">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500 font-bold">금일 매출</span>
-              <span className="font-extrabold text-slate-800">₩ {salesStats.today.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500 font-bold">금월 누적</span>
-              <span className="font-extrabold text-slate-800">₩ {salesStats.month.toLocaleString()}</span>
-            </div>
-            <div className="border-t border-slate-100 pt-2 flex justify-between items-center text-xs font-black">
-              <span className="text-emerald-650">금년도 합계</span>
-              <span className="text-emerald-800">₩ {salesStats.year.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 4. 매입액 */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-black text-slate-800">총 매입액</h3>
-            <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
-              <FileSpreadsheet className="w-5 h-5 text-amber-600" />
-            </div>
-          </div>
-          <div className="space-y-2.5">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500 font-bold">금일 매입</span>
-              <span className="font-extrabold text-slate-800">₩ {costStats.today.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500 font-bold">금월 누적</span>
-              <span className="font-extrabold text-slate-800">₩ {costStats.month.toLocaleString()}</span>
-            </div>
-            <div className="border-t border-slate-100 pt-2 flex justify-between items-center text-xs font-black">
-              <span className="text-amber-650">금년도 합계</span>
-              <span className="text-amber-800">₩ {costStats.year.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 5. 생산현황 (총생산량, 불량건수, 납기준수율 / 금일, 금월, 금년) */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all text-left">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-lg font-black text-slate-800">생산현황</h3>
-            <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
-              <Factory className="w-5 h-5 text-purple-600" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="bg-purple-50/40 border border-purple-100/60 p-2 rounded-xl text-[11px] space-y-0.5">
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-purple-900">금일 생산</span>
-                <span className="font-extrabold text-purple-950">{productionStats.today.volume.toLocaleString()}개</span>
-              </div>
-              <div className="flex justify-between items-center text-[10px] text-slate-500">
-                <span>불량: <strong className="text-rose-600">{productionStats.today.defects}건</strong></span>
-                <span>준수율: <strong className="text-indigo-600">{productionStats.today.onTimeRate}%</strong></span>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 border border-slate-150 p-2 rounded-xl text-[11px] space-y-0.5">
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-slate-700">금월 누적</span>
-                <span className="font-extrabold text-slate-900">{productionStats.month.volume.toLocaleString()}개</span>
-              </div>
-              <div className="flex justify-between items-center text-[10px] text-slate-500">
-                <span>불량: <strong className="text-rose-600">{productionStats.month.defects}건</strong></span>
-                <span>준수율: <strong className="text-indigo-600">{productionStats.month.onTimeRate}%</strong></span>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-100 pt-1.5 flex justify-between items-center text-[10px] font-bold">
-              <span className="text-purple-700">금년도 합계</span>
-              <span className="text-slate-800">{productionStats.year.volume.toLocaleString()}개 (준수 {productionStats.year.onTimeRate}%)</span>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* 2구역: 임직원 출근 현황, 재고 현황, 채권채무 현황 및 자금소요예상 관제 지표 */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        
-        {/* 근태 현황 */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs text-left">
-          <div className="flex items-center gap-2 mb-6">
-            <UserCheck className="w-5 h-5 text-indigo-650" />
-            <h2 className="text-base font-black text-slate-800">출근 현황</h2>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
-            
-            {/* 출근율 원형 차트 게이지 */}
-            <div className="md:col-span-2 flex flex-col items-center justify-center border-r border-slate-100 pr-4">
-              <div className="relative w-28 h-28 flex items-center justify-center">
-                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                  <path
-                    className="text-slate-100"
-                    strokeWidth="3.5"
-                    stroke="currentColor"
-                    fill="none"
-                    d="M18 2.0845
-                      a 15.9155 15.9155 0 0 1 0 31.831
-                      a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                  <path
-                    className="text-indigo-650 transition-all duration-500"
-                    strokeDasharray={attendanceRate + ", 100"}
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    stroke="currentColor"
-                    fill="none"
-                    d="M18 2.0845
-                      a 15.9155 15.9155 0 0 1 0 31.831
-                      a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                </svg>
-                <div className="absolute flex flex-col items-center">
-                  <span className="text-2xl font-black text-slate-800">{attendanceRate}%</span>
-                  <span className="text-[9px] text-slate-400 font-bold">실시간 출근율</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 상태별 실인원 수치 리스트 */}
-            <div className="md:col-span-3 space-y-3.5 pl-2">
-              <div className="flex justify-between items-center text-xs">
-                <div className="flex items-center gap-1.5 font-bold text-slate-600">
-                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></span>
-                  <span>정상</span>
-                </div>
-                <span className="font-extrabold text-slate-800">{attendanceCount - lateCount - earlyLeaveCount} 명</span>
-              </div>
-
-              <div className="flex justify-between items-center text-xs">
-                <div className="flex items-center gap-1.5 font-bold text-slate-600">
-                  <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                  <span>지각</span>
-                </div>
-                <span className="font-extrabold text-slate-800">{lateCount} 명</span>
-              </div>
-
-              <div className="flex justify-between items-center text-xs">
-                <div className="flex items-center gap-1.5 font-bold text-slate-600">
-                  <span className="w-2.5 h-2.5 bg-sky-400 rounded-full"></span>
-                  <span>조퇴</span>
-                </div>
-                <span className="font-extrabold text-slate-800">{earlyLeaveCount} 명</span>
-              </div>
-
-              <div className="flex justify-between items-center text-xs">
-                <div className="flex items-center gap-1.5 font-bold text-slate-600">
-                  <span className="w-2.5 h-2.5 bg-rose-500 rounded-full"></span>
-                  <span>결근/미등록</span>
-                </div>
-                <span className="font-extrabold text-slate-800">{absentCount} 명</span>
-              </div>
-
-              <div className="border-t border-slate-100 pt-2.5 flex justify-between items-center text-xs font-black text-slate-500">
-                <span>총원</span>
-                <span className="text-slate-700">총 {totalOperators} 명</span>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        {/* 실시간 재고 자산 현황 */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs text-left">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <FileSpreadsheet className="w-5 h-5 text-indigo-650" />
-              <h2 className="text-base font-black text-slate-800">재고 현황</h2>
-            </div>
-            <span className="text-[10px] bg-slate-50 text-slate-500 font-extrabold px-2.5 py-1 rounded-lg border border-slate-100">
-              {valuationMethodLabel}
-            </span>
-          </div>
-
-          <div className="space-y-4">
-            {/* 총재고액 대형 수치 */}
-            <div className="bg-indigo-50/30 border border-indigo-100/40 p-4.5 rounded-2xl flex flex-col justify-center text-center">
-              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-wider block mb-1">Total Asset Value</span>
-              <span className="text-2xl font-black text-indigo-950">
-                ₩ {totalInventoryValue.toLocaleString()}
-              </span>
-            </div>
-
-            {/* 제품 및 원자재 구분 표시 */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50/50 border border-slate-100 p-3 rounded-2xl text-center">
-                <span className="text-[9px] font-extrabold text-slate-400 block mb-0.5">완제품 자산액</span>
-                <span className="text-xs font-extrabold text-slate-800 block truncate">
-                  ₩ {totalProductValue.toLocaleString()}
-                </span>
-              </div>
-              <div className="bg-slate-50/50 border border-slate-100 p-3 rounded-2xl text-center">
-                <span className="text-[9px] font-extrabold text-slate-400 block mb-0.5">원부자재 자산액</span>
-                <span className="text-xs font-extrabold text-slate-800 block truncate">
-                  ₩ {totalMaterialValue.toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 미수금, 미지급금, 가지급금 현황 카드 */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs text-left">
-          <div className="flex items-center gap-2 mb-6">
-            <Scale className="w-5 h-5 text-amber-600" />
-            <h2 className="text-base font-black text-slate-800">미수 · 미지급 · 가지급금 현황</h2>
-          </div>
-
-          <div className="space-y-3">
-            {/* 1. 미수금 (받을 돈) */}
-            <div className="bg-amber-50/40 border border-amber-100 p-3 rounded-2xl flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider block">Accounts Receivable</span>
-                <span className="text-xs font-black text-slate-800">미수금 (받을 돈)</span>
-              </div>
-              <span className="text-base font-black text-amber-900">
-                ₩ {totalUncollected.toLocaleString()}
-              </span>
-            </div>
-
-            {/* 2. 미지급금 (줄 돈) */}
-            <div className="bg-rose-50/40 border border-rose-100 p-3 rounded-2xl flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-black text-rose-700 uppercase tracking-wider block">Accounts Payable</span>
-                <span className="text-xs font-black text-slate-800">미지급금 (줄 돈)</span>
-              </div>
-              <span className="text-base font-black text-rose-900">
-                ₩ {totalUnpaidCost.toLocaleString()}
-              </span>
-            </div>
-
-            {/* 3. 가지급금 (정산 필요) */}
-            <div className="bg-purple-50/40 border border-purple-100 p-3 rounded-2xl flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider block">Temporary Payments</span>
-                <span className="text-xs font-black text-slate-800">가지급금 (정산 대상)</span>
-              </div>
-              <span className="text-base font-black text-purple-900">
-                ₩ {totalTemporaryPay.toLocaleString()}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 자금 소요 예상 (금일, 금주, 금월, 3개월, 6개월, 1년) 카드 */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs text-left">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingDown className="w-5 h-5 text-rose-600" />
-            <h2 className="text-base font-black text-slate-800">자금 소요 예상</h2>
-          </div>
-
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-rose-50/50 border border-rose-100 p-2 rounded-xl text-center">
-                <span className="text-[9px] font-extrabold text-rose-600 block">금일 소요</span>
-                <span className="text-xs font-black text-rose-950 truncate block mt-0.5">
-                  ₩ {cashRequirementForecast.today.toLocaleString()}
-                </span>
-              </div>
-              <div className="bg-rose-50/50 border border-rose-100 p-2 rounded-xl text-center">
-                <span className="text-[9px] font-extrabold text-rose-600 block">금주 소요</span>
-                <span className="text-xs font-black text-rose-950 truncate block mt-0.5">
-                  ₩ {cashRequirementForecast.week.toLocaleString()}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl text-center">
-                <span className="text-[9px] font-extrabold text-slate-500 block">금월 누적</span>
-                <span className="text-xs font-black text-slate-800 truncate block mt-0.5">
-                  ₩ {cashRequirementForecast.month.toLocaleString()}
-                </span>
-              </div>
-              <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl text-center">
-                <span className="text-[9px] font-extrabold text-slate-500 block">3개월 소요</span>
-                <span className="text-xs font-black text-slate-800 truncate block mt-0.5">
-                  ₩ {cashRequirementForecast.month3.toLocaleString()}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
-              <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl text-center">
-                <span className="text-[9px] font-extrabold text-indigo-600 block">6개월 소요</span>
-                <span className="text-xs font-black text-indigo-950 truncate block mt-0.5">
-                  ₩ {cashRequirementForecast.month6.toLocaleString()}
-                </span>
-              </div>
-              <div className="bg-indigo-50/50 border border-indigo-100 p-2 rounded-xl text-center">
-                <span className="text-[9px] font-extrabold text-indigo-700 block">1년 소요</span>
-                <span className="text-xs font-black text-indigo-950 truncate block mt-0.5">
-                  ₩ {cashRequirementForecast.year1.toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* 3구역: 인증서 및 특허 기한 AI 캘린더 위젯 (100% 가로 풀너비) */}
       <div className="mt-8 w-full block">
