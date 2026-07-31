@@ -608,24 +608,9 @@ export default function MemberManagementPage() {
             )}
 
             <form onSubmit={handleAddMemberSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1">계정 유형</label>
-                <select
-                  value={formRole}
-                  onChange={(e) => {
-                    const selectedRole = e.target.value as any;
-                    setFormRole(selectedRole);
-                    if (selectedRole !== "SUPER_ADMIN") {
-                      // 사장님이 아닌 경우 테넌트 ID 강제 비움
-                      setFormTenantId("");
-                    }
-                  }}
-                  className="w-full px-4 py-3 border border-slate-200 focus:border-indigo-500 focus:outline-none rounded-2xl text-xs text-slate-700 bg-white"
-                >
-                  <option value="SUPER_ADMIN">소상공인 사장님 (회원)</option>
-                  <option value="SUB_OPERATOR">매장 부운영자 (피고용 직원)</option>
-                  <option value="EMPLOYEE">매장 일반직원 (피고용 직원)</option>
-                </select>
+              <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl text-[11px] font-semibold text-indigo-950 leading-relaxed flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0" />
+                <span>신규 테넌트 개설 시 해당 회원사의 <strong>테넌트 최고관리자(대표 계정) 1명</strong>이 자동으로 개설됩니다.</span>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

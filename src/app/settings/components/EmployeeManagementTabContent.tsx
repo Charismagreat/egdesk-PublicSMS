@@ -268,16 +268,20 @@ export default function EmployeeManagementTabContent() {
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
                 <Users className="w-5 h-5 text-indigo-600" />
-                <span>직원 계정 관리</span>
+                <span>🏢 소속 부운영자 & 임직원 계정 관리</span>
               </h3>
               {currentUser?.role === 'SYSTEM_ADMIN' || currentUser?.username === 'admin' ? (
                 <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black">
-                  🔑 시스템 운영자 통제 모드
+                  🔑 시스템 운영자 관제 모드
                 </span>
-              ) : null}
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-900 border border-indigo-200 text-[10px] font-black">
+                  👑 테넌트 최고관리자 전용 모드
+                </span>
+              )}
             </div>
             <p className="text-slate-500 text-xs mt-1">
-              매장에 소속된 피고용인 직원 계정을 등록하고 권한 및 기본 정보를 안전하게 관리합니다.
+              테넌트 최고관리자로서 본인 회원사에 소속된 부운영자 및 일반직원 계정을 직접 등록하고 근무 권한을 제어합니다.
             </p>
           </div>
           <div className="flex items-center gap-2">
