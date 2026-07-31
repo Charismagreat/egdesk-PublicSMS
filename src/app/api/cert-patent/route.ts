@@ -5,14 +5,15 @@ import { setupDatabase } from '@/lib/setup-db';
 // DB 자동 동기화 래퍼
 let isDbInitialized = false;
 async function ensureDb() {
-  if (!isDbInitialized) {
-    try {
-      await setupDatabase();
-      isDbInitialized = true;
-    } catch (e) {
-      console.error("Setup DB Error:", e);
-    }
-  }
+  // 💡 setupDatabase 자동 가동 주석 처리 (API 로딩 속도 최적화)
+  // if (!isDbInitialized) {
+  //   try {
+  //     await setupDatabase();
+  //     isDbInitialized = true;
+  //   } catch (e) {
+  //     console.error("Setup DB Error:", e);
+  //   }
+  // }
 }
 
 // GET: 인증서, 특허, AI 태스크, 캘린더 데이터 통합 조회

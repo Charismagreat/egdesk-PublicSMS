@@ -10,10 +10,11 @@ const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'egdesk-su
 
 export async function POST(req: Request) {
   try {
-    if (!isDbInitialized) {
-      await setupDatabase();
-      isDbInitialized = true;
-    }
+    // 💡 로그인 시 setupDatabase 자동 가동 주석 처리 (로그인 속도 최우선)
+    // if (!isDbInitialized) {
+    //   await setupDatabase();
+    //   isDbInitialized = true;
+    // }
 
     const { username, password } = await req.json();
 

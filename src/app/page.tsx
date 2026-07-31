@@ -101,16 +101,16 @@ export default async function Home() {
   let copilotEnabled = true;
 
   try {
-    // 0. system_settings 확인 및 DB 셋업 확인
-    const { listTables } = require("@/../egdesk-helpers");
-    const checkRes = await listTables().catch(() => ({ tables: [] }));
-    const tables = checkRes.tables || [];
-    const hasSettingsTable = tables.some((t: any) => t.tableName === 'system_settings');
+    // 0. system_settings 확인 및 DB 셋업 주석 처리 (대시보드 로딩 속도 최적화)
+    // const { listTables } = require("@/../egdesk-helpers");
+    // const checkRes = await listTables().catch(() => ({ tables: [] }));
+    // const tables = checkRes.tables || [];
+    // const hasSettingsTable = tables.some((t: any) => t.tableName === 'system_settings');
 
-    if (!hasSettingsTable) {
-      const { setupDatabase } = require("@/lib/setup-db");
-      await setupDatabase();
-    }
+    // if (!hasSettingsTable) {
+    //   const { setupDatabase } = require("@/lib/setup-db");
+    //   await setupDatabase();
+    // }
 
     const { getTenantId } = require("@/lib/tenant");
     const tenantId = await getTenantId() || 'default';
