@@ -2,15 +2,19 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Users, Plus, Search, Edit2, Trash2, Shield, Check, X, AlertTriangle, Key
+  Users, Plus, Search, Edit2, Trash2, Shield, Check, X, AlertTriangle, Key, FileSpreadsheet 
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { usePersistedState } from "@/hooks/usePersistedState";
+import EmployeeBatchUploadModal from "./EmployeeBatchUploadModal";
 
 export default function EmployeeManagementTabContent() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
+  
+  // 엑셀 일괄 등록 모달 상태
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   
   // 로그인한 오너(본인) 정보 저장
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -269,13 +273,23 @@ export default function EmployeeManagementTabContent() {
               매장에 소속된 피고용인 직원 계정을 등록하고 권한 및 기본 정보를 안전하게 관리합니다.
             </p>
           </div>
-          <button
-            onClick={openAddModal}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black border-none cursor-pointer shadow-sm transition-all"
-          >
-            <Plus className="w-3.5 h-3.5 text-white" />
-            신규 직원 등록
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsBatchModalOpen(true)}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/90 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95"
+              title="엑셀 또는 CSV 표준 작성 양식을 업로드하여 다수의 직원 계정을 일괄 등록합니다."
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <span>📊 엑셀 일괄 등록</span>
+            </button>
+            <button
+              onClick={openAddModal}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black border-none cursor-pointer shadow-sm transition-all active:scale-95"
+            >
+              <Plus className="w-3.5 h-3.5 text-white" />
+              신규 직원 등록
+            </button>
+          </div>
         </div>
 
         {/* 🔍 검색 바 및 검색 정보 요약 */}
@@ -660,6 +674,17 @@ export default function EmployeeManagementTabContent() {
           </div>
         </div>
       )}
+
+      {/* 직원 계정 엑셀 일괄 등록 모달 */}
+      <EmployeeBatchUploadModal
+        isOpen={isBatchModalOpen}
+        onClose={() => setIsBatchModalOpen(false)}
+        onSuccess={() => {
+          showToast("🎉 직원 계정 일괄 등록이 완료되었습니다.", "success");
+          fetchEmployees();
+        }}
+        workplaces={workplaces}
+      />
 
     </div>
   );

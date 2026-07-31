@@ -71,7 +71,81 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
-    const { username, password, name, newRole, employee_number, phone, department, workplace_id, work_start_time, work_end_time } = await req.json();
+    const body = await req.json();
+    const action = body?.action;
+
+    // 💡 [신규] 직원 엑셀 일괄 등록 처리
+    if (action === 'batch_register') {
+      const { employees = [] } = body;
+      if (!Array.isArray(employees) || employees.length === 0) {
+        return NextResponse.json({ success: false, error: '등록할 직원 데이터가 없습니다.' }, { status: 400 });
+      }
+
+      const allExistingRes = await queryTable('crm_operators', { limit: 5000 });
+      const allActiveOps = (allExistingRes.rows || []).filter((op: any) => !op.deleted_at);
+      const existingUsernames = new Set(allActiveOps.map((op: any) => op.username));
+      const existingEmpNumbers = new Set(allActiveOps.filter((op: any) => op.tenant_id === tenantId).map((op: any) => op.employee_number));
+
+      const rowsToInsert: any[] = [];
+      const leaveRowsToInsert: any[] = [];
+      let successCount = 0;
+
+      for (let i = 0; i < employees.length; i++) {
+        const emp = employees[i];
+        const { username, password, name, role, employee_number, phone, department, work_start_time, work_end_time } = emp;
+        if (!username || !name) continue;
+
+        // 아이디 및 사원번호 중복 스킵/처리
+        if (existingUsernames.has(username)) continue;
+
+        const finalEmpNumber = (employee_number || `EMP-${Date.now() % 10000 + i}`).trim();
+        const pwdHash = await bcrypt.hash(password || '1234', 10);
+        const newOpId = Date.now() + i;
+        const nowStr = new Date().toISOString();
+
+        rowsToInsert.push({
+          id: newOpId,
+          username,
+          password_hash: pwdHash,
+          name,
+          role: role || 'EMPLOYEE',
+          employee_number: finalEmpNumber,
+          phone: (phone || '').trim(),
+          department: (department || '').trim(),
+          work_start_time: work_start_time || '09:00:00',
+          work_end_time: work_end_time || '18:00:00',
+          created_at: nowStr,
+          tenant_id: tenantId
+        });
+
+        leaveRowsToInsert.push({
+          operator_id: String(newOpId),
+          total_allowed: 15.0,
+          used: 0.0,
+          remaining: 15.0,
+          year: new Date().getFullYear(),
+          created_at: nowStr,
+          tenant_id: tenantId
+        });
+
+        existingUsernames.add(username);
+        existingEmpNumbers.add(finalEmpNumber);
+        successCount++;
+      }
+
+      if (rowsToInsert.length > 0) {
+        await insertRows('crm_operators', rowsToInsert);
+        await insertRows('crm_operator_leave_balances', leaveRowsToInsert);
+      }
+
+      return NextResponse.json({
+        success: true,
+        count: successCount,
+        message: `🎉 ${successCount}명의 직원 계정이 성공적으로 일괄 등록되었습니다.`
+      });
+    }
+
+    const { username, password, name, newRole, employee_number, phone, department, workplace_id, work_start_time, work_end_time } = body;
 
     if (!username || !password || !name) {
       return NextResponse.json({ success: false, error: '모든 필드를 입력해주세요.' }, { status: 400 });
