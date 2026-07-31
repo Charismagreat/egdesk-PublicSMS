@@ -376,7 +376,7 @@ export default function MemberManagementPage() {
             className="flex items-center justify-center gap-2 px-5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-indigo-600/10 cursor-pointer active:scale-95"
           >
             <UserPlus className="w-4 h-4" />
-            <span>신규 사장님/직원 등록</span>
+            <span>신규 테넌트 등록</span>
           </button>
         </div>
 
@@ -597,7 +597,7 @@ export default function MemberManagementPage() {
             
             <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
               <UserPlus className="w-6 h-6 text-indigo-600" />
-              <span>신규 회원/직원 추가 등록</span>
+              <span>신규 테넌트 추가 등록</span>
             </h2>
 
             {formError && (
