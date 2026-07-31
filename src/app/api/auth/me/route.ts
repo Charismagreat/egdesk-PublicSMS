@@ -28,12 +28,13 @@ export async function GET() {
     let workplaceName = (payload as any).workplace_name || null;
     let workplaceLat = null;
     let workplaceLng = null;
+    let avatarUrl: string | null = null;
 
     try {
       const { executeSQL } = await import('../../../../../egdesk-helpers');
-      // 1. crm_employees에서 workplace_id 조회
+      // 1. crm_employees에서 workplace_id 및 avatar_url 조회
       const empRes = await executeSQL(`
-        SELECT e.workplace_id, w.name as workplace_name, w.latitude, w.longitude, w.radius_meters
+        SELECT e.workplace_id, e.avatar_url, w.name as workplace_name, w.latitude, w.longitude, w.radius_meters
         FROM crm_employees e
         LEFT JOIN crm_workplaces w ON e.workplace_id = w.id AND w.deleted_at IS NULL
         WHERE e.deleted_at IS NULL AND (e.name = '${name}' OR e.email = '${username}')
@@ -41,6 +42,7 @@ export async function GET() {
       `);
       if (empRes.rows && empRes.rows.length > 0) {
         const emp = empRes.rows[0];
+        avatarUrl = emp.avatar_url || null;
         if (emp.workplace_name) {
           workplaceId = emp.workplace_id;
           workplaceName = emp.workplace_name;
@@ -72,6 +74,7 @@ export async function GET() {
       role: payload.role as string || 'SUB_OPERATOR',
       name: name,
       username: username,
+      avatar_url: avatarUrl,
       workplace_id: workplaceId,
       workplace_name: workplaceName || '본사',
       latitude: workplaceLat,
@@ -85,5 +88,44 @@ export async function GET() {
       name: '손님', 
       error: error.message 
     });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    if (!token) {
+      return NextResponse.json({ success: false, message: '인증 토큰이 존재하지 않습니다.' }, { status: 401 });
+    }
+
+    const payload = decodeJwt(token);
+    const username = payload.username as string || '';
+    const name = payload.name as string || '운영자';
+
+    const body = await req.json();
+    const { avatar_url } = body;
+
+    if (!avatar_url) {
+      return NextResponse.json({ success: false, message: '프로필 사진 URL이 유효하지 않습니다.' }, { status: 400 });
+    }
+
+    const { executeSQL } = await import('../../../../../egdesk-helpers');
+    
+    // crm_employees 테이블의 avatar_url 업데이트
+    await executeSQL(`
+      UPDATE crm_employees
+      SET avatar_url = '${avatar_url}', updated_at = datetime('now', 'localtime')
+      WHERE deleted_at IS NULL AND (name = '${name}' OR email = '${username}')
+    `);
+
+    return NextResponse.json({
+      success: true,
+      message: '프로필 사진이 정상 교체되었습니다.',
+      avatar_url
+    });
+  } catch (error: any) {
+    console.error("Failed to update profile avatar:", error);
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }
 }

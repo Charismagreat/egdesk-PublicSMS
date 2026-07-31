@@ -931,6 +931,9 @@ export default function MobileHubPage() {
         onOpenLeaveModal={() => setIsLeaveModalOpen(true)}
         onOpenPendingLeaveModal={() => setIsPendingLeaveModalOpen(true)}
         onLogout={handleLogout}
+        onAvatarUpdated={(newUrl) => {
+          if (session) session.avatar_url = newUrl;
+        }}
       />
 
       {/* 2. 실시간 근태 위젯 */}
