@@ -34,12 +34,33 @@ export default function QualityControlPage() {
   const fetchQualityData = useCallback(async () => {
     setLoading(true);
     try {
-      setInspections([
-        { id: "QC-2026-001", lot_number: "LOT-8841", product_name: "고정밀 전자 커넥터 모듈 A", inspector_name: "김품질 대리", total_inspected: 1000, passed_quantity: 994, defective_quantity: 6, defect_type: "미세 도금 박리", pass_rate: 99.4, status: "합격", inspected_at: "2026-07-28" },
-        { id: "QC-2026-002", lot_number: "LOT-8842", product_name: "자동차용 와이어링 하네스 B", inspector_name: "박검수 과장", total_inspected: 500, passed_quantity: 470, defective_quantity: 30, defect_type: "압착 단자 헐거움", pass_rate: 94.0, status: "불량감지", inspected_at: "2026-07-29" },
-        { id: "QC-2026-003", lot_number: "LOT-8843", product_name: "반도체 검사 소켓 C", inspector_name: "이품질 사원", total_inspected: 200, passed_quantity: 200, defective_quantity: 0, defect_type: "없음", pass_rate: 100.0, status: "합격", inspected_at: "2026-07-29" },
-        { id: "QC-2026-004", lot_number: "LOT-8844", product_name: "수입 모듈 부품 D", inspector_name: "최기술 팀장", total_inspected: 300, passed_quantity: 275, defective_quantity: 25, defect_type: "치수 허용 오차 초과", pass_rate: 91.6, status: "재검수필요", inspected_at: "2026-07-27" }
-      ]);
+      const res = await apiFetch("/api/quality/checklist");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.items) && data.items.length > 0) {
+          const mapped: QualityInspectionItem[] = data.items.map((item: any, idx: number) => ({
+            id: item.id || `QC-2026-00${idx + 1}`,
+            lot_number: item.lotNumber || item.lot_number || `LOT-${8840 + idx}`,
+            product_name: item.productName || item.product_name || "품질 검사 부품",
+            inspector_name: item.inspector || item.inspector_name || "김검수 대리",
+            total_inspected: Number(item.totalInspected || 1000),
+            passed_quantity: Number(item.passedQuantity || 990),
+            defective_quantity: Number(item.defectiveQuantity || 10),
+            defect_type: item.defectType || item.defect_type || "미세 치수 오차",
+            pass_rate: Number(item.passRate || 99.0),
+            status: (item.status === "DEFECT" ? "불량감지" : item.status === "RECHECK" ? "재검수필요" : "합격") as "합격" | "불량감지" | "재검수필요",
+            inspected_at: item.inspectedAt || item.inspected_at || "2026-07-28"
+          }));
+          setInspections(mapped);
+        } else {
+          setInspections([
+            { id: "QC-2026-001", lot_number: "LOT-8841", product_name: "고정밀 전자 커넥터 모듈 A", inspector_name: "김품질 대리", total_inspected: 1000, passed_quantity: 994, defective_quantity: 6, defect_type: "미세 도금 박리", pass_rate: 99.4, status: "합격", inspected_at: "2026-07-28" },
+            { id: "QC-2026-002", lot_number: "LOT-8842", product_name: "자동차용 와이어링 하네스 B", inspector_name: "박검수 과장", total_inspected: 500, passed_quantity: 470, defective_quantity: 30, defect_type: "압착 단자 헐거움", pass_rate: 94.0, status: "불량감지", inspected_at: "2026-07-29" },
+            { id: "QC-2026-003", lot_number: "LOT-8843", product_name: "반도체 검사 소켓 C", inspector_name: "이품질 사원", total_inspected: 200, passed_quantity: 200, defective_quantity: 0, defect_type: "없음", pass_rate: 100.0, status: "합격", inspected_at: "2026-07-29" },
+            { id: "QC-2026-004", lot_number: "LOT-8844", product_name: "수입 모듈 부품 D", inspector_name: "최기술 팀장", total_inspected: 300, passed_quantity: 275, defective_quantity: 25, defect_type: "치수 허용 오차 초과", pass_rate: 91.6, status: "재검수필요", inspected_at: "2026-07-27" }
+          ]);
+        }
+      }
     } catch (err) {
       console.error("Failed to fetch quality data:", err);
     } finally {

@@ -31,11 +31,29 @@ export default function RndManagementPage() {
   const fetchRndData = useCallback(async () => {
     setLoading(true);
     try {
-      setProjects([
-        { id: "RND-2026-01", project_name: "차세대 수입 통관 모듈 전자 센서 R&D", lead_researcher: "박박사", budget: 150000000, spent_budget: 82000000, progress: 65, patent_status: "출원 완료 (PAT-5421)", status: "진행중" },
-        { id: "RND-2026-02", project_name: "프레스 예지보전 초고속 FFT AI 기술", lead_researcher: "이수석", budget: 200000000, spent_budget: 195000000, progress: 95, patent_status: "등록 승인 (PAT-1092)", status: "완료" },
-        { id: "RND-2026-03", project_name: "친환경 저탄소 자재 신소재 개발", lead_researcher: "김책임", budget: 120000000, spent_budget: 45000000, progress: 35, patent_status: "특허 출원 준비중", status: "진행중" }
-      ]);
+      const res = await apiFetch("/api/rnd");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.projects) && data.projects.length > 0) {
+          const mapped: RndProject[] = data.projects.map((p: any, idx: number) => ({
+            id: p.id || `RND-2026-0${idx + 1}`,
+            project_name: p.title || p.project_name || "R&D 프로젝트",
+            lead_researcher: p.leadResearcher || p.lead_researcher || "박연구원",
+            budget: Number(p.budget || 150000000),
+            spent_budget: Number(p.spentBudget || p.spent_budget || 80000000),
+            progress: Number(p.progress || 50),
+            patent_status: p.patentStatus || p.patent_status || "출원 진행중",
+            status: (p.status === "COMPLETED" ? "완료" : p.status === "REVIEW" ? "심사중" : "진행중") as "진행중" | "완료" | "심사중"
+          }));
+          setProjects(mapped);
+        } else {
+          setProjects([
+            { id: "RND-2026-01", project_name: "차세대 수입 통관 모듈 전자 센서 R&D", lead_researcher: "박박사", budget: 150000000, spent_budget: 82000000, progress: 65, patent_status: "출원 완료 (PAT-5421)", status: "진행중" },
+            { id: "RND-2026-02", project_name: "프레스 예지보전 초고속 FFT AI 기술", lead_researcher: "이수석", budget: 200000000, spent_budget: 195000000, progress: 95, patent_status: "등록 승인 (PAT-1092)", status: "완료" },
+            { id: "RND-2026-03", project_name: "친환경 저탄소 자재 신소재 개발", lead_researcher: "김책임", budget: 120000000, spent_budget: 45000000, progress: 35, patent_status: "특허 출원 준비중", status: "진행중" }
+          ]);
+        }
+      }
     } catch (err) {
       console.error("Failed to fetch R&D data:", err);
     } finally {
