@@ -307,19 +307,13 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     }
   };
 
-  // 💡 시스템 운영자(admin) 계정인 경우, 플랫폼 회원/테넌트 관리 전용으로 사이드바 메뉴 뷰 슬림화
+  // 💡 시스템 운영자(admin) 계정인 경우: 플랫폼 테넌트 가입/회원 관리 전용 단일 메뉴 뷰 제공
   const systemAdminMenuItems = [
     {
       href: "/admin/members",
       label: "👑 전사 회원 관리",
       icon: Shield,
       color: "text-amber-400 font-black"
-    },
-    {
-      href: "/settings",
-      label: "🏢 시스템 설정",
-      icon: Settings,
-      color: "text-indigo-400 font-bold"
     }
   ];
 
