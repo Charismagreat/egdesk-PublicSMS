@@ -289,10 +289,10 @@ export default function GovernanceDashboard() {
       if (data.success) {
         setActionReports(data.reports || []);
 
-        // 2. [선택 시] 향후 동일 사건 AI 자율 자동 실행 규칙으로 등록
+        // 2. [선택 시] 향후 동일 업무 AI 자율 자동 실행 규칙으로 등록
         if (options?.saveAutoRule) {
           const ruleTitle = `[자율 대행] ${(selectedEvent.title || '').replace(/^AI 결재 보류:\s*/g, '')} 자율 처리 규칙`;
-          const ruleExpr = `이벤트 유형 '${selectedEvent.type}' 발생 시 자율 조치(${selectedActions.join(', ')}) 자동 처리`;
+          const ruleExpr = `업무 유형 '${selectedEvent.type}' 발생 시 자율 조치(${selectedActions.join(', ')}) 자동 처리`;
           await apiFetch('/api/governance?action=save_auto_rule', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

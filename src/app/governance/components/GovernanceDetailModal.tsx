@@ -428,10 +428,10 @@ export default function GovernanceDetailModal({
               <div className="space-y-0.5">
                 <span className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
                   <Bot className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span>동일 유형 사건 발생 시 AI 자율 자동 실행 규칙으로 승인 등록</span>
+                  <span>동일 유형 업무 발생 시 AI 자율 자동 실행 규칙으로 승인 등록</span>
                 </span>
                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                  스위치를 켜고 자율 작업을 실행하면, 향후 동일한 유형의 사건 발생 시 관리자 수동 승인 없이 AI가 자동으로 승인 대행합니다.
+                  스위치를 켜고 자율 작업을 실행하면, 향후 동일한 유형의 업무 발생 시 관리자 수동 승인 없이 AI가 자동으로 승인 대행합니다.
                 </p>
               </div>
               <button
