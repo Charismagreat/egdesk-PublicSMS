@@ -13,6 +13,7 @@ interface MobileTodoListSectionProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   filteredTasks: any[];
+  allTasks?: any[];
   activeTaskCount: number;
   completedTaskCount: number;
   taskFolderCount: number;
@@ -33,6 +34,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
   searchQuery,
   setSearchQuery,
   filteredTasks,
+  allTasks = [],
   activeTaskCount,
   completedTaskCount,
   taskFolderCount,
@@ -50,6 +52,52 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
       // 완료 항목 클릭 안내
       alert("✅ 최고관리자의 관제 승인에 의해 실행 완료된 업무입니다.");
     }
+  };
+
+  // 하부 탭별 건수 동적 집계 함수
+  const getSubTabCount = (periodId: string, tabType: "active" | "completed") => {
+    if (!allTasks || allTasks.length === 0) return 0;
+    const targetTasks = allTasks.filter((t) => (tabType === "active" ? t.status !== "DONE" : t.status === "DONE"));
+    if (periodId === "ALL") return targetTasks.length;
+
+    return targetTasks.filter((t) => {
+      if (t.due_date && String(t.due_date).trim() !== '') {
+        const taskDate = new Date(t.due_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const taskZero = new Date(taskDate);
+        taskZero.setHours(0, 0, 0, 0);
+
+        const diffDays = Math.round((taskZero.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (tabType === "active") {
+          if (periodId === "TODAY") return diffDays <= 0;
+          if (periodId === "TOMORROW") return diffDays === 1;
+          if (periodId === "WEEK") return diffDays >= 0 && diffDays <= 7;
+          if (periodId === "MONTH") {
+            return taskDate.getFullYear() === today.getFullYear() && taskDate.getMonth() === today.getMonth();
+          }
+          if (periodId === "NEXT_MONTH") {
+            const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+            return taskDate.getFullYear() === nextMonth.getFullYear() && taskDate.getMonth() === nextMonth.getMonth();
+          }
+        } else {
+          if (periodId === "TODAY") return diffDays === 0;
+          if (periodId === "YESTERDAY") return diffDays === -1;
+          if (periodId === "WEEK") return diffDays >= -7 && diffDays <= 0;
+          if (periodId === "MONTH") {
+            return taskDate.getFullYear() === today.getFullYear() && taskDate.getMonth() === today.getMonth();
+          }
+          if (periodId === "LAST_MONTH") {
+            const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            return taskDate.getFullYear() === lastMonth.getFullYear() && taskDate.getMonth() === lastMonth.getMonth();
+          }
+        }
+        return false;
+      }
+      return periodId === "TODAY";
+    }).length;
   };
 
   return (
@@ -121,20 +169,26 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                   { id: "MONTH", label: "이번 달" },
                   { id: "NEXT_MONTH", label: "다음달" },
                   { id: "ALL", label: "전체" },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setTodoPeriod(item.id as any)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border-none cursor-pointer transition-all whitespace-nowrap ${
-                      todoPeriod === item.id
-                        ? "bg-indigo-600 text-white shadow-2xs"
-                        : "bg-slate-50 text-slate-500 hover:bg-slate-100"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+                ].map((item) => {
+                  const count = getSubTabCount(item.id, "active");
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setTodoPeriod(item.id as any)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border-none cursor-pointer transition-all whitespace-nowrap flex items-center gap-1 ${
+                        todoPeriod === item.id
+                          ? "bg-indigo-600 text-white shadow-2xs"
+                          : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${todoPeriod === item.id ? "bg-white/20 text-white" : "bg-slate-200/80 text-slate-600"}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
               </>
             ) : (
               <>
@@ -145,20 +199,26 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                   { id: "MONTH", label: "이번 달" },
                   { id: "LAST_MONTH", label: "지난달" },
                   { id: "ALL", label: "전체" },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setCompletedPeriod(item.id as any)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border-none cursor-pointer transition-all whitespace-nowrap ${
-                      completedPeriod === item.id
-                        ? "bg-indigo-600 text-white shadow-2xs"
-                        : "bg-slate-50 text-slate-500 hover:bg-slate-100"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+                ].map((item) => {
+                  const count = getSubTabCount(item.id, "completed");
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setCompletedPeriod(item.id as any)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border-none cursor-pointer transition-all whitespace-nowrap flex items-center gap-1 ${
+                        completedPeriod === item.id
+                          ? "bg-indigo-600 text-white shadow-2xs"
+                          : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${completedPeriod === item.id ? "bg-white/20 text-white" : "bg-slate-200/80 text-slate-600"}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
               </>
             )}
           </div>
