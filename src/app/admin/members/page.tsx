@@ -519,11 +519,11 @@ export default function MemberManagementPage() {
                         <div className="flex flex-col">
                           <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                             {member.name}
-                            {member.username === "admin" && (
-                              <span className="px-1.5 py-0.5 bg-rose-50 text-rose-600 rounded text-[9px] font-black border border-rose-100">호스트</span>
+                            {isSystemAdminUser(member) && (
+                              <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md text-[10px] font-black border border-amber-200">플랫폼 운영자</span>
                             )}
-                            {member.role === "SUPER_ADMIN" && member.username !== "admin" && (
-                              <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[9px] font-black border border-blue-100">회원(사장)</span>
+                            {isTenantOwner(member) && (
+                              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-black border border-indigo-200">테넌트 대표</span>
                             )}
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono mt-0.5">{member.username}</span>
@@ -536,12 +536,22 @@ export default function MemberManagementPage() {
                       </td>
                       <td className="p-4">
                         <div className="flex items-center">
-                          {member.role === "SUPER_ADMIN" ? (
-                            <span className="text-indigo-600 font-bold">최고관리자 (SUPER)</span>
+                          {isSystemAdminUser(member) ? (
+                            <span className="text-amber-600 font-extrabold flex items-center gap-1">
+                              🔑 시스템 최고운영자 (SYSTEM_ADMIN)
+                            </span>
+                          ) : isTenantOwner(member) ? (
+                            <span className="text-indigo-600 font-bold flex items-center gap-1">
+                              👑 테넌트 최고관리자 (TENANT_ADMIN)
+                            </span>
                           ) : member.role === "SUB_OPERATOR" ? (
-                            <span className="text-emerald-600">부운영자 (OPERATOR)</span>
+                            <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                              🛠️ 매장 부운영자 (SUB_OPERATOR)
+                            </span>
                           ) : (
-                            <span className="text-slate-500">일반 직원 (EMPLOYEE)</span>
+                            <span className="text-slate-500 font-semibold flex items-center gap-1">
+                              👥 매장 일반직원 (EMPLOYEE)
+                            </span>
                           )}
                         </div>
                       </td>

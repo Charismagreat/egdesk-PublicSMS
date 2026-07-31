@@ -28,8 +28,15 @@ export async function GET(req: Request) {
     }
 
     const result = await queryTable('crm_operators');
-    // 소프트 삭제(deleted_at)되지 않은 활성 임직원만 필터링
-    const activeOps = (result.rows || []).filter((op: any) => !op.deleted_at);
+    // 소프트 삭제(deleted_at)되지 않은 활성 임직원만 필터링 (admin 계정은 SYSTEM_ADMIN 역할 보정)
+    const activeOps = (result.rows || [])
+      .filter((op: any) => !op.deleted_at)
+      .map((op: any) => {
+        if (op.username === 'admin') {
+          return { ...op, role: 'SYSTEM_ADMIN' };
+        }
+        return op;
+      });
 
     return NextResponse.json({ success: true, operators: activeOps });
   } catch (error: any) {
