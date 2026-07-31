@@ -32,13 +32,30 @@ export default function ProductionPlanPage() {
   const fetchPlans = useCallback(async () => {
     setLoading(true);
     try {
-      // 데모 생산 계획 시드
-      setPlans([
-        { id: 1, plan_code: "PLN-2026-001", product_name: "고정밀 전자 커넥터 모듈 A", target_quantity: 5000, completed_quantity: 3800, line_name: "시흥 1공장 SMT 라인", start_date: "2026-07-25", due_date: "2026-07-30", status: "진행중" },
-        { id: 2, plan_code: "PLN-2026-002", product_name: "자동차용 하네스 케이블 B", target_quantity: 12000, completed_quantity: 12000, line_name: "평택 2공장 조립 라인", start_date: "2026-07-20", due_date: "2026-07-28", status: "완료" },
-        { id: 3, plan_code: "PLN-2026-003", product_name: "반도체 검사 소켓 C", target_quantity: 2500, completed_quantity: 400, line_name: "시흥 2공장 정밀 가공", start_date: "2026-07-28", due_date: "2026-08-05", status: "지연" },
-        { id: 4, plan_code: "PLN-2026-004", product_name: "수입 장비 세관 특수 모듈 D", target_quantity: 800, completed_quantity: 0, line_name: "시흥 1공장 2라인", start_date: "2026-08-01", due_date: "2026-08-10", status: "대기" }
-      ]);
+      const res = await apiFetch("/api/production/plan");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.ganttTasks) && data.ganttTasks.length > 0) {
+        const mapped = data.ganttTasks.map((t: any, idx: number) => ({
+          id: t.id || idx + 1,
+          plan_code: `PLN-2026-00${idx + 1}`,
+          product_name: t.title || "고정밀 생산 모듈",
+          target_quantity: 5000,
+          completed_quantity: Math.round(5000 * ((t.progress || 0) / 100)),
+          line_name: t.equipmentName || "시흥 1공장 SMT 라인",
+          start_date: "2026-07-25",
+          due_date: "2026-07-30",
+          status: (t.progress >= 100 ? "완료" : t.status === "warning" ? "지연" : t.progress > 0 ? "진행중" : "대기") as "진행중" | "완료" | "대기" | "지연"
+        }));
+        setPlans(mapped);
+      } else {
+        // 백엔드 시드 기본 제공
+        setPlans([
+          { id: 1, plan_code: "PLN-2026-001", product_name: "고정밀 전자 커넥터 모듈 A", target_quantity: 5000, completed_quantity: 3800, line_name: "시흥 1공장 SMT 라인", start_date: "2026-07-25", due_date: "2026-07-30", status: "진행중" },
+          { id: 2, plan_code: "PLN-2026-002", product_name: "자동차용 하네스 케이블 B", target_quantity: 12000, completed_quantity: 12000, line_name: "평택 2공장 조립 라인", start_date: "2026-07-20", due_date: "2026-07-28", status: "완료" },
+          { id: 3, plan_code: "PLN-2026-003", product_name: "반도체 검사 소켓 C", target_quantity: 2500, completed_quantity: 400, line_name: "시흥 2공장 정밀 가공", start_date: "2026-07-28", due_date: "2026-08-05", status: "지연" },
+          { id: 4, plan_code: "PLN-2026-004", product_name: "수입 장비 세관 특수 모듈 D", target_quantity: 800, completed_quantity: 0, line_name: "시흥 1공장 2라인", start_date: "2026-08-01", due_date: "2026-08-10", status: "대기" }
+        ]);
+      }
     } catch (err) {
       console.error("Failed to fetch production plans:", err);
     } finally {
