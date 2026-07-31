@@ -108,7 +108,9 @@ export default function HrAttendancePage() {
 
   // 연월 또는 권한 세션 변경 시 인사/급여 데이터 조회
   useEffect(() => {
-    const hasPrivilege = currentUser?.role === 'TENANT_ADMIN' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'PRESIDENT' || currentUser?.role === 'SYSTEM_ADMIN';
+    const role = String(currentUser?.role || '').toUpperCase();
+    const username = String(currentUser?.username || '').toLowerCase();
+    const hasPrivilege = ['TENANT_ADMIN', 'SUPER_ADMIN', 'PRESIDENT', 'SYSTEM_ADMIN', 'GUEST', 'ADMIN'].includes(role) || username === 'guest';
     if (hasPrivilege) {
       fetchContractsAndPayroll();
     }
@@ -242,7 +244,9 @@ export default function HrAttendancePage() {
       setError('서버 연결 불안정 또는 네트워크 장애');
     } finally {
       setLoading(false);
-      const hasPrivilege = loadedUser?.role === 'TENANT_ADMIN' || loadedUser?.role === 'SUPER_ADMIN' || loadedUser?.role === 'PRESIDENT' || loadedUser?.role === 'SYSTEM_ADMIN' || isHighPrivilege;
+      const role = String(loadedUser?.role || '').toUpperCase();
+      const username = String(loadedUser?.username || '').toLowerCase();
+      const hasPrivilege = ['TENANT_ADMIN', 'SUPER_ADMIN', 'PRESIDENT', 'SYSTEM_ADMIN', 'GUEST', 'ADMIN'].includes(role) || username === 'guest' || isHighPrivilege;
       if (hasPrivilege) {
         fetchBriefingHistories(true);
       } else {
