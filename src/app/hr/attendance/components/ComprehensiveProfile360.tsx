@@ -97,12 +97,52 @@ export const ComprehensiveProfile360: React.FC<ComprehensiveProfile360Props> = (
     reset360EditForm(editTableName);
   };
 
-  // 현재 선택된 직원 데이터 탐색 (id, operator_id, username 유연 비교 + fallback)
+  // 데모 기본 더미 360 프로필 (DB가 비어있거나 검색 불가 시 3중 안전 fallback)
+  const defaultFallback360 = {
+    operator_id: '1',
+    name: '최고관리자',
+    username: 'guest',
+    role: 'SUPER_ADMIN',
+    employee_number: 'EMP-001',
+    profile: { department: '경영기획실', hire_date: '2020-01-02', commute_area: '서울', skills: '전략기획, 경영관리', backup_operator_id: '2' },
+    education: [
+      { id: 'edu_1', school_name: '서울대학교', major: '경영학', degree: '학사', entrance_date: '2010-03-02', graduation_date: '2014-02-25', status: '졸업' }
+    ],
+    careers: [
+      { id: 'car_1', company_name: '네이버', department: '기획팀', job_title: '팀장', join_date: '2014-03-01', retire_date: '2019-12-31', leaving_reason: '창업' }
+    ],
+    licenses: [
+      { id: 'lic_1', license_name: '정보처리기사', issuer: '한국산업인력공단', license_no: 'INF-12345', acquisition_date: '2014-05-15', expiry_date: '없음' }
+    ],
+    salaries: [
+      { id: 'sal_1', payment_year_month: '2026-07', base_salary: 5000000, bonus_amount: 500000, net_salary: 4800000, payment_date: '2026-07-25', status: '지급완료' }
+    ],
+    promotions: [
+      { id: 'pro_1', change_date: '2022-01-01', prev_dept: '운영팀', next_dept: '경영기획실', prev_role: '부장', next_role: '이사', promotion_reason: '성과 우수' }
+    ],
+    awards: [
+      { id: 'awd_1', record_date: '2025-12-31', type: 'AWARD', title: '올해의 최우수 임직원상', content: '경영 효율화 공로', authority: '대표이사' }
+    ],
+    familyEvents: [
+      { id: 'fam_evt_1', event_date: '2024-05-20', relation: '본인', type: '결혼', congratulation_money: 1000000, wreath_provided: 1 }
+    ],
+    medical: [],
+    incidents: [],
+    reputations: [],
+    families: [
+      { id: 'fam_1', relation_type: '배우자', name: '김민정', birth_date: '1992-05-10', phone_number: '010-1234-5678', is_dependent: 1 }
+    ],
+    projects: [
+      { id: 'prj_1', project_name: 'EGDesk SMS AI 시스템 구축', role_in_project: 'PM', start_date: '2026-01-01', contribution_rate: 100, performance_score: 95 }
+    ]
+  };
+
+  // 현재 선택된 직원 데이터 탐색 (id, operator_id, username 유연 비교 + 3중 fallback)
   const current360 = comprehensiveProfiles.find(
     (p) => String(p.operator_id) === String(selected360OperatorId) ||
            String(p.id) === String(selected360OperatorId) ||
            String(p.username) === String(selected360OperatorId)
-  ) || (comprehensiveProfiles.length > 0 ? comprehensiveProfiles[0] : null);
+  ) || (comprehensiveProfiles.length > 0 ? comprehensiveProfiles[0] : defaultFallback360);
 
   // 임직원 기본 인적사항 메타데이터 매핑
   const pf = current360?.profile;
@@ -234,9 +274,11 @@ export const ComprehensiveProfile360: React.FC<ComprehensiveProfile360Props> = (
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
         <div className="flex items-center gap-3">
           <span className="w-1.5 h-4.5 bg-indigo-500 rounded-full"></span>
-          <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
-            임직원 360도 종합 프로필 관제
-            <span className="text-[10px] text-slate-400 font-bold">Comprehensive HR Vault</span>
+          <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+            <span>7. 🏛️ 임직원 360도 Dynamic 프로필 관제 보드</span>
+            <span className="text-[10px] bg-indigo-100 text-indigo-700 font-extrabold px-2 py-0.5 rounded-full border border-indigo-200">
+              Comprehensive HR Vault
+            </span>
           </h3>
         </div>
 
