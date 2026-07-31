@@ -307,13 +307,19 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     }
   };
 
-  // 💡 시스템 운영자(admin) 계정인 경우, 개별 매장 실무 대장을 침범하지 않고 회원/직원 계정 관리(/settings) 메뉴로 전용 배치
+  // 💡 시스템 운영자(admin) 계정인 경우, 플랫폼 회원/테넌트 관리 전용으로 사이드바 메뉴 뷰 슬림화
   const systemAdminMenuItems = [
     {
+      href: "/admin/members",
+      label: "👑 전사 회원 관리",
+      icon: Shield,
+      color: "text-amber-400 font-black"
+    },
+    {
       href: "/settings",
-      label: "👥 회원/직원 계정 관리",
-      icon: UserCog,
-      color: "text-indigo-400 font-black"
+      label: "🏢 시스템 설정",
+      icon: Settings,
+      color: "text-indigo-400 font-bold"
     }
   ];
 
@@ -474,29 +480,6 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
       
       {/* 하단 고정 메뉴 영역 */}
       <div className="p-4 border-t border-slate-700/80 bg-slate-900/95 backdrop-blur-md space-y-2 shadow-[0_-12px_24px_-8px_rgba(0,0,0,0.8)] relative z-10">
-        {isSystemAdmin && (
-          <Link
-            href="/admin/members"
-            className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
-              isActive("/admin/members")
-                ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
-                : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
-            }`}
-          >
-            <div className="flex items-center space-x-3 min-w-0">
-              <Shield className={`w-5 h-5 shrink-0 ${isActive("/admin/members") ? "text-white" : "text-slate-400"}`} />
-              <span>회원 관리</span>
-            </div>
-            <button
-              type="button"
-              onClick={(e) => handleOpenNewTab(e, "/admin/members")}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
-              title="새 탭에서 열기"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          </Link>
-        )}
 
         <Link
           href="/"
