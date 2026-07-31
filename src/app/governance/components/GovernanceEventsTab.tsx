@@ -307,28 +307,25 @@ export default function GovernanceEventsTab({
                       </span>
                     )}
 
-                    {/* 📎 [상신 첨부 서류 퀵버튼] */}
-                    {((evt.data?.attachments && evt.data.attachments.length > 0) || evt.data?.file_url) && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const firstAtt = evt.data?.attachments?.[0];
-                          const title = firstAtt?.name || evt.data?.matched_filename || '상신 첨부 서류';
-                          const url = firstAtt?.url || evt.data?.file_url;
-                          handleOpenDocumentModal(
-                            title,
-                            url,
-                            evt.data?.combined_ai_analysis_text || evt.data?.reason || evt.subtitle
-                          );
-                        }}
-                        className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 px-2 py-1 rounded-lg font-black transition-all cursor-pointer shrink-0"
-                        title="상신 첨부서류 열람 및 AI 분석 확인"
-                      >
-                        <Paperclip className="w-3 h-3 text-indigo-600" />
-                        <span>서류 열람</span>
-                      </button>
-                    )}
+                    {/* 📎 [상신 첨부 서류 퀵버튼 - 실물 파일 다이렉트 새탭 열람] */}
+                    {((evt.data?.attachments && evt.data.attachments.length > 0) || evt.data?.file_url) && (() => {
+                      const firstAtt = evt.data?.attachments?.[0];
+                      const url = firstAtt?.url || evt.data?.file_url;
+                      return (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 px-2 py-1 rounded-lg font-black transition-all cursor-pointer shrink-0 text-decoration-none"
+                          title="상신 첨부 실물 서류 새 탭 열람"
+                        >
+                          <Paperclip className="w-3 h-3 text-indigo-600" />
+                          <span>서류 열람</span>
+                          <ExternalLink className="w-3 h-3 text-indigo-400 shrink-0" />
+                        </a>
+                      );
+                    })()}
 
                     <button
                       onClick={() => handleOpenDetail(evt)}

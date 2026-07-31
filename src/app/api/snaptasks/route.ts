@@ -144,12 +144,8 @@ export async function GET(req: Request) {
           const taskItems = itemsRows.filter(it => String(it.task_id) === String(t.id) && it.file_url && it.file_url.trim() !== '');
           const attachments = taskItems.map(it => {
             const fileName = it.content_text ? it.content_text.replace('[상신 첨부] ', '').trim() : `첨부서류_${it.id}`;
-            const rawUrl = (it.file_url || '').trim();
-            // 💡 브라우저가 새 탭에서 곧바로 열 수 있는 웹 경로(/uploads/..., http..., data:...)면 직접 경로 서빙
-            const isDirectUrl = rawUrl.startsWith('/') || rawUrl.startsWith('http') || rawUrl.startsWith('data:');
-            const downloadUrl = isDirectUrl
-              ? rawUrl
-              : `/api/shared/files?tableName=crm_snaptask_items&rowId=${it.id}&columnName=file_url`;
+            // 💡 Next.js 정적 public/ 폴더 서빙 꼬임 방지를 위해 100% 동적 통합 게이트웨이 엔드포인트로 파일 서빙
+            const downloadUrl = `/api/shared/files?tableName=crm_snaptask_items&rowId=${it.id}&columnName=file_url`;
             
             return {
               id: it.id,

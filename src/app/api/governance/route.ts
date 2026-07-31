@@ -254,7 +254,7 @@ export async function GET(request: Request) {
         const firstImportRow = importMasterRows.find((r: any) => r.file_path || r.id);
         const defaultImportFileUrl = firstImportRow
           ? `/api/shared/files?tableName=import_master&rowId=${firstImportRow.id}&columnName=file_path`
-          : '/uploads/customs/20260630수입통관서류.pdf';
+          : null;
 
         // 💡 [소급 적용 개편] 기존 및 신규 취소 요청 기록(TASK_CANCEL_REQUEST 및 doc_title 내 취소 요청 포함 건)과 원본 상신 로그 1:1 완벽 병합
         const isCancelLog = (l: any) => 
@@ -334,11 +334,8 @@ export async function GET(request: Request) {
           });
           relatedItems.forEach((item: any) => {
             const fileName = item.content_text ? item.content_text.replace('[상신 첨부] ', '').trim() : `첨부서류_${item.id}`;
-            const rawUrl = (item.file_url || '').trim();
-            const isDirectUrl = rawUrl.startsWith('/') || rawUrl.startsWith('http') || rawUrl.startsWith('data:');
-            const downloadUrl = isDirectUrl
-              ? rawUrl
-              : `/api/shared/files?tableName=crm_snaptask_items&rowId=${item.id}&columnName=file_url`;
+            // 💡 Next.js 정적 public/ 폴더 서빙 꼬임 방지를 위해 100% 동적 통합 게이트웨이 엔드포인트로 파일 서빙
+            const downloadUrl = `/api/shared/files?tableName=crm_snaptask_items&rowId=${item.id}&columnName=file_url`;
             
             if (item.content_text) combinedAiAnalysisText += ` ${item.content_text}`;
             if (item.ai_analysis) combinedAiAnalysisText += ` ${typeof item.ai_analysis === 'string' ? item.ai_analysis : JSON.stringify(item.ai_analysis)}`;
@@ -1091,7 +1088,7 @@ export async function POST(request: Request) {
             id: itemId,
             task_id: taskId,
             content_text: `[상신 첨부] ${file.name || '첨부 파일'}`,
-            file_url: finalFileUrl || '/uploads/customs/20260630수입통관서류.pdf', 
+            file_url: finalFileUrl || file.url || null, 
             file_type: fType,
             ai_analysis: JSON.stringify({ message: "Mobile request attachment" }),
             created_at: nowStr,
@@ -1111,9 +1108,10 @@ export async function POST(request: Request) {
             console.error('Failed to query inserted snaptask item real id:', queryErr);
           }
 
-          if (file.base64 && file.name) {
+          const fileDataToUpload = file.base64 || file.url || file.preview || fileContent;
+          if (fileDataToUpload && file.name) {
             try {
-              await uploadFile('crm_snaptask_items', realDbId, 'file_url', file.name, file.base64);
+              await uploadFile('crm_snaptask_items', realDbId, 'file_url', file.name, fileDataToUpload);
             } catch (uploadErr: any) {
               console.error(`Failed to upload attachment file ${file.name}:`, uploadErr.message);
             }

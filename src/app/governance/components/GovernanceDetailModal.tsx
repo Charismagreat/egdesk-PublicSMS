@@ -90,9 +90,7 @@ export default function GovernanceDetailModal({
         <div className="bg-slate-50/60 border border-slate-100 rounded-2xl p-4 space-y-3">
           <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">이벤트 데이터 명세</h4>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-            <div className="col-span-2 bg-white p-2.5 rounded-xl border border-slate-200/80 mb-1">
-              <span className="font-black text-slate-900 text-sm">{displayTitle}</span>
-            </div>
+
             <div>
               <span className="text-slate-400 font-semibold block">이벤트 ID</span>
               <span className="font-mono font-bold text-slate-800">{selectedEvent.id}</span>
@@ -156,35 +154,29 @@ export default function GovernanceDetailModal({
                           <div className="flex flex-wrap gap-2">
                             {selectedEvent.data.attachments && selectedEvent.data.attachments.length > 0 ? (
                               selectedEvent.data.attachments.map((att: any, attIdx: number) => (
-                                <button
+                                <a
                                   key={attIdx}
-                                  type="button"
-                                  onClick={() => handleOpenDocumentModal(
-                                    att.name || '상신 첨부 서류', 
-                                    att.url,
-                                    selectedEvent.data.combined_ai_analysis_text || selectedEvent.data.reason || selectedEvent.subtitle
-                                  )}
-                                  className="inline-flex items-center gap-1.5 bg-white hover:bg-indigo-50 text-indigo-900 font-extrabold text-xs px-3 py-1.5 rounded-xl border border-indigo-200 transition-all cursor-pointer shadow-2xs group/att"
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 bg-white hover:bg-indigo-50 text-indigo-900 font-extrabold text-xs px-3 py-1.5 rounded-xl border border-indigo-200 transition-all cursor-pointer shadow-2xs group/att text-decoration-none"
                                 >
                                   <FileText className="w-3.5 h-3.5 text-indigo-600 group-hover/att:scale-110 transition-transform" />
                                   <span className="truncate max-w-[200px]">{att.name}</span>
                                   <ExternalLink className="w-3 h-3 text-indigo-400" />
-                                </button>
+                                </a>
                               ))
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenDocumentModal(
-                                  selectedEvent.data.matched_filename || '상신 첨부 서류', 
-                                  selectedEvent.data.file_url,
-                                  selectedEvent.data.combined_ai_analysis_text || selectedEvent.data.reason || selectedEvent.subtitle
-                                )}
-                                className="inline-flex items-center gap-1.5 bg-white hover:bg-indigo-50 text-indigo-900 font-extrabold text-xs px-3 py-1.5 rounded-xl border border-indigo-200 transition-all cursor-pointer shadow-2xs group/att"
+                              <a
+                                href={selectedEvent.data.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 bg-white hover:bg-indigo-50 text-indigo-900 font-extrabold text-xs px-3 py-1.5 rounded-xl border border-indigo-200 transition-all cursor-pointer shadow-2xs group/att text-decoration-none"
                               >
                                 <FileText className="w-3.5 h-3.5 text-indigo-600 group-hover/att:scale-110 transition-transform" />
-                                <span className="truncate max-w-[220px]">{selectedEvent.data.matched_filename || '첨부서류열기'}</span>
+                                <span className="truncate max-w-[220px]">{selectedEvent.data.matched_filename || '첨부서류 열기'}</span>
                                 <ExternalLink className="w-3 h-3 text-indigo-400" />
-                              </button>
+                              </a>
                             )}
                           </div>
                         </div>
