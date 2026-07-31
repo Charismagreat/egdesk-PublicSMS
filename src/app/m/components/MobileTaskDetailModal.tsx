@@ -22,8 +22,8 @@ export default function MobileTaskDetailModal({
   const getStatusBadge = () => {
     if (isPendingCancel) {
       return (
-        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/80 px-2.5 py-0.5 rounded-full text-xs font-black">
-          <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+        <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-800 border border-rose-200/80 px-2.5 py-0.5 rounded-full text-xs font-black">
+          <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
           <span>🚨 취소 승인 대기 중</span>
         </span>
       );
@@ -32,14 +32,14 @@ export default function MobileTaskDetailModal({
       return (
         <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 px-2.5 py-0.5 rounded-full text-xs font-black">
           <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-          <span>🟢 처리 완료</span>
+          <span>🟢 관제 실행 완료</span>
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200/80 px-2.5 py-0.5 rounded-full text-xs font-black">
-        <Clock className="w-3 h-3 text-indigo-600 shrink-0" />
-        <span>🟡 진행 중</span>
+      <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/80 px-2.5 py-0.5 rounded-full text-xs font-black">
+        <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+        <span>🟡 관제 승인 대기</span>
       </span>
     );
   };
