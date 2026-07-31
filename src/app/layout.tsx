@@ -17,9 +17,9 @@ export const metadata: Metadata = {
   title: "EGDESK SMS",
   description: "중소기업을 위한 AI 기반 자율 경영 플랫폼",
   icons: {
-    icon: "/icon.ico",
+    icon: "/favicon.ico",
     shortcut: "/favicon.ico",
-    apple: "/icon.ico",
+    apple: "/favicon.ico",
   },
 };
 
