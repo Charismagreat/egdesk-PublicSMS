@@ -68,6 +68,13 @@ export const ComprehensiveProfile360: React.FC<ComprehensiveProfile360Props> = (
     reset360EditForm(editTableName);
   }, [selected360OperatorId]);
 
+  // 선택된 직원이 비어있다면 첫 번째 직원을 자동 기선택 처리
+  useEffect(() => {
+    if (!selected360OperatorId && employees && employees.length > 0) {
+      handleSelect360Employee(String(employees[0].id));
+    }
+  }, [employees, selected360OperatorId, handleSelect360Employee]);
+
   // 수정 여부 감지
   const getIs360Modified = () => {
     if (!editFormData || Object.keys(editFormData).length === 0) return false;
@@ -90,10 +97,12 @@ export const ComprehensiveProfile360: React.FC<ComprehensiveProfile360Props> = (
     reset360EditForm(editTableName);
   };
 
-  // 현재 선택된 직원 데이터 탐색
+  // 현재 선택된 직원 데이터 탐색 (id, operator_id, username 유연 비교 + fallback)
   const current360 = comprehensiveProfiles.find(
-    (p) => String(p.operator_id) === String(selected360OperatorId)
-  );
+    (p) => String(p.operator_id) === String(selected360OperatorId) ||
+           String(p.id) === String(selected360OperatorId) ||
+           String(p.username) === String(selected360OperatorId)
+  ) || (comprehensiveProfiles.length > 0 ? comprehensiveProfiles[0] : null);
 
   // 임직원 기본 인적사항 메타데이터 매핑
   const pf = current360?.profile;
