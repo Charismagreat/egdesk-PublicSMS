@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { 
   ShieldAlert, X, Calendar, Paperclip, FileText, ExternalLink, 
   ListTodo, CheckSquare, Square, ShieldCheck, Loader2, Sparkles, 
-  CheckCircle2, XCircle, Plus 
+  CheckCircle2, XCircle, Plus, Bot, ToggleLeft, ToggleRight
 } from "lucide-react";
 
 interface GovernanceDetailModalProps {
@@ -17,7 +17,7 @@ interface GovernanceDetailModalProps {
   setSelectedActions: React.Dispatch<React.SetStateAction<string[]>>;
   actionReports: { action: string; success: boolean; detail: string }[] | null;
   isExecuting: boolean;
-  handleExecuteActions: () => void;
+  handleExecuteActions: (options?: { saveAutoRule?: boolean }) => void;
   handleApproveLeave: (id: string) => void;
   handleRejectLeave: (id: string) => void;
   handleApproveCancelRequest: (evt: any) => void;
@@ -50,6 +50,7 @@ export default function GovernanceDetailModal({
   const [customActionDesc, setCustomActionDesc] = useState("");
   const [isAddingAction, setIsAddingAction] = useState(false);
   const [customActions, setCustomActions] = useState<any[]>([]);
+  const [saveAutoRuleOnExecute, setSaveAutoRuleOnExecute] = useState(false);
 
   if (!selectedEvent) return null;
 
@@ -421,6 +422,33 @@ export default function GovernanceDetailModal({
                 );
               })}
             </div>
+
+            {/* 🤖 향후 동일 유형 이벤트 AI 자율 자동 실행 규칙 등록 스위치 */}
+            <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-3.5 flex items-center justify-between gap-3 mt-3">
+              <div className="space-y-0.5">
+                <span className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                  <Bot className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>동일 유형 사건 발생 시 AI 자율 자동 실행 규칙으로 승인 등록</span>
+                </span>
+                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                  스위치를 켜고 자율 작업을 실행하면, 향후 동일한 유형의 사건 발생 시 관리자 수동 승인 없이 AI가 자동으로 승인 대행합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSaveAutoRuleOnExecute(!saveAutoRuleOnExecute)}
+                className={`p-1 rounded-full transition-colors cursor-pointer border-none bg-transparent shrink-0 ${
+                  saveAutoRuleOnExecute ? 'text-indigo-600' : 'text-slate-300'
+                }`}
+                title="AI 자율 자동 실행 규칙 활성화 토글"
+              >
+                {saveAutoRuleOnExecute ? (
+                  <ToggleRight className="w-8 h-8 text-indigo-600" />
+                ) : (
+                  <ToggleLeft className="w-8 h-8 text-slate-300" />
+                )}
+              </button>
+            </div>
           </div>
         )}
 
@@ -496,7 +524,7 @@ export default function GovernanceDetailModal({
             </div>
           ) : !actionReports ? (
             <button
-              onClick={handleExecuteActions}
+              onClick={() => handleExecuteActions({ saveAutoRule: saveAutoRuleOnExecute })}
               disabled={isExecuting || selectedActions.length === 0}
               className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold px-6 py-3 rounded-xl shadow-xs text-xs border-none cursor-pointer flex items-center gap-2 transition-all"
             >

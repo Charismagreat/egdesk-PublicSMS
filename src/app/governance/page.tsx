@@ -271,11 +271,12 @@ export default function GovernanceDashboard() {
     }
   };
 
-  // 자율 액션 실행
-  const handleExecuteActions = async () => {
+  // 자율 액션 실행 및 동일 유형 AI 자율 자동 실행 규칙 등록
+  const handleExecuteActions = async (options?: { saveAutoRule?: boolean }) => {
     if (!selectedEvent || selectedActions.length === 0) return;
     setIsExecuting(true);
     try {
+      // 1. 자율 작업 실행
       const res = await apiFetch("/api/governance?action=execute_autonomous_actions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -287,6 +288,20 @@ export default function GovernanceDashboard() {
       const data = await res.json();
       if (data.success) {
         setActionReports(data.reports || []);
+
+        // 2. [선택 시] 향후 동일 사건 AI 자율 자동 실행 규칙으로 등록
+        if (options?.saveAutoRule) {
+          const ruleTitle = `[자율 대행] ${(selectedEvent.title || '').replace(/^AI 결재 보류:\s*/g, '')} 자율 처리 규칙`;
+          const ruleExpr = `이벤트 유형 '${selectedEvent.type}' 발생 시 자율 조치(${selectedActions.join(', ')}) 자동 처리`;
+          await apiFetch('/api/governance?action=save_auto_rule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: ruleTitle,
+              expression: ruleExpr
+            })
+          }).catch(() => {});
+        }
       } else {
         alert("자율 액션 실행 실패: " + data.error);
       }
