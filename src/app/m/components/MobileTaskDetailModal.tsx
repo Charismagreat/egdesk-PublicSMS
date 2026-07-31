@@ -18,6 +18,7 @@ export default function MobileTaskDetailModal({
 
   const isPendingCancel = task.status === "PENDING_APPROVAL" || task.has_cancel_request;
   const isDone = task.status === "DONE";
+  const memoText = task.memo || task.note || task.customer_memo || task.data?.memo || task.data?.note;
 
   const getStatusBadge = () => {
     if (isPendingCancel) {
@@ -109,6 +110,18 @@ export default function MobileTaskDetailModal({
               <span className="text-[10px] font-bold text-slate-400 block">세부 내용 및 현장 요청 사항</span>
               <p className="text-xs font-medium text-slate-800 leading-relaxed whitespace-pre-wrap">
                 {task.description}
+              </p>
+            </div>
+          )}
+
+          {/* 💡 등록 시 작성된 추가 메모 */}
+          {memoText && (
+            <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200/70 space-y-1">
+              <span className="text-[10px] font-black text-amber-900 flex items-center gap-1">
+                💡 상신 시 작성한 추가 메모
+              </span>
+              <p className="text-xs font-semibold text-amber-950 leading-relaxed whitespace-pre-wrap">
+                {memoText}
               </p>
             </div>
           )}
