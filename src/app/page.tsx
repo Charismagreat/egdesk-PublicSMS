@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function Home() {
-  // 🔑 시스템 운영자(admin) 계정이 메인 진입 시 회원 계정 관리(/settings)로 자동 리다이렉트 가드
+  // 🔑 시스템 운영자(admin) 계정이 메인 진입 시 테넌트 관리(/admin/members)로 자동 리다이렉트 가드
   try {
     const { cookies } = await import('next/headers');
     const { decodeJwt } = await import('jose');
@@ -26,7 +26,7 @@ export default async function Home() {
       const username = (payload.username as string || '').toLowerCase();
       const role = (payload.role as string || '').toUpperCase();
       if (username === 'admin' || role === 'SYSTEM_ADMIN') {
-        redirect('/settings');
+        redirect('/admin/members');
       }
     }
   } catch (e: any) {
