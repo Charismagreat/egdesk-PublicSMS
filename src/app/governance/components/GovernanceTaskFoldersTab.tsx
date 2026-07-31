@@ -59,6 +59,15 @@ export default function GovernanceTaskFoldersTab({
     }
   };
 
+  const getCreatorDisplayName = (rawBy?: string | null) => {
+    if (!rawBy) return '최고관리자';
+    const val = String(rawBy).trim();
+    if (val === 'guest' || val === 'admin' || val === 'SUPER_ADMIN_DEV' || val === 'SUPER_ADMIN') return '최고관리자';
+    if (val === 'guest-1' || val === 'guest-dev') return '김직원';
+    if (val === 'guest-2') return '이대리';
+    return val;
+  };
+
   return (
     <div className="space-y-4">
       {/* 폴더 관제 헤더 컨트롤바 */}
@@ -109,7 +118,7 @@ export default function GovernanceTaskFoldersTab({
                       </span>
                       <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
                         <UserCheck className="w-3 h-3" />
-                        <span>생성자: {folder.created_by || '임직원'}</span>
+                        <span>생성자: {getCreatorDisplayName(folder.created_by)}</span>
                       </span>
                     </div>
                   </div>

@@ -579,7 +579,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // 💡 [신규] 태스크 폴더 관제 탭의 폴더 목록 반환
+    // 💡 [신규] 태스크 폴더 관제 탭의 폴더 목록 반환 (생성자 아이디 -> 실명 정제)
     if (action === 'get_task_folders') {
       try {
         const res = await queryTable('crm_task_folders', {
@@ -601,7 +601,35 @@ export async function GET(request: Request) {
           rows = [defaultFolder];
         }
 
-        return NextResponse.json({ success: true, folders: rows });
+        // crm_employees 정보 조인 또는 아이디 -> 이름 매핑 정제
+        const empRes = await queryTable('crm_employees', { limit: 1000 });
+        const employees = empRes.rows || [];
+        const empMap: Record<string, string> = {};
+        employees.forEach((emp: any) => {
+          if (emp.email) empMap[emp.email] = emp.name;
+          if (emp.username) empMap[emp.username] = emp.name;
+        });
+
+        // 💡 아이디 -> 이름 100% 정제 변환
+        const formattedRows = rows.map((folder: any) => {
+          const rawBy = folder.created_by || '';
+          let displayName = empMap[rawBy] || rawBy;
+
+          if (rawBy === 'guest' || rawBy === 'admin' || rawBy === 'SUPER_ADMIN_DEV' || rawBy === 'SUPER_ADMIN') {
+            displayName = '최고관리자';
+          } else if (rawBy === 'guest-1' || rawBy === 'guest-dev') {
+            displayName = '김직원';
+          } else if (rawBy === 'guest-2') {
+            displayName = '이대리';
+          }
+
+          return {
+            ...folder,
+            created_by: displayName
+          };
+        });
+
+        return NextResponse.json({ success: true, folders: formattedRows });
       } catch (err: any) {
         return NextResponse.json({ success: false, error: err.message }, { status: 500 });
       }
