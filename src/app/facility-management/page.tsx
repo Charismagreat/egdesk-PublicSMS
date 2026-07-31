@@ -35,11 +35,20 @@ export default function FacilityManagementPage() {
       const res = await apiFetch("/api/facility/predictive?equipmentId=PRESS-01");
       if (res.ok) {
         const data = await res.json();
-        if (data.success && Array.isArray(data.items)) {
-          setFacilities(data.items);
-        } else {
+        if (data.success && data.predictiveStatus) {
+          const ps = data.predictiveStatus;
+          const dbItem: FacilityItem = {
+            id: ps.equipmentId || "EQ-PRESS-01",
+            name: ps.equipmentName || "주력 사출 프레스 M-500",
+            location: "시흥 1공장 A구역",
+            status: ps.healthScore < 60 ? "수리중" : ps.healthScore < 80 ? "점검필요" : "가동중",
+            health_score: Math.round(ps.healthScore || 84.5),
+            vibration: Number(ps.vibrationRms || 2.8),
+            temperature: 42,
+            last_maintenance: "2026-07-25"
+          };
           setFacilities([
-            { id: "EQ-PRESS-01", name: "300톤 프레스 서보 1호기", location: "시흥 1공장 A구역", status: "가동중", health_score: 94, vibration: 1.2, temperature: 42, last_maintenance: "2026-07-15" },
+            dbItem,
             { id: "EQ-CNC-02", name: "5축 CNC 밀링 가공기 2호기", location: "시흥 1공장 B구역", status: "점검필요", health_score: 68, vibration: 4.8, temperature: 68, last_maintenance: "2026-06-20" },
             { id: "EQ-SMT-03", name: "SMT 표면실장 라인 3호기", location: "평택 2공장 C구역", status: "가동중", health_score: 98, vibration: 0.8, temperature: 38, last_maintenance: "2026-07-22" },
             { id: "EQ-INJ-04", name: "사출 성형기 4호기", location: "평택 2공장 D구역", status: "수리중", health_score: 45, vibration: 6.2, temperature: 75, last_maintenance: "2026-07-01" }
