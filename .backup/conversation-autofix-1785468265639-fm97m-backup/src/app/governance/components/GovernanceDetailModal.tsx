@@ -309,6 +309,7 @@ export default function GovernanceDetailModal({
                 <span>처리 일시 저장</span>
               </button>
             </div>
+          </div>
         </div>
 
         {/* AI 추천 자율 대행 액션 리스트 및 최고관리자 항목 추가/제거 */}

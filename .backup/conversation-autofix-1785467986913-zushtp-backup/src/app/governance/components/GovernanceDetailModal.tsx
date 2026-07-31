@@ -212,8 +212,6 @@ export default function GovernanceDetailModal({
                   </div>
                 </div>
               )}
-            </div>
-          )}
           {(selectedEvent.type === 'TASK_CANCEL_REQUEST' || selectedEvent.data?.has_cancel_request) && (
             <div className="bg-white p-2.5 rounded-xl border border-rose-200/80 grid grid-cols-2 gap-2 text-[11px]">
               <div>
@@ -234,53 +232,54 @@ export default function GovernanceDetailModal({
               </div>
             </div>
           )}
-          {selectedEvent.type === 'LOW_STOCK' && (
-            <div className="bg-white p-2.5 rounded-xl border border-rose-200/80 grid grid-cols-2 gap-2 text-[11px]">
-              <div>
-                <span className="text-slate-400 font-medium block text-[10px]">상품 코드</span>
-                <span className="font-mono font-bold text-slate-800">{selectedEvent.data.barcode || `INV-${selectedEvent.data.id}`}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-medium block text-[10px]">상품 명</span>
-                <span className="font-bold text-slate-855">{selectedEvent.data.name || selectedEvent.data.itemName}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-medium block text-[10px]">현재고 / 안전재고 한도</span>
-                <span className="font-bold text-rose-600">{selectedEvent.data.quantity}개 / {selectedEvent.data.safety_stock || selectedEvent.data.safetyStock}개</span>
-              </div>
-            </div>
-          )}
-
-          {selectedEvent.type === 'LEAVE_APPROVAL_REQUEST' && (
-            <div className="bg-white p-2.5 rounded-xl border border-indigo-200/80 grid grid-cols-2 gap-2 text-[11px]">
-              <div>
-                <span className="text-slate-400 font-medium block text-[10px]">연차/휴가 신청자</span>
-                <span className="font-bold text-slate-800">{selectedEvent.data.employee_name || '임직원'}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-medium block text-[10px]">휴가 종류 (소요 일수)</span>
-                <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg text-xs w-fit inline-block">
-                  {selectedEvent.data.leave_type_str} ({selectedEvent.data.days_spent}일)
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-medium block text-[10px]">휴가 희망 기간</span>
-                <span className="font-bold text-slate-800">
-                  {selectedEvent.data.leave_type === 'HALF_AM'
-                    ? `${selectedEvent.data.start_date} 오전`
-                    : selectedEvent.data.leave_type === 'HALF_PM'
-                    ? `${selectedEvent.data.start_date} 오후`
-                    : `${selectedEvent.data.start_date} ~ ${selectedEvent.data.end_date}`}
-                </span>
-              </div>
-              <div className="col-span-2 border-t border-slate-100 pt-1.5 mt-0.5">
-                <span className="text-slate-400 font-medium block text-[10px]">휴가 신청 상세 사유</span>
-                <span className="font-semibold text-slate-800 bg-slate-50 p-2.5 rounded-xl block leading-relaxed border border-slate-150 whitespace-pre-wrap">
-                  {selectedEvent.data.reason || '사유가 기재되지 않았습니다.'}
-                </span>
-              </div>
-            </div>
-          )}
+            {selectedEvent.type === 'LOW_STOCK' && (
+              <>
+                <div className="col-span-2 border-t border-slate-100 my-1"></div>
+                <div>
+                  <span className="text-slate-400 font-semibold block">상품 코드</span>
+                  <span className="font-mono font-bold text-slate-800">{selectedEvent.data.barcode || `INV-${selectedEvent.data.id}`}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold block">상품 명</span>
+                  <span className="font-bold text-slate-855">{selectedEvent.data.name || selectedEvent.data.itemName}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold block">현재고 / 안전재고 한도</span>
+                  <span className="font-bold text-rose-600">{selectedEvent.data.quantity}개 / {selectedEvent.data.safety_stock || selectedEvent.data.safetyStock}개</span>
+                </div>
+              </>
+            )}
+            {selectedEvent.type === 'LEAVE_APPROVAL_REQUEST' && (
+              <>
+                <div className="col-span-2 border-t border-slate-100 my-1"></div>
+                <div>
+                  <span className="text-slate-400 font-semibold block">연차/휴가 신청자</span>
+                  <span className="font-bold text-slate-800">{selectedEvent.data.employee_name || '임직원'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold block">휴가 종류 (소요 일수)</span>
+                  <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg text-xs w-fit inline-block">
+                    {selectedEvent.data.leave_type_str} ({selectedEvent.data.days_spent}일)
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold block">휴가 희망 기간</span>
+                  <span className="font-bold text-slate-800">
+                    {selectedEvent.data.leave_type === 'HALF_AM'
+                      ? `${selectedEvent.data.start_date} 오전`
+                      : selectedEvent.data.leave_type === 'HALF_PM'
+                      ? `${selectedEvent.data.start_date} 오후`
+                      : `${selectedEvent.data.start_date} ~ ${selectedEvent.data.end_date}`}
+                  </span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-slate-400 font-semibold block">휴가 신청 상세 사유</span>
+                  <span className="font-semibold text-slate-800 bg-slate-50 p-4 rounded-2xl block mt-1 leading-relaxed border border-slate-150 whitespace-pre-wrap">
+                    {selectedEvent.data.reason || '사유가 기재되지 않았습니다.'}
+                  </span>
+                </div>
+              </>
+            )}
         </div>
 
           {/* 📅 관제 대상 건 처리 일시 (완료 마감일 due_date) 지정 및 변경 컨트롤 바 */}
@@ -309,6 +308,7 @@ export default function GovernanceDetailModal({
                 <span>처리 일시 저장</span>
               </button>
             </div>
+          </div>
         </div>
 
         {/* AI 추천 자율 대행 액션 리스트 및 최고관리자 항목 추가/제거 */}
@@ -525,6 +525,7 @@ export default function GovernanceDetailModal({
             </button>
           )}
         </div>
+
       </div>
     </div>
   );
