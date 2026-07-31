@@ -579,6 +579,53 @@ export async function GET(request: Request) {
       }
     }
 
+    // 💡 [신규] 태스크 폴더 관제 탭의 폴더 목록 반환
+    if (action === 'get_task_folders') {
+      try {
+        const res = await queryTable('crm_task_folders', {
+          orderBy: 'created_at DESC'
+        });
+        let rows = (res.rows || []).filter((r: any) => !r.deleted_at);
+
+        if (rows.length === 0) {
+          const defaultFolder = {
+            id: 13,
+            name: '수입통관 및 증빙 수집 폴더',
+            description: '모바일 포털 및 현장에서 스캔하여 수집한 관제용 무역 서류를 안전하게 보관하는 기본 폴더입니다.',
+            created_at: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19),
+            created_by: '최고관리자',
+            tenant_id: 'default',
+            uuid: 'folder_default_13'
+          };
+          await insertRows('crm_task_folders', [defaultFolder]);
+          rows = [defaultFolder];
+        }
+
+        return NextResponse.json({ success: true, folders: rows });
+      } catch (err: any) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
+    // 💡 [신규] 태스크 폴더 내부 파일 목록 반환
+    if (action === 'get_folder_files') {
+      try {
+        const folderId = searchParams.get('folder_id');
+        const itemsRes = await queryTable('crm_snaptask_items', {
+          orderBy: 'created_at DESC'
+        });
+        let items = (itemsRes.rows || []).filter((r: any) => !r.deleted_at);
+
+        if (folderId) {
+          items = items.filter((r: any) => String(r.task_id || r.folder_id) === String(folderId));
+        }
+
+        return NextResponse.json({ success: true, files: items });
+      } catch (err: any) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
     // 💡 [신규] 일일 업무 보고서 목록 조회
     if (action === 'daily_reports') {
       try {

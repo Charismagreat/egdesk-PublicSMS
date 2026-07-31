@@ -141,9 +141,10 @@ export default function GovernanceDashboard() {
       const res = await apiFetch('/api/governance?action=get_task_folders');
       const data = await res.json();
       if (data.success) {
-        setTaskFolders(data.folders || []);
-        if (data.folders && data.folders.length > 0 && !selectedFolderId) {
-          setSelectedFolderId(data.folders[0].id);
+        const fetchedFolders = data.folders || [];
+        setTaskFolders(fetchedFolders);
+        if (fetchedFolders.length > 0) {
+          setSelectedFolderId((prev) => prev || fetchedFolders[0].id);
         }
       }
     } catch (err) {
