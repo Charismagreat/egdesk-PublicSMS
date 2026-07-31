@@ -363,8 +363,7 @@ export default function MemberManagementPage() {
   const currentItems = filteredMembers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
-    <div className="w-full bg-slate-50 min-h-screen px-4 md:px-8 py-8 text-left font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="w-full bg-slate-50 min-h-screen px-4 md:px-8 py-8 text-left font-sans space-y-6">
         
         {/* 상단 타이틀 영역 */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -612,7 +611,6 @@ export default function MemberManagementPage() {
           )}
 
         </div>
-      </div>
 
       {/* 5. 회원 등록 모달 */}
       {showAddModal && (
