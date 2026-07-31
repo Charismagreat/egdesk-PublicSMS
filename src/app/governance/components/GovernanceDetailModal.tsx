@@ -1,10 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { 
   ShieldAlert, X, Calendar, Paperclip, FileText, ExternalLink, 
   ListTodo, CheckSquare, Square, ShieldCheck, Loader2, Sparkles, 
-  CheckCircle2, XCircle 
+  CheckCircle2, XCircle, Plus 
 } from "lucide-react";
 
 interface GovernanceDetailModalProps {
@@ -46,12 +46,37 @@ export default function GovernanceDetailModal({
   handleOpenDocumentModal,
   loadData,
 }: GovernanceDetailModalProps) {
+  const [customActionTitle, setCustomActionTitle] = useState("");
+  const [customActionDesc, setCustomActionDesc] = useState("");
+  const [isAddingAction, setIsAddingAction] = useState(false);
+  const [customActions, setCustomActions] = useState<any[]>([]);
+
   if (!selectedEvent) return null;
 
-  const actionsList = selectedEvent.data?.suggested_actions || [
+  const defaultActionsList = selectedEvent.data?.suggested_actions || [
     { code: "NOTIFY_USER", label: "관리자 / 담당자 알림 발송", description: "관제 이벤트를 담당 관리자에게 즉시 알림" },
     { code: "LOG_AUDIT", label: "감사 로그 보존", description: "본 사건 처리 이력을 전사 거버넌스 원장에 기록" },
   ];
+
+  const actionsList = [...defaultActionsList, ...customActions];
+
+  const handleAddCustomAction = () => {
+    if (!customActionTitle.trim()) {
+      alert("추가할 자율 대행 작업 제목을 입력해 주세요.");
+      return;
+    }
+    const newCode = `CUSTOM_${Date.now()}`;
+    const newAction = {
+      code: newCode,
+      label: customActionTitle.trim(),
+      description: customActionDesc.trim() || "최고관리자가 추가한 수동 조치 시나리오",
+    };
+    setCustomActions((prev) => [...prev, newAction]);
+    setSelectedActions((prev) => [...prev, newCode]);
+    setCustomActionTitle("");
+    setCustomActionDesc("");
+    setIsAddingAction(false);
+  };
 
   const displayTitle = (selectedEvent.title || '')
     .replace(/^AI 결재 보류:\s*/g, '')
@@ -310,15 +335,62 @@ export default function GovernanceDetailModal({
         {/* AI 추천 자율 대행 액션 리스트 및 최고관리자 항목 추가/제거 */}
         {!actionReports && selectedEvent.type !== 'LEAVE_APPROVAL_REQUEST' && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
                 <ListTodo className="w-4 h-4 text-indigo-650" />
                 <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">AI 권장 자율 대행 조치 시나리오</h4>
               </div>
-              <span className="text-[10px] text-indigo-600 bg-indigo-50 font-bold px-2 py-0.5 rounded-md border border-indigo-100">
-                필요 시 항목을 자유롭게 선택/제거 가능
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingAction((prev) => !prev)}
+                  className="inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] px-2.5 py-1 rounded-lg border border-indigo-200 transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>+ 추천 작업 추가</span>
+                </button>
+                <span className="text-[10px] text-indigo-600 bg-indigo-50 font-bold px-2 py-0.5 rounded-md border border-indigo-100 hidden sm:inline-block">
+                  선택/제거/추가 가능
+                </span>
+              </div>
             </div>
+
+            {/* 최고관리자 커스텀 추천 작업 인라인 작성 폼 */}
+            {isAddingAction && (
+              <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-2xl p-3.5 space-y-2.5 animate-fade-in">
+                <span className="text-xs font-black text-indigo-900 block">✨ 최고관리자 전용 추천 작업 항목 추가</span>
+                <input
+                  type="text"
+                  value={customActionTitle}
+                  onChange={(e) => setCustomActionTitle(e.target.value)}
+                  placeholder="예: 협력업체 긴급 실사 및 비상 연락망 가동"
+                  className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <input
+                  type="text"
+                  value={customActionDesc}
+                  onChange={(e) => setCustomActionDesc(e.target.value)}
+                  placeholder="작업 설명 (선택 사항: 담당자 지정 또는 세부 안내)"
+                  className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingAction(false)}
+                    className="px-3 py-1 text-slate-500 hover:bg-slate-200/60 rounded-lg text-xs font-bold transition-all border-none bg-transparent cursor-pointer"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddCustomAction}
+                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-black transition-all cursor-pointer shadow-xs"
+                  >
+                    목록에 추가
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               {actionsList.map((act: any) => {
