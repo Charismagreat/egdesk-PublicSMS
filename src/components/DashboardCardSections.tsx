@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Plus, Sparkles, Trash2, ArrowUpRight } from "lucide-react";
 import { useDashboardCards, CustomDashboardCard } from "@/hooks/useDashboardCards";
+import { useHoverAutoScroll } from "@/hooks/useHoverAutoScroll";
 import DashboardCardGenModal from "@/components/DashboardCardGenModal";
 
 interface DashboardCardSectionsProps {
@@ -36,6 +37,8 @@ export default function DashboardCardSections({
   cashflowStats,
 }: DashboardCardSectionsProps) {
   const { getCardsBySection, addCard, removeCard, isRestored } = useDashboardCards();
+  const section1Ref = useHoverAutoScroll<HTMLDivElement>();
+  const section2Ref = useHoverAutoScroll<HTMLDivElement>();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [targetSection, setTargetSection] = useState<"section1" | "section2">("section1");
@@ -64,12 +67,12 @@ export default function DashboardCardSections({
               핵심 실적 KPI 영역
             </h3>
           </div>
-          <span className="text-[10px] text-slate-400 font-semibold">
-            카드 좌우 스크롤 ↔️
+          <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100/80">
+            카드 좌우 스크롤 ↔️ (마우스 호버 시 자동 스크롤)
           </span>
         </div>
 
-        <div className="flex items-stretch gap-4 overflow-x-auto pb-4 pt-1 scrollbar-thin snap-x">
+        <div ref={section1Ref} className="flex items-stretch gap-4 overflow-x-auto pb-4 pt-1 scrollbar-thin snap-x">
           
           {/* 맨 앞: ➕ 새 카드 추가 버튼 */}
           <button
@@ -270,12 +273,12 @@ export default function DashboardCardSections({
               종합 운용 현황 영역
             </h3>
           </div>
-          <span className="text-[10px] text-slate-400 font-semibold">
-            카드 좌우 스크롤 ↔️
+          <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100/80">
+            카드 좌우 스크롤 ↔️ (마우스 호버 시 자동 스크롤)
           </span>
         </div>
 
-        <div className="flex items-stretch gap-4 overflow-x-auto pb-4 pt-1 scrollbar-thin snap-x">
+        <div ref={section2Ref} className="flex items-stretch gap-4 overflow-x-auto pb-4 pt-1 scrollbar-thin snap-x">
 
           {/* 맨 앞: ➕ 새 카드 추가 버튼 */}
           <button
