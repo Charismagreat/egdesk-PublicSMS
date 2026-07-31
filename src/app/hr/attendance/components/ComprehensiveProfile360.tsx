@@ -308,7 +308,7 @@ export const ComprehensiveProfile360: React.FC<ComprehensiveProfile360Props> = (
         <div className="py-20 text-center animate-pulse text-xs text-slate-400 font-bold">
           임직원 360도 전수 이력을 복원하고 있습니다...
         </div>
-      ) : current360 ? (
+      ) : (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
           {/* 6단 스마트 탭 전환형 이력 상세 보드 (8 cols) */}
           <div className="xl:col-span-8 space-y-6">
@@ -2137,10 +2137,6 @@ export const ComprehensiveProfile360: React.FC<ComprehensiveProfile360Props> = (
               </div>
             )}
           </div>
-        </div>
-      ) : (
-        <div className="py-20 text-center border border-dashed border-slate-200 rounded-3xl text-slate-400 font-bold text-xs">
-          임직원을 선택하시면 6단 탭 기반 360도 라이프사이클 정보와 역사적 수직 타임라인을 정밀 분석합니다.
         </div>
       )}
     </div>

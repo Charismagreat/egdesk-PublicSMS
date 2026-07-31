@@ -716,6 +716,19 @@ export default function HrAttendancePage() {
         pendingLeavesCount={pendingLeavesCount}
       />
 
+      {/* 7. 🏛️ 임직원 360도 Dynamic 프로필 관제 보드 */}
+      <ComprehensiveProfile360
+        currentUser={currentUser}
+        employees={employees}
+        comprehensiveProfiles={comprehensiveProfiles}
+        selected360OperatorId={selected360OperatorId}
+        handleSelect360Employee={setSelected360OperatorId}
+        handleDelete360Record={handleDelete360Record}
+        handleSubmit360Upsert={handleSubmit360Upsert}
+        submitLoading={submitLoading}
+        comprehensiveLoading={comprehensiveLoading}
+      />
+
       {/* 4. 메인 관제 보드 (캘린더 + AI 예보) */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
         {/* 캘린더 영역 */}
@@ -829,18 +842,7 @@ export default function HrAttendancePage() {
         profileLoading={profileLoading}
       />
 
-      {/* 7. 임직원 360도 Dynamic 프로필 관제 보드 (관리자 전용) */}
-      <ComprehensiveProfile360
-        currentUser={currentUser}
-        employees={employees}
-        comprehensiveProfiles={comprehensiveProfiles}
-        selected360OperatorId={selected360OperatorId}
-        handleSelect360Employee={setSelected360OperatorId}
-        handleDelete360Record={handleDelete360Record}
-        handleSubmit360Upsert={handleSubmit360Upsert}
-        submitLoading={submitLoading}
-        comprehensiveLoading={comprehensiveLoading}
-      />
+
 
       {/* ==========================================
           🏛️ 팝업 모달 목록 마운트
