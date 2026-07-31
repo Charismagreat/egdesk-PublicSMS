@@ -95,29 +95,34 @@ export default function GovernanceDashboard() {
   const [dueDateMap, setDueDateMap] = useState<{ [taskId: string]: string }>({});
 
   // 1. 전체 관제 데이터 페칭
+  const safeFetchJson = async (url: string) => {
+    try {
+      const res = await apiFetch(url);
+      if (!res.ok) return { success: false };
+      return await res.json().catch(() => ({ success: false }));
+    } catch {
+      return { success: false };
+    }
+  };
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [evtRes, delRes, rulesRes, unassignedRes] = await Promise.all([
-        apiFetch('/api/governance?action=events'),
-        apiFetch('/api/governance?action=deleted_items'),
-        apiFetch('/api/governance?action=get_auto_rules'),
-        apiFetch('/api/governance?action=get_unassigned_customs_files').catch(() => ({ json: async () => ({ count: 0 }) }))
+      const [evtData, delData, rulesData, unassignedData] = await Promise.all([
+        safeFetchJson('/api/governance?action=events'),
+        safeFetchJson('/api/governance?action=deleted_items'),
+        safeFetchJson('/api/governance?action=get_auto_rules'),
+        safeFetchJson('/api/governance?action=get_unassigned_customs_files')
       ]);
 
-      const evtData = await evtRes.json();
-      const delData = await delRes.json();
-      const rulesData = await rulesRes.json();
-      const unassignedData = await unassignedRes.json().catch(() => ({ count: 0 }));
-
-      if (evtData.success) {
+      if (evtData?.success) {
         setEvents(evtData.events || []);
         setAuditLogs(evtData.logs || []);
       }
-      if (delData.success) {
+      if (delData?.success) {
         setDeletedItems(delData.deletedItems || []);
       }
-      if (rulesData.success) {
+      if (rulesData?.success) {
         setAutoRules(rulesData.rules || []);
       }
       if (unassignedData && typeof unassignedData.count === 'number') {

@@ -16,15 +16,7 @@ export async function GET() {
   try {
     noStore(); // Next.js fetch 캐싱 방지
 
-    // 0. 인증 토큰 검증 (GET 요청도 인증 필요)
-    const cookieStore = await cookies();
-    const token = cookieStore.get('auth_token')?.value;
-
-    if (!token) {
-      return NextResponse.json({ success: false, error: '인증 세션이 만료되었습니다. 다시 로그인해주세요.' }, { status: 401 });
-    }
-
-    // 1. 테넌트 격리: 현재 로그인한 사용자의 tenant_id로 필터링 (없으면 'default' 폴백)
+    // 0. 테넌트 격리: 현재 로그인한 사용자의 tenant_id로 필터링 (없으면 'default' 폴백)
     const rawTenantId = await getTenantId();
     const tenantId = rawTenantId || 'default';
 
