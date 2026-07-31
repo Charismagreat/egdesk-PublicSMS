@@ -310,17 +310,15 @@ export default function MemberManagementPage() {
     return ["SUPER_ADMIN", "TENANT_ADMIN", "PRESIDENT", "GUEST"].includes(r) || u === "guest";
   };
 
-  // 💡 등록된 테넌트 목록 추출 (테넌트 ID + 대표 사장님 성명)
-  const tenantList = Array.from(
-    new Set(members.map((m) => m.tenant_id).filter((t): t is string => Boolean(t && t.trim() !== "")))
-  ).map((tId) => {
-    const owner = members.find((m) => m.tenant_id === tId && isTenantOwner(m));
-    return {
-      tenant_id: tId,
-      owner_name: owner ? owner.name : "미지정 대표",
-      owner_username: owner ? owner.username : ""
-    };
-  });
+  // 💡 등록된 테넌트 목록 추출 (실제 등록된 테넌트 최고관리자 사장님 계정 기준)
+  const tenantList = members
+    .filter((m) => isTenantOwner(m) && Boolean(m.tenant_id && m.tenant_id.trim() !== ""))
+    .map((m) => ({
+      tenant_id: m.tenant_id!,
+      owner_name: m.name,
+      owner_username: m.username
+    }))
+    .filter((t, idx, self) => self.findIndex((x) => x.tenant_id === t.tenant_id) === idx);
 
   // 데이터 필터링 및 검색 로직
   const filteredMembers = members.filter((member) => {
