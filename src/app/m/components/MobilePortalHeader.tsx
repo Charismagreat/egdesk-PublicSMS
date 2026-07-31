@@ -142,9 +142,6 @@ export const MobilePortalHeader: React.FC<MobilePortalHeaderProps> = ({
               {userName}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 font-medium cursor-pointer hover:text-indigo-600 transition-colors" onClick={handleAvatarClick}>
-            📸 터치하여 사진 교체
-          </p>
         </div>
       </div>
 
