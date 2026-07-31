@@ -56,7 +56,7 @@ function DynamicTitleHandler() {
       "/settings": "시스템 설정",
       "/ai-settings": "AI 비서 및 하이브리드 라우팅 설정",
       "/login": "로그인",
-      "/admin/members": "회원 관리 대장",
+      "/admin/members": "테넌트 관리",
       "/my-db": "MY DB",
       "/tenant-cert-patent": "인증서·특허 기한 관리 AI 센터",
       "/import-customs": "수입 통관 AI",

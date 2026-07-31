@@ -371,7 +371,7 @@ export default function MemberManagementPage() {
           <div className="flex flex-col">
             <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2.5">
               <ShieldCheck className="w-9 h-9 text-indigo-600 shrink-0" />
-              <span>회원 관리 대장</span>
+              <span>테넌트 관리</span>
             </h1>
             <p className="text-slate-500 mt-2 text-xs font-semibold pl-1">
               플랫폼 가입 사장님(회원)들의 테넌트 식별자와 임직원 계정 명세를 전역적으로 모니터링하고 제어합니다.
