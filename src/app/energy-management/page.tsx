@@ -30,12 +30,29 @@ export default function EnergyManagementPage() {
   const fetchEnergyData = useCallback(async () => {
     setLoading(true);
     try {
-      setEnergyData([
-        { id: "ZONE-01", zone_name: "시흥 1공장 프레스 라인", current_power_kw: 450, daily_cost: 1450000, efficiency_rate: 92.5, carbon_emission: 185, status: "정상" },
-        { id: "ZONE-02", zone_name: "시흥 2공장 열처리 furnace 구역", current_power_kw: 820, daily_cost: 2890000, efficiency_rate: 78.4, carbon_emission: 340, status: "피크주의" },
-        { id: "ZONE-03", zone_name: "평택 2공장 SMT 클린룸", current_power_kw: 310, daily_cost: 980000, efficiency_rate: 96.1, carbon_emission: 120, status: "정상" },
-        { id: "ZONE-04", zone_name: "본사 사무동 및 R&D 센터", current_power_kw: 180, daily_cost: 450000, efficiency_rate: 88.0, carbon_emission: 75, status: "정상" }
-      ]);
+      const res = await apiFetch("/api/production/energy");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.equipments) && data.equipments.length > 0) {
+          const mapped: EnergyItem[] = data.equipments.map((eq: any, idx: number) => ({
+            id: eq.id || `ZONE-0${idx + 1}`,
+            zone_name: eq.name || `생산 존 0${idx + 1}`,
+            current_power_kw: Number(eq.currentPower || 350),
+            daily_cost: Number(eq.estimatedCost || 1200000),
+            efficiency_rate: eq.currentPower > 80 ? 78.4 : 92.5,
+            carbon_emission: Math.round(Number(eq.currentPower || 350) * 0.42),
+            status: (eq.currentPower > 80 ? "피크주의" : "정상") as "정상" | "피크주의" | "절감필요"
+          }));
+          setEnergyData(mapped);
+        } else {
+          setEnergyData([
+            { id: "ZONE-01", zone_name: "시흥 1공장 프레스 라인", current_power_kw: 450, daily_cost: 1450000, efficiency_rate: 92.5, carbon_emission: 185, status: "정상" },
+            { id: "ZONE-02", zone_name: "시흥 2공장 열처리 furnace 구역", current_power_kw: 820, daily_cost: 2890000, efficiency_rate: 78.4, carbon_emission: 340, status: "피크주의" },
+            { id: "ZONE-03", zone_name: "평택 2공장 SMT 클린룸", current_power_kw: 310, daily_cost: 980000, efficiency_rate: 96.1, carbon_emission: 120, status: "정상" },
+            { id: "ZONE-04", zone_name: "본사 사무동 및 R&D 센터", current_power_kw: 180, daily_cost: 450000, efficiency_rate: 88.0, carbon_emission: 75, status: "정상" }
+          ]);
+        }
+      }
     } catch (err) {
       console.error("Failed to fetch energy data:", err);
     } finally {
