@@ -225,7 +225,8 @@ export default function GovernanceEventsTab({
               return (
                 <div
                   key={item.id}
-                  className={`bg-white border transition-all rounded-3xl p-4 md:p-5 shadow-2xs hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group ${
+                  onClick={() => handleOpenDetail(evt)}
+                  className={`bg-white border transition-all rounded-3xl p-4 md:p-5 shadow-2xs hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group cursor-pointer active:scale-[0.995] ${
                     evt.status === 'RESOLVED' 
                       ? 'border-slate-200/60 bg-slate-50/40 opacity-75' 
                       : evt.type === 'TASK_CANCEL_REQUEST'
