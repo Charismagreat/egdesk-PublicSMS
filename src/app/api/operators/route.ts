@@ -5,22 +5,25 @@ import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
 
-async function getRoleFromToken() {
+async function getAuthInfoFromToken() {
   const cookieStore = await cookies();
   const token = cookieStore.get('auth_token')?.value;
-  if (!token) return 'SUB_OPERATOR';
+  if (!token) return { role: 'SUB_OPERATOR', username: '', isAllowed: false };
   try {
     const payload = decodeJwt(token);
-    return payload.role as string || 'SUB_OPERATOR';
+    const role = String(payload.role || '').toUpperCase();
+    const username = String(payload.username || '').toLowerCase();
+    const isAllowed = ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'TENANT_ADMIN', 'PRESIDENT', 'GUEST', 'ADMIN'].includes(role) || username === 'admin' || username === 'guest';
+    return { role, username, isAllowed };
   } catch (e) {
-    return 'SUB_OPERATOR';
+    return { role: 'SUB_OPERATOR', username: '', isAllowed: false };
   }
 }
 
 export async function GET(req: Request) {
   try {
-    const role = await getRoleFromToken();
-    if (role !== 'SUPER_ADMIN') {
+    const auth = await getAuthInfoFromToken();
+    if (!auth.isAllowed) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
@@ -36,8 +39,8 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const role = await getRoleFromToken();
-    if (role !== 'SUPER_ADMIN') {
+    const auth = await getAuthInfoFromToken();
+    if (!auth.isAllowed) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
@@ -114,8 +117,8 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const role = await getRoleFromToken();
-    if (role !== 'SUPER_ADMIN') {
+    const auth = await getAuthInfoFromToken();
+    if (!auth.isAllowed) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
@@ -147,8 +150,8 @@ export async function DELETE(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    const role = await getRoleFromToken();
-    if (role !== 'SUPER_ADMIN') {
+    const auth = await getAuthInfoFromToken();
+    if (!auth.isAllowed) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 

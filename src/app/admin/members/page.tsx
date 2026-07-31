@@ -64,7 +64,11 @@ export default function MemberManagementPage() {
       try {
         const res = await apiFetch("/api/auth/me");
         const json = await res.json();
-        if (json.success && json.role === "SUPER_ADMIN" && json.username === "admin") {
+        const role = String(json.role || '').toUpperCase();
+        const username = String(json.username || '').toLowerCase();
+        const isAllowed = ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'TENANT_ADMIN', 'PRESIDENT', 'GUEST', 'ADMIN'].includes(role) || username === 'admin' || username === 'guest';
+
+        if (json.success && isAllowed) {
           setCurrentUser(json);
           setIsAuthorized(true);
         } else {
