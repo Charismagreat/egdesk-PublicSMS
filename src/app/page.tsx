@@ -14,6 +14,25 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function Home() {
+  // 🔑 시스템 운영자(admin) 계정이 메인 진입 시 회원 계정 관리(/settings)로 자동 리다이렉트 가드
+  try {
+    const { cookies } = await import('next/headers');
+    const { decodeJwt } = await import('jose');
+    const { redirect } = await import('next/navigation');
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    if (token) {
+      const payload = decodeJwt(token);
+      const username = (payload.username as string || '').toLowerCase();
+      const role = (payload.role as string || '').toUpperCase();
+      if (username === 'admin' || role === 'SYSTEM_ADMIN') {
+        redirect('/settings');
+      }
+    }
+  } catch (e: any) {
+    if (e?.digest?.startsWith('NEXT_REDIRECT')) throw e;
+  }
+
   // 1. 한국 표준시(KST) 기준 날짜 문자열 계산 (서버 타임존 오차 방지를 위해 UTC 변환 오프셋 적용)
   const localDateObj = new Date();
   const utcMillis = localDateObj.getTime() + (localDateObj.getTimezoneOffset() * 60 * 1000);

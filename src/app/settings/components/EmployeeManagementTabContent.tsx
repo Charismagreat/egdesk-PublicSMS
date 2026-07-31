@@ -265,10 +265,17 @@ export default function EmployeeManagementTabContent() {
         {/* 상단 타이틀 및 신규 등록 버튼 */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4 mb-6 text-left">
           <div>
-            <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-              <Users className="w-5 h-5 text-indigo-600" />
-              <span>직원 계정 관리</span>
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-600" />
+                <span>직원 계정 관리</span>
+              </h3>
+              {currentUser?.role === 'SYSTEM_ADMIN' || currentUser?.username === 'admin' ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black">
+                  🔑 시스템 운영자 통제 모드
+                </span>
+              ) : null}
+            </div>
             <p className="text-slate-500 text-xs mt-1">
               매장에 소속된 피고용인 직원 계정을 등록하고 권한 및 기본 정보를 안전하게 관리합니다.
             </p>

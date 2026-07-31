@@ -307,14 +307,28 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     }
   };
 
-  // 현재 노출할 메뉴와 숨김 메뉴 분리 (최고관리자 권한만 숨김 필터링 적용)
-  const visibleItems = isAdmin 
-    ? displayMenuItems.filter((item) => !hiddenHrefs.includes(item.href))
-    : displayMenuItems;
+  // 💡 시스템 운영자(admin) 계정인 경우, 개별 매장 실무 대장을 침범하지 않고 회원/직원 계정 관리(/settings) 메뉴로 전용 배치
+  const systemAdminMenuItems = [
+    {
+      href: "/settings",
+      label: "👥 회원/직원 계정 관리",
+      icon: UserCog,
+      color: "text-indigo-400 font-black"
+    }
+  ];
 
-  const hiddenItems = isAdmin
-    ? displayMenuItems.filter((item) => hiddenHrefs.includes(item.href))
-    : [];
+  // 현재 노출할 메뉴와 숨김 메뉴 분리 (최고관리자 권한만 숨김 필터링 적용)
+  const visibleItems = isSystemAdmin
+    ? systemAdminMenuItems
+    : isAdmin 
+      ? displayMenuItems.filter((item) => !hiddenHrefs.includes(item.href))
+      : displayMenuItems;
+
+  const hiddenItems = isSystemAdmin
+    ? []
+    : isAdmin
+      ? displayMenuItems.filter((item) => hiddenHrefs.includes(item.href))
+      : [];
 
   return (
     <>
