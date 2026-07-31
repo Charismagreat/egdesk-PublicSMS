@@ -32,10 +32,11 @@ export default function MemberManagementPage() {
 
   // 2. usePersistedState를 활용한 상태 보존
   const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<"all" | "owners" | "staff">("egdesk_admin_members_activeTab", "all");
+  const [selectedTenantFilter, setSelectedTenantFilter, isTenantFilterRestored] = usePersistedState<string>("egdesk_admin_members_selectedTenant", "ALL");
   const [searchQuery, setSearchQuery, isSearchQueryRestored] = usePersistedState<string>("egdesk_admin_members_searchQuery", "");
   const [currentPage, setCurrentPage, isCurrentPageRestored] = usePersistedState<number>("egdesk_admin_members_currentPage", 1);
   
-  const isStateRestored = isActiveTabRestored && isSearchQueryRestored && isCurrentPageRestored;
+  const isStateRestored = isActiveTabRestored && isTenantFilterRestored && isSearchQueryRestored && isCurrentPageRestored;
 
   // 3. 컴포넌트 내부 로컬 상태
   const [members, setMembers] = useState<Member[]>([]);
@@ -294,18 +295,42 @@ export default function MemberManagementPage() {
     );
   }
 
+  // 💡 테넌트 최고관리자 판별 헬퍼
+  const isTenantOwner = (m: Member) => {
+    const r = String(m.role || "").toUpperCase();
+    const u = String(m.username || "").toLowerCase();
+    return ["SUPER_ADMIN", "TENANT_ADMIN", "PRESIDENT", "GUEST"].includes(r) || u === "guest";
+  };
+
+  // 💡 등록된 테넌트 목록 추출 (테넌트 ID + 대표 사장님 성명)
+  const tenantList = Array.from(
+    new Set(members.map((m) => m.tenant_id).filter((t): t is string => Boolean(t && t.trim() !== "")))
+  ).map((tId) => {
+    const owner = members.find((m) => m.tenant_id === tId && isTenantOwner(m));
+    return {
+      tenant_id: tId,
+      owner_name: owner ? owner.name : "미지정 대표",
+      owner_username: owner ? owner.username : ""
+    };
+  });
+
   // 데이터 필터링 및 검색 로직
   const filteredMembers = members.filter((member) => {
-    // 탭 필터링
+    // 1. 탭 필터링
     if (activeTab === "owners") {
-      // 사장님(회원)은 SUPER_ADMIN이며 admin이 아닌 경우
-      if (member.role !== "SUPER_ADMIN" || member.username === "admin") return false;
+      // 테넌트 최고관리자 탭: 최고관리자 계정만 표출
+      if (!isTenantOwner(member)) return false;
     } else if (activeTab === "staff") {
-      // 직원은 SUB_OPERATOR 또는 EMPLOYEE인 경우
-      if (member.role === "SUPER_ADMIN" && member.username !== "admin") return false;
+      // 부운영자/일반직원 탭: 부운영자 및 일반직원 계정만 표출
+      if (isTenantOwner(member)) return false;
+
+      // 💡 테넌트 선택 필터링 적용
+      if (selectedTenantFilter !== "ALL") {
+        if (member.tenant_id !== selectedTenantFilter) return false;
+      }
     }
 
-    // 검색어 필터링
+    // 2. 검색어 필터링
     if (searchQuery.trim() !== "") {
       const q = searchQuery.toLowerCase();
       const nameMatch = (member.name || "").toLowerCase().includes(q);
@@ -317,6 +342,10 @@ export default function MemberManagementPage() {
 
     return true;
   });
+
+  // 카운트 계산
+  const ownerCount = members.filter((m) => isTenantOwner(m)).length;
+  const staffCount = members.filter((m) => !isTenantOwner(m)).length;
 
   // 페이지네이션 변수
   const itemsPerPage = 10;
@@ -365,38 +394,62 @@ export default function MemberManagementPage() {
           {/* 상단 필터 및 검색 바 */}
           <div className="p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             
-            {/* 탭바 */}
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl w-fit">
-              <button
-                onClick={() => setActiveTab("all")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === "all"
-                    ? "bg-white text-indigo-600 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                전체 구성원 ({members.length})
-              </button>
-              <button
-                onClick={() => setActiveTab("owners")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === "owners"
-                    ? "bg-white text-indigo-600 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                소상공인 사장님 ({members.filter(m => m.role === "SUPER_ADMIN" && m.username !== "admin").length})
-              </button>
-              <button
-                onClick={() => setActiveTab("staff")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === "staff"
-                    ? "bg-white text-indigo-600 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                부운영자/일반직원 ({members.filter(m => m.role !== "SUPER_ADMIN" || m.username === "admin").length})
-              </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* 탭바 */}
+              <div className="flex bg-slate-100 p-1.5 rounded-2xl w-fit">
+                <button
+                  onClick={() => setActiveTab("all")}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeTab === "all"
+                      ? "bg-white text-indigo-600 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  전체 구성원 ({members.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("owners")}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeTab === "owners"
+                      ? "bg-white text-indigo-600 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  테넌트 최고관리자 ({ownerCount})
+                </button>
+                <button
+                  onClick={() => setActiveTab("staff")}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeTab === "staff"
+                      ? "bg-white text-indigo-600 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  부운영자/일반직원 ({staffCount})
+                </button>
+              </div>
+
+              {/* 💡 부운영자/일반직원 탭 활성화 시 테넌트 선택 드롭다운 필터 표출 */}
+              {activeTab === "staff" && (
+                <div className="flex items-center gap-2 bg-slate-100/80 border border-slate-200/80 px-3.5 py-2 rounded-2xl text-xs font-bold text-slate-700">
+                  <span className="text-slate-400 shrink-0">🏢 소속 테넌트:</span>
+                  <select
+                    value={selectedTenantFilter}
+                    onChange={(e) => {
+                      setSelectedTenantFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="bg-transparent border-none focus:outline-none text-xs font-extrabold text-indigo-600 cursor-pointer max-w-xs truncate"
+                  >
+                    <option value="ALL">전체 테넌트 (전체 부운영자/일반직원)</option>
+                    {tenantList.map((t) => (
+                      <option key={t.tenant_id} value={t.tenant_id}>
+                        {t.owner_name} 사장님 [{t.tenant_id}]
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* 검색창 */}
