@@ -990,10 +990,31 @@ export async function POST(request: Request) {
 
     // [신규] 임직원 모바일 현장 작업 요청 접수 (create_mobile_request & create_log 모두 호환)
     if (action === 'create_mobile_request' || action === 'create_log') {
-      const { title, doc_title, reason, note, voiceText, files = [], photos = [] } = body;
+      const { title, doc_title, reason, note, voiceText, files = [], photos = [], operator, submitter, user_name } = body;
       const requestTitle = (title || doc_title || '').trim();
       const requestReason = (reason || note || '').trim();
       const allFiles = [...files, ...photos];
+
+      // 💡 모바일 현장 상신자 이름 정제 (body의 operator/submitter/user_name 우선 -> auth_token 쿠키 -> fallback '김직원')
+      let finalOperator = (operator || submitter || user_name || '').trim();
+      if (!finalOperator || finalOperator === 'SUPER_ADMIN_DEV') {
+        try {
+          const cookieStore = await cookies();
+          const token = cookieStore.get('auth_token')?.value;
+          if (token) {
+            const payload = decodeJwt(token);
+            if (payload.name || payload.username) {
+              const jwtName = (payload.name || payload.username) as string;
+              if (jwtName && jwtName !== 'SUPER_ADMIN_DEV') {
+                finalOperator = jwtName;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+      if (!finalOperator || finalOperator === 'SUPER_ADMIN_DEV') {
+        finalOperator = '김직원';
+      }
       
       if (!requestTitle) {
         return NextResponse.json({ success: false, error: '요청 제목이 누락되었습니다.' }, { status: 400 });
@@ -1001,7 +1022,7 @@ export async function POST(request: Request) {
 
       const reqId = `mobile_req_${Date.now()}`;
       
-      // 1. 거버넌스 승인 요청 로그 인서트
+      // 1. 거버넌스 승인 요청 로그 인서트 (상신자: finalOperator)
       await insertRows('crm_governance_logs', [{
         id: reqId,
         doc_type: 'mobile_request',
@@ -1009,11 +1030,11 @@ export async function POST(request: Request) {
         doc_title: requestTitle,
         status: 'PENDING_APPROVAL',
         reason: requestReason || '모바일 현장 수동 접수 요청 건',
-        operator: currentUser,
+        operator: finalOperator,
         created_at: nowStr,
         uuid: reqId,
         updated_at: nowStr,
-        updated_by: currentUser
+        updated_by: finalOperator
       }]);
 
       // 2. 메인 [할 일] (스냅태스크) 생성

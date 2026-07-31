@@ -560,6 +560,7 @@ export default function MobileHubPage() {
       const photosToSend = photosInput && photosInput.length > 0 ? photosInput : requestPhotos;
       const filesToSend = filesInput && filesInput.length > 0 ? filesInput : requestFiles;
 
+      const currentOperator = (session as any)?.user?.name || (session as any)?.name || (session as any)?.username || "김직원";
       const res = await apiFetch("/api/governance?action=create_log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -567,6 +568,7 @@ export default function MobileHubPage() {
           doc_title: formattedTitle,
           doc_type: "FIELD_COLLECTION",
           note: note,
+          operator: currentOperator,
           photos: photosToSend,
           files: filesToSend,
         }),
