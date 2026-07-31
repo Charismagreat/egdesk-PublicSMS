@@ -31,7 +31,7 @@ export default function MemberManagementPage() {
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   // 2. usePersistedState를 활용한 상태 보존
-  const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<"all" | "owners" | "staff">("egdesk_admin_members_activeTab", "all");
+  const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<"all" | "sysadmin" | "owners" | "staff">("egdesk_admin_members_activeTab", "all");
   const [selectedTenantFilter, setSelectedTenantFilter, isTenantFilterRestored] = usePersistedState<string>("egdesk_admin_members_selectedTenant", "ALL");
   const [searchQuery, setSearchQuery, isSearchQueryRestored] = usePersistedState<string>("egdesk_admin_members_searchQuery", "");
   const [currentPage, setCurrentPage, isCurrentPageRestored] = usePersistedState<number>("egdesk_admin_members_currentPage", 1);
@@ -295,8 +295,16 @@ export default function MemberManagementPage() {
     );
   }
 
-  // 💡 테넌트 최고관리자 판별 헬퍼
+  // 💡 플랫폼 최상위 시스템 운영자(admin) 판별 헬퍼
+  const isSystemAdminUser = (m: Member) => {
+    const r = String(m.role || "").toUpperCase();
+    const u = String(m.username || "").toLowerCase();
+    return r === "SYSTEM_ADMIN" || u === "admin";
+  };
+
+  // 💡 테넌트 최고관리자 판별 헬퍼 (시스템 운영자 admin 제외)
   const isTenantOwner = (m: Member) => {
+    if (isSystemAdminUser(m)) return false;
     const r = String(m.role || "").toUpperCase();
     const u = String(m.username || "").toLowerCase();
     return ["SUPER_ADMIN", "TENANT_ADMIN", "PRESIDENT", "GUEST"].includes(r) || u === "guest";
@@ -317,12 +325,15 @@ export default function MemberManagementPage() {
   // 데이터 필터링 및 검색 로직
   const filteredMembers = members.filter((member) => {
     // 1. 탭 필터링
-    if (activeTab === "owners") {
-      // 테넌트 최고관리자 탭: 최고관리자 계정만 표출
+    if (activeTab === "sysadmin") {
+      // 시스템 운영자 탭: 플랫폼 호스트 관리자 계정만 표출
+      if (!isSystemAdminUser(member)) return false;
+    } else if (activeTab === "owners") {
+      // 테넌트 최고관리자 탭: 회원사 최고관리자 계정만 표출
       if (!isTenantOwner(member)) return false;
     } else if (activeTab === "staff") {
-      // 부운영자/일반직원 탭: 부운영자 및 일반직원 계정만 표출
-      if (isTenantOwner(member)) return false;
+      // 부운영자/일반직원 탭: 시스템 운영자 및 테넌트 최고관리자를 엄격히 제외한 순수 부운영자/직원만 표출
+      if (isSystemAdminUser(member) || isTenantOwner(member)) return false;
 
       // 💡 테넌트 선택 필터링 적용
       if (selectedTenantFilter !== "ALL") {
@@ -343,9 +354,10 @@ export default function MemberManagementPage() {
     return true;
   });
 
-  // 카운트 계산
+  // 카운트 연산
+  const sysAdminCount = members.filter((m) => isSystemAdminUser(m)).length;
   const ownerCount = members.filter((m) => isTenantOwner(m)).length;
-  const staffCount = members.filter((m) => !isTenantOwner(m)).length;
+  const staffCount = members.filter((m) => !isSystemAdminUser(m) && !isTenantOwner(m)).length;
 
   // 페이지네이션 변수
   const itemsPerPage = 10;
@@ -395,7 +407,7 @@ export default function MemberManagementPage() {
           <div className="p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             
             <div className="flex flex-wrap items-center gap-3">
-              {/* 탭바 */}
+              {/* 4대 탭바 */}
               <div className="flex bg-slate-100 p-1.5 rounded-2xl w-fit">
                 <button
                   onClick={() => setActiveTab("all")}
@@ -408,6 +420,16 @@ export default function MemberManagementPage() {
                   전체 구성원 ({members.length})
                 </button>
                 <button
+                  onClick={() => setActiveTab("sysadmin")}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeTab === "sysadmin"
+                      ? "bg-white text-indigo-600 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  🔑 시스템 운영자 ({sysAdminCount})
+                </button>
+                <button
                   onClick={() => setActiveTab("owners")}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     activeTab === "owners"
@@ -415,7 +437,7 @@ export default function MemberManagementPage() {
                       : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
-                  테넌트 최고관리자 ({ownerCount})
+                  👑 테넌트 최고관리자 ({ownerCount})
                 </button>
                 <button
                   onClick={() => setActiveTab("staff")}
@@ -425,7 +447,7 @@ export default function MemberManagementPage() {
                       : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
-                  부운영자/일반직원 ({staffCount})
+                  👥 부운영자/일반직원 ({staffCount})
                 </button>
               </div>
 
