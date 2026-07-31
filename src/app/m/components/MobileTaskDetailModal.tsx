@@ -45,8 +45,8 @@ export default function MobileTaskDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-end sm:items-center z-50 p-0 sm:p-4">
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-5 space-y-5 animate-slide-up sm:animate-scale-in text-left">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-5 space-y-4 animate-scale-in text-left">
         
         {/* 모달 상단 헤더 */}
         <div className="flex justify-between items-start border-b border-slate-100 pb-3">
