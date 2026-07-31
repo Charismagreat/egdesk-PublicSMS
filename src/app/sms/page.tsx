@@ -51,14 +51,14 @@ export default function SmsPage() {
   const autoHook = useAutomation();
 
   return (
-    <div className="space-y-6 pb-20" data-easybot-hint="통합 SMS 문자 관제 센터: 무료 SMS/LMS 문자 생성 및 발송, 실시간 발송 로그 모니터링, AI 자동 발송 규칙을 한곳에서 원스톱으로 관리합니다.">
+    <div className="space-y-6 pb-20" data-easybot-hint="문자 관제 AI: 무료 SMS/LMS 문자 생성 및 발송, 실시간 발송 로그 모니터링, AI 자동 발송 규칙을 한곳에서 원스톱으로 관리합니다.">
       {/* 📱 메인 서브 타이틀 헤더 바 */}
       <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
               <MessageSquare className="w-7 h-7 text-indigo-600" />
-              <span>📱 통합 SMS 문자 관제 센터</span>
+              <span>📱 문자 관제 AI</span>
             </h1>
             <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/80 text-[10px] font-black">
               All-in-One 원스톱 관리

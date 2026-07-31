@@ -17,9 +17,9 @@ function DynamicTitleHandler() {
     // 정적 경로와 메뉴명 매핑
     const staticTitles: Record<string, string> = {
       "/": "CEO 대시보드",
-      "/sms": "통합 SMS 문자 관제 AI",
-      "/message-logs": "통합 SMS 문자 관제 AI - 발송 내역",
-      "/automation": "통합 SMS 문자 관제 AI - 자동 발송",
+      "/sms": "문자 관제 AI",
+      "/message-logs": "문자 관제 AI - 발송 내역",
+      "/automation": "문자 관제 AI - 자동 발송",
       "/customers": "고객 관리 AI",
       "/partners": "거래처 관리 AI",
       "/transactions": "거래 관리 AI",

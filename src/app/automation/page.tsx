@@ -11,7 +11,7 @@ export default function AutomationPage() {
 
   return (
     <div className="p-8 text-center space-y-2">
-      <p className="text-sm font-bold text-slate-600">📱 통합 SMS 문자 관제 센터(자동 발송 탭)로 이동 중입니다...</p>
+      <p className="text-sm font-bold text-slate-600">📱 문자 관제 AI(자동 발송 탭)로 이동 중입니다...</p>
     </div>
   );
 }
