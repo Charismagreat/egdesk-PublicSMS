@@ -478,103 +478,101 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
         )}
       </nav>
       
-      {/* 하단 고정 메뉴 영역 */}
-      <div className="p-4 border-t border-slate-700/80 bg-slate-900/95 backdrop-blur-md space-y-2 shadow-[0_-12px_24px_-8px_rgba(0,0,0,0.8)] relative z-10">
-
-        <Link
-          href="/"
-          className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
-            isActive("/")
-              ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
-              : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
-          }`}
-        >
-          <div className="flex items-center space-x-3 min-w-0">
-            <LayoutDashboard className={`w-5 h-5 shrink-0 ${isActive("/") ? "text-white" : "text-blue-555"}`} />
-            <span>CEO 대시보드</span>
-          </div>
-          <button
-            type="button"
-            onClick={(e) => handleOpenNewTab(e, "/")}
-            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
-            title="새 탭에서 열기"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </button>
-        </Link>
-
-        {isAdmin && (
+      {/* 하단 고정 메뉴 영역 (시스템 운영자 admin 계정인 경우 슬림화 정돈) */}
+      {!isSystemAdmin && (
+        <div className="p-4 border-t border-slate-700/80 bg-slate-900/95 backdrop-blur-md space-y-2 shadow-[0_-12px_24px_-8px_rgba(0,0,0,0.8)] relative z-10">
           <Link
-            href="/governance"
+            href="/"
             className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
-              isActive("/governance")
+              isActive("/")
                 ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
             }`}
           >
             <div className="flex items-center space-x-3 min-w-0">
-              <ShieldAlert className={`w-5 h-5 shrink-0 ${isActive("/governance") ? "text-white" : "text-rose-555"}`} />
-              <span>AI 컨트롤타워</span>
+              <LayoutDashboard className={`w-5 h-5 shrink-0 ${isActive("/") ? "text-white" : "text-blue-555"}`} />
+              <span>CEO 대시보드</span>
             </div>
-            {/* 💡 새 탭에서 열기 숏컷 버튼 */}
             <button
               type="button"
-              onClick={(e) => handleOpenNewTab(e, "/governance")}
+              onClick={(e) => handleOpenNewTab(e, "/")}
               className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
               title="새 탭에서 열기"
             >
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
           </Link>
-        )}
 
-        {(isAdmin || userRole === "SUB_OPERATOR") && (
+          {isAdmin && (
+            <Link
+              href="/governance"
+              className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
+                isActive("/governance")
+                  ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
+              }`}
+            >
+              <div className="flex items-center space-x-3 min-w-0">
+                <ShieldAlert className={`w-5 h-5 shrink-0 ${isActive("/governance") ? "text-white" : "text-rose-555"}`} />
+                <span>AI 컨트롤타워</span>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => handleOpenNewTab(e, "/governance")}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
+                title="새 탭에서 열기"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            </Link>
+          )}
+
+          {(isAdmin || userRole === "SUB_OPERATOR") && (
+            <Link
+              href="/my-db"
+              className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
+                isActive("/my-db")
+                  ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
+              }`}
+            >
+              <div className="flex items-center space-x-3 min-w-0">
+                <Database className={`w-5 h-5 shrink-0 ${isActive("/my-db") ? "text-white" : "text-slate-400"}`} />
+                <span>MY DB</span>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => handleOpenNewTab(e, "/my-db")}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
+                title="새 탭에서 열기"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            </Link>
+          )}
           <Link
-            href="/my-db"
+            href="/settings"
             className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
-              isActive("/my-db")
+              isActive("/settings")
                 ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
             }`}
           >
             <div className="flex items-center space-x-3 min-w-0">
-              <Database className={`w-5 h-5 shrink-0 ${isActive("/my-db") ? "text-white" : "text-slate-400"}`} />
-              <span>MY DB</span>
+              <Settings className={`w-5 h-5 shrink-0 ${isActive("/settings") ? "text-white" : "text-slate-400"}`} />
+              <span>시스템 설정</span>
             </div>
-            {/* 💡 새 탭에서 열기 숏컷 버튼 */}
             <button
               type="button"
-              onClick={(e) => handleOpenNewTab(e, "/my-db")}
+              onClick={(e) => handleOpenNewTab(e, "/settings")}
               className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
               title="새 탭에서 열기"
             >
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
           </Link>
-        )}
-        <Link
-          href="/settings"
-          className={`group flex items-center justify-between p-3 rounded-lg transition-all ${
-            isActive("/settings")
-              ? "bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/10 scale-[1.02]"
-              : "text-slate-300 hover:bg-slate-800 hover:text-white hover:scale-[1.01]"
-          }`}
-        >
-          <div className="flex items-center space-x-3 min-w-0">
-            <Settings className={`w-5 h-5 shrink-0 ${isActive("/settings") ? "text-white" : "text-slate-400"}`} />
-            <span>시스템 설정</span>
-          </div>
-          {/* 💡 새 탭에서 열기 숏컷 버튼 */}
-          <button
-            type="button"
-            onClick={(e) => handleOpenNewTab(e, "/settings")}
-            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-700/60 rounded text-slate-400 hover:text-white border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0 ml-2 z-10"
-            title="새 탭에서 열기"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </button>
-        </Link>
-      </div>
+        </div>
+      )}
     </>
   );
 }
