@@ -99,20 +99,46 @@ export async function GET() {
     let doneTasks: any[] = [];
     try {
       const taskRes = await queryTable('crm_snaptasks', {});
-      const allTasks = (taskRes.rows || []).filter((t: any) => !t.deleted_at);
+      const snaptasks = (taskRes.rows || []).filter((t: any) => !t.deleted_at);
+
+      // 모바일 현장 상신 및 거버넌스 할 일 레코드 병합 (crm_governance_logs)
+      const govRes = await queryTable('crm_governance_logs', {}).catch(() => ({ rows: [] }));
+      const govLogs = (govRes.rows || []).filter((g: any) => !g.deleted_at && (g.doc_type === 'mobile_request' || g.doc_type === 'mobile_req'));
+
+      const govTasks = govLogs.map((g: any) => ({
+        id: g.id || g.doc_id,
+        title: g.doc_title || '현장 작업 요청',
+        description: g.reason || '',
+        status: (g.status === 'APPROVED' || g.status === 'RESOLVED' || g.status === 'DONE') ? 'DONE' : 'ACTIVE',
+        due_date: g.due_date || null,
+        created_at: g.created_at,
+        created_by: g.operator || 'system',
+        updated_by: g.operator || 'system',
+        assignee_name: g.operator || '담당자',
+        attachments: g.attachments ? (typeof g.attachments === 'string' ? JSON.parse(g.attachments) : g.attachments) : []
+      }));
+
+      // 중복 제거 및 전체 통합 태스크 목록
+      const existingIds = new Set(snaptasks.map((t: any) => t.id));
+      const combinedTasks = [...snaptasks];
+      govTasks.forEach((gt: any) => {
+        if (!existingIds.has(gt.id)) {
+          combinedTasks.push(gt);
+        }
+      });
 
       // 보안 격리 필터
-      const myTasks = allTasks.filter((t: any) => {
-        if (role === 'SUPER_ADMIN') return true;
-        return t.created_by === username || t.updated_by === username;
+      const myTasks = combinedTasks.filter((t: any) => {
+        if (role === 'SUPER_ADMIN' || role === 'SYSTEM_ADMIN' || role === 'TENANT_ADMIN') return true;
+        return t.created_by === username || t.updated_by === username || t.assignee_name === username;
       });
 
       // ACTIVE -> 해야할 일
-      todoTasks = myTasks.filter((t: any) => t.status === 'ACTIVE');
-      // COMPLETED -> 한 일
-      doneTasks = myTasks.filter((t: any) => t.status === 'COMPLETED');
+      todoTasks = myTasks.filter((t: any) => t.status !== 'DONE' && t.status !== 'COMPLETED');
+      // DONE -> 한 일
+      doneTasks = myTasks.filter((t: any) => t.status === 'DONE' || t.status === 'COMPLETED');
     } catch (e) {
-      console.warn('Failed to query snaptasks for mobile dashboard:', e);
+      console.warn('Failed to query tasks for mobile dashboard:', e);
     }
 
     // 4. 오늘 결재 승인 / 반려 건수 집계

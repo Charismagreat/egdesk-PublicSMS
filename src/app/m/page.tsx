@@ -799,23 +799,18 @@ export default function MobileHubPage() {
     if (!confirmCancel) return;
 
     try {
-      // 1) AI 컨트롤타워에 TASK_CANCEL_REQUEST 이벤트 로그 생성
-      const res = await apiFetch("/api/governance?action=create_log", {
+      // 1) 백엔드 create_cancel_request 단일 파이프라인 호출 (원본 태스크 1:1 유지 및 상태 갱신)
+      const res = await apiFetch("/api/governance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          doc_title: `[업무 취소 요청] ${task.title}`,
-          doc_type: "TASK_CANCEL_REQUEST",
-          note: `직원 취소 요청 (태스크 ID: ${task.id})`,
+          action: "create_cancel_request",
+          taskId: String(task.id),
+          reason: `[모바일 현장 직원의 취소 요청] (${task.title})`
         }),
       });
 
-      // 2) 백엔드 태스크 취소/삭제 처리
-      const delRes = await apiFetch(`/api/snaptasks?action=delete_item&id=${task.id}`, {
-        method: "POST",
-      });
-
-      if (res.ok || delRes.ok) {
+      if (res.ok) {
         alert("🎉 최고관리자의 컨트롤타워 관제에 취소 요청이 정상 상신되었습니다.");
         const taskRes = await apiFetch("/api/snaptasks");
         if (taskRes.ok) {
@@ -855,51 +850,68 @@ export default function MobileHubPage() {
   const activeTasks = tasks.filter((t) => t.status !== "DONE");
   const completedTasks = tasks.filter((t) => t.status === "DONE");
 
-  // 📅 기간별 필터링 판별 함수 (오늘, 내일, 어제, 이번 주, 이번 달, 다음달, 지난달, 전체)
-  const isTaskInPeriod = (taskDateStr: string | undefined, period: string, tab: "active" | "completed") => {
+  // 📅 기간별 필터링 판별 함수 (관제 지정일 due_date vs 일반 오늘 등록건)
+  const isTaskInPeriod = (t: any, period: string, tab: "active" | "completed") => {
     if (period === "ALL") return true;
-    if (!taskDateStr) return true;
 
-    const taskDate = new Date(taskDateStr);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // 1) 관제에 의해 처리일시(due_date)가 명시적으로 지정된 건 -> 지정된 해당 일자 탭에만 노출
+    if (t.due_date && String(t.due_date).trim() !== '') {
+      const taskDate = new Date(t.due_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    const taskZero = new Date(taskDate);
-    taskZero.setHours(0, 0, 0, 0);
+      const taskZero = new Date(taskDate);
+      taskZero.setHours(0, 0, 0, 0);
 
-    const diffDays = Math.round((taskZero.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      const diffDays = Math.round((taskZero.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-    if (tab === "active") {
-      if (period === "TODAY") return diffDays === 0;
-      if (period === "TOMORROW") return diffDays === 1;
-      if (period === "WEEK") return diffDays >= 0 && diffDays <= 7;
-      if (period === "MONTH") {
-        return taskDate.getFullYear() === today.getFullYear() && taskDate.getMonth() === today.getMonth();
+      if (tab === "active") {
+        if (period === "TODAY") return diffDays <= 0;
+        if (period === "TOMORROW") return diffDays === 1;
+        if (period === "WEEK") return diffDays >= 0 && diffDays <= 7;
+        if (period === "MONTH") {
+          return (
+            taskDate.getFullYear() === today.getFullYear() &&
+            taskDate.getMonth() === today.getMonth()
+          );
+        }
+        if (period === "NEXT_MONTH") {
+          const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+          return (
+            taskDate.getFullYear() === nextMonth.getFullYear() &&
+            taskDate.getMonth() === nextMonth.getMonth()
+          );
+        }
+      } else {
+        if (period === "TODAY") return diffDays === 0;
+        if (period === "YESTERDAY") return diffDays === -1;
+        if (period === "WEEK") return diffDays >= -7 && diffDays <= 0;
+        if (period === "MONTH") {
+          return taskDate.getFullYear() === today.getFullYear() && taskDate.getMonth() === today.getMonth();
+        }
+        if (period === "LAST_MONTH") {
+          const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          return taskDate.getFullYear() === lastMonth.getFullYear() && taskDate.getMonth() === lastMonth.getMonth();
+        }
       }
-      if (period === "NEXT_MONTH") {
-        const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-        return taskDate.getFullYear() === nextMonth.getFullYear() && taskDate.getMonth() === nextMonth.getMonth();
-      }
-    } else {
-      if (period === "TODAY") return diffDays === 0;
-      if (period === "YESTERDAY") return diffDays === -1;
-      if (period === "WEEK") return diffDays >= -7 && diffDays <= 0;
-      if (period === "MONTH") {
-        return taskDate.getFullYear() === today.getFullYear() && taskDate.getMonth() === today.getMonth();
-      }
-      if (period === "LAST_MONTH") {
-        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        return taskDate.getFullYear() === lastMonth.getFullYear() && taskDate.getMonth() === lastMonth.getMonth();
-      }
+      return false;
     }
-    return true;
+
+    // 2) 관제 지정일(due_date)이 없는 일반 오늘 등록건 -> '오늘' 탭(및 '전체')에만 표시!
+    if (tab === "active") {
+      if (period === "TODAY") return true;
+      return false; // 내일, 이번주, 이번달, 다음달 탭에서는 노출 제외
+    } else {
+      if (period === "TODAY") return true;
+      return false;
+    }
   };
 
   const filteredTasks = tasks.filter((t) => {
     const isTabMatch = todoTab === "active" ? t.status !== "DONE" : t.status === "DONE";
-    const isSearchMatch = !searchQuery || t.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const isSearchMatch = !searchQuery || (t.title || '').toLowerCase().includes(searchQuery.toLowerCase());
     const currentPeriod = todoTab === "active" ? todoPeriod : completedPeriod;
-    const isPeriodMatch = isTaskInPeriod(t.due_date || t.date || t.created_at, currentPeriod, todoTab === "active" ? "active" : "completed");
+    const isPeriodMatch = isTaskInPeriod(t, currentPeriod, todoTab === "active" ? "active" : "completed");
     return isTabMatch && isSearchMatch && isPeriodMatch;
   });
 

@@ -75,6 +75,31 @@ When building features for this Next.js project:
 3. **Never use bare `fetch('/api/...')`** - it will fail in EGDesk tunnel
 4. **Inform the user** about this limitation when implementing API features
 
+## EGDesk MCP (optional — preferred for exploring My DB)
+
+External agents (Claude Desktop, Antigravity, Cursor MCP, etc.) can talk to EGDesk My DB
+through the **egdesk-user-data** MCP server when EGDesk is running and MCP is installed.
+
+### Check whether MCP is connected
+
+1. Confirm EGDesk is running and the local MCP HTTP gateway is up (usually `http://localhost:8080`).
+2. Confirm EGDesk MCP services were installed into the agent (Claude Desktop / Antigravity MCP config).
+3. Prefer calling MCP tools over reading filesystem caches or inventing HTTP scripts:
+   - `user_data_list_projects` — see available My DB projects (do this first)
+   - `user_data_select_project` — choose `projectId` + `environment`
+   - `user_data_list_tables` / `user_data_query` / etc. — work with data
+
+### When to use MCP vs app helpers
+
+| Goal | Prefer |
+|------|--------|
+| Explore / query My DB from an IDE agent | **MCP** (`egdesk-user-data` tools) if connected |
+| Ship UI/API code inside this Next.js app | **egdesk-helpers.ts** (`queryTable`, etc.) |
+| MCP tools missing / empty / failing | Fall back to helpers + `EGDESK-README.md` / schema files; tell the user to install MCP from EGDesk |
+
+Do **not** browse `~/.gemini/antigravity/mcp/*` cache folders as a substitute for MCP tool calls.
+Config lives at `~/.gemini/config/mcp_config.json` (Antigravity) or Claude Desktop config — not under `~/.gemini/antigravity/mcp_config.json`.
+
 ## Troubleshooting
 
 ### API calls return 404

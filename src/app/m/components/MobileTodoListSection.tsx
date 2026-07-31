@@ -227,6 +227,11 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                             <ShieldCheck className="w-3 h-3" />
                             <span>관제 실행 완료</span>
                           </span>
+                        ) : t.status === 'PENDING_APPROVAL' ? (
+                          <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-0.5 shrink-0">
+                            <Clock className="w-3 h-3 text-rose-600 animate-pulse" />
+                            <span>🚨 취소 승인 대기 중</span>
+                          </span>
                         ) : (
                           <div className="flex items-center gap-1 shrink-0">
                             <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center gap-0.5">
@@ -275,9 +280,9 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
 
                       <div className="flex items-center gap-2 mt-1.5 text-[10px] font-bold text-slate-400">
                         {t.due_date && (
-                          <span className="flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded-md">
-                            <Calendar className="w-3 h-3 text-indigo-500" />
-                            {t.due_date.substring(0, 10)}
+                          <span className="flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200/80 px-2 py-0.5 rounded-md font-extrabold shrink-0" title="관제 대상 처리 일시">
+                            <Calendar className="w-3 h-3 text-purple-600 shrink-0" />
+                            <span>{t.due_date.substring(0, 10)}</span>
                           </span>
                         )}
                         {t.assignee_name && (

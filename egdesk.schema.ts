@@ -559,6 +559,7 @@ export const COLUMN_DEFINITIONS = {
     { name: 'status', type: 'TEXT', notNull: true },
     { name: 'reason', type: 'TEXT', notNull: true },
     { name: 'operator', type: 'TEXT', notNull: true },
+    { name: 'due_date', type: 'TEXT' },
     { name: 'created_at', type: 'TEXT', notNull: true },
   ],
   expense_categories: [

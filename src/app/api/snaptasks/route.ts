@@ -166,39 +166,99 @@ export async function GET(req: Request) {
           };
         });
 
-      // 4) crm_governance_logs 완료 건 연동 병합 (최고관리자 관제 완료 처리 건)
+      // 4) crm_governance_logs 상신 및 관제 로그 due_date 결합 동기화
       try {
         const govLogsRes = await queryTable('crm_governance_logs', { limit: 10000 });
         const govLogs = govLogsRes.rows || [];
 
+        // 제목 정제 함수 (모든 접두어 전면 제거하여 순수 핵심 제목 추출)
+        const getPureTitle = (titleStr: string) => {
+          if (!titleStr) return '';
+          return titleStr
+            .replace(/AI 결재 보류:\s*/g, '')
+            .replace(/\[(업무 취소 요청|취소 요청|상신|현장 상신)\]\s*/g, '')
+            .replace(/\[(업무 취소 요청|취소 요청|상신|현장 상신)\]\s*/g, '')
+            .replace(/\[(업무 취소 요청|취소 요청|상신|현장 상신)\]\s*/g, '')
+            .trim();
+        };
+
         govLogs.forEach((log: any) => {
           if (log.deleted_at) return;
-          const isLogApproved = log.status === 'APPROVED' || log.status === 'FORCE_APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED';
+          const isCancelLog = log.doc_type === 'TASK_CANCEL_REQUEST' || (log.doc_title || '').includes('취소 요청');
+          const logPure = getPureTitle(log.doc_title);
 
-          if (isLogApproved) {
-            const logTitleClean = (log.doc_title || '').replace(/^\[상신\]\s*/, '').trim();
-            const existingTask = tasks.find((t: any) => 
-              t.title === log.doc_title || 
-              t.title === `[상신] ${logTitleClean}` || 
-              t.title === logTitleClean ||
-              String(t.id) === String(log.doc_id)
-            );
+          // 1:1 매칭 태스크 탐색 (순수 제목 및 ID 상호 대조)
+          const existingTask = tasks.find((t: any) => {
+            const tPure = getPureTitle(t.title);
+            if (logPure && tPure && logPure === tPure) return true;
+            if (log.doc_id && (String(t.id) === String(log.doc_id) || String(t.doc_id) === String(log.doc_id))) return true;
+            if (log.id && (String(t.id) === String(log.id) || String(t.doc_id) === String(log.id))) return true;
+            return false;
+          });
 
-            if (existingTask) {
+          if (existingTask) {
+            if (log.due_date) {
+              existingTask.due_date = log.due_date;
+            }
+            // 💡 취소 요청 로그가 존재하는 경우 원본 카드 상태를 PENDING_APPROVAL로 전파
+            if (isCancelLog) {
+              if (log.status !== 'APPROVED' && log.status !== 'RESOLVED' && log.status !== 'REJECTED') {
+                existingTask.status = 'PENDING_APPROVAL';
+                existingTask.has_cancel_request = true;
+              }
+            }
+            if (log.status === 'APPROVED' || log.status === 'FORCE_APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED') {
               existingTask.status = 'DONE';
-            } else {
-              tasks.push({
-                id: `gov_done_${log.id}`,
-                title: log.doc_title || '관제 승인 완료 업무',
-                status: 'DONE',
-                description: log.reason || '최고관리자 관제 실행 완료',
-                assignee_name: log.operator || '김직원',
-                created_at: log.updated_at || log.created_at,
-                due_date: log.created_at ? log.created_at.substring(0, 10) : ''
-              });
+            }
+          } else if (!isCancelLog) {
+            // 💡 취소 요청 로그(isCancelLog)는 독립 신규 카드를 절대 추가 생성하지 않음!
+            const isLogApproved = log.status === 'APPROVED' || log.status === 'FORCE_APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED';
+            const logNowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
+            tasks.push({
+              id: log.id || log.doc_id,
+              title: log.doc_title || '관제 업무',
+              status: isLogApproved ? 'DONE' : 'ACTIVE',
+              description: log.reason || '모바일 현장 수동 접수 요청 건',
+              assignee_name: log.operator || '김직원',
+              created_at: log.created_at || logNowStr,
+              due_date: log.due_date || null
+            });
+          }
+        });
+
+        // 💡 [중복 태스크 1:1 완벽 병합 정제 (De-duplication)]
+        // crm_snaptasks에 수동 등록되었던 취소 태스크와 원본 태스크를 pureTitle 기준으로 1개로 합침
+        const mergedTasksMap = new Map<string, any>();
+        tasks.forEach((t: any) => {
+          const pure = getPureTitle(t.title);
+          const key = pure || String(t.id);
+
+          const isCancelTask = (t.title || '').includes('취소 요청') || t.status === 'PENDING_APPROVAL' || t.has_cancel_request;
+
+          if (!mergedTasksMap.has(key)) {
+            mergedTasksMap.set(key, {
+              ...t,
+              title: `[상신] ${pure}`,
+              status: isCancelTask ? 'PENDING_APPROVAL' : t.status,
+              has_cancel_request: isCancelTask ? true : t.has_cancel_request
+            });
+          } else {
+            // 이미 원본이나 구 태스크가 존재하는 경우: 취소 요청 상태 및 최신 데이터 병합
+            const existing = mergedTasksMap.get(key);
+            if (isCancelTask) {
+              existing.status = 'PENDING_APPROVAL';
+              existing.has_cancel_request = true;
+            }
+            if (t.attachments && t.attachments.length > 0 && (!existing.attachments || existing.attachments.length === 0)) {
+              existing.attachments = t.attachments;
+            }
+            if (t.due_date && !existing.due_date) {
+              existing.due_date = t.due_date;
             }
           }
         });
+
+        tasks = Array.from(mergedTasksMap.values());
       } catch (ge) {
         console.error('관제 완료 로그 동기화 실패:', ge);
       }

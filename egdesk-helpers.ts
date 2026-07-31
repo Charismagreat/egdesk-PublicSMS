@@ -10,6 +10,13 @@
  * Schema files:
  *  - egdesk.schema.ts  — committed seed schema (edit this; commit to git)
  *  - egdesk.config.ts  — auto-generated runtime snapshot (gitignored; do not edit)
+ *
+ * AI / external agents:
+ *  - If egdesk-user-data MCP is connected (Claude Desktop / Antigravity / Cursor), prefer MCP tools
+ *    for exploring My DB: user_data_list_projects → user_data_select_project → user_data_list_tables / query.
+ *  - Check that EGDesk is running and MCP tools are actually available before relying on them.
+ *  - For app code in this repo, keep using these helpers (queryTable, etc.) — MCP is optional for agents.
+ *  - If MCP tools are missing/empty, fall back to helpers + EGDESK-README.md; ask the user to install MCP from EGDesk.
  */
 
 import { EGDESK_CONFIG } from './egdesk.config';
@@ -257,6 +264,16 @@ export async function getTableSchema(tableName: string) {
 }
 
 /**
+ * Get schemas for multiple tables in ONE call (preferred over repeated getTableSchema).
+ * Omit tableNames to fetch schemas for all tables.
+ */
+export async function getTableSchemas(tableNames?: string[]) {
+  return callUserDataTool('user_data_get_schemas_batch', {
+    ...(tableNames?.length ? { tableNames } : {}),
+  });
+}
+
+/**
  * Create a new table
  */
 export async function createTable(
@@ -424,6 +441,190 @@ export async function getFileStats(tableName?: string) {
 }
 
 // ==========================================
+// USER DATA CRON JOBS
+// ==========================================
+
+export type UserDataCronActionType = 'sync_config' | 'browser_recording' | 'backup' | 'script';
+export type UserDataCronFrequencyType = 'daily' | 'weekly' | 'monthly' | 'custom' | 'cron';
+
+export type UserDataCronActionPayload = {
+  syncConfigId?: string;
+  syncConfigName?: string;
+  testPath?: string;
+  testName?: string;
+  scriptPath?: string;
+  functionName?: string;
+  args?: unknown;
+  timeoutMs?: number;
+  cwd?: string;
+};
+
+export type CreateUserDataCronJobOptions = {
+  name: string;
+  actionType: UserDataCronActionType;
+  actionPayload?: UserDataCronActionPayload;
+  /** Flat alias for actionPayload.syncConfigId */
+  syncConfigId?: string;
+  syncConfigName?: string;
+  /** Flat alias for actionPayload.testPath */
+  testPath?: string;
+  testName?: string;
+  /** Flat alias for actionPayload.scriptPath (.js/.mjs/.cjs) */
+  scriptPath?: string;
+  functionName?: string;
+  args?: unknown;
+  timeoutMs?: number;
+  cwd?: string;
+  scheduledTime?: string;
+  /** Defaults to daily when omitted */
+  frequencyType?: UserDataCronFrequencyType;
+  dayOfWeek?: number;
+  dayOfMonth?: number;
+  customIntervalDays?: number;
+  cronExpression?: string;
+  enabled?: boolean;
+};
+
+export type UpdateUserDataCronJobOptions = Partial<CreateUserDataCronJobOptions> & {
+  jobId: string;
+};
+
+/** List UserData cron jobs for the active project+env */
+export async function listUserDataCronJobs() {
+  return callUserDataTool('user_data_cron_list', {});
+}
+
+/** Get a UserData cron job by id */
+export async function getUserDataCronJob(jobId: string) {
+  return callUserDataTool('user_data_cron_get', { jobId });
+}
+
+/** Create a UserData cron job (sync_config / browser_recording / backup) */
+export async function createUserDataCronJob(options: CreateUserDataCronJobOptions) {
+  return callUserDataTool('user_data_cron_create', options);
+}
+
+/** Update a UserData cron job */
+export async function updateUserDataCronJob(options: UpdateUserDataCronJobOptions) {
+  return callUserDataTool('user_data_cron_update', options);
+}
+
+/** Delete a UserData cron job */
+export async function deleteUserDataCronJob(jobId: string) {
+  return callUserDataTool('user_data_cron_delete', { jobId });
+}
+
+/** Enable or pause a UserData cron job */
+export async function toggleUserDataCronJob(jobId: string, enabled: boolean) {
+  return callUserDataTool('user_data_cron_toggle', { jobId, enabled });
+}
+
+/** Run a UserData cron job immediately */
+export async function runUserDataCronJobNow(jobId: string) {
+  return callUserDataTool('user_data_cron_run_now', { jobId });
+}
+
+/** List execution history for a UserData cron job */
+export async function listUserDataCronExecutions(jobId: string, limit?: number) {
+  return callUserDataTool('user_data_cron_executions', {
+    jobId,
+    ...(limit != null ? { limit } : {}),
+  });
+}
+
+/** Get UserData cron scheduler status */
+export async function getUserDataCronStatus() {
+  return callUserDataTool('user_data_cron_status', {});
+}
+
+// ==========================================
+// USER DATA QUEUE JOBS
+// ==========================================
+
+export type UserDataQueueActionType =
+  | 'sync_config'
+  | 'browser_recording'
+  | 'backup'
+  | 'script';
+
+export type UserDataQueueActionPayload = UserDataCronActionPayload;
+
+export type EnqueueUserDataQueueJobOptions = {
+  name?: string;
+  actionType: UserDataQueueActionType;
+  actionPayload?: UserDataQueueActionPayload;
+  syncConfigId?: string;
+  syncConfigName?: string;
+  testPath?: string;
+  testName?: string;
+  scriptPath?: string;
+  functionName?: string;
+  args?: unknown;
+  timeoutMs?: number;
+  cwd?: string;
+  priority?: number;
+  maxAttempts?: number;
+  runAfter?: string | null;
+  idempotencyKey?: string | null;
+};
+
+/** List UserData queue jobs for the active project+env */
+export async function listUserDataQueueJobs(options?: {
+  status?: string;
+  limit?: number;
+}) {
+  return callUserDataTool('user_data_queue_list', options || {});
+}
+
+/** Get a UserData queue job by id */
+export async function getUserDataQueueJob(jobId: string) {
+  return callUserDataTool('user_data_queue_get', { jobId });
+}
+
+/** Enqueue a UserData job (sync_config / browser_recording / backup / script) */
+export async function enqueueUserDataQueueJob(options: EnqueueUserDataQueueJobOptions) {
+  return callUserDataTool('user_data_queue_enqueue', options);
+}
+
+/** Cancel a pending UserData queue job */
+export async function cancelUserDataQueueJob(jobId: string) {
+  return callUserDataTool('user_data_queue_cancel', { jobId });
+}
+
+/** Retry a failed/dead/cancelled UserData queue job */
+export async function retryUserDataQueueJob(jobId: string) {
+  return callUserDataTool('user_data_queue_retry', { jobId });
+}
+
+/** Delete a UserData queue job */
+export async function deleteUserDataQueueJob(jobId: string) {
+  return callUserDataTool('user_data_queue_delete', { jobId });
+}
+
+/** Run a UserData queue job immediately */
+export async function runUserDataQueueJobNow(jobId: string) {
+  return callUserDataTool('user_data_queue_run_now', { jobId });
+}
+
+/** List attempt history for a UserData queue job */
+export async function listUserDataQueueRuns(jobId: string, limit?: number) {
+  return callUserDataTool('user_data_queue_runs', {
+    jobId,
+    ...(limit != null ? { limit } : {}),
+  });
+}
+
+/** Get UserData queue counts by status */
+export async function getUserDataQueueStats() {
+  return callUserDataTool('user_data_queue_stats', {});
+}
+
+/** Get UserData queue worker status */
+export async function getUserDataQueueStatus() {
+  return callUserDataTool('user_data_queue_status', {});
+}
+
+// ==========================================
 // USER DATA REAL-TIME SUBSCRIPTIONS
 // ==========================================
 
@@ -469,7 +670,16 @@ export function onUserDataChanged(
 
   const apiUrl = EGDESK_CONFIG.apiUrl || '';
   const apiKey = EGDESK_CONFIG.apiKey || '';
-  const sseUrl = apiKey ? `${apiUrl}/user-data/sse?key=${encodeURIComponent(apiKey)}` : `${apiUrl}/user-data/sse`;
+  const projectId =
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_PROJECT_ID) || '';
+  const egdeskEnv =
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_ENV) || '';
+  const sseParams = new URLSearchParams();
+  if (apiKey) sseParams.set('key', apiKey);
+  if (projectId) sseParams.set('egdeskId', projectId);
+  if (egdeskEnv) sseParams.set('environment', egdeskEnv);
+  const sseQuery = sseParams.toString();
+  const sseUrl = `${apiUrl}/user-data/sse${sseQuery ? `?${sseQuery}` : ''}`;
   const es = new EventSource(sseUrl);
 
   es.addEventListener('message', (e: MessageEvent) => {
@@ -2219,6 +2429,242 @@ export async function getPageIndexPages(docId: string, pages: string) {
 /** Delete an indexed document */
 export async function deletePageIndexDocument(docId: string) {
   return callPageIndexTool('pageindex_delete_document', { doc_id: docId });
+}
+
+// ==========================================
+// Drive (MCP) — change watch / poll / events
+// ==========================================
+
+/**
+ * Call EGDesk Drive MCP tool (Google Drive change notifications + poll).
+ *
+ * Auth on EGDesk: GOOGLE_SERVICE_ACCOUNT_JSON or Google Workspace sign-in.
+ * Share target folders with the service account when using SA credentials.
+ *
+ * - Server: `POST {apiUrl}/drive/tools/call`
+ * - Client: `POST /__drive_proxy` (see proxy.ts / middleware)
+ * - Webhook (Google push, not this helper): `POST {apiUrl}/drive/webhook`
+ */
+export async function callDriveTool(
+  toolName: string,
+  args: Record<string, any> = {}
+): Promise<any> {
+  const body = JSON.stringify({ tool: toolName, arguments: args });
+
+  const isServer = typeof window === 'undefined';
+
+  let response: Response;
+  if (isServer) {
+    const apiUrl =
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) ||
+      EGDESK_CONFIG.apiUrl;
+    response = await fetch(`${apiUrl}/drive/tools/call`, {
+      method: 'POST',
+      headers: buildServerEgdeskHeaders(),
+      body
+    });
+  } else {
+    response = await apiFetch('/__drive_proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+  }
+
+  return parseEgdeskMcpToolResponse(response);
+}
+
+/** Check Drive auth (service account / Google OAuth) */
+export async function getDriveAuthStatus() {
+  return callDriveTool('drive_auth_status', {});
+}
+
+/**
+ * Start Google OAuth for Drive. Returns { status:'pending', authUrl } immediately.
+ * Open authUrl in the browser, then poll getDriveAuthStatus() until connected.
+ */
+export async function startDriveAuthLogin(options: {
+  openWindow?: boolean;
+  forceConsent?: boolean;
+} = {}) {
+  return callDriveTool('drive_auth_login', options);
+}
+
+/** Initialize Drive sync (page token + target folders; optional snapshot) */
+export async function initDriveSync(options: {
+  folderIds: string[];
+  snapshot?: boolean;
+  downloadPath?: string;
+  reset?: boolean;
+}) {
+  return callDriveTool('drive_init', options);
+}
+
+/** Start drive.changes.watch; webhook = {webhookBaseUrl}/drive/webhook */
+export async function watchDriveChanges(options: {
+  webhookBaseUrl: string;
+  ttlSeconds?: number;
+}) {
+  return callDriveTool('drive_watch', options);
+}
+
+/** Stop the active Drive watch channel */
+export async function stopDriveWatch() {
+  return callDriveTool('drive_stop', {});
+}
+
+/** One-shot poll via changes.list (no tunnel needed) */
+export async function pollDriveChanges(options: { download?: boolean } = {}) {
+  return callDriveTool('drive_poll', options);
+}
+
+/** Keep watching saved folders on an interval (persists + auto-resumes) */
+export async function startDrivePollLoop(options: {
+  intervalSeconds?: number;
+  download?: boolean;
+} = {}) {
+  return callDriveTool('drive_start_poll_loop', options);
+}
+
+/** Stop continuous poll loop (folders/page token stay saved) */
+export async function stopDrivePollLoop() {
+  return callDriveTool('drive_stop_poll_loop', {});
+}
+
+/** Sync state, channel expiry, and event counts */
+export async function getDriveStatus() {
+  return callDriveTool('drive_status', {});
+}
+
+/** List currently watched folders with names and Drive URLs */
+export async function listDriveWatchedFolders() {
+  return callDriveTool('drive_list_watched_folders', {});
+}
+
+/** List recent drive_file_events */
+export async function listDriveEvents(options: {
+  limit?: number;
+  downloadedOnly?: boolean;
+  since?: string;
+} = {}) {
+  return callDriveTool('drive_list_events', options);
+}
+
+/** Replace monitored folder IDs without resetting the page token */
+export async function setDriveTargetFolders(folderIds: string[]) {
+  return callDriveTool('drive_set_target_folders', { folderIds });
+}
+
+// ==========================================
+// Knowledge Wiki (MCP) — Obsidian + wikiHow
+// ==========================================
+
+/**
+ * Call EGDesk Knowledge Wiki MCP tool (Obsidian vault index + wikiHow guides).
+ *
+ * - Server: `POST {apiUrl}/knowledge-wiki/tools/call`
+ * - Client: `POST /__knowledge_wiki_proxy` (see proxy.ts / middleware)
+ */
+export async function callKnowledgeWikiTool(
+  toolName: string,
+  args: Record<string, any> = {}
+): Promise<any> {
+  const body = JSON.stringify({ tool: toolName, arguments: args });
+
+  const isServer = typeof window === 'undefined';
+
+  let response: Response;
+  if (isServer) {
+    const apiUrl =
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) ||
+      EGDESK_CONFIG.apiUrl;
+    response = await fetch(`${apiUrl}/knowledge-wiki/tools/call`, {
+      method: 'POST',
+      headers: buildServerEgdeskHeaders(),
+      body
+    });
+  } else {
+    response = await apiFetch('/__knowledge_wiki_proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+  }
+
+  return parseEgdeskMcpToolResponse(response);
+}
+
+export async function getKnowledgeWikiStatus() {
+  return callKnowledgeWikiTool('knowledge_wiki_status', {});
+}
+
+export async function searchKnowledgeWiki(
+  query: string,
+  options: { limit?: number; sources?: Array<'obsidian' | 'wikihow'> } = {}
+) {
+  return callKnowledgeWikiTool('knowledge_wiki_search', { query, ...options });
+}
+
+export async function setObsidianVault(vaultPath: string) {
+  return callKnowledgeWikiTool('obsidian_set_vault', { vaultPath });
+}
+
+export async function indexObsidianVault(options: { vaultPath?: string } = {}) {
+  return callKnowledgeWikiTool('obsidian_index', options);
+}
+
+export async function listObsidianNotes(options: {
+  limit?: number;
+  offset?: number;
+  tag?: string;
+} = {}) {
+  return callKnowledgeWikiTool('obsidian_list_notes', options);
+}
+
+export async function getObsidianNote(options: {
+  path?: string;
+  title?: string;
+  id?: string;
+}) {
+  return callKnowledgeWikiTool('obsidian_get_note', options);
+}
+
+export async function searchObsidianNotes(query: string, limit?: number) {
+  return callKnowledgeWikiTool('obsidian_search', { query, limit });
+}
+
+export async function getObsidianBacklinks(title: string, limit?: number) {
+  return callKnowledgeWikiTool('obsidian_backlinks', { title, limit });
+}
+
+export async function listObsidianTags() {
+  return callKnowledgeWikiTool('obsidian_list_tags', {});
+}
+
+export async function searchWikiHow(
+  query: string,
+  options: { lang?: string; limit?: number } = {}
+) {
+  return callKnowledgeWikiTool('wikihow_search', { query, ...options });
+}
+
+export async function getWikiHowGuide(
+  titleOrUrl: string,
+  options: { lang?: string; cache?: boolean } = {}
+) {
+  return callKnowledgeWikiTool('wikihow_get_guide', { titleOrUrl, ...options });
+}
+
+export async function listCachedWikiHow(options: {
+  limit?: number;
+  offset?: number;
+  lang?: string;
+} = {}) {
+  return callKnowledgeWikiTool('wikihow_list_cached', options);
+}
+
+export async function searchCachedWikiHow(query: string, limit?: number) {
+  return callKnowledgeWikiTool('wikihow_search_cached', { query, limit });
 }
 
 // ==========================================
