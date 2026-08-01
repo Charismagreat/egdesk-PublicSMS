@@ -10,20 +10,25 @@ const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'egdesk-su
 
 export async function POST(req: Request) {
   try {
-    // 💡 로그인 시 setupDatabase 자동 가동 주석 처리 (로그인 속도 최우선)
-    // if (!isDbInitialized) {
-    //   await setupDatabase();
-    //   isDbInitialized = true;
-    // }
-
     const { username, password } = await req.json();
 
     if (!username || !password) {
       return NextResponse.json({ success: false, error: '아이디와 비밀번호를 모두 입력해주세요.' }, { status: 400 });
     }
 
-    // 1. 운영자 조회
-    const result = await queryTable('crm_operators', { filters: { username } });
+    // 1. 운영자 조회 (최초 미설치/미생성 환경 자동 감지 가드)
+    let result = await queryTable('crm_operators', { filters: { username } }).catch(() => ({ rows: [] }));
+
+    // 계정이 없거나 DB가 비어있는 경우, 최초 1회 setupDatabase()를 자동 가동하여 디폴트 계정 시딩 후 재조회
+    if (!result.rows || result.rows.length === 0) {
+      if (!isDbInitialized) {
+        console.log('⚠️ 운영자 계정이 없거나 DB가 초기화되지 않았습니다. setupDatabase()를 자동 트리거합니다...');
+        await setupDatabase();
+        isDbInitialized = true;
+        result = await queryTable('crm_operators', { filters: { username } }).catch(() => ({ rows: [] }));
+      }
+    }
+
     if (!result.rows || result.rows.length === 0) {
       return NextResponse.json({ success: false, error: '존재하지 않는 계정입니다.' }, { status: 401 });
     }
