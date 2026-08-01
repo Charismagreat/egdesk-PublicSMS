@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { queryTable, insertRows, deleteRows, executeSQL, updateRows } from '../../../../egdesk-helpers';
 import { couponCache } from '@/lib/coupon-cache';
 import { getTenantId } from '@/lib/tenant';
+import { backfillFinishedGoodsToProducts } from '@/lib/sync-products-helper';
 
 // GET /api/products : 상품 목록 조회 (서버 사이드 페이지네이션 및 상태 집계)
 
@@ -14,10 +15,26 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: '인증이 필요합니다.' }, { status: 401 });
     }
 
+    // ⚡ 0건 방지 및 테넌트 자가 복구 가드(Self-Healing Guard):
+    // products 테이블 데이터가 0건일 경우, 재고 완제품(inventory_items) 항목들을 자동으로 동기화 백필합니다.
+    try {
+      const checkRes = await queryTable('products', { limit: 1 });
+      const currentRows = checkRes.rows || [];
+      if (currentRows.length === 0) {
+        console.log('[Self-Healing] products table is empty. Running auto-backfill from inventory...');
+        await backfillFinishedGoodsToProducts();
+      }
+    } catch (selfHealingErr: any) {
+      console.warn('[Self-Healing Warning] Auto-backfill check warning:', selfHealingErr.message);
+    }
+
     // ⚡ 테넌트 불일치 자가 복구 가드(Self-Healing Guard):
     // 기존에 다른 테넌트 ID('tenant-guest-id-2222' 또는 NULL)로 적재된 상품 데이터를
     // 현재 세션의 활성 테넌트 ID(tenantId)로 자동 바인딩 보정 처리합니다. (다이렉트 SQL UPDATE 활용)
     try {
+      // ⚡ brand 컬럼 무손실 인앱 마이그레이션 자동 보정
+      await executeSQL(`ALTER TABLE products ADD COLUMN brand TEXT`).catch(() => {});
+
       if (tenantId !== 'tenant-guest-id-2222') {
         await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
         await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: null as any } });
@@ -45,14 +62,14 @@ export async function GET(req: Request) {
     try {
       let countQuery = `SELECT COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
       let dataQuery = `
-        SELECT p.*, i.barcode as inventory_barcode 
+        SELECT p.*, i.barcode as inventory_barcode, i.stock as inventory_stock 
         FROM products p
         LEFT JOIN inventory_items i ON p.inventory_item_id = i.id
         WHERE p.tenant_id = '${tenantId}' AND p.status = '${status}'
       `;
 
       if (search) {
-        const searchCond = ` AND (p.name LIKE '%${search}%' OR p.category LIKE '%${search}%' OR p.description LIKE '%${search}%')`;
+        const searchCond = ` AND (p.name LIKE '%${search}%' OR p.category LIKE '%${search}%' OR p.brand LIKE '%${search}%' OR p.description LIKE '%${search}%')`;
         countQuery += searchCond;
         dataQuery += searchCond;
       }
@@ -94,6 +111,7 @@ export async function GET(req: Request) {
         allRows = allRows.filter((r: any) => 
           (r.name && String(r.name).toLowerCase().includes(cleanSearch)) ||
           (r.category && String(r.category).toLowerCase().includes(cleanSearch)) ||
+          (r.brand && String(r.brand).toLowerCase().includes(cleanSearch)) ||
           (r.description && String(r.description).toLowerCase().includes(cleanSearch))
         );
       }
@@ -101,18 +119,18 @@ export async function GET(req: Request) {
       filteredCount = allRows.length;
       const sliced = allRows.slice(offset, offset + limit);
       
-      // 메모리 상에서 inventory_barcode 필드 바인딩 백필
+      // 메모리 상에서 inventory_barcode 및 inventory_stock 필드 바인딩 백필
       rows = sliced.map((r: any) => {
         const matched = invItems.find(i => String(i.id) === String(r.inventory_item_id));
         return {
           ...r,
-          inventory_barcode: matched ? matched.barcode : null
+          inventory_barcode: matched ? matched.barcode : null,
+          inventory_stock: matched ? matched.stock : 0
         };
       });
     }
 
     const products = rows.map((r: any) => {
-      // 💡 바코드가 있으면 바코드 우선 사용, 없으면 INV-{inventory_item_id} 폴백 코드 생성
       let validItemCode = '';
       if (r.inventory_item_id) {
         validItemCode = r.inventory_barcode ? String(r.inventory_barcode).trim() : `INV-${r.inventory_item_id}`;
@@ -124,17 +142,19 @@ export async function GET(req: Request) {
         id: r.id,
         name: r.name,
         price: r.price,
+        brand: r.brand || '',
         url: r.url,
         category: r.category,
         menu_category: r.menu_category || '',
-        description: r.description,
+        description: r.description || '',
         main_image_url: r.main_image_url,
         detail_image_url: r.detail_image_url,
         available_methods: r.available_methods || '',
-        is_coupon_excludable: Number(r.is_coupon_excludable) || 0,
+        is_coupon_excludable: r.is_coupon_excludable !== undefined && r.is_coupon_excludable !== null ? Number(r.is_coupon_excludable) : 1,
+        itemCode: validItemCode,
+        stock: r.inventory_stock !== undefined && r.inventory_stock !== null ? Number(r.inventory_stock) : 0,
         status: r.status || 'ACTIVE',
-        inventory_item_id: r.inventory_item_id || null,
-        valid_item_code: validItemCode
+        inventory_item_id: r.inventory_item_id || null
       };
     });
 
@@ -184,7 +204,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: '인증이 필요합니다.' }, { status: 401 });
     }
 
-    const { id, name, price, url, category, menu_category, description, main_image_url, detail_image_url, available_methods, is_coupon_excludable, status, inventory_item_id } = await req.json();
+    const { id, name, price, brand, url, category, menu_category, description, main_image_url, detail_image_url, available_methods, is_coupon_excludable, status, inventory_item_id } = await req.json();
 
     if (!name) {
       return NextResponse.json({ success: false, error: 'Product name is required' }, { status: 400 });
@@ -192,11 +212,13 @@ export async function POST(req: Request) {
 
     const newId = id || Date.now().toString();
     const { insertRows } = require('../../../../egdesk-helpers');
+
     await insertRows('products', [{
       id: newId,
       tenant_id: tenantId,
       name,
       price: price || '',
+      brand: brand || '',
       url: url || '',
       category: category || '일반상품',
       menu_category: menu_category || '',
@@ -204,7 +226,7 @@ export async function POST(req: Request) {
       main_image_url: main_image_url || '',
       detail_image_url: detail_image_url || '',
       available_methods: available_methods || '',
-      is_coupon_excludable: Number(is_coupon_excludable) || 0,
+      is_coupon_excludable: is_coupon_excludable !== undefined && is_coupon_excludable !== null ? Number(is_coupon_excludable) : 1,
       status: status || 'ACTIVE',
       inventory_item_id: inventory_item_id || null
     }]);
@@ -222,7 +244,7 @@ export async function POST(req: Request) {
 // PUT /api/products : 상품 수정 (Hot Reload Trigger)
 export async function PUT(req: Request) {
   try {
-    const { id, name, price, url, category, menu_category, description, main_image_url, detail_image_url, available_methods, is_coupon_excludable, status, inventory_item_id } = await req.json();
+    const { id, name, price, brand, url, category, menu_category, description, main_image_url, detail_image_url, available_methods, is_coupon_excludable, status, inventory_item_id } = await req.json();
 
     if (!id) return NextResponse.json({ success: false, error: 'Product ID is required' }, { status: 400 });
 
@@ -230,7 +252,10 @@ export async function PUT(req: Request) {
 
     // [부분 갱신 지원] 단일 토글 상태 갱신 시
     if (is_coupon_excludable !== undefined && !name) {
-      await updateRows('products', { is_coupon_excludable: Number(is_coupon_excludable) }, { filters: { id: id } });
+      const isNum = !isNaN(Number(id));
+      const opt: any = { filters: { id: String(id) } };
+      if (isNum) opt.ids = [Number(id)];
+      await updateRows('products', { is_coupon_excludable: Number(is_coupon_excludable) }, opt);
       couponCache.clear();
       return NextResponse.json({ success: true, id });
     }
@@ -240,8 +265,12 @@ export async function PUT(req: Request) {
       const partialUpdates: any = { status };
       if (main_image_url !== undefined) partialUpdates.main_image_url = main_image_url;
       if (price !== undefined) partialUpdates.price = String(price);
+      if (brand !== undefined) partialUpdates.brand = String(brand);
       
-      await updateRows('products', partialUpdates, { filters: { id: id } });
+      const isNum = !isNaN(Number(id));
+      const opt: any = { filters: { id: String(id) } };
+      if (isNum) opt.ids = [Number(id)];
+      await updateRows('products', partialUpdates, opt);
       couponCache.clear();
       return NextResponse.json({ success: true, id });
     }
@@ -251,6 +280,7 @@ export async function PUT(req: Request) {
     const updates: any = {
       name,
       price: price || '',
+      brand: brand || '',
       url: url || '',
       category: category || '스토어용',
       menu_category: menu_category || '',
@@ -268,7 +298,13 @@ export async function PUT(req: Request) {
     console.log(`[Debug Product PUT] Received category:`, category);
     console.log(`[Debug Product PUT] Updates object:`, JSON.stringify(updates));
 
-    const result = await updateRows('products', updates, { filters: { id: id } });
+    const isNumericId = !isNaN(Number(id));
+    const updateOptions: any = { filters: { id: String(id) } };
+    if (isNumericId) {
+      updateOptions.ids = [Number(id)];
+    }
+
+    const result = await updateRows('products', updates, updateOptions);
     console.log(`[Debug Product PUT] updateRows DB result:`, JSON.stringify(result));
 
     // 캐시 무효화

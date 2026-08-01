@@ -2,8 +2,12 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows } from '../../../../../egdesk-helpers';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const targetProductIdParam = searchParams.get('productId');
+    const targetProductIdsParam = searchParams.get('productIds'); // 다중 선택된 상품 ID들 ("PROD-1,PROD-2")
+
     // 1. 네이버 블로그 설정 조회
     const settingsRes = await queryTable('naver_blog_marketing_settings', { filters: { id: '1' } });
     const settings = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0] : null;
@@ -16,31 +20,65 @@ export async function GET() {
       return NextResponse.json({ 
         success: true, 
         triggered: false, 
-        message: '현재 오토파일럿 모드가 비활성화 상태입니다. 수동 검토 모드로 동작 중입니다.' 
+        message: '현재 오토파일럿 모드가 비활성화 상태입니다. 상단 스위치를 ON으로 전환 후 즉시 구동해 주세요.' 
       });
     }
 
-    // 2. 전체 상품 목록 조회
-    const productsRes = await queryTable('products', {});
-    const products = productsRes.rows || [];
+    // 2. 사용자가 선택한 단일/다중 상품 파라미터 체크
+    let targetProduct: any = null;
 
-    if (products.length === 0) {
-      return NextResponse.json({ 
-        success: true, 
-        triggered: false, 
-        message: '오토파일럿 대상 상품이 없습니다. 먼저 상품을 등록해주세요.' 
-      });
+    if (targetProductIdsParam) {
+      const idsArr = targetProductIdsParam.split(',').map(s => s.trim()).filter(Boolean);
+      if (idsArr.length > 0) {
+        // 선택된 상품 풀(Pool) 중에서 픽업 (아직 포스팅 안 된 상품 우선, 또는 무작위 픽업)
+        const poolProductsRes = await queryTable('products', { limit: 10000 });
+        const poolProducts = (poolProductsRes.rows || []).filter((p: any) => !p.deleted_at && idsArr.includes(String(p.id)));
+
+        if (poolProducts.length > 0) {
+          const postsRes = await queryTable('crm_naver_blog_posts', { limit: 10000 });
+          const posts = postsRes.rows || [];
+          const postedProductIds = new Set(posts.map((post: any) => post.product_id).filter(Boolean));
+
+          targetProduct = poolProducts.find((prod: any) => !postedProductIds.has(prod.id));
+          if (!targetProduct) {
+            targetProduct = poolProducts[Math.floor(Math.random() * poolProducts.length)];
+          }
+        }
+      }
     }
 
-    // 3. 이미 네이버 블로그 게시글로 등록된 상품들의 ID 조회
-    const postsRes = await queryTable('crm_naver_blog_posts', {});
-    const posts = postsRes.rows || [];
-    const postedProductIds = new Set(posts.map((post: any) => post.product_id).filter(Boolean));
+    if (!targetProduct && targetProductIdParam) {
+      try {
+        const singleRes = await queryTable('products', { filters: { id: targetProductIdParam } });
+        if (singleRes.rows && singleRes.rows.length > 0) {
+          targetProduct = singleRes.rows[0];
+        }
+      } catch (e: any) {
+        console.warn('핀포인트 상품 조회 실패, 전체 스캔 폴백:', e.message);
+      }
+    }
 
-    // 아직 포스팅되지 않은 상품 중에서 하나를 선정 (모두 포스팅되었다면 랜덤 선정)
-    let targetProduct = products.find((prod: any) => !postedProductIds.has(prod.id));
+    // 3. 선택 상품 파라미터가 없거나 핀포인트 조회 실패 시 전체 상품 목록에서 자동 선정
     if (!targetProduct) {
-      targetProduct = products[Math.floor(Math.random() * products.length)];
+      const productsRes = await queryTable('products', { limit: 10000 });
+      const allProducts = (productsRes.rows || []).filter((p: any) => !p.deleted_at);
+
+      if (allProducts.length === 0) {
+        return NextResponse.json({ 
+          success: true, 
+          triggered: false, 
+          message: '오토파일럿 대상 상품이 없습니다. 먼저 상품을 선택/등록해주세요.' 
+        });
+      }
+
+      const postsRes = await queryTable('crm_naver_blog_posts', { limit: 10000 });
+      const posts = postsRes.rows || [];
+      const postedProductIds = new Set(posts.map((post: any) => post.product_id).filter(Boolean));
+
+      targetProduct = allProducts.find((prod: any) => !postedProductIds.has(prod.id));
+      if (!targetProduct) {
+        targetProduct = allProducts[Math.floor(Math.random() * allProducts.length)];
+      }
     }
 
     // 4. 상품 기반 오토파일럿 블로그 포스트 자동 생성
@@ -170,4 +208,8 @@ export async function GET() {
     console.error('네이버 블로그 오토파일럿 스케줄러 구동 에러:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
+}
+
+export async function POST(req: Request) {
+  return GET(req);
 }

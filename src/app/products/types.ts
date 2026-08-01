@@ -1,8 +1,8 @@
-// 상품 상세 객체 인터페이스
 export interface Product {
   id: string;
   name: string;
   price: string;
+  brand?: string;
   url: string;
   description: string;
   main_image_url: string;
@@ -11,12 +11,17 @@ export interface Product {
   menu_category: string;
   is_coupon_excludable?: number;
   available_methods?: string;
+  inventory_item_id?: number | string | null;
+  itemCode?: string;
+  stock?: number;
+  status?: string;
 }
 
 // 상품 추가 및 수정용 폼 데이터 인터페이스
 export interface ProductForm {
   name: string;
   price: string;
+  brand: string;
   url: string;
   description: string;
   main_image_url: string;

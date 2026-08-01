@@ -2,12 +2,16 @@
 
 import { apiFetch } from '@/lib/api';
 import React from "react";
-import { Search, Pencil, Trash2 } from "lucide-react";
+import { Search, Pencil, Trash2, RotateCcw } from "lucide-react";
 import { Product, HoverImage } from "../types";
 
 interface ProductTableProps {
   statusFilter?: 'ACTIVE' | 'DRAFT';
+  sourceFilter?: 'ALL' | 'INVENTORY' | 'MANUAL';
+  setSourceFilter?: (v: 'ALL' | 'INVENTORY' | 'MANUAL') => void;
   onApprove?: (id: string, price: string, mainImageUrl: string) => Promise<void>;
+  onUnapprove?: (id: string) => Promise<void>;
+  onBatchToggleCoupon?: (targetValue: number) => Promise<void>;
   searchQuery: string;
   setSearchQuery: (val: string) => void;
   filteredDataCount: number;
@@ -75,9 +79,20 @@ function DraftRow({
     <tr className="hover:bg-amber-50/10 transition-colors">
       <td className="p-4 text-xs font-mono text-slate-400">{String(product.id || '').slice(-6)}</td>
       <td className="p-4">
-        <span className="px-2.5 py-1 text-xs font-semibold text-amber-600 bg-amber-50 rounded-lg">완제품 연동</span>
+        <span className="px-2.5 py-1 text-xs font-extrabold text-purple-700 bg-purple-50 border border-purple-200/80 rounded-lg inline-flex items-center gap-1 shadow-3xs">
+          📦 재고 연동
+        </span>
       </td>
       <td className="p-4 text-sm text-slate-650 font-bold">{product.menu_category || '-'}</td>
+      <td className="p-4 text-sm font-bold text-slate-700">
+        {product.brand ? (
+          <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+            {product.brand}
+          </span>
+        ) : (
+          <span className="text-slate-300 font-semibold">-</span>
+        )}
+      </td>
       <td className="p-4">
         <div className="font-bold text-slate-800 text-sm">{product.name}</div>
         <p className="text-xs text-slate-450 mt-1 truncate max-w-[180px]" title={product.description}>
@@ -139,7 +154,11 @@ function DraftRow({
 
 export function ProductTable({
   statusFilter = 'ACTIVE',
+  sourceFilter = 'ALL',
+  setSourceFilter,
   onApprove,
+  onUnapprove,
+  onBatchToggleCoupon,
   searchQuery,
   setSearchQuery,
   filteredDataCount,
@@ -155,14 +174,56 @@ export function ProductTable({
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden w-full text-slate-800">
       <div className="p-4 border-b border-slate-100 bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-        <h2 className="font-bold text-slate-800 shrink-0">
-          {isDraftTab ? '승인 대기 완제품 목록' : '등록된 상품 목록'} ({filteredDataCount}건)
-        </h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="font-bold text-slate-800 shrink-0">
+            {isDraftTab ? '승인 대기 완제품 목록' : '등록된 상품 목록'} ({filteredDataCount}건)
+          </h2>
+
+          {/* 🏷️ 출처별 세부 필터 버튼 탭 (판매 중 탭일 때 노출) */}
+          {!isDraftTab && setSourceFilter && (
+            <div className="flex items-center p-0.5 rounded-xl bg-slate-200/60 text-xs font-bold shrink-0">
+              <button
+                type="button"
+                onClick={() => setSourceFilter('ALL')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  sourceFilter === 'ALL'
+                    ? 'bg-white text-slate-800 shadow-2xs font-extrabold'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                전체 출처
+              </button>
+              <button
+                type="button"
+                onClick={() => setSourceFilter('INVENTORY')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  sourceFilter === 'INVENTORY'
+                    ? 'bg-purple-600 text-white shadow-2xs font-extrabold'
+                    : 'text-purple-700 hover:bg-purple-50'
+                }`}
+              >
+                <span>📦 재고 연동</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSourceFilter('MANUAL')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  sourceFilter === 'MANUAL'
+                    ? 'bg-emerald-600 text-white shadow-2xs font-extrabold'
+                    : 'text-emerald-700 hover:bg-emerald-50'
+                }`}
+              >
+                <span>✍️ 직접 등록</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="relative w-full md:w-64">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
           <input
             type="text"
-            placeholder="상품명, 카테고리, 상세 설명 검색"
+            placeholder="상품명, 카테고리, 브랜드, 상세 설명 검색"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-full focus:ring-2 focus:ring-blue-500 outline-none text-xs bg-white font-semibold"
@@ -176,6 +237,7 @@ export function ProductTable({
               <th className="p-4 font-semibold text-slate-600">ID</th>
               <th className="p-4 font-semibold text-slate-600">분류</th>
               <th className="p-4 font-semibold text-slate-600">카테고리</th>
+              <th className="p-4 font-semibold text-slate-600">브랜드</th>
               <th className="p-4 font-semibold text-slate-600 w-[22%]">상품정보</th>
               {isDraftTab ? (
                 <>
@@ -187,7 +249,31 @@ export function ProductTable({
               ) : (
                 <>
                   <th className="p-4 font-semibold text-slate-600 text-right">가격</th>
-                  <th className="p-4 font-semibold text-slate-600">쿠폰 적용</th>
+                  <th className="p-4 font-semibold text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <span>쿠폰 적용</span>
+                      {onBatchToggleCoupon && (
+                        <div className="flex items-center gap-1 bg-slate-100 border border-slate-200/80 p-0.5 rounded-lg text-[10px] font-bold shadow-3xs">
+                          <button
+                            type="button"
+                            onClick={() => onBatchToggleCoupon(0)}
+                            className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all cursor-pointer shadow-3xs"
+                            title="목록 내 모든 상품 쿠폰 적용 허용 🟢"
+                          >
+                            전체 허용 🟢
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onBatchToggleCoupon(1)}
+                            className="px-1.5 py-0.5 rounded bg-white text-slate-500 hover:bg-slate-700 hover:text-white transition-all cursor-pointer shadow-3xs border border-slate-200"
+                            title="목록 내 모든 상품 쿠폰 적용 제외 ⚪"
+                          >
+                            전체 제외 ⚪
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </th>
                   <th className="p-4 font-semibold text-slate-600">상세 설명</th>
                   <th className="p-4 font-semibold text-slate-600 text-center w-24">관리</th>
                 </>
@@ -197,7 +283,7 @@ export function ProductTable({
           <tbody className="divide-y divide-slate-100">
             {paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-slate-450 font-bold text-sm">
+                <td colSpan={9} className="p-8 text-center text-slate-450 font-bold text-sm">
                   {totalDataLength === 0 ? "조회할 상품이 없습니다." : "검색 결과와 일치하는 상품이 없습니다."}
                 </td>
               </tr>
@@ -221,9 +307,32 @@ export function ProductTable({
                   <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="p-4 text-xs font-mono text-slate-400">{String(t.id || '').slice(-6)}</td>
                     <td className="p-4">
-                      <span className="px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-lg">{t.category || '스토어용'}</span>
+                      <div className="flex flex-col gap-1 items-start">
+                        {t.inventory_item_id ? (
+                          <span className="px-2.5 py-0.5 text-[11px] font-extrabold text-purple-700 bg-purple-50 border border-purple-200/80 rounded-lg inline-flex items-center gap-1.5 shadow-3xs">
+                            <span>📦 재고 연동</span>
+                            <span className="px-1.5 py-0.2 rounded-md bg-purple-200/60 text-purple-900 text-[10px] font-black">
+                              {t.stock !== undefined && t.stock !== null ? Number(t.stock).toLocaleString() : 0}개
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 text-[11px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 rounded-lg inline-flex items-center gap-1 shadow-3xs">
+                            ✍️ 직접 등록
+                          </span>
+                        )}
+                        <span className="text-[10px] font-bold text-slate-400 pl-0.5">{t.category || '스토어용'}</span>
+                      </div>
                     </td>
                     <td className="p-4 text-sm text-slate-600 font-bold">{t.menu_category || '-'}</td>
+                    <td className="p-4 text-sm font-bold text-slate-700">
+                      {t.brand ? (
+                        <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                          {t.brand}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 font-semibold">-</span>
+                      )}
+                    </td>
                     <td className="p-4">
                       <div className="flex items-center space-x-3">
                         {t.main_image_url ? (
@@ -241,9 +350,16 @@ export function ProductTable({
                         <div>
                           <div className="font-bold text-slate-800 text-sm">{t.name}</div>
                           <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-1">
-                            {t.available_methods ? t.available_methods.split(',').map((method: string, i: number) => (
-                              <span key={i} className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-bold">{method}</span>
-                            )) : null}
+                            {(() => {
+                              const methods = Array.isArray(t.available_methods) 
+                                ? t.available_methods 
+                                : (typeof t.available_methods === 'string' && t.available_methods.trim() 
+                                  ? (t.available_methods as string).split(',') 
+                                  : []);
+                              return methods.map((method: string, i: number) => (
+                                <span key={i} className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-bold">{method}</span>
+                              ));
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -252,26 +368,31 @@ export function ProductTable({
                       {isPriceTbd ? '상담후결정' : `${numericPrice.toLocaleString()}원`}
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center space-x-2">
-                        <button 
-                          type="button"
-                          onClick={() => onToggleCouponExclude(t.id, t.is_coupon_excludable || 0)}
-                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
-                            (t.is_coupon_excludable || 0) === 1 ? 'bg-slate-200' : 'bg-green-500 shadow-sm shadow-green-500/20'
-                          }`}
-                        >
-                          <span 
-                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                              (t.is_coupon_excludable || 0) === 1 ? 'translate-x-0' : 'translate-x-4'
-                            }`}
-                          />
-                        </button>
-                        <span className={`text-xs font-bold ${
-                          (t.is_coupon_excludable || 0) === 1 ? 'text-slate-400' : 'text-green-600'
-                        }`}>
-                          {(t.is_coupon_excludable || 0) === 1 ? '제외' : '허용'}
-                        </span>
-                      </div>
+                      {(() => {
+                        const isExcludable = (t.is_coupon_excludable !== undefined && t.is_coupon_excludable !== null) ? Number(t.is_coupon_excludable) : 1;
+                        return (
+                          <div className="flex items-center space-x-2">
+                            <button 
+                              type="button"
+                              onClick={() => onToggleCouponExclude(t.id, isExcludable)}
+                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
+                                isExcludable === 1 ? 'bg-slate-200' : 'bg-green-500 shadow-sm shadow-green-500/20'
+                              }`}
+                            >
+                              <span 
+                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                  isExcludable === 1 ? 'translate-x-0' : 'translate-x-4'
+                                }`}
+                              />
+                            </button>
+                            <span className={`text-xs font-bold ${
+                              isExcludable === 1 ? 'text-slate-400' : 'text-green-600'
+                            }`}>
+                              {isExcludable === 1 ? '제외' : '허용'}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="p-4 text-slate-500 text-xs">
                       <p className="truncate max-w-[180px] font-medium" title={t.description}>{t.description || '-'}</p>
@@ -287,11 +408,11 @@ export function ProductTable({
                           <Pencil className="w-4 h-4"/>
                         </button>
                         <button 
-                          onClick={() => onDeleteClick(t.id)} 
-                          className="text-slate-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50 border-0 bg-transparent cursor-pointer" 
-                          title="삭제"
+                          onClick={() => onUnapprove ? onUnapprove(t.id) : onDeleteClick(t.id)} 
+                          className="text-slate-400 hover:text-amber-600 transition-colors p-2 rounded-lg hover:bg-amber-50 border-0 bg-transparent cursor-pointer" 
+                          title="승인 취소 (승인 대기 완제품 탭으로 되돌리기)"
                         >
-                          <Trash2 className="w-4 h-4"/>
+                          <RotateCcw className="w-4 h-4 text-amber-500" />
                         </button>
                       </div>
                     </td>

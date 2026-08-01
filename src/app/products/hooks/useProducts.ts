@@ -10,6 +10,7 @@ export function useProducts() {
   const [form, setForm] = useState<ProductForm>({
     name: '',
     price: '',
+    brand: '',
     url: '',
     description: '',
     main_image_url: '',
@@ -27,6 +28,7 @@ export function useProducts() {
   const [itemsPerPage, setItemsPerPage, isLimitRestored] = usePersistedState('products_itemsPerPage', 10);
   const [isUploadingExcel, setIsUploadingExcel] = useState(false);
   const [statusFilter, setStatusFilter, isFilterRestored] = usePersistedState<'ACTIVE' | 'DRAFT'>('products_statusFilter', 'ACTIVE');
+  const [sourceFilter, setSourceFilter] = useState<'ALL' | 'INVENTORY' | 'MANUAL'>('ALL');
   const [totalCount, setTotalCount] = useState(0);
   const [activeCount, setActiveCount] = useState(0);
   const [draftCount, setDraftCount] = useState(0);
@@ -35,7 +37,7 @@ export function useProducts() {
   useEffect(() => {
     if (!isSearchRestored || !isFilterRestored) return;
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, isSearchRestored, isFilterRestored]);
+  }, [searchQuery, statusFilter, sourceFilter, isSearchRestored, isFilterRestored]);
 
   // 페이지, 필터, 검색어가 최종 결정되면 데이터 요청
   useEffect(() => {
@@ -87,6 +89,7 @@ export function useProducts() {
           const mappedProducts = rawRows.map((row: any) => {
             const nameVal = row['상품명'] || row['상품 이름'] || row['이름'] || row['productName'] || row['name'] || '';
             const priceVal = row['가격'] || row['단가'] || row['판매가'] || row['금액'] || row['price'] || '';
+            const brandVal = row['브랜드'] || row['브랜드명'] || row['제조사'] || row['brand'] || '';
             const menuCategoryVal = row['카테고리'] || row['분류'] || row['메뉴분류'] || row['menuCategory'] || row['menu_category'] || '';
             const methodsVal = row['수령방식'] || row['수령 방식'] || row['배송수단'] || row['methods'] || '매장에서,가져가기,배달,배송';
             const descriptionVal = row['상세설명'] || row['설명'] || row['비고'] || row['description'] || '';
@@ -95,6 +98,7 @@ export function useProducts() {
             return {
               name: nameVal,
               price: String(priceVal),
+              brand: brandVal,
               menu_category: menuCategoryVal,
               available_methods: methodsVal,
               description: descriptionVal,
@@ -182,11 +186,17 @@ export function useProducts() {
   };
 
   // ⚡ 이미 서버 사이드에서 필터링 및 페이징이 완료되었으므로 바로 바인딩
-  const filteredData = data;
-  const totalPages = Math.ceil(totalCount / itemsPerPage);
+  const filteredData = data.filter(p => {
+    if (sourceFilter === 'INVENTORY') return !!p.inventory_item_id;
+    if (sourceFilter === 'MANUAL') return !p.inventory_item_id;
+    return true;
+  });
+
+  const displayTotalCount = sourceFilter === 'ALL' ? totalCount : filteredData.length;
+  const totalPages = Math.ceil(displayTotalCount / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + data.length;
-  const paginatedData = data;
+  const endIndex = startIndex + filteredData.length;
+  const paginatedData = filteredData;
 
   const addData = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,6 +220,7 @@ export function useProducts() {
         setForm({
           name: '',
           price: '',
+          brand: '',
           url: '',
           description: '',
           main_image_url: '',
@@ -239,6 +250,7 @@ export function useProducts() {
     setForm({
       name: product.name || '',
       price: isPriceTbd ? '' : (product.price || ''),
+      brand: product.brand || '',
       url: product.url || '',
       description: product.description || '',
       main_image_url: product.main_image_url || '',
@@ -255,6 +267,7 @@ export function useProducts() {
     setForm({
       name: '',
       price: '',
+      brand: '',
       url: '',
       description: '',
       main_image_url: '',
@@ -292,6 +305,36 @@ export function useProducts() {
       const json = await res.json();
       if (!json.success) {
         alert('쿠폰 적용 여부 변경에 실패했습니다: ' + json.error);
+        fetchData();
+      }
+    } catch (e) {
+      alert('네트워크 오류가 발생했습니다.');
+      fetchData();
+    }
+  };
+
+  // ⚡ 원클릭 쿠폰 적용 일괄 변경 핸들러 (0: 전체 허용, 1: 전체 제외)
+  const handleBatchToggleCoupon = async (targetValue: number) => {
+    const label = targetValue === 0 ? '전체 허용 🟢' : '전체 제외 ⚪';
+    if (!confirm(`현재 표시 중인 상품들의 쿠폰 적용 상태를 [${label}] 상태로 일괄 변경하시겠습니까?`)) return;
+
+    const currentIds = paginatedData.map(p => p.id);
+    setData(prev => prev.map(p => currentIds.includes(p.id) ? { ...p, is_coupon_excludable: targetValue } : p));
+
+    try {
+      const res = await apiFetch('/api/products/batch-coupon', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_coupon_excludable: targetValue,
+          productIds: currentIds
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        fetchData();
+      } else {
+        alert('쿠폰 적용 일괄 변경 실패: ' + json.error);
         fetchData();
       }
     } catch (e) {
@@ -351,6 +394,26 @@ export function useProducts() {
     }
   };
 
+  // ↩️ 승인 취소 핸들러 (ACTIVE -> DRAFT 되돌리기)
+  const unapproveProduct = async (id: string) => {
+    if (!confirm('이 상품을 승인 취소하고 승인 대기 완제품(DRAFT) 탭으로 되돌리시겠습니까?')) return;
+    try {
+      const res = await apiFetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: 'DRAFT' })
+      });
+      const json = await res.json();
+      if (json.success) {
+        fetchData();
+      } else {
+        alert('승인 취소 처리 중 오류 발생: ' + json.error);
+      }
+    } catch (err) {
+      alert('네트워크 오류가 발생했습니다.');
+    }
+  };
+
   return {
     data,
     form, setForm,
@@ -362,10 +425,12 @@ export function useProducts() {
     itemsPerPage, setItemsPerPage,
     isUploadingExcel,
     statusFilter, setStatusFilter,
+    sourceFilter, setSourceFilter,
     approveProduct,
+    unapproveProduct,
     activeCount,
     draftCount,
-    totalCount,
+    totalCount: displayTotalCount,
     totalPages,
     startIndex,
     endIndex,
@@ -379,6 +444,7 @@ export function useProducts() {
     cancelEdit,
     deleteData,
     toggleCouponExclude,
+    handleBatchToggleCoupon,
     existingCategories,
     handleFileUpload
   };

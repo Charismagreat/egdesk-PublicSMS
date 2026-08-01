@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Search, Sliders, Heart, MessageCircle } from 'lucide-react';
+import { Search, Sliders, Heart, MessageCircle, ImageOff } from 'lucide-react';
 import { NaverPost } from '../types';
 
 // 커스텀 네이버 아이콘 SVG 컴포넌트
@@ -130,7 +130,7 @@ export default function MobilePreview({
             </div>
 
             {/* 1. 대표 이미지 렌더링 */}
-            {viewMainImage && (
+            {viewMainImage ? (
               <div className="relative rounded-2xl overflow-hidden border border-slate-100 bg-slate-50 aspect-video shadow-xs">
                 <img 
                   src={viewMainImage} 
@@ -140,6 +140,12 @@ export default function MobilePreview({
                 <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-lg bg-black/60 text-white text-[8px] font-bold tracking-wider uppercase">
                   대표 이미지
                 </div>
+              </div>
+            ) : (
+              <div className="relative rounded-2xl overflow-hidden border border-dashed border-slate-300 bg-slate-100/70 aspect-video flex flex-col items-center justify-center text-slate-400 p-4 text-center select-none">
+                <ImageOff className="w-6 h-6 text-slate-400 mb-1.5" />
+                <span className="text-[10px] font-extrabold text-slate-500">등록된 대표 이미지가 없습니다</span>
+                <span className="text-[8px] text-slate-400 mt-1">상품에 이미지를 첨부하거나 AI 생성을 실행해 주세요</span>
               </div>
             )}
 

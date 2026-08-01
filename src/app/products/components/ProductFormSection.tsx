@@ -52,6 +52,13 @@ export function ProductFormSection({
               className="flex-[2] border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-pink-500 font-semibold text-sm" 
               required
             />
+            <input 
+              type="text" 
+              placeholder="브랜드명 (예: 삼성, LG, 자사)" 
+              value={form.brand || ''} 
+              onChange={e => setForm(prev => ({...prev, brand: e.target.value}))} 
+              className="w-40 border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-pink-500 font-semibold text-sm" 
+            />
             <div className="flex-[1] flex items-center gap-2 border rounded-lg px-3 py-2 bg-white">
               <input 
                 type="text" 

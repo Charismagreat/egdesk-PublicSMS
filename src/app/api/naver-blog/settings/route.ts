@@ -94,9 +94,9 @@ export async function POST(req: Request) {
       autopilot_interval: data.autopilot_interval || 'DAILY',
       autopilot_time: data.autopilot_time || '10:00',
       tone_style: data.tone_style || '정보제공형',
-      naver_blog_id: data.naver_blog_id || '',
-      api_client_id: '',
-      api_client_secret: '',
+      naver_blog_id: data.naver_blog_id !== undefined ? data.naver_blog_id : (checkExist.rows?.[0]?.naver_blog_id || ''),
+      api_client_id: data.api_client_id !== undefined ? data.api_client_id : (checkExist.rows?.[0]?.api_client_id || ''),
+      api_client_secret: data.api_client_secret !== undefined ? data.api_client_secret : (checkExist.rows?.[0]?.api_client_secret || ''),
     };
 
     if (checkExist.rows && checkExist.rows.length > 0) {

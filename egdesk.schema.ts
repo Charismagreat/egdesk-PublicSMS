@@ -59,6 +59,7 @@ export const COLUMN_DEFINITIONS = {
     { name: 'id', type: 'TEXT', notNull: true },
     { name: 'name', type: 'TEXT', notNull: true },
     { name: 'price', type: 'TEXT' },
+    { name: 'brand', type: 'TEXT' },
     { name: 'url', type: 'TEXT' },
     { name: 'description', type: 'TEXT' },
     { name: 'main_image_url', type: 'TEXT' },

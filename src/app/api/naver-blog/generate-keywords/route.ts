@@ -17,6 +17,7 @@ interface KeywordResponse {
   singleKeywords: KeywordItem[];
   petKeywords: KeywordItem[];
   officeKeywords: KeywordItem[];
+  dynamicPersonas?: any[];
 }
 
 export async function POST(req: Request) {
@@ -48,20 +49,19 @@ export async function POST(req: Request) {
 - 상품 설명: ${description || '설명 없음'}
 
 [미션 및 요구사항]
-1. 다음 5가지 세그먼트별로 최적화된 키워드를 각각 정확히 4개씩 생성하세요:
-   - specKeywords: 상품의 스펙, 사양, 성능비교, 가성비를 다루는 메인/서브 키워드
-   - familyKeywords: 육아맘, 아기 키우는 가정, 패밀리 타겟을 위한 실생활 밀착형 키워드
-   - singleKeywords: 원룸, 자취생, 1인가구의 실용성과 공간 활용을 공략하는 키워드
-   - petKeywords: 반려동물(강아지, 고양이)을 키우는 집사들을 공략하는 키워드
-   - officeKeywords: 회사, 사무실, 탕비실, 직장인 업무 효율을 공략하는 키워드
+1. 기본 4대 페르소나(familyKeywords, singleKeywords, petKeywords, officeKeywords)와 스펙 키워드(specKeywords) 외에도, **해당 상품 카테고리 및 특징에 특화된 1~2개의 '동적 맞춤 페르소나(dynamicPersonas)'**를 추가로 도출하세요.
+   - specKeywords: 상품 스펙/성능/가성비 키워드 4개
+   - familyKeywords: 육아맘, 아기 키우는 가정, 패밀리 타겟 키워드 4개
+   - singleKeywords: 원룸, 자취생, 1인가구 타겟 키워드 4개
+   - petKeywords: 반려동물 키우는 집사 타겟 키워드 4개
+   - officeKeywords: 회사, 사무실, 직장인 타겟 키워드 4개
+   - dynamicPersonas: 상품의 성격(예: 캠핑, 뷰티, 헬스, 여행, 시니어 등)에 특화된 맞춤 페르소나 객체 배열 (각 객체는 id, name, icon, keywords: KeywordItem[] 4개 포함)
 
-2. 각 키워드는 반드시 아래의 JSON 포맷 형식을 준수해야 하며, 다른 텍스트 설명 없이 JSON만 응답해야 합니다.
-   - keyword: 블로그 타겟 키워드 (예: "가성비 무선청소기 추천", "아기있는집 가습기")
-   - competition: 경쟁 정도 ("HIGH", "MEDIUM", "LOW" 중 하나로 영문 대문자여야 함)
-   - volume: 월간 검색량 (숫자와 쉼표로 표기된 문자열, 예: "4,500" 또는 "12,800")
-   - reason: 해당 키워드를 추천하는 이유 (네이버 블로그 검색 유입 타겟층의 니즈를 분석한 짤막한 한글 설명)
-
-반드시 마크다운 코드 블록(\`\`\`json ... \`\`\`) 없이 순수 JSON 문자열만 출력되도록 하거나, 규격에 맞는 유효한 JSON 포맷을 반환하십시오.
+2. 각 키워드는 반드시 아래의 JSON 포맷 형식을 준수해야 합니다:
+   - keyword: 블로그 타겟 키워드
+   - competition: 경쟁 정도 ("HIGH", "MEDIUM", "LOW" 중 하나)
+   - volume: 월간 검색량 (예: "4,500")
+   - reason: 추천 이유 짤막한 한글 설명
 `;
 
         const response = await fetchGeminiWithFallback(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
@@ -105,7 +105,7 @@ export async function POST(req: Request) {
           }
 
           if (rawText) {
-            aiResponse = JSON.parse(rawText.trim()) as KeywordResponse;
+            aiResponse = JSON.parse(rawText.trim()) as any;
           }
         } else {
           console.error('Gemini API 응답 실패:', response.statusText);
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // AI 호출이 실패했거나 API 키가 없는 경우 고품질 폴백 엔진 가동 (기존의 우수한 시뮬레이션 데이터를 유연하게 가공)
+    // AI 호출이 실패했거나 API 키가 없는 경우 고품질 폴백 엔진 가동
     if (!aiResponse) {
       const firstWord = cleanName.split(' ')[0] || '추천상품';
       
@@ -149,6 +149,19 @@ export async function POST(req: Request) {
           { keyword: `회의실 ${firstWord} 추천`, competition: 'LOW', volume: '1,500', reason: '공용 공간 인테리어와 정숙한 소음 사양 서치 키워드' },
           { keyword: `회사 탕비실 꿀템`, competition: 'LOW', volume: '1,100', reason: '복지 및 가성비 높은 세련된 사무환경 오브제 니즈' },
           { keyword: `업무효율 가전 추천`, competition: 'MEDIUM', volume: '3,200', reason: '업무 피로 경감 및 직장인 공감 마케팅 연동' }
+        ],
+        dynamicPersonas: [
+          {
+            id: 'category_special',
+            name: `${firstWord} 특화/아웃도어`,
+            icon: '🏕️',
+            keywords: [
+              { keyword: `차박 캠핑 ${firstWord}`, competition: 'LOW', volume: '3,100', reason: '야외 활동 및 차박 족들이 집중 검색하는 롱테일 키워드' },
+              { keyword: `아웃도어 필수템 ${firstWord}`, competition: 'MEDIUM', volume: '6,400', reason: '주말 야외 레저 활동 유입률 우수' },
+              { keyword: `휴대용 ${firstWord} 추천`, competition: 'LOW', volume: '2,200', reason: '경량화 사양을 선호하는 맞춤 키워드' },
+              { keyword: `감성 캠핑용품 ${itemBrand}`, competition: 'LOW', volume: '1,800', reason: '디자인과 감성 소비를 자극하는 키워드' }
+            ]
+          }
         ]
       };
     }

@@ -26,20 +26,22 @@ export async function GET(req: Request) {
       productMap.set(prod.id, prod);
     });
 
-    // 게시글 목록에 상품 정보 결합
-    const mergedPosts = posts.map((post: any) => {
-      const product = post.product_id ? productMap.get(post.product_id) : null;
-      return {
-        ...post,
-        product: product ? {
-          id: product.id,
-          name: product.name,
-          price: product.price,
-          main_image_url: product.main_image_url,
-          url: product.url,
-        } : null
-      };
-    });
+    // 게시글 목록에 상품 정보 결합 (소프트 삭제 배제 및 연동)
+    let mergedPosts = posts
+      .filter((post: any) => !post.deleted_at)
+      .map((post: any) => {
+        const product = post.product_id ? productMap.get(post.product_id) : null;
+        return {
+          ...post,
+          product: product ? {
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            main_image_url: product.main_image_url,
+            url: product.url,
+          } : null
+        };
+      });
 
     // scheduled_at을 기준으로 정렬 (예약 시간이 가까운 것/최신 것 순)
     mergedPosts.sort((a: any, b: any) => {

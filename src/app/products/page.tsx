@@ -22,7 +22,9 @@ export default function ProductsPage() {
     itemsPerPage, setItemsPerPage,
     isUploadingExcel,
     statusFilter, setStatusFilter,
+    sourceFilter, setSourceFilter,
     approveProduct,
+    unapproveProduct,
     activeCount,
     draftCount,
     totalCount,
@@ -38,6 +40,7 @@ export default function ProductsPage() {
     cancelEdit,
     deleteData,
     toggleCouponExclude,
+    handleBatchToggleCoupon,
     existingCategories,
     handleFileUpload
   } = useProducts();
@@ -103,7 +106,11 @@ export default function ProductsPage() {
       {/* 실시간 필터링이 적용된 등록된 상품 목록 그리드 테이블 영역 */}
       <ProductTable
         statusFilter={statusFilter}
+        sourceFilter={sourceFilter}
+        setSourceFilter={setSourceFilter}
         onApprove={approveProduct}
+        onUnapprove={unapproveProduct}
+        onBatchToggleCoupon={handleBatchToggleCoupon}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         filteredDataCount={totalCount}

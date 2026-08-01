@@ -76,6 +76,7 @@ export default function NaverBlogMarketingPortal() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
   
   // AI 생성 폼 상태
   const [postTitle, setPostTitle] = useState('');
@@ -119,13 +120,14 @@ export default function NaverBlogMarketingPortal() {
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
 
   // AI Keyword Lab 상태
-  const [activePersona, setActivePersona] = useState<'family' | 'single' | 'pet' | 'office'>('family');
+  const [activePersona, setActivePersona] = useState<string>('family');
   const [generatedKeywords, setGeneratedKeywords] = useState<{
     specKeywords: KeywordItem[];
     familyKeywords: KeywordItem[];
     singleKeywords: KeywordItem[];
     petKeywords: KeywordItem[];
     officeKeywords: KeywordItem[];
+    dynamicPersonas?: any[];
   }>({
     specKeywords: [],
     familyKeywords: [],
@@ -211,18 +213,18 @@ export default function NaverBlogMarketingPortal() {
   const viewContent = selectedPostForPreview ? selectedPostForPreview.content : (postContent || '좌측 상품을 클릭하고 AI 원고 빌더를 실행하거나 수동으로 매력적인 SEO 포스팅 본문을 집필해 주세요. 실시간 네이버 모바일 블로그 뷰어 스킨에 맞춰 마크다운과 이모지가 완벽 렌더링됩니다.');
   const viewKeywords = selectedPostForPreview ? selectedPostForPreview.target_keywords : targetKeywords;
   
-  let viewMainImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80';
-  let viewSubImage = 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&auto=format&fit=crop&q=80';
+  let viewMainImage = '';
+  let viewSubImage = '';
 
   if (selectedPostForPreview) {
-    viewMainImage = selectedPostForPreview.image_url;
-    viewSubImage = selectedPostForPreview.sub_image_url || viewSubImage;
+    viewMainImage = selectedPostForPreview.image_url || '';
+    viewSubImage = selectedPostForPreview.sub_image_url || '';
   } else {
-    if (imageTab === 'product' && selectedProduct?.main_image_url) {
-      viewMainImage = selectedProduct.main_image_url;
-    } else if (imageTab === 'ai' && generatedImageUrl) {
-      viewMainImage = generatedImageUrl;
-      viewSubImage = generatedSubImageUrl || viewSubImage;
+    if (imageTab === 'product') {
+      viewMainImage = selectedProduct?.main_image_url || '';
+    } else if (imageTab === 'ai') {
+      viewMainImage = generatedImageUrl || '';
+      viewSubImage = generatedSubImageUrl || '';
     }
   }
 
@@ -235,6 +237,9 @@ export default function NaverBlogMarketingPortal() {
         setSettings(data.settings);
         setHasSession(data.has_session === 1);
         
+        setApiClientIdInput(data.settings.api_client_id || '');
+        setApiClientSecretInput(data.settings.api_client_secret || '');
+
         if (data.settings.naver_blog_id) {
           setNaverBlogIdInput(data.settings.naver_blog_id);
           
@@ -245,11 +250,12 @@ export default function NaverBlogMarketingPortal() {
             setActiveModeTab('rpa');
             setIsAccountConnected(data.has_session === 1);
           }
-          
-          setApiClientIdInput(data.settings.api_client_id || '');
-          setApiClientSecretInput(data.settings.api_client_secret || '');
         } else {
-          setActiveModeTab('rpa');
+          if (data.settings.api_client_id && data.settings.api_client_secret) {
+            setActiveModeTab('api');
+          } else {
+            setActiveModeTab('rpa');
+          }
           setIsAccountConnected(false);
         }
       }
@@ -272,12 +278,14 @@ export default function NaverBlogMarketingPortal() {
 
   const fetchProducts = async () => {
     try {
-      const res = await apiFetch('/api/products');
+      const res = await apiFetch('/api/products?status=ACTIVE&limit=1000');
       const data = await res.json();
       if (data.success && data.products) {
         setProducts(data.products);
         if (data.products.length > 0) {
-          setSelectedProduct(data.products[0]);
+          // 승인 완료(ACTIVE) 상품 또는 브랜드가 정의된 정식 상품을 1순위 기본 선택
+          const primaryProduct = data.products.find((p: any) => p.status === 'ACTIVE' || (p.brand && p.brand !== '미분류')) || data.products[0];
+          setSelectedProduct(primaryProduct);
         }
       }
     } catch (err) {
@@ -541,7 +549,11 @@ export default function NaverBlogMarketingPortal() {
   const handleTriggerAutopilot = async () => {
     showToast('네이버 블로그 오토파일럿 AI 마케터를 즉시 기동합니다...', 'info');
     try {
-      const res = await apiFetch('/api/naver-blog/scheduler');
+      const selectedIds = selectedProducts.map(p => p.id).join(',');
+      const targetQuery = selectedIds ? `?productIds=${encodeURIComponent(selectedIds)}` : (selectedProduct ? `?productId=${selectedProduct.id}` : '');
+      const res = await apiFetch(`/api/naver-blog/scheduler${targetQuery}`, {
+        method: 'POST'
+      });
       const data = await res.json();
       if (data.success) {
         if (data.triggered) {
@@ -945,6 +957,8 @@ export default function NaverBlogMarketingPortal() {
             products={products}
             selectedProduct={selectedProduct}
             setSelectedProduct={setSelectedProduct}
+            selectedProducts={selectedProducts}
+            setSelectedProducts={setSelectedProducts}
             productSearchQuery={productSearchQuery}
             setProductSearchQuery={setProductSearchQuery}
             setSelectedPostForPreview={setSelectedPostForPreview}

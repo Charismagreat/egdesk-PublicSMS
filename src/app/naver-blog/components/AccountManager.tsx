@@ -57,6 +57,18 @@ export default function AccountManager({
     ? (!!settings.api_client_id && !!settings.naver_blog_id)
     : (hasSession && !!settings.naver_blog_id);
 
+  // 공식 API 설정 변경점 체크
+  const isApiSettingsUnchanged = 
+    naverBlogIdInput.trim() === (settings.naver_blog_id || '').trim() &&
+    apiClientIdInput.trim() === (settings.api_client_id || '').trim() &&
+    apiClientSecretInput.trim() === (settings.api_client_secret || '').trim();
+  const isApiFormEmpty = !naverBlogIdInput.trim() || !apiClientIdInput.trim() || !apiClientSecretInput.trim();
+  const isApiSaveDisabled = isApiFormEmpty || isApiSettingsUnchanged;
+
+  // RPA 설정 변경점 체크
+  const isRpaIdUnchanged = naverBlogIdInput.trim() === (settings.naver_blog_id || '').trim();
+  const isRpaSaveDisabled = !naverBlogIdInput.trim() || isRpaIdUnchanged;
+
   return (
     <div className="space-y-8">
       {/* 계정 연동 세팅 관리 카드 (RPA & API 하이브리드형) */}
@@ -131,7 +143,7 @@ export default function AccountManager({
                         : 'RPA 연동이 필요합니다'}
                     </span>
                     <span className={`w-2.5 h-2.5 rounded-full ${
-                      hasSession && settings.naver_blog_id ? 'bg-emerald-550 animate-pulse' : 'bg-rose-500'
+                      hasSession && settings.naver_blog_id ? 'bg-emerald-600 animate-pulse' : 'bg-rose-500'
                     }`}></span>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
@@ -173,7 +185,7 @@ export default function AccountManager({
                 onClick={handleSyncRpaSession}
                 className="py-3 rounded-2xl bg-white text-slate-700 hover:bg-slate-50 border border-slate-250 transition-all text-xs font-bold active:scale-98 flex items-center justify-center gap-2 shadow-xs cursor-pointer"
               >
-                <RefreshCw className="w-4 h-4 text-emerald-550" />
+                <RefreshCw className="w-4 h-4 text-emerald-600" />
                 세션 동기화 실시간 갱신 🔄
               </button>
             </div>
@@ -192,9 +204,14 @@ export default function AccountManager({
                   />
                   <button
                     type="submit"
-                    className="px-5 py-2.5 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 transition-all text-xs font-bold shrink-0 cursor-pointer active:scale-95 shadow-xs"
+                    disabled={isRpaSaveDisabled}
+                    className={`px-5 py-2.5 rounded-2xl transition-all text-xs font-bold shrink-0 shadow-xs ${
+                      isRpaSaveDisabled
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300/50'
+                        : 'bg-slate-900 text-white hover:bg-slate-800 cursor-pointer active:scale-95'
+                    }`}
                   >
-                    저장 💾
+                    {isRpaIdUnchanged && naverBlogIdInput.trim() ? '최신 상태 ✅' : '저장 💾'}
                   </button>
                 </div>
               </div>
@@ -296,10 +313,15 @@ export default function AccountManager({
               </div>
               <button
                 type="submit"
-                className="w-full py-3 rounded-2xl bg-slate-900 text-white hover:bg-sky-550 transition-all text-xs font-bold active:scale-98 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                disabled={isApiSaveDisabled}
+                className={`w-full py-3 rounded-2xl transition-all text-xs font-bold flex items-center justify-center gap-2 shadow-sm ${
+                  isApiSaveDisabled
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300/50'
+                    : 'bg-slate-900 text-white hover:bg-sky-600 active:scale-98 cursor-pointer'
+                }`}
               >
                 <Sliders className="w-4 h-4" />
-                API 안전 정보 저장 및 연동 💾
+                {isApiSettingsUnchanged && !isApiFormEmpty ? 'API 정보 변경 사항 없음 (최신 상태) ✅' : 'API 안전 정보 저장 및 연동 💾'}
               </button>
             </form>
           </div>
@@ -327,12 +349,12 @@ export default function AccountManager({
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button 
               onClick={handleTriggerAutopilot}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-bold bg-emerald-550 text-white hover:bg-emerald-600 hover:shadow-md transition-all active:scale-95 cursor-pointer shadow-sm"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md transition-all active:scale-95 cursor-pointer shadow-sm"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              오토파일럿 AI 즉시 구동
+              <RefreshCw className="w-3.5 h-3.5 text-white" />
+              <span>오토파일럿 AI 즉시 구동</span>
             </button>
-            <div className="px-3.5 py-2 rounded-2xl bg-white border border-slate-200 text-xs text-slate-550 font-bold flex items-center gap-2">
+            <div className="px-3.5 py-2 rounded-2xl bg-white border border-slate-200 text-xs text-slate-700 font-bold flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-[#03C75A] animate-pulse"></span>
               <span>데몬 대기 중</span>
               <button 
@@ -349,7 +371,7 @@ export default function AccountManager({
             >
               {settings.is_autopilot === 1 ? (
                 <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-50 border border-emerald-250 text-emerald-600 font-extrabold text-xs cursor-pointer shadow-2xs">
-                  <ToggleRight className="w-5 h-5 text-emerald-550" /> ON (자동화 작동)
+                  <ToggleRight className="w-5 h-5 text-emerald-600" /> ON (자동화 작동)
                 </div>
               ) : (
                 <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-slate-100 border border-slate-250 text-slate-400 font-bold text-xs cursor-pointer shadow-2xs">

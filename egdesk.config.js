@@ -9,7 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TABLE_NAMES = exports.MAIN_TABLE = exports.TABLES = exports.EGDESK_CONFIG = void 0;
 exports.getTableByName = getTableByName;
 exports.EGDESK_CONFIG = {
-    apiUrl: 'https://tunneling-service.onrender.com/t/mcp-server-fxkud1',
+    apiUrl: 'http://localhost:8080',
     apiKey: 'a67ddc0f-7e2b-4997-9a0b-9667a74c89d0',
 };
 exports.TABLES = {

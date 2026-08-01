@@ -42,6 +42,7 @@ export async function syncInventoryToProduct(item: any, action: 'INSERT' | 'UPDA
         tenant_id: item.tenant_id || 'default',
         name: item.name || '',
         price: item.price !== undefined && item.price !== null ? String(item.price) : '0',
+        brand: item.brand || '',
         description: item.description || '',
         category: item.category || '',
         updated_at: nowStr,
@@ -79,7 +80,7 @@ export async function syncInventoryToProduct(item: any, action: 'INSERT' | 'UPDA
         productPayload.inventory_item_id = item.id;
         productPayload.uuid = item.uuid || null;
         productPayload.is_estimate_price = 0;
-        productPayload.is_coupon_excludable = 0;
+        productPayload.is_coupon_excludable = 1; // 기본값: 쿠폰 적용 제외(비활성화)
 
         await insertRows('products', [productPayload]);
         console.log(`[Sync] Created new DRAFT product linked to inventory item ID: ${item.id}`);
@@ -87,5 +88,23 @@ export async function syncInventoryToProduct(item: any, action: 'INSERT' | 'UPDA
     }
   } catch (error) {
     console.error(`[Sync Error] Failed to sync inventory item ${item.id} to products:`, error);
+  }
+}
+
+/**
+ * 기존 모든 완제품 품목(inventory_items)을 products 테이블에 일괄 백필 동기화합니다.
+ */
+export async function backfillFinishedGoodsToProducts() {
+  try {
+    const invRes = await queryTable('inventory_items', { limit: 10000 });
+    const invItems = invRes.rows || [];
+    const finishedGoods = invItems.filter((i: any) => !i.deleted_at && (i.type === '완제품' || i.type === 'product'));
+    
+    console.log(`[Backfill] Found ${finishedGoods.length} finished goods in inventory_items.`);
+    for (const item of finishedGoods) {
+      await syncInventoryToProduct(item, 'UPDATE');
+    }
+  } catch (err: any) {
+    console.error('[Backfill Error] Failed to backfill products:', err.message);
   }
 }

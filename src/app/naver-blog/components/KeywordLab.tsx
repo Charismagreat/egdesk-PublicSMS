@@ -2,18 +2,19 @@
 
 import React from 'react';
 import { Sparkles } from 'lucide-react';
-import { Product, KeywordItem } from '../types';
+import { Product, KeywordItem, DynamicPersona } from '../types';
 
 interface KeywordLabProps {
   selectedProduct: Product | null;
-  activePersona: 'family' | 'single' | 'pet' | 'office';
-  setActivePersona: (v: 'family' | 'single' | 'pet' | 'office') => void;
+  activePersona: string;
+  setActivePersona: (v: string) => void;
   generatedKeywords: {
     specKeywords: KeywordItem[];
     familyKeywords: KeywordItem[];
     singleKeywords: KeywordItem[];
     petKeywords: KeywordItem[];
     officeKeywords: KeywordItem[];
+    dynamicPersonas?: DynamicPersona[];
   };
   isGeneratingKeywords: boolean;
   handleKeywordInject: (keyword: string, event: React.MouseEvent<HTMLButtonElement>) => void;
@@ -179,6 +180,22 @@ export default function KeywordLab({
             <span className="text-sm">🏢</span>
             <span>오피스</span>
           </button>
+
+          {/* ⚡ 카테고리 특화 동적 맞춤 페르소나 탭 */}
+          {generatedKeywords.dynamicPersonas && generatedKeywords.dynamicPersonas.map((dp) => (
+            <button
+              key={dp.id}
+              onClick={() => setActivePersona(dp.id)}
+              className={`py-2 px-4 rounded-2xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+                activePersona === dp.id 
+                  ? 'bg-gradient-to-r from-teal-500 to-emerald-600 text-white shadow-md scale-105 ring-2 ring-teal-400 ring-offset-2' 
+                  : 'bg-emerald-50/70 hover:bg-emerald-100/70 text-emerald-700 border border-emerald-200 shadow-3xs'
+              }`}
+            >
+              <span className="text-sm">{dp.icon || '✨'}</span>
+              <span>{dp.name}</span>
+            </button>
+          ))}
         </div>
 
         {/* 페르소나별 키워드 리스트 드로잉 */}
@@ -198,6 +215,14 @@ export default function KeywordLab({
               if (activePersona === 'single') targetList = generatedKeywords.singleKeywords || [];
               if (activePersona === 'pet') targetList = generatedKeywords.petKeywords || [];
               if (activePersona === 'office') targetList = generatedKeywords.officeKeywords || [];
+
+              // 동적 페르소나 탭 처리
+              if (generatedKeywords.dynamicPersonas) {
+                const matchedDynamic = generatedKeywords.dynamicPersonas.find(dp => dp.id === activePersona);
+                if (matchedDynamic) {
+                  targetList = matchedDynamic.keywords || [];
+                }
+              }
 
               if (!selectedProduct) {
                 return (

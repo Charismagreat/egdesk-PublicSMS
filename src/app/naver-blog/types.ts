@@ -49,3 +49,11 @@ export interface KeywordItem {
   volume: string;
   reason: string;
 }
+
+// 상품 특성별 동적 확장 페르소나 인터페이스
+export interface DynamicPersona {
+  id: string;
+  name: string;
+  icon: string;
+  keywords: KeywordItem[];
+}
