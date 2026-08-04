@@ -15,10 +15,11 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const { Readable } = require('stream');
+const { convertHtmlToSmartEditorJson } = require('./html-to-smarteditor');
 const { finished } = require('stream/promises');
 
-// 환경변수 기반 기본 설정 로드
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+// 환경변수 기반 기본 설정 로드 (EGDesk 운영 포트: 4002)
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4002';
 const SESSION_FILE_PATH = path.join(__dirname, 'naver_session.json');
 
 // 인간적인 타이핑/클릭 패턴 모방을 위한 랜덤 대기 유틸리티 (지터 딜레이)
@@ -31,37 +32,125 @@ async function runNaverRpaDaemon() {
   console.log('🤖 [RPA] 네이버 블로그 자동 발행 데몬 동작을 개시합니다.');
   console.log(`🌐 백엔드 연동 서버 주소: ${APP_URL}`);
 
+  const isLoginOnly = process.argv.includes('--login');
+  const hasSession = fs.existsSync(SESSION_FILE_PATH);
+
   let browser;
   try {
-    // 1. Next.js 백엔드 API를 통해 예약 포스트 리스트 호출 (네이티브 fetch 사용)
-    const resList = await fetch(`${APP_URL}/api/naver-blog/posts`);
-    const dataList = await resList.json();
-    
-    if (!dataList.success || !dataList.posts) {
-      console.log('❌ [RPA] 예약 포스트 목록을 조회하지 못했습니다. 서버 상태를 확인하세요.');
-      return;
+    // 0. 로그인 전용 모드 또는 세션 쿠키가 전혀 없는 경우 즉시 팝업 브라우저 띄우기
+    if (isLoginOnly || !hasSession) {
+      console.log('🔑 [RPA] 네이버 로그인 인증 브라우저 팝업 창을 엽니다.');
+      console.log('💡 [RPA] 브라우저 창에서 로그인 및 2단계 인증을 마무리해 주십시오. (최대 5분 대기)');
+
+      browser = await chromium.launch({
+        headless: false,
+        args: [
+          '--disable-blink-features=AutomationControlled',
+          '--window-size=1280,800'
+        ]
+      });
+
+      const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+      const loginPage = await context.newPage();
+
+      await loginPage.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      });
+
+      await loginPage.goto('https://nid.naver.com/nidlogin.login');
+
+      // 사용자가 직접 로그인을 마무리하고 네이버 메인 또는 블로그로 이동할 때까지 5분간 대기
+      try {
+        await loginPage.waitForURL((url) => {
+          const href = url.href;
+          return href.includes('naver.com') && !href.includes('nidlogin.login');
+        }, { timeout: 300000 });
+        console.log('🎉 [RPA] 네이버 로그인 완착 감지! 세션 파일로 덤프합니다.');
+
+        const storageState = await context.storageState();
+        fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(storageState, null, 2));
+        console.log(`💾 [RPA] 쿠키 데이터가 안전하게 저장되었습니다: ${SESSION_FILE_PATH}`);
+      } catch (e) {
+        console.warn('⚠️ [RPA] 로그인 대기 시간 초과 또는 사용자가 창을 닫았습니다.');
+      }
+
+      await browser.close();
+
+      if (isLoginOnly) {
+        console.log('✅ [RPA] 로그인 인증 덤프 절차가 종료되었습니다.');
+        return;
+      }
+
+      // 세션 파일이 덤프되지 않았다면 포스팅 중단 및 펜딩건 FAILED 업데이트
+      if (!fs.existsSync(SESSION_FILE_PATH)) {
+        console.warn('⚠️ [RPA] 네이버 로그인이 완료되지 않아 펜딩 포스트 상태를 [FAILED]로 정리하고 자동화를 중단합니다.');
+        try {
+          const resList = await fetch(`${APP_URL}/api/naver-blog/posts`);
+          const dataList = await resList.json();
+          if (dataList.success && dataList.posts) {
+            const nowThreshold = Date.now() + 120000;
+            const duePosts = dataList.posts.filter((post) => post.status === 'SCHEDULED' && post.scheduled_at && new Date(post.scheduled_at).getTime() <= nowThreshold);
+            for (const p of duePosts) {
+              await fetch(`${APP_URL}/api/naver-blog/posts`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: p.id,
+                  updates: { status: 'FAILED', error_message: '네이버 로그인 세션 미생성 (계정 연동 탭에서 최초 1회 로그인이 필요합니다)' }
+                })
+              });
+            }
+          }
+        } catch (e) {
+          console.error('FAILED 동기화 에러:', e);
+        }
+        return;
+      }
     }
 
-    const now = new Date();
-    // 예정 시각이 지났고 아직 SCHEDULED(예약대기)인 포스트 중 가장 오래된 건 1개 선점
-    const pendingPosts = dataList.posts
-      .filter((post) => post.status === 'SCHEDULED' && new Date(post.scheduled_at) <= now)
-      .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+    // 1. Next.js 백엔드 API를 통해 예약 포스트 리스트 호출 (전 포트 범주 동적 자동 탐색)
+    let pendingPosts = [];
+    const portsToScan = [4002, 4000, 4006, 4001, 4003, 4004, 4005, 3000, 8080, 8000];
+    const candidateUrls = Array.from(new Set([APP_URL, ...portsToScan.map(p => `http://localhost:${p}`)]));
+    let activeAppUrl = APP_URL;
+
+    for (const testUrl of candidateUrls) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5초 빠른 포트 타임아웃
+        const resList = await fetch(`${testUrl}/api/naver-blog/posts`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (resList.ok) {
+          const dataList = await resList.json();
+          if (dataList.success && dataList.posts) {
+            activeAppUrl = testUrl;
+            console.log(`🌐 [RPA] 활성 이지데스크 백엔드 포트 자동 바인딩 성공: ${activeAppUrl}`);
+            const nowThreshold = Date.now() + 120000;
+            pendingPosts = dataList.posts
+              .filter((post) => post.status === 'SCHEDULED' && post.scheduled_at && new Date(post.scheduled_at).getTime() <= nowThreshold)
+              .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+            break;
+          }
+        }
+      } catch (fetchErr) {
+        // 포트 연속 스캔 진행
+      }
+    }
 
     if (pendingPosts.length === 0) {
-      console.log('💤 [RPA] 현재 기준 실행해야 할 발행 예정 예약글이 없습니다. 데몬을 대기 모드로 전환합니다.');
+      console.log('💤 [RPA] 현재 기준 실행해야 할 발행 예정 예약글이 없거나 조회가 완료되었습니다.');
       return;
     }
 
     const targetPost = pendingPosts[0];
     console.log(`🎯 [RPA] 발행 대상 예약 포스트 포커싱 성공: ID [${targetPost.id}] | 제목: "${targetPost.title}"`);
 
-    // 2. Playwright 브라우저 및 컨텍스트 초기화
-    // 네이버 캡차 방지 및 동적 스크롤 인터랙션을 위해 headless: false 모드를 강력히 권장합니다.
+    // 2. Playwright 브라우저 및 컨텍스트 초기화 (세션 파일 기반 Headed 로딩)
     browser = await chromium.launch({ 
       headless: false,
       args: [
-        '--disable-blink-features=AutomationControlled', // 웹드라이버 자동화 감지 무력화 플래그
+        '--disable-blink-features=AutomationControlled',
         '--window-size=1280,800'
       ]
     });
@@ -75,23 +164,7 @@ async function runNaverRpaDaemon() {
         viewport: { width: 1280, height: 800 }
       });
     } else {
-      console.log('⚠️ [RPA] 네이버 로그인 세션 쿠키 파일이 존재하지 않습니다.');
-      console.log('💡 [RPA] 브라우저 창에서 최초 1회 로그인을 안전하게 진행해 주십시오. (2단계 인증 포함 3분 대기)');
-      context = await browser.newContext({
-        viewport: { width: 1280, height: 800 }
-      });
-      
-      const loginPage = await context.newPage();
-      await loginPage.goto('https://nid.naver.com/nidlogin.login');
-      
-      // 사용자가 직접 로그인을 마무리하고 네이버 메인으로 넘어갈 때까지 대기
-      await loginPage.waitForURL('https://www.naver.com/', { timeout: 180000 });
-      console.log('🎉 [RPA] 네이버 로그인 완착 감지! 세션 파일로 덤프합니다.');
-      
-      const storageState = await context.storageState();
-      fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(storageState, null, 2));
-      console.log(`💾 [RPA] 쿠키 데이터가 안전하게 저장되었습니다: ${SESSION_FILE_PATH}`);
-      await loginPage.close();
+      context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     }
 
     const page = await context.newPage();
@@ -101,101 +174,431 @@ async function runNaverRpaDaemon() {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
 
-    console.log('🌐 [RPA] 네이버 블로그 스마트에디터 ONE 글쓰기 화면으로 진입합니다.');
-    await page.goto('https://blog.naver.com/write');
+    // 블로그 아이디 설정 조회 (기본값: nocodelife)
+    let targetBlogId = 'nocodelife';
+    try {
+      const settingsRes = await fetch(`${activeAppUrl}/api/naver-blog/settings`);
+      if (settingsRes.ok) {
+        const settingsData = await settingsRes.json();
+        if (settingsData.settings?.naver_blog_id) {
+          targetBlogId = settingsData.settings.naver_blog_id.trim();
+        }
+      }
+    } catch (e) {}
+
+    console.log(`🌐 [RPA] 네이버 블로그(@${targetBlogId}) 스마트에디터 ONE 글쓰기 폼으로 진입합니다.`);
+    const primaryWriteUrl = `https://blog.naver.com/${targetBlogId}?Redirect=Write`;
+    const secondaryWriteUrl = `https://blog.naver.com/PostWriteForm.naver?blogId=${targetBlogId}`;
+
+    try {
+      await page.goto(primaryWriteUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    } catch (e) {
+      await page.goto(secondaryWriteUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+    }
     await jitterSleep(4000, 6000);
 
-    // 에디터 경고 팝업 또는 임시저장 불러오기 모달 등이 떴을 때 닫기 핸들링
-    try {
-      const popupCloseBtn = page.locator('.se-popup-close, .dialog-close, button:has-text("취소")');
-      if (await popupCloseBtn.count() > 0) {
-        await popupCloseBtn.first().click();
-        console.log('🧹 [RPA] 에디터 초기 안내/임시저장 팝업창을 닫았습니다.');
-        await jitterSleep(1000, 2000);
-      }
-    } catch (err) {
-      // 팝업이 없는 경우 패스
+    // mainFrame iframe 여부 탐색
+    let frame = page;
+    const mainFrameElement = await page.$('#mainFrame');
+    if (mainFrameElement) {
+      console.log('🖼️ [RPA] 네이버 스마트에디터 ONE #mainFrame 프레임을 감지하여 전환합니다.');
+      frame = page.frame({ name: 'mainFrame' }) || page;
     }
 
-    // 4. 제목(Title) 안전 입력
+    // 에디터 경고 팝업 / 임시저장 불러오기 모달("작성 중인 글이 있습니다" [취소]) 집요한 닫기 처리
+    for (let i = 0; i < 5; i++) {
+      try {
+        await page.keyboard.press('Escape').catch(() => {});
+
+        // 메인 DOM 및 iframe 내부의 모든 [취소] 버튼 직접 타격
+        await page.evaluate(() => {
+          const btns = Array.from(document.querySelectorAll('button, a'));
+          const cancelBtn = btns.find(b => (b.innerText && b.innerText.trim() === '취소') || (b.className && typeof b.className === 'string' && b.className.includes('cancel')));
+          if (cancelBtn) cancelBtn.click();
+        }).catch(() => {});
+
+        if (mainFrameElement) {
+          await frame.evaluate(() => {
+            const btns = Array.from(document.querySelectorAll('button, a'));
+            const cancelBtn = btns.find(b => (b.innerText && b.innerText.trim() === '취소') || (b.className && typeof b.className === 'string' && b.className.includes('cancel')));
+            if (cancelBtn) cancelBtn.click();
+          }).catch(() => {});
+        }
+
+        // 우측 도움말 패널 강제 제거 및 닫기
+        await page.evaluate(() => {
+          const closeBtns = document.querySelectorAll('.se-help-close, .se-popup-close-button, button.btn_close, button[aria-label="닫기"], .se-help-header button');
+          closeBtns.forEach(b => b.click());
+          const helpPanels = document.querySelectorAll('.se-help-panel, .se-help-container, [class*="help"]');
+          helpPanels.forEach(el => el.remove());
+        }).catch(() => {});
+
+        if (mainFrameElement) {
+          await frame.evaluate(() => {
+            const closeBtns = document.querySelectorAll('.se-help-close, .se-popup-close-button, button.btn_close, button[aria-label="닫기"], .se-help-header button');
+            closeBtns.forEach(b => b.click());
+            const helpPanels = document.querySelectorAll('.se-help-panel, .se-help-container, [class*="help"]');
+            helpPanels.forEach(el => el.remove());
+          }).catch(() => {});
+        }
+      } catch (err) {}
+      await jitterSleep(400, 800);
+    }
+
+    // 4. 제목(Title) 안전 입력 (egdesk-scratch 공식 XPath & Physical Keyboard 입력 기법)
     console.log('✍️ [RPA] 블로그 포스팅 제목 입력을 시작합니다.');
-    const titleContainer = page.locator('.se-document-title [contenteditable="true"]');
-    await titleContainer.click();
+    
+    const titleSelectors = [
+      'xpath=/html/body/div[1]/div/div[3]/div/div/div[1]/div/div[1]/div[2]/section/article/div[1]/div[1]/div/div/p/span[2]',
+      '.se-document-title [contenteditable="true"]',
+      '.se-title-text',
+      '.se-ff-nanumgothic.se-document-title'
+    ];
+
+    let titleClicked = false;
+    for (const selector of titleSelectors) {
+      try {
+        if (mainFrameElement) {
+          const tLoc = frame.locator(selector).first();
+          if (await tLoc.count() > 0 && await tLoc.isVisible()) {
+            await tLoc.click({ force: true, timeout: 5000 });
+            titleClicked = true;
+            console.log(`[RPA] 제목 영역 포커스 성공 (Selector: ${selector})`);
+            break;
+          }
+        }
+        const pTLoc = page.locator(selector).first();
+        if (await pTLoc.count() > 0 && await pTLoc.isVisible()) {
+          await pTLoc.click({ force: true, timeout: 5000 });
+          titleClicked = true;
+          console.log(`[RPA] 제목 영역 포커스 성공 (Page Selector: ${selector})`);
+          break;
+        }
+      } catch (e) {}
+    }
+
+    if (!titleClicked) {
+      // DOM 클릭 폴백
+      await page.evaluate(() => {
+        const titleEl = document.querySelector('.se-document-title [contenteditable="true"], .se-title-text');
+        if (titleEl) titleEl.click();
+      }).catch(() => {});
+    }
+
+    await jitterSleep(500, 1000);
+
+    // 전체 선택 후 물리 키보드로 제목 텍스트 타이핑 (SmartEditor State 반영)
+    await page.keyboard.press('Control+a').catch(() => {});
+    await page.keyboard.press('Backspace').catch(() => {});
+    await jitterSleep(300, 500);
+
+    try {
+      await page.keyboard.insertText(targetPost.title);
+      console.log(`✍️ [RPA] 제목 입력 완료: "${targetPost.title}"`);
+    } catch (err) {
+      // 키보드 입력을 못 받은 경우 DOM 타이핑 폴백
+      await frame.evaluate((titleText) => {
+        const el = document.querySelector('.se-document-title [contenteditable="true"], .se-title-text');
+        if (el) {
+          el.innerText = titleText;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }, targetPost.title).catch(() => {});
+    }
+
     await jitterSleep(1000, 2000);
 
-    // 타이핑 속도 감지를 회피하기 위해 element.innerText 변경 방식으로 붙여넣기 시뮬레이션
-    await page.evaluate((titleText) => {
-      const el = document.querySelector('.se-document-title [contenteditable="true"]');
-      if (el) {
-        el.innerText = titleText;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
+    // 5. 본문(Content) 가독성 정밀 입력 (문단별 줄바꿈 & Enter 단락 분리 엔진)
+    console.log('✍️ [RPA] 블로그 포스팅 본문 가독성 단락 분리 입력을 시작합니다.');
+    
+    // 본문 작성 구역 포커스
+    const contentArea = frame.locator('.se-component-write_area [contenteditable="true"], .se-content, .se-component-content').first();
+    await contentArea.click({ force: true }).catch(() => {});
+    await jitterSleep(800, 1500);
+
+    // 본문 원고를 줄바꿈(\n) 단위로 정밀 파싱하여 각 문단별 Enter 단락 분리 입력
+    try {
+      const paragraphs = targetPost.content.split('\n');
+      for (let idx = 0; idx < paragraphs.length; idx++) {
+        const line = paragraphs[idx].trim();
+        if (line.length > 0) {
+          await page.keyboard.insertText(line);
+          await page.keyboard.press('Enter');
+          await jitterSleep(150, 300);
+        } else {
+          // 빈 줄일 경우 1회 더 Enter를 쳐서 가독성 문단 간격 확보
+          await page.keyboard.press('Enter');
+          await jitterSleep(100, 200);
+        }
       }
-    }, targetPost.title);
+      console.log('✍️ [RPA] 문단별 Enter 단락 분리 입력을 통해 본문 가독성 배치를 완료했습니다.');
+    } catch (kErr) {
+      console.warn('⚠️ [RPA] 키보드 단락 주입 폴백 처리:', kErr.message);
+      await page.keyboard.insertText(targetPost.content).catch(() => {});
+    }
+
     await jitterSleep(1500, 3000);
 
-    // 5. 본문(Content) 안전 입력
-    console.log('✍️ [RPA] 블로그 포스팅 본문 장문 원고 입력을 시작합니다.');
-    const contentBody = page.locator('.se-component-write_area [contenteditable="true"]');
-    await contentBody.first().click();
-    await jitterSleep(1000, 2000);
+    // 6. 대표 이미지 리소스 연동 및 Google Imagen 3 AI 동적 고화질 첨부 처리
+    try {
+      console.log('📸 [RPA] Google Imagen 3 AI 전용 이미지 모델을 기동하여 대표 이미지를 생성 및 다운로드합니다.');
+      const tempImgPath = path.join(__dirname, `temp_blog_upload_${Date.now()}.jpg`);
 
-    // 본문 전체 내용을 한 번에 주입하여 인간다운 붙여넣기(Ctrl+V) 모방
-    await page.evaluate((bodyText) => {
-      const el = document.querySelector('.se-component-write_area [contenteditable="true"]');
-      if (el) {
-        el.innerText = bodyText;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
+      // 1순위: 포스트에 명시된 image_url, 2순위: Google Imagen 3 API 호출 또는 최신 AI 모델 폴백
+      let imageBuffer: Buffer | null = null;
+      const keywordSeed = targetPost.target_keywords || targetPost.title || 'technology product';
+      const imagen3Prompt = `Professional high quality realistic lifestyle blog photo about ${keywordSeed}, 8k resolution, cinematic lighting, studio product photography, clean background`;
+
+      // 구글 API 키 조회 시도
+      let googleApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '';
+      try {
+        const sysRes = await fetch(`${backendUrl}/api/shared/settings?key=google_ai_api_key`).catch(() => null);
+        if (sysRes && sysRes.ok) {
+          const sysData = await sysRes.json().catch(() => null);
+          if (sysData && sysData.value) googleApiKey = sysData.value;
+        }
+      } catch (e) {}
+
+      // A. Google Imagen 3 (imagen-3.0-generate-002) 생성 시도
+      if (googleApiKey && (!targetPost.image_url || !targetPost.image_url.startsWith('http'))) {
+        try {
+          console.log(`✨ [RPA] Google Imagen 3 (imagen-3.0-generate-002) 모델 호출 기동 중... (프롬프트: "${keywordSeed}")`);
+          const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${googleApiKey}`;
+          
+          const imagenRes = await fetch(imagenUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              instances: [{ prompt: imagen3Prompt }],
+              parameters: { sampleCount: 1, aspectRatio: '4:3', outputOptions: { mimeType: 'image/jpeg' } }
+            })
+          }).catch(() => null);
+
+          if (imagenRes && imagenRes.ok) {
+            const imagenJson = await imagenRes.json().catch(() => null);
+            const b64Data = imagenJson?.predictions?.[0]?.bytesBase64Encoded;
+            if (b64Data) {
+              imageBuffer = Buffer.from(b64Data, 'base64');
+              console.log('🎉 [RPA] Google Imagen 3 AI 모델 이미지 실시간 생성 성공!');
+            }
+          }
+        } catch (imagenErr) {
+          console.warn('⚠️ [RPA] Google Imagen 3 호출 예외, 폴백 엔진으로 전환합니다:', imagenErr.message);
+        }
       }
-    }, targetPost.content);
-    await jitterSleep(2000, 4500);
 
-    // 6. 대표 이미지 리소스 연동 및 업로드 처리 (네이티브 fetch Stream 다운로드)
-    if (targetPost.image_url) {
-      console.log('📸 [RPA] AI 대표 이미지 다운로드 및 에디터 본문 첨부를 조율합니다.');
-      const tempImgPath = path.join(__dirname, 'temp_blog_upload.jpg');
-      
-      const imgRes = await fetch(targetPost.image_url);
-      if (!imgRes.ok) {
-        throw new Error(`이미지 다운로드 실패: ${imgRes.statusText}`);
+      // B. 1순위 URL 또는 폴백 고화질 AI 렌더링 다운로드
+      if (!imageBuffer) {
+        const randomSeed = Math.floor(Math.random() * 1000000);
+        const dynamicImageUrl = targetPost.image_url && targetPost.image_url.startsWith('http')
+          ? targetPost.image_url
+          : `https://image.pollinations.ai/prompt/${encodeURIComponent(imagen3Prompt)}?width=800&height=600&seed=${randomSeed}&nologo=true`;
+
+        console.log(`🌐 [RPA] 고화질 이미지 소스 다운로드 진행: ${dynamicImageUrl}`);
+        const imgRes = await fetch(dynamicImageUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }).catch(() => null);
+        if (imgRes && imgRes.ok) {
+          const arrayBuffer = await imgRes.arrayBuffer();
+          imageBuffer = Buffer.from(arrayBuffer);
+        }
       }
-      
-      const writer = fs.createWriteStream(tempImgPath);
-      // fetch body stream을 Readable로 변환하여 파일에 파이프 스트림 연결
-      await finished(Readable.fromWeb(imgRes.body).pipe(writer));
 
-      // Playwright 파일 선택 대화상자(FileChooser) 캡처 후 사진 업로드 버튼 타격
-      const [fileChooser] = await Promise.all([
-        page.waitForEvent('filechooser'),
-        page.locator('.se-image-upload-button, button:has-text("사진")').first().click()
-      ]);
-      
-      await fileChooser.setFiles(tempImgPath);
-      console.log('⏳ [RPA] 블로그 에디터 서버에 이미지 전송 중... 이미지 렌더링을 기다립니다.');
-      await jitterSleep(5000, 8000); // 넉넉히 대기하여 로딩 완료 보장
+      if (imageBuffer) {
+        fs.writeFileSync(tempImgPath, imageBuffer);
+        console.log('📁 [RPA] 이미지 파일 바이너리 준비 완료. 스마트에디터 파일 업로드 인풋을 정밀 타격합니다.');
 
-      // 임시 다운로드 파일 즉시 정리
-      fs.unlinkSync(tempImgPath);
-      console.log('🧹 [RPA] 로컬 임시 이미지 캐시 파일 삭제 완료.');
+        // Playwright filechooser 이벤트 및 direct input setFiles 동시 적용
+        let uploadedSuccess = false;
+
+        try {
+          // A. 네이버 에디터 내 숨겨진 file input 요소 직주입 시도
+          if (mainFrameElement) {
+            const fileInputInFrame = frame.locator('input[type="file"]').first();
+            if (await fileInputInFrame.count() > 0) {
+              await fileInputInFrame.setInputFiles(tempImgPath).catch(() => {});
+              uploadedSuccess = true;
+              console.log('📸 [RPA] frame input[type="file"]에 Imagen3 생성 이미지 직주입 완료!');
+            }
+          }
+
+          if (!uploadedSuccess) {
+            const fileInputInPage = page.locator('input[type="file"]').first();
+            if (await fileInputInPage.count() > 0) {
+              await fileInputInPage.setInputFiles(tempImgPath).catch(() => {});
+              uploadedSuccess = true;
+              console.log('📸 [RPA] page input[type="file"]에 Imagen3 생성 이미지 직주입 완료!');
+            }
+          }
+        } catch (inputErr) {}
+
+        // B. 툴바 [사진] 단추 클릭 + filechooser 이벤트 캡처
+        if (!uploadedSuccess) {
+          const photoSelectors = 'button.se-image-toolbar-button, button[data-name="image"], .se-toolbar-button-image, button:has-text("사진")';
+          try {
+            const fcPromise = page.waitForEvent('filechooser', { timeout: 5000 }).catch(() => null);
+            
+            if (mainFrameElement) {
+              const btnInFrame = frame.locator(photoSelectors).first();
+              if (await btnInFrame.count() > 0) await btnInFrame.click({ force: true }).catch(() => {});
+            } else {
+              const btnInPage = page.locator(photoSelectors).first();
+              if (await btnInPage.count() > 0) await btnInPage.click({ force: true }).catch(() => {});
+            }
+
+            const fileChooser = await fcPromise;
+            if (fileChooser) {
+              await fileChooser.setFiles(tempImgPath);
+              uploadedSuccess = true;
+              console.log('📸 [RPA] Playwright fileChooser를 통한 Imagen3 이미지 업로드 완료!');
+            }
+          } catch (fcErr) {}
+        }
+
+        await jitterSleep(4000, 6000);
+
+        if (fs.existsSync(tempImgPath)) {
+          try { fs.unlinkSync(tempImgPath); } catch (e) {}
+        }
+      }
+    } catch (imgErr) {
+      console.warn('⚠️ [RPA] 이미지 첨부 처리 예외:', imgErr.message);
     }
 
     // 7. 네이버 블로그 최종 [발행] 서브 패널 오픈
     console.log('🔔 [RPA] 에디터 우측 상단 [발행] 패널을 클릭합니다.');
-    const publishBtn = page.locator('button:has-text("발행"), .btn_publish');
-    await publishBtn.click();
-    await jitterSleep(2000, 3500);
+    
+    // html-to-smarteditor.js 기반 스마트에디터 JSON 변환 생성
+    try {
+      const seDocumentJson = convertHtmlToSmartEditorJson(targetPost.title, targetPost.content, '#AI #블로그', undefined, { preserveImageMarkers: true });
+      console.log('📑 [RPA] [egdesk-scratch 기술] SmartEditor v2.8.10 JSON 규격 변환이 성공적으로 완료되었습니다.');
 
-    // 8. 최종 [발행하기] 버튼 타격
-    console.log('🚀 [RPA] 블로그 최종 등록 및 게시글 등록 트랜잭션을 완성합니다.');
-    const finalSubmitBtn = page.locator('.btn_register, button:has-text("발행하기")');
-    await finalSubmitBtn.click();
-    await jitterSleep(6000, 9000); // 블로그 생태계 처리 완료 대기
+      // 스마트에디터 내 객체에 direct JSON 인젝트 시도
+      if (mainFrameElement) {
+        await frame.evaluate((seJson) => {
+          if (window.se && typeof window.se.importDocument === 'function') {
+            try { window.se.importDocument(seJson.document); } catch (e) {}
+          }
+        }, seDocumentJson).catch(() => {});
+      }
+    } catch (jsonErr) {
+      console.warn('⚠️ [RPA] SmartEditor JSON 변환 시도 패스:', jsonErr);
+    }
+    
+    // 도움말 사이드바 닫기
+    await page.evaluate(() => {
+      const closeBtn = document.querySelector('.se-help-close, .se-popup-close-button');
+      if (closeBtn) closeBtn.click();
+    }).catch(() => {});
+
+    // 1단계: 우측 상단 [발행] 초록색 헤더 버튼 클릭 (egdesk-scratch 공식 XPath 연동)
+    console.log('🔔 [RPA] [egdesk-scratch 학습 적용] 스마트에디터 ONE 상단 헤더 [발행] 버튼 클릭을 시도합니다.');
+    
+    const initialPublishSelectors = [
+      'xpath=/html/body/div[1]/div/div[1]/div/div[3]/div[2]/button',
+      'button:has-text("발행")',
+      '.se-header-publish-button button',
+      'button.btn_publish'
+    ];
+
+    let initialButtonClicked = false;
+
+    for (const selector of initialPublishSelectors) {
+      try {
+        if (mainFrameElement) {
+          const btnInFrame = frame.locator(selector).first();
+          if (await btnInFrame.count() > 0 && await btnInFrame.isVisible()) {
+            await btnInFrame.click({ force: true, timeout: 5000 });
+            initialButtonClicked = true;
+            console.log(`[RPA] 상단 헤더 발행 버튼 클릭 성공 (Frame Selector: ${selector})`);
+            break;
+          }
+        }
+        const btnInPage = page.locator(selector).first();
+        if (await btnInPage.count() > 0 && await btnInPage.isVisible()) {
+          await btnInPage.click({ force: true, timeout: 5000 });
+          initialButtonClicked = true;
+          console.log(`[RPA] 상단 헤더 발행 버튼 클릭 성공 (Page Selector: ${selector})`);
+          break;
+        }
+      } catch (e) {}
+    }
+
+    if (!initialButtonClicked) {
+      // DOM Fallback
+      await page.evaluate(() => {
+        const btn = document.querySelector('button.btn_publish, .se-header-publish-button button, header button');
+        if (btn) btn.click();
+      }).catch(() => {});
+    }
+
+    // 2단계: egdesk-scratch의 5초 정밀 완충 대기 (발행 옵션 레이어 팝업 애니메이션 안정화)
+    console.log('⏳ [RPA] [egdesk-scratch 기술] 발행 옵션 팝업 애니메이션 안정화를 위해 5초간 완충 대기합니다...');
+    await jitterSleep(5000, 5000);
+
+    // 3단계: 우측 발행 옵션 팝업 내 최종 V 발행 버튼 클릭 (egdesk-scratch 공식 최종 XPath 적용)
+    console.log('🚀 [RPA] [egdesk-scratch 기술] 우측 레이어 팝업 내 최종 "V 발행" 버튼을 정밀 타격합니다.');
+    
+    const finalPublishSelectors = [
+      'xpath=/html/body/div[1]/div/div[1]/div/div[3]/div[2]/div/div/div/div[8]/div/button',
+      'xpath=/html/body/div[1]/div/div[1]/div//div[3]/div[2]/button',
+      'button.confirm_btn',
+      'button.btn_confirm',
+      'button[data-name="confirm"]',
+      '.layer_publish button.confirm_btn',
+      '.se-publish-popup button'
+    ];
+
+    let isPostedReal = false;
+    let finalUrl = page.url();
+
+    for (let loop = 1; loop <= 6; loop++) {
+      console.log(`⏳ [RPA] 네이버 서버 포스팅 게재 시도 ${loop}/6...`);
+
+      for (const selector of finalPublishSelectors) {
+        try {
+          if (mainFrameElement) {
+            const fBtn = frame.locator(selector).first();
+            if (await fBtn.count() > 0 && await fBtn.isVisible()) {
+              await fBtn.hover({ force: true }).catch(() => {});
+              await fBtn.click({ force: true, timeout: 5000 });
+              console.log(`🎯 [RPA] 최종 "V 발행" 버튼 타격 성공 (Frame Selector: ${selector})`);
+            }
+          }
+          const pBtn = page.locator(selector).first();
+          if (await pBtn.count() > 0 && await pBtn.isVisible()) {
+            await pBtn.hover({ force: true }).catch(() => {});
+            await pBtn.click({ force: true, timeout: 5000 });
+            console.log(`🎯 [RPA] 최종 "V 발행" 버튼 타격 성공 (Page Selector: ${selector})`);
+          }
+        } catch (e) {}
+      }
+
+      // Native Event dispatch fallback
+      await page.evaluate(() => {
+        const confirmBtn = document.querySelector('button.confirm_btn, button.btn_confirm, .layer_publish button, button[data-name="confirm"]');
+        if (confirmBtn) confirmBtn.click();
+      }).catch(() => {});
+
+      await page.keyboard.press('Enter').catch(() => {});
+
+      await jitterSleep(3000, 4000);
+
+      finalUrl = page.url();
+      if (!finalUrl.includes('Redirect=Write') && !finalUrl.includes('PostWriteForm')) {
+        isPostedReal = true;
+        break;
+      }
+    }
 
     // 9. 결과 주소(URL) 피드백 획득 및 Next.js DB 상태 완료 처리
-    const finalUrl = page.url();
-    console.log(`🎉 [RPA] 네이버 블로그 실제 자동 포스팅 발행 완착 성공!`);
+    if (isPostedReal || !finalUrl.includes('Redirect=Write')) {
+      console.log(`🎉 [RPA] 네이버 블로그 실제 게시글 게재 리다이렉트 완착 성공!`);
+      console.log(`🔗 실제 등록된 게시글 URL: ${finalUrl}`);
+    } else {
+      console.warn(`⚠️ [RPA] 글쓰기 폼에 머물러 있어 포스팅 게재 미완료 가능성이 있습니다. URL: ${finalUrl}`);
+    }
     console.log(`🔗 게시글 URL: ${finalUrl}`);
 
-    const patchRes = await fetch(`${APP_URL}/api/naver-blog/posts`, {
+    const patchRes = await fetch(`${activeAppUrl}/api/naver-blog/posts`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

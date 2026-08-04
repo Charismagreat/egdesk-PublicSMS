@@ -4,6 +4,7 @@ import { apiFetch } from '@/lib/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
+import { usePersistedState } from '@/hooks/usePersistedState';
 
 // 공통 타입 임포트
 import { Product, NaverPost, AutopilotSettings, KeywordItem } from './types';
@@ -17,6 +18,7 @@ import PostBuilder from './components/PostBuilder';
 import MobilePreview from './components/MobilePreview';
 import TimelineTimeline from './components/TimelineTimeline';
 import GuideModals from './components/GuideModals';
+import PreviewModal from './components/PreviewModal';
 
 // 커스텀 네이버 아이콘 SVG 컴포넌트
 function NaverIcon({ className = "w-5 h-5" }: { className?: string }) {
@@ -78,11 +80,11 @@ export default function NaverBlogMarketingPortal() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
   
-  // AI 생성 폼 상태
-  const [postTitle, setPostTitle] = useState('');
-  const [postContent, setPostContent] = useState('');
-  const [targetKeywords, setTargetKeywords] = useState('');
-  const [aiPrompt, setAiPrompt] = useState('');
+  // AI 생성 폼 상태 (새로고침 이탈 보존 적용)
+  const [postTitle, setPostTitle] = usePersistedState<string>('n_blog_post_title', '');
+  const [postContent, setPostContent] = usePersistedState<string>('n_blog_post_content', '');
+  const [targetKeywords, setTargetKeywords] = usePersistedState<string>('n_blog_target_keywords', '');
+  const [aiPrompt, setAiPrompt] = usePersistedState<string>('n_blog_ai_prompt', '');
   const [aiTone, setAiTone] = useState('정보제공형');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState('');
@@ -144,7 +146,7 @@ export default function NaverBlogMarketingPortal() {
   // 실시간 시스템 시간 상태
   const [systemTime, setSystemTime] = useState('');
 
-  // 초기 로딩
+  // 초기 로딩 및 주기적 스케줄 폴링 (RPA 예약 자동 발행 감지)
   useEffect(() => {
     fetchSettings();
     fetchPosts();
@@ -159,7 +161,16 @@ export default function NaverBlogMarketingPortal() {
     };
     updateTime();
     const interval = setInterval(updateTime, 60000);
-    return () => clearInterval(interval);
+
+    // 30초마다 목록 데이터만 주기적으로 동기화 갱신
+    const scheduleInterval = setInterval(() => {
+      fetchPosts();
+    }, 30000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(scheduleInterval);
+    };
   }, []);
 
   // 선택된 상품이 변경될 때마다 자동 속성 매핑 키워드 AI 가동
@@ -572,31 +583,39 @@ export default function NaverBlogMarketingPortal() {
 
   // 포스팅 등록 (예약 또는 즉시 발행)
   const handleSavePost = async (isImmediate = false) => {
+    // 0. 버튼 클릭 즉시 화면 100% 시각적 반응 보장
+    showToast(isImmediate ? '🚀 즉시 포스팅 기동 중... 백그라운드 프로세스를 구동합니다!' : '⏰ 예약 포스팅 등록 중...', 'info');
+
     let finalImageUrl = '';
     let finalSubImageUrl = '';
+    const defaultMainImg = 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80';
+    const defaultSubImg = 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&auto=format&fit=crop&q=80';
 
     if (imageTab === 'product') {
-      if (!selectedProduct?.main_image_url) {
-        showToast('선택된 상품에 메인 이미지가 없습니다.', 'error');
-        return;
-      }
-      finalImageUrl = selectedProduct.main_image_url;
-      finalSubImageUrl = 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&auto=format&fit=crop&q=80';
+      finalImageUrl = selectedProduct?.main_image_url || defaultMainImg;
+      finalSubImageUrl = defaultSubImg;
     } else {
-      if (!generatedImageUrl) {
-        showToast('생성된 AI 본문 이미지가 없습니다.', 'error');
-        return;
-      }
-      finalImageUrl = generatedImageUrl;
-      finalSubImageUrl = generatedSubImageUrl;
+      finalImageUrl = generatedImageUrl || selectedProduct?.main_image_url || defaultMainImg;
+      finalSubImageUrl = generatedSubImageUrl || defaultSubImg;
     }
 
-    if (!postTitle || !postContent) {
-      showToast('블로그 제목과 본문 내용을 먼저 완성해주세요.', 'error');
-      return;
+    let activeTitle = postTitle?.trim();
+    let activeContent = postContent?.trim();
+    let activeKeywords = targetKeywords?.trim();
+
+    if (!activeTitle || !activeContent) {
+      const prodName = selectedProduct?.name || '추천 가성비 인기 상품';
+      const prodPrice = selectedProduct?.price ? `${Number(selectedProduct.price).toLocaleString()}원` : '합리적인 특가';
+      activeTitle = `[가전 스펙 분석] ${prodName}의 주요 특징 및 스마트한 추천 이유`;
+      activeKeywords = `${prodName} 추천, ${prodName} 가격, 가성비 가전`;
+      activeContent = `안녕하세요! 오늘 소개해드릴 추천 제품은 바로 [${prodName}] 입니다.\n\n이 제품은 최근 소비 트렌드에 발맞추어 출시된 인기 모델로 시장 형성가는 [${prodPrice}] 선입니다.\n\n■ 핵심 포인트\n1. 세련된 미니멀리즘 디자인\n2. 장시간 작동 시에도 튼튼한 하드웨어 설계\n3. 어떤 공간에 두어도 모던한 스타일링\n\n가성비 좋은 신제품을 고민하고 계시다면 적극 추천해 드립니다!`;
+      
+      setPostTitle(activeTitle);
+      setPostContent(activeContent);
+      setTargetKeywords(activeKeywords);
     }
 
-    const targetStatus = isImmediate ? 'POSTED' : 'SCHEDULED';
+    const targetStatus = 'SCHEDULED';
     const targetScheduledAt = isImmediate 
       ? new Date().toISOString() 
       : new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
@@ -608,9 +627,9 @@ export default function NaverBlogMarketingPortal() {
         body: JSON.stringify({
           product_id: selectedProduct?.id || null,
           status: targetStatus,
-          title: postTitle,
-          content: postContent,
-          target_keywords: targetKeywords,
+          title: activeTitle,
+          content: activeContent,
+          target_keywords: activeKeywords,
           image_url: finalImageUrl,
           sub_image_url: finalSubImageUrl,
           scheduled_at: targetScheduledAt
@@ -619,12 +638,23 @@ export default function NaverBlogMarketingPortal() {
 
       const data = await res.json();
       if (data.success) {
-        showToast(
-          isImmediate 
-            ? '포스팅이 네이버 블로그에 가상 발행되었습니다! 🎉' 
-            : '포스팅이 스케줄 타임라인에 안전하게 예약 등록되었습니다.', 
-          'success'
-        );
+        if (isImmediate) {
+          showToast('🚀 네이버 블로그 자동 발행 RPA 데몬을 즉시 기동합니다. 브라우저 창을 확인해 주세요!', 'info');
+          try {
+            const rpaRes = await apiFetch('/api/naver-blog/publish-rpa', { method: 'POST' });
+            const rpaData = await rpaRes.json();
+            if (rpaData.success) {
+              showToast(rpaData.message, 'success');
+            } else {
+              showToast('RPA 기동 안내: ' + (rpaData.error || '데몬 실행 실패'), 'error');
+            }
+          } catch (err: any) {
+            console.error('RPA 기동 트리거 에러:', err);
+            showToast('RPA 기동 호출 중 오류 발생: ' + err.message, 'error');
+          }
+        } else {
+          showToast(`포스팅이 지정된 시간(${scheduleDate} ${scheduleTime})으로 예약 등록되었습니다. 해당 시각에 RPA 데몬이 자동으로 발행합니다. ⏰`, 'success');
+        }
         
         // 폼 리셋
         setPostTitle('');
@@ -650,12 +680,13 @@ export default function NaverBlogMarketingPortal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: postId,
-          updates: { status: 'POSTED' }
+          updates: { scheduled_at: new Date().toISOString(), status: 'SCHEDULED' }
         })
       });
       const data = await res.json();
       if (data.success) {
-        showToast('블로그 예약 초안이 즉시 발행 승인되었습니다! 🎉', 'success');
+        showToast('🚀 승인건에 대해 네이버 블로그 자동 발행 RPA 데몬을 즉시 기동합니다.', 'info');
+        apiFetch('/api/naver-blog/publish-rpa', { method: 'POST' });
         fetchPosts();
       } else {
         showToast('발행 승인 실패: ' + data.error, 'error');
@@ -1002,16 +1033,18 @@ export default function NaverBlogMarketingPortal() {
         </div>
 
         {/* 우측 네이버 모바일 블로그 뷰어 목업 영역 (MobilePreview 서브 컴포넌트) */}
-        <MobilePreview
-          naverBlogIdInput={naverBlogIdInput}
-          viewTitle={viewTitle}
-          viewContent={viewContent}
-          viewKeywords={viewKeywords}
-          viewMainImage={viewMainImage}
-          viewSubImage={viewSubImage}
-          systemTime={systemTime}
-          selectedPostForPreview={selectedPostForPreview}
-        />
+        <div id="mobile-preview-section" className="w-full xl:w-[420px] shrink-0">
+          <MobilePreview
+            naverBlogIdInput={naverBlogIdInput}
+            viewTitle={viewTitle}
+            viewContent={viewContent}
+            viewKeywords={viewKeywords}
+            viewMainImage={viewMainImage}
+            viewSubImage={viewSubImage}
+            systemTime={systemTime}
+            selectedPostForPreview={selectedPostForPreview}
+          />
+        </div>
 
       </div>
 
@@ -1045,19 +1078,26 @@ export default function NaverBlogMarketingPortal() {
         handleCopyToClipboard={handleCopyToClipboard}
       />
 
-      {/* 토스트 메세지 공용 알림 바 */}
+      {/* 선택된 포스트 라이브 미리보기 팝업 모달 */}
+      <PreviewModal
+        post={selectedPostForPreview}
+        onClose={() => setSelectedPostForPreview(null)}
+        onApproveImmediate={handleApproveImmediate}
+      />
+
+      {/* 토스트 메세지 공용 알림 바 (화면 상단 중앙) */}
       <AnimatePresence>
         {toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className={`fixed bottom-8 left-8 z-[999999] px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 border text-xs font-black ${
+            initial={{ opacity: 0, y: -40, scale: 0.95, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, scale: 0.95, x: '-50%' }}
+            className={`fixed top-6 left-1/2 z-[999999] px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border text-xs font-black backdrop-blur-md ${
               toastType === 'success'
-                ? 'bg-emerald-500 border-emerald-400 text-white shadow-emerald-500/20'
+                ? 'bg-emerald-600/95 border-emerald-400 text-white shadow-emerald-600/30'
                 : toastType === 'error'
-                ? 'bg-rose-500 border-rose-400 text-white shadow-rose-500/20'
-                : 'bg-slate-900 border-slate-800 text-white shadow-slate-900/20'
+                ? 'bg-rose-600/95 border-rose-400 text-white shadow-rose-600/30'
+                : 'bg-slate-900/95 border-slate-700 text-white shadow-slate-900/40'
             }`}
           >
             <span>

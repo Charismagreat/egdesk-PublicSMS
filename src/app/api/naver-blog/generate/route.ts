@@ -177,45 +177,43 @@ ${prompt || '이 상품을 블로그 포스팅으로 상세하게 소개해주�
       generatedBody = bodyTemplates[Math.floor(Math.random() * bodyTemplates.length)];
     }
 
-    // 4. AI 이미지 생성 (Unsplash 기반 대표 이미지 및 서브 이미지)
-    let imageUrl = productImageUrl || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80';
-    let subImageUrl = 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&auto=format&fit=crop&q=80';
+    // 4. Google Imagen 3 (imagen-3.0-generate-002) AI 이미지 실시간 생성
+    let imageUrl = productImageUrl || '';
+    let subImageUrl = '';
 
-    // 사용자의 프롬프트나 상품명에 매칭되는 감성 Unsplash 라이프스타일 큐레이팅
-    const randomSeed1 = Math.floor(Math.random() * 1000);
-    const randomSeed2 = Math.floor(Math.random() * 1000) + 1000;
-    
-    // 기본적으로 랜덤성 및 키워드 연관성 부여
-    const searchKeywords = prompt || productName;
-    imageUrl = `https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80&sig=${randomSeed1}`;
-    subImageUrl = `https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&auto=format&fit=crop&q=80&sig=${randomSeed2}`;
+    if (!imageUrl && apiKey) {
+      try {
+        console.log(`✨ [AI Route] Google Imagen 3 모델을 통한 이미지 생성 시도 (키워드: ${keywordsStr || productName})`);
+        const imagen3Prompt = `Professional high quality product photograph of ${keywordsStr || productName}, 8k resolution, studio lighting, clean background, realistic lifestyle blog photo`;
+        
+        const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+        const imagenRes = await fetch(imagenUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instances: [{ prompt: imagen3Prompt }],
+            parameters: { sampleCount: 1, aspectRatio: '4:3', outputOptions: { mimeType: 'image/jpeg' } }
+          })
+        });
 
-    if (searchKeywords) {
-      const lower = searchKeywords.toLowerCase();
-      if (lower.includes('에어컨') || lower.includes('lg') || lower.includes('삼성') || lower.includes('가전') || lower.includes('가전제품')) {
-        imageUrl = `https://images.unsplash.com/photo-1621905252507-b354bc25edac?w=800&auto=format&fit=crop&q=80&sig=${randomSeed1}`; // 스마트 가전, 에어컨 필터 느낌
-        subImageUrl = `https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&auto=format&fit=crop&q=80&sig=${randomSeed2}`; // 기술적 스펙 느낌
-      } else if (lower.includes('커피') || lower.includes('원두') || lower.includes('머신')) {
-        imageUrl = `https://images.unsplash.com/photo-1507133750040-4a8f57021571?w=800&auto=format&fit=crop&q=80&sig=${randomSeed1}`;
-        subImageUrl = `https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&auto=format&fit=crop&q=80&sig=${randomSeed2}`;
-      } else if (lower.includes('화장품') || lower.includes('피부') || lower.includes('세럼') || lower.includes('뷰티')) {
-        imageUrl = `https://images.unsplash.com/photo-1556228720-195a672e8a03?w=800&auto=format&fit=crop&q=80&sig=${randomSeed1}`;
-        subImageUrl = `https://images.unsplash.com/photo-1608248597481-496100c8c836?w=800&auto=format&fit=crop&q=80&sig=${randomSeed2}`;
-      } else if (lower.includes('가구') || lower.includes('의자') || lower.includes('인테리어') || lower.includes('소파')) {
-        imageUrl = `https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&auto=format&fit=crop&q=80&sig=${randomSeed1}`;
-        subImageUrl = `https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&auto=format&fit=crop&q=80&sig=${randomSeed2}`;
-      } else if (lower.includes('의류') || lower.includes('원피스') || lower.includes('옷') || lower.includes('패션')) {
-        imageUrl = `https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&auto=format&fit=crop&q=80&sig=${randomSeed1}`;
-        subImageUrl = `https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800&auto=format&fit=crop&q=80&sig=${randomSeed2}`;
-      } else if (lower.includes('음식') || lower.includes('밀키트') || lower.includes('반찬') || lower.includes('먹방')) {
-        imageUrl = `https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80&sig=${randomSeed1}`;
-        subImageUrl = `https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=800&auto=format&fit=crop&q=80&sig=${randomSeed2}`;
+        if (imagenRes.ok) {
+          const imagenJson = await imagenRes.json();
+          const b64Data = imagenJson?.predictions?.[0]?.bytesBase64Encoded;
+          if (b64Data) {
+            imageUrl = `data:image/jpeg;base64,${b64Data}`;
+            console.log('🎉 [AI Route] Google Imagen 3 모델 대표 이미지 생성 성공!');
+          }
+        }
+      } catch (imagenErr: any) {
+        console.warn('⚠️ [AI Route] Google Imagen 3 생성 예외, 폴백 렌더링 사용:', imagenErr.message);
       }
     }
 
-    // 상품 이미지가 있는 경우에는 상품 이미지를 무조건 메인 대표이미지로 사용하도록 함
-    if (productImageUrl) {
-      imageUrl = productImageUrl;
+    // 폴백 이미지 렌더링
+    if (!imageUrl) {
+      const randomSeed1 = Math.floor(Math.random() * 1000000);
+      const searchKeywords = prompt || productName;
+      imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(searchKeywords)}?width=800&height=600&seed=${randomSeed1}&nologo=true`;
     }
 
     return NextResponse.json({

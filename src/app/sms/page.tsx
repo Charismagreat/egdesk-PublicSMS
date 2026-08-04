@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { MessageSquare, Send, BarChart3, Zap } from "lucide-react";
 import { usePersistedState } from "@/hooks/usePersistedState";
@@ -28,7 +28,7 @@ import { AutomationHeader } from "../automation/components/AutomationHeader";
 import { AutomationInfo } from "../automation/components/AutomationInfo";
 import { AutomationGrid } from "../automation/components/AutomationGrid";
 
-export default function SmsPage() {
+function SmsContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab")?.toUpperCase();
 
@@ -222,5 +222,13 @@ export default function SmsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SmsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500 font-bold">페이지 로딩 중...</div>}>
+      <SmsContent />
+    </Suspense>
   );
 }

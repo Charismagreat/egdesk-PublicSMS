@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { 
-  Layers, RefreshCw, Search, CheckCircle, Calendar, 
+  Layers, RefreshCw, Search, CheckCircle, Calendar, Send,
   Eye, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Heart
 } from 'lucide-react';
 import { NaverPost } from '../types';
@@ -173,9 +173,15 @@ export default function TimelineTimeline({
                     </span>
                   )}
                   {post.status === 'SCHEDULED' && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-250 shadow-3xs animate-pulse">
-                      <Calendar className="w-3.5 h-3.5" /> 예약 자동 대기
-                    </span>
+                    new Date(post.scheduled_at).getTime() <= Date.now() + 60000 ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-sky-50 text-sky-700 border border-sky-200 shadow-3xs animate-pulse">
+                        <Send className="w-3.5 h-3.5 text-sky-600 animate-spin" /> 실시간 발행 처리 중
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-250 shadow-3xs">
+                        <Calendar className="w-3.5 h-3.5" /> 예약 자동 대기
+                      </span>
+                    )
                   )}
                   {post.status === 'DRAFT' && (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-slate-50 text-slate-550 border border-slate-200 shadow-3xs">
@@ -206,7 +212,7 @@ export default function TimelineTimeline({
                 </td>
                 <td className="py-4 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-center gap-2">
-                    {post.status === 'SCHEDULED' && (
+                    {post.status === 'SCHEDULED' && new Date(post.scheduled_at).getTime() > Date.now() + 60000 && (
                       <button
                         onClick={() => handleApproveImmediate(post.id)}
                         className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-[#03C75A] text-emerald-600 hover:text-white border border-emerald-100 hover:border-[#03C75A] text-[10px] font-black transition-all active:scale-95 flex items-center gap-1 cursor-pointer shadow-3xs"
@@ -216,8 +222,14 @@ export default function TimelineTimeline({
                       </button>
                     )}
                     <button
-                      onClick={() => setSelectedPostForPreview(post)}
-                      className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-650 hover:text-slate-800 border border-slate-200 text-[10px] font-extrabold transition-all active:scale-95 flex items-center gap-1 cursor-pointer shadow-3xs"
+                      onClick={() => {
+                        setSelectedPostForPreview(post);
+                        const targetEl = document.getElementById('mobile-preview-section');
+                        if (targetEl) {
+                          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 border border-emerald-200/80 text-[10px] font-extrabold transition-all active:scale-95 flex items-center gap-1 cursor-pointer shadow-3xs"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       미리보기

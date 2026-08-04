@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows } from '../../../../../egdesk-helpers';
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 
 // 기본 설정 값 정의
 const DEFAULT_SETTINGS = {
@@ -31,14 +31,14 @@ export async function GET(req: Request) {
       
       const daemonScriptPath = path.join(process.cwd(), 'scripts', 'naver_rpa_daemon.js');
       
-      // 백그라운드 비동기 프로세스로 실행 (Headed 크로미움 브라우저 팝업)
-      exec(`node "${daemonScriptPath}"`, (err, stdout, stderr) => {
-        if (err) {
-          console.error('❌ [API] Playwright 세션 데몬 실행 에러:', err);
-          return;
-        }
-        console.log('🤖 [API] Playwright 세션 데몬 콘솔 로그:', stdout);
+      const child = spawn(process.execPath, [daemonScriptPath, '--login'], {
+        cwd: process.cwd(),
+        detached: true,
+        windowsHide: false,
+        stdio: 'ignore'
       });
+      child.unref();
+      console.log('🚀 [API] 독립형 GUI 프로세스로 로그인 브라우저를 성공적으로 스폰하였습니다.');
 
       return NextResponse.json({ 
         success: true, 

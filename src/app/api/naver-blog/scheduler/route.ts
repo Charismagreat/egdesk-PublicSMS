@@ -1,12 +1,41 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows } from '../../../../../egdesk-helpers';
+import { exec } from 'child_process';
+import path from 'path';
+
+// RPA 발행 데몬 백그라운드 자동 기동 헬퍼 (publish-rpa 경유로 싱글톤 락 준수)
+async function triggerRpaDaemon(requestUrl?: string) {
+  try {
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4002';
+    if (requestUrl) {
+      try {
+        const u = new URL(requestUrl);
+        baseUrl = `${u.protocol}//${u.host}`;
+      } catch (e) {}
+    }
+    await fetch(`${baseUrl}/api/naver-blog/publish-rpa`, { method: 'POST' });
+  } catch (err: any) {
+    console.error('❌ [Scheduler] RPA 데몬 트리거 실패:', err.message);
+  }
+}
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const targetProductIdParam = searchParams.get('productId');
     const targetProductIdsParam = searchParams.get('productIds'); // 다중 선택된 상품 ID들 ("PROD-1,PROD-2")
+
+    // 0. 예약 시각이 지난 포스트 탐색 및 RPA 자동 기동
+    const allPostsRes = await queryTable('crm_naver_blog_posts', { limit: 10000 });
+    const nowIso = new Date().toISOString();
+    const pendingPosts = (allPostsRes.rows || []).filter(
+      (p: any) => p.status === 'SCHEDULED' && p.scheduled_at && p.scheduled_at <= nowIso
+    );
+    if (pendingPosts.length > 0) {
+      console.log(`⏰ [Scheduler] 발행 시각이 경과한 예약 포스트 ${pendingPosts.length}건 감지! RPA 데몬을 기동합니다.`);
+      triggerRpaDaemon(req.url);
+    }
 
     // 1. 네이버 블로그 설정 조회
     const settingsRes = await queryTable('naver_blog_marketing_settings', { filters: { id: '1' } });
@@ -17,6 +46,13 @@ export async function GET(req: Request) {
     }
 
     if (Number(settings.is_autopilot) !== 1) {
+      if (pendingPosts.length > 0) {
+        return NextResponse.json({
+          success: true,
+          triggered: true,
+          message: `오토파일럿은 OFF 상태이지만, 발행 시각이 도래한 예약 포스트 ${pendingPosts.length}건에 대해 RPA 발행 데몬을 실행했습니다.`
+        });
+      }
       return NextResponse.json({ 
         success: true, 
         triggered: false, 
@@ -196,6 +232,11 @@ export async function GET(req: Request) {
     };
 
     await insertRows('crm_naver_blog_posts', [newPost]);
+
+    // 예약 일시가 현재 시각 이하이면 바로 RPA 데몬 기동
+    if (new Date(newPost.scheduled_at) <= new Date()) {
+      triggerRpaDaemon();
+    }
 
     return NextResponse.json({
       success: true,

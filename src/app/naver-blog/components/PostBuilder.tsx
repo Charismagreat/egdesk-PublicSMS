@@ -235,37 +235,35 @@ export default function PostBuilder({
             </div>
           </div>
 
-          {/* 2. 지정 시간 예약 등록 버튼 */}
+          {/* 2. 예약 포스팅 버튼 */}
           <div className="w-full md:flex-1">
             <button
               type="button"
               onClick={() => handleSavePost(false)}
-              disabled={!postTitle || !postContent}
               className={`w-full py-3 rounded-2xl text-xs font-black active:scale-95 transition-all duration-300 border flex items-center justify-center gap-2 h-[45px] cursor-pointer shadow-3xs ${
                 (!postTitle || !postContent)
-                  ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                  ? 'bg-slate-100 border-slate-250 text-slate-400 hover:bg-slate-200/60'
                   : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-250 shadow-xs'
               }`}
             >
               <Calendar className="w-4 h-4 shrink-0 text-slate-500" />
-              <span className="truncate">지정 시간 예약 등록</span>
+              <span className="truncate">예약 포스팅</span>
             </button>
           </div>
 
-          {/* 3. 네이버 블로그 즉시 발행 버튼 */}
+          {/* 3. 즉시 포스팅 버튼 */}
           <div className="w-full md:flex-1">
             <button
               type="button"
               onClick={() => handleSavePost(true)}
-              disabled={!postTitle || !postContent}
               className={`w-full py-3 rounded-2xl text-xs font-black active:scale-95 transition-all duration-300 flex items-center justify-center gap-2 h-[45px] cursor-pointer shadow-[0_4px_15px_rgba(3,199,90,0.2)] ${
                 (!postTitle || !postContent)
-                  ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                  ? 'bg-emerald-300/80 text-white hover:bg-emerald-400'
                   : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white'
               }`}
             >
               <Send className="w-4 h-4 shrink-0" />
-              <span className="truncate">네이버 블로그 즉시 발행</span>
+              <span className="truncate">즉시 포스팅</span>
             </button>
           </div>
 
