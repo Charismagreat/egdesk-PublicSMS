@@ -235,7 +235,7 @@ async function runNaverRpaDaemon() {
       try {
         const cleanUrl = testUrl.replace(/\/$/, '');
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃 확대 (GET 요청 실시간 동기화 완충)
         const resList = await fetch(`${cleanUrl}/api/naver-blog/posts`, { signal: controller.signal });
         clearTimeout(timeoutId);
 
@@ -244,14 +244,23 @@ async function runNaverRpaDaemon() {
           if (dataList.success && Array.isArray(dataList.posts) && dataList.posts.length > 0) {
             const nowThreshold = Date.now() + 1800000; // 30분 타임 마진
             const foundPending = dataList.posts
-              .filter((post) => (post.status === 'SCHEDULED' || (post.status === 'POSTED' && !post.post_url)) && (!post.scheduled_at || new Date(post.scheduled_at).getTime() <= nowThreshold))
+              .filter((post) => {
+                const isStatusMatch = post.status === 'SCHEDULED' || (post.status === 'POSTED' && !post.post_url);
+                const isTimeMatch = !post.scheduled_at || new Date(post.scheduled_at).getTime() <= nowThreshold;
+                if (isStatusMatch) {
+                  console.log(`🔍 [RPA Check] ID ${post.id}: status=${post.status}, scheduled_at=${post.scheduled_at}, isTimeMatch=${isTimeMatch}`);
+                }
+                return isStatusMatch && isTimeMatch;
+              })
               .sort((a, b) => new Date(a.scheduled_at || a.created_at || 0).getTime() - new Date(b.scheduled_at || b.created_at || 0).getTime());
 
-            if (foundPending.length > 0 || !activeAppUrl) {
+            console.log(`🔍 [RPA Check] ${cleanUrl} 포트 탐색 결과: foundPending ${foundPending.length}건`);
+
+            if (foundPending.length > 0) {
               activeAppUrl = cleanUrl;
               pendingPosts = foundPending;
               console.log(`🌐 [RPA] 활성 이지데스크 백엔드 포트 자동 바인딩 성공: ${activeAppUrl} (대상 포스트: ${pendingPosts.length}건)`);
-              if (pendingPosts.length > 0) break; // 실행할 대상글이 있는 포트 감지 시 즉시 확정!
+              break; // 대기 중인 포스트가 있는 진짜 포트를 찾았으므로 즉시 확정!
             }
           }
         }
