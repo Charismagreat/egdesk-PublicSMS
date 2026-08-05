@@ -22,12 +22,12 @@ export async function POST(req: Request) {
     if (clientId && clientSecret) {
       console.log(`📡 [API] 네이버 공식 API 키(Client ID: ${clientId}) 기반 포스팅 전송을 시도합니다...`);
 
-      // 발행 대상 SCHEDULED 포스트 1건 조회
+      // 발행 대상 SCHEDULED 포스트 1건 조회 (미래 10분 이내 시각 또는 시각 무관 최신 SCHEDULED 포스트)
       const postsRes = await queryTable('crm_naver_blog_posts', { limit: 10000 });
-      const nowThreshold = new Date(Date.now() + 120000).toISOString();
+      const nowThreshold = new Date(Date.now() + 600000).toISOString(); // 10분 마진
       const pendingPosts = (postsRes.rows || [])
-        .filter((p: any) => p.status === 'SCHEDULED' && p.scheduled_at && p.scheduled_at <= nowThreshold)
-        .sort((a: any, b: any) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+        .filter((p: any) => p.status === 'SCHEDULED' && (!p.scheduled_at || p.scheduled_at <= nowThreshold))
+        .sort((a: any, b: any) => new Date(a.scheduled_at || a.created_at || 0).getTime() - new Date(b.scheduled_at || b.created_at || 0).getTime());
 
       if (pendingPosts.length === 0) {
         return NextResponse.json({
@@ -99,6 +99,27 @@ export async function POST(req: Request) {
     }
 
     const hasSession = fs.existsSync(sessionFilePath);
+
+    // 2-1. API 인증키와 RPA 세션 둘 다 없는 경우 최고관리자 실패 원인 기록 및 반환
+    if (!clientId && !hasSession) {
+      console.warn('⚠️ [API] 네이버 API 인증 키와 RPA 로그인 세션이 모두 없습니다. 포스팅을 FAILED 처리합니다.');
+      
+      const postsRes = await queryTable('crm_naver_blog_posts', { limit: 10000 });
+      const pendingPosts = (postsRes.rows || []).filter((p: any) => p.status === 'SCHEDULED');
+
+      for (const p of pendingPosts) {
+        await updateRows('crm_naver_blog_posts', {
+          status: 'FAILED',
+          error_message: '네이버 공식 API 인증 키(Client ID/Secret) 미등록 및 RPA 자동화 로그인 세션(naver_session.json)이 등록되어 있지 않습니다.'
+        }, { filters: { id: String(p.id) } });
+      }
+
+      return NextResponse.json({
+        success: false,
+        error: '네이버 API 인증 키 및 RPA 로그인 세션이 미등록 상태입니다. 1단계 계정 관리에서 연동 설정을 완료해 주세요.',
+        reason_code: 'NO_AUTH_SETTING'
+      }, { status: 400 });
+    }
 
     isRpaRunning = true;
     console.log('🤖 [API] 네이버 블로그 RPA 자동 발행 데몬을 즉시 기동합니다...');

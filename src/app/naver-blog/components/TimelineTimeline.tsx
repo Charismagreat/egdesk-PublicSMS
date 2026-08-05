@@ -1,9 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Layers, RefreshCw, Search, CheckCircle, Calendar, Send,
-  Eye, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Heart
+  Eye, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Heart,
+  AlertTriangle, AlertCircle, Wrench, ArrowRight, X, ShieldAlert, ExternalLink
 } from 'lucide-react';
 import { NaverPost } from '../types';
 
@@ -42,6 +44,13 @@ export default function TimelineTimeline({
   handleApproveImmediate,
   handleDeletePost
 }: TimelineTimelineProps) {
+  // 최고관리자 진단 대상 포스트 모달 상태
+  const [diagnosingPost, setDiagnosingPost] = useState<NaverPost | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <div className="mt-12 p-6 lg:p-8 rounded-3xl bg-white/70 backdrop-blur-xl border border-slate-200/60 shadow-sm space-y-6 relative z-10">
@@ -126,7 +135,13 @@ export default function TimelineTimeline({
             {paginatedPosts.map((post) => (
               <tr 
                 key={post.id}
-                onClick={() => setSelectedPostForPreview(post)}
+                onClick={() => {
+                  if (post.status === 'FAILED') {
+                    setDiagnosingPost(post);
+                  } else {
+                    setSelectedPostForPreview(post);
+                  }
+                }}
                 className={`hover:bg-slate-50/80 transition-all cursor-pointer ${
                   selectedPostForPreview?.id === post.id ? 'bg-emerald-50/20 font-semibold' : ''
                 }`}
@@ -168,9 +183,20 @@ export default function TimelineTimeline({
                 </td>
                 <td className="py-4 px-4">
                   {post.status === 'POSTED' && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-150 shadow-3xs">
-                      <CheckCircle className="w-3.5 h-3.5" /> 즉시 발행 완료
-                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // 1순위: 포스트에 기록된 게시글 URL, 2순위: 네이버 블로그 내 블로그 홈
+                        const targetUrl = post.post_url || 'https://blog.naver.com';
+                        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[10px] font-black bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/90 shadow-3xs cursor-pointer active:scale-95 transition-all group"
+                      title="클릭 시 새 탭으로 실제 네이버 블로그 포스팅 보기"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>발행 완료</span>
+                      <ExternalLink className="w-3 h-3 text-emerald-500 opacity-70 group-hover:opacity-100 transition-opacity shrink-0" />
+                    </button>
                   )}
                   {post.status === 'SCHEDULED' && (
                     new Date(post.scheduled_at).getTime() <= Date.now() + 60000 ? (
@@ -189,9 +215,17 @@ export default function TimelineTimeline({
                     </span>
                   )}
                   {post.status === 'FAILED' && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-650 border border-rose-200 shadow-3xs">
-                      발행 실패
-                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDiagnosingPost(post);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[10px] font-black bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/90 shadow-3xs cursor-pointer active:scale-95 transition-all"
+                      title="발행 실패 원인 및 해결 가이드 리포트 확인"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      <span>발행 실패 (원인 & 해결가이드)</span>
+                    </button>
                   )}
                 </td>
                 <td className="py-4 px-4">
@@ -212,6 +246,14 @@ export default function TimelineTimeline({
                 </td>
                 <td className="py-4 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-center gap-2">
+                    {post.status === 'FAILED' && (
+                      <button
+                        onClick={() => setDiagnosingPost(post)}
+                        className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-black transition-all active:scale-95 flex items-center gap-1 cursor-pointer shadow-3xs"
+                      >
+                        🔍 실패 원인 & 해결
+                      </button>
+                    )}
                     {post.status === 'SCHEDULED' && new Date(post.scheduled_at).getTime() > Date.now() + 60000 && (
                       <button
                         onClick={() => handleApproveImmediate(post.id)}
@@ -328,6 +370,159 @@ export default function TimelineTimeline({
           </button>
         </div>
       </div>
+
+      {/* 🚨 최고관리자 전용 네이버 블로그 발행 실패 정밀 진단 및 해결 가이드 모달 */}
+      {mounted && diagnosingPost && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="p-5 sm:p-6 bg-gradient-to-r from-rose-500 via-rose-600 to-red-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 rounded-2xl bg-white/20 backdrop-blur-md text-white border border-white/20">
+                  <ShieldAlert className="w-6 h-6" />
+                </span>
+                <div>
+                  <h3 className="text-base font-black text-white flex items-center gap-2">
+                    발행 실패 정밀 진단 리포트
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/20 font-bold border border-white/20">
+                      최고관리자 전용
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-rose-100 font-medium mt-0.5">
+                    포스팅 발행이 정상 처리되지 않은 실시간 원인과 단계별 해결 가이드를 제공합니다.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDiagnosingPost(null)}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body (Scrollable) */}
+            <div className="p-6 overflow-y-auto space-y-5 text-xs text-slate-700">
+              
+              {/* 1. 대상 포스트 요약 카드 */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-extrabold text-slate-400 block uppercase">대상 포스팅 제목</span>
+                  <h4 className="text-sm font-black text-slate-900 mt-0.5 line-clamp-1">
+                    {diagnosingPost.title}
+                  </h4>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className="text-[10px] font-extrabold text-slate-400 block uppercase">예정 일시</span>
+                  <span className="text-xs font-bold text-slate-650">
+                    {new Date(diagnosingPost.scheduled_at).toLocaleString('ko-KR')}
+                  </span>
+                </div>
+              </div>
+
+              {/* 2. 실패 감지 사유 (Error Log Case) */}
+              <div className="p-5 rounded-2xl bg-rose-50/70 border border-rose-200 space-y-2">
+                <div className="flex items-center gap-2 text-rose-700 font-extrabold">
+                  <AlertCircle className="w-4.5 h-4.5 text-rose-600" />
+                  <span>시스템 진단 원인 (System Failure Reason)</span>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-rose-150 font-mono text-[11px] text-rose-900 leading-relaxed break-words font-semibold shadow-3xs">
+                  {diagnosingPost.error_message || 
+                   '네이버 공식 API 인증 키(Client ID/Secret) 미등록 및 RPA 자동화 로그인 세션(naver_session.json)이 등록되어 있지 않습니다.'}
+                </div>
+              </div>
+
+              {/* 3. 최고관리자 3단계 조치 및 해결 Action Plan */}
+              <div className="space-y-3">
+                <h4 className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+                  <Wrench className="w-4 h-4 text-emerald-600" />
+                  최고관리자 원클릭 해결 Action Plan (3단계 가이드)
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  
+                  {/* Step 1 */}
+                  <div className="p-3.5 rounded-2xl border border-slate-200 bg-white space-y-1.5 shadow-3xs">
+                    <div className="flex items-center justify-between text-[10px] font-black text-emerald-600">
+                      <span>STEP 1</span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold">인증 세팅</span>
+                    </div>
+                    <h5 className="font-bold text-slate-800 text-xs">계정 연동 상태 확인</h5>
+                    <p className="text-[10px] text-slate-500 font-medium leading-normal">
+                      상단 '1단계 계정 관리'에서 API Key 등록 또는 RPA 로그인 버튼을 실행해 주세요.
+                    </p>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="p-3.5 rounded-2xl border border-slate-200 bg-white space-y-1.5 shadow-3xs">
+                    <div className="flex items-center justify-between text-[10px] font-black text-sky-600">
+                      <span>STEP 2</span>
+                      <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 font-bold">로그인 동기화</span>
+                    </div>
+                    <h5 className="font-bold text-slate-800 text-xs">세션 / 토큰 갱신</h5>
+                    <p className="text-[10px] text-slate-500 font-medium leading-normal">
+                      로그인 창에서 1회 인증 완료 후 'RPA 세션 동기화' 버튼을 눌러 상태를 갱신합니다.
+                    </p>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="p-3.5 rounded-2xl border border-slate-200 bg-white space-y-1.5 shadow-3xs">
+                    <div className="flex items-center justify-between text-[10px] font-black text-purple-600">
+                      <span>STEP 3</span>
+                      <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-bold">즉시 재발행</span>
+                    </div>
+                    <h5 className="font-bold text-slate-800 text-xs">포스팅 즉시 재시도</h5>
+                    <p className="text-[10px] text-slate-500 font-medium leading-normal">
+                      아래 '승인 및 즉시 재발행' 버튼을 클릭하여 백그라운드 RPA 데몬을 기동합니다.
+                    </p>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDiagnosingPost(null);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-extrabold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+              >
+                <span>⚙️ 1단계 계정 연동 설정으로 스크롤 이동</span>
+              </button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setDiagnosingPost(null)}
+                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+                >
+                  닫기
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const postId = diagnosingPost.id;
+                    setDiagnosingPost(null);
+                    await handleApproveImmediate(postId);
+                  }}
+                  className="flex-1 sm:flex-none px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-extrabold text-xs shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>승인 및 즉시 재발행 실행</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

@@ -105,7 +105,7 @@ export default function NaverBlogMarketingPortal() {
   const [apiClientSecretInput, setApiClientSecretInput] = useState('');
   const [isAccountConnected, setIsAccountConnected] = useState(false);
   const [hasSession, setHasSession] = useState(false); // RPA 로그인 세션 보유 여부
-  const [activeModeTab, setActiveModeTab] = useState<'rpa' | 'api'>('rpa'); // RPA vs API 탭 모드
+  const [activeModeTab, setActiveModeTab] = usePersistedState<'rpa' | 'api'>('n_blog_active_mode_tab', 'rpa'); // RPA vs API 탭 모드 (상태 보존)
   const [isRpaLaunching, setIsRpaLaunching] = useState(false); // RPA 로그인 창 로딩 상태
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false); // RPA 설치 가이드 모달 상태
   const [isDaemonInfoOpen, setIsDaemonInfoOpen] = useState(false); // 데몬 상세 정보 모달 상태
@@ -189,12 +189,15 @@ export default function NaverBlogMarketingPortal() {
     }, 4000);
   };
 
-  // 통계 연동 변수 계산
-  const isConnected = isAccountConnected;
+  // 통계 연동 변수 계산 (현재 활성화된 연동 모드 탭 activeModeTab과 100% 동기화)
+  const isConnected = activeModeTab === 'api'
+    ? (!!settings.api_client_id?.trim() && !!settings.api_client_secret?.trim() && !!settings.naver_blog_id?.trim())
+    : (hasSession && !!settings.naver_blog_id?.trim());
+
   const displayAccountStatus = isConnected ? '연동 완료 🟢' : '미연동 🔴';
   const accountSubtext = isConnected 
     ? `${activeModeTab === 'api' ? '공식 API' : 'RPA 자동화'}로 안전하게 연동 중`
-    : '네이버 계정을 연결하고 오토파일럿을 활성화하세요';
+    : `${activeModeTab === 'api' ? '공식 API Key' : 'RPA 로그인 세션'} 인증 연동이 필요합니다`;
 
   const totalCount = posts.length;
   const uploadedCount = posts.filter(p => p.status === 'POSTED').length;
@@ -255,18 +258,11 @@ export default function NaverBlogMarketingPortal() {
           setNaverBlogIdInput(data.settings.naver_blog_id);
           
           if (data.settings.api_client_id && data.settings.api_client_secret) {
-            setActiveModeTab('api');
             setIsAccountConnected(true);
           } else {
-            setActiveModeTab('rpa');
             setIsAccountConnected(data.has_session === 1);
           }
         } else {
-          if (data.settings.api_client_id && data.settings.api_client_secret) {
-            setActiveModeTab('api');
-          } else {
-            setActiveModeTab('rpa');
-          }
           setIsAccountConnected(false);
         }
       }
@@ -388,6 +384,27 @@ export default function NaverBlogMarketingPortal() {
       const data = await res.json();
       if (data.success) {
         showToast(data.message, 'success');
+
+        // 🚀 사용자가 브라우저에서 로그인을 완료할 때까지 2초마다 세션 생성을 실시간 자동 감지 (Auto Polling)
+        let attempts = 0;
+        const pollInterval = setInterval(async () => {
+          attempts++;
+          try {
+            const checkRes = await apiFetch('/api/naver-blog/settings');
+            const checkData = await checkRes.json();
+            if (checkData.success && checkData.has_session === 1) {
+              setHasSession(true);
+              setIsAccountConnected(true);
+              showToast('🎉 로그인 완료 감지! 네이버 RPA 자동화 세션이 성공적으로 연동되었습니다! 🟢', 'success');
+              clearInterval(pollInterval);
+            }
+          } catch (e) {}
+
+          if (attempts >= 60) { // 최대 2분 감지
+            clearInterval(pollInterval);
+          }
+        }, 2000);
+
       } else {
         showToast('RPA 브라우저 기동 실패: ' + data.error, 'error');
       }
@@ -501,23 +518,10 @@ export default function NaverBlogMarketingPortal() {
   const handleDisconnectAccount = async () => {
     if (activeModeTab === 'rpa') {
       await handleClearRpaSession();
-      await saveSettings({
-        naver_blog_id: '',
-        api_client_id: '',
-        api_client_secret: ''
-      });
-      setNaverBlogIdInput('');
+      showToast('RPA 로그인 세션 쿠키가 해제되었습니다. (블로그 ID 및 API 설정은 보존됩니다)', 'info');
     } else {
-      await saveSettings({
-        naver_blog_id: '',
-        api_client_id: '',
-        api_client_secret: ''
-      });
       setIsAccountConnected(false);
-      setNaverBlogIdInput('');
-      setApiClientIdInput('');
-      setApiClientSecretInput('');
-      showToast('공식 API 연동 계정이 정상적으로 해제되었습니다.', 'info');
+      showToast('공식 API 연동 연결이 해제되었습니다. (등록된 ID 및 Client Key 정보는 보존됩니다)', 'info');
     }
   };
 
@@ -583,7 +587,47 @@ export default function NaverBlogMarketingPortal() {
 
   // 포스팅 등록 (예약 또는 즉시 발행)
   const handleSavePost = async (isImmediate = false) => {
-    // 0. 버튼 클릭 즉시 화면 100% 시각적 반응 보장
+    // 0-1. 클릭 시점 최신 세션 유효 상태 실시간 동기화
+    let currentHasSession = hasSession;
+    let currentSettings = settings;
+    try {
+      const res = await apiFetch('/api/naver-blog/settings');
+      const data = await res.json();
+      if (data.success) {
+        currentHasSession = data.has_session === 1;
+        setHasSession(currentHasSession);
+        if (data.settings) {
+          currentSettings = data.settings;
+          setSettings(data.settings);
+        }
+      }
+    } catch (e) {}
+
+    // 사전 계정 연동 및 로그인 세션 유효성 가드 체크 (사전 실패 방지)
+    const isRpaMode = activeModeTab === 'rpa';
+    const isApiValid = !!(currentSettings.api_client_id?.trim() && currentSettings.api_client_secret?.trim());
+    const isRpaValid = currentHasSession;
+
+    // RPA 모드인 경우 반드시 네이버 서버 Live Ping(currentHasSession)이 유효해야 함!
+    const isCurrentSessionValid = isRpaMode ? isRpaValid : (isApiValid || isRpaValid);
+
+    if (!isCurrentSessionValid) {
+      showToast('⚠️ 네이버 로그인 세션이 만료되었습니다. 상단 1단계 계정 관리를 확인해 주세요.', 'error');
+      
+      const confirmRedirect = window.confirm(
+        '⚠️ [발행 사전 방지 경고]\n\n' +
+        '네이버 RPA 로그인 인증 세션(naver_session.json)이 만료되어 네이버 서버에서 세션을 거부했습니다.\n' +
+        '이대로 진행 시 블로그 포스팅 자동 발행이 실패하게 됩니다.\n\n' +
+        '상단 [1단계: 네이버 블로그 마케터 계정 연동] 영역으로 이동하여 [RPA 로그인 인증]을 진행하시겠습니까?'
+      );
+
+      if (confirmRedirect) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      return; // 불필요한 시도 사전 차단!
+    }
+
+    // 0-2. 버튼 클릭 즉시 화면 100% 시각적 반응 보장
     showToast(isImmediate ? '🚀 즉시 포스팅 기동 중... 백그라운드 프로세스를 구동합니다!' : '⏰ 예약 포스팅 등록 중...', 'info');
 
     let finalImageUrl = '';
@@ -674,6 +718,45 @@ export default function NaverBlogMarketingPortal() {
 
   // 예약글 승인(즉시 발행)
   const handleApproveImmediate = async (postId: number) => {
+    // 0. 클릭 시점 최신 세션 유효 상태 실시간 동기화
+    let currentHasSession = hasSession;
+    let currentSettings = settings;
+    try {
+      const res = await apiFetch('/api/naver-blog/settings');
+      const data = await res.json();
+      if (data.success) {
+        currentHasSession = data.has_session === 1;
+        setHasSession(currentHasSession);
+        if (data.settings) {
+          currentSettings = data.settings;
+          setSettings(data.settings);
+        }
+      }
+    } catch (e) {}
+
+    // 사전 계정 연동 및 로그인 세션 유효성 체크
+    const isRpaMode = activeModeTab === 'rpa';
+    const isApiValid = !!(currentSettings.api_client_id?.trim() && currentSettings.api_client_secret?.trim());
+    const isRpaValid = currentHasSession;
+
+    const isCurrentSessionValid = isRpaMode ? isRpaValid : (isApiValid || isRpaValid);
+
+    if (!isCurrentSessionValid) {
+      showToast('⚠️ 네이버 로그인 세션이 만료되었습니다.', 'error');
+      
+      const confirmRedirect = window.confirm(
+        '⚠️ [발행 승인 사전 방지 경고]\n\n' +
+        '네이버 RPA 로그인 인증 세션(naver_session.json)이 만료되어 네이버 서버에서 세션을 거부하였습니다.\n' +
+        '이대로 승인 시 블로그 포스팅 발행이 실패하게 됩니다.\n\n' +
+        '상단 [1단계: 네이버 블로그 마케터 계정 연동] 영역으로 이동하여 [RPA 로그인 인증]을 완료하시겠습니까?'
+      );
+
+      if (confirmRedirect) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      return;
+    }
+
     try {
       const res = await apiFetch('/api/naver-blog/posts', {
         method: 'PATCH',

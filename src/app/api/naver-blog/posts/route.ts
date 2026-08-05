@@ -2,10 +2,45 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, deleteRows } from '../../../../../egdesk-helpers';
 
+// 네이버 공감 수치 비동기 수집 헬퍼 함수
+async function syncNaverLikes(posts: any[]) {
+  const targetPosts = posts.filter((p: any) => p.status === 'POSTED' && p.post_url);
+  for (const post of targetPosts) {
+    try {
+      const urlObj = new URL(post.post_url);
+      const pathParts = urlObj.pathname.split('/').filter(Boolean);
+      if (pathParts.length >= 2) {
+        const blogId = pathParts[0];
+        const logNo = pathParts[1];
+        const likeApiUrl = `https://blog.like.naver.com/v1/search/contents?suppress_response_codes=true&q=BLOG[${blogId}_${logNo}]`;
+        const likeRes = await fetch(likeApiUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': post.post_url
+          }
+        }).catch(() => null);
+
+        if (likeRes && likeRes.ok) {
+          const likeData = await likeRes.json().catch(() => null);
+          const reactions = likeData?.contents?.[0]?.reactions || [];
+          const totalLikes = reactions.reduce((sum: number, r: any) => sum + (Number(r.count) || 0), 0);
+
+          if (totalLikes !== post.likes_count) {
+            post.likes_count = totalLikes;
+            await updateRows('crm_naver_blog_posts', { likes_count: totalLikes }, { ids: [post.id] }).catch(() => {});
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn(`⚠️ [Metrics Sync] Post ${post.id} metrics fetch error:`, err.message);
+    }
+  }
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const status = searchParams.get('status'); // DRAFT, SCHEDULED, POSTED, FAILED 필터
+    const status = searchParams.get('status');
     
     const filters: any = {};
     if (status) {
@@ -20,13 +55,11 @@ export async function GET(req: Request) {
     const productsRes = await queryTable('products', {});
     const products = productsRes.rows || [];
     
-    // 상품 ID를 키로 하는 Map 생성
     const productMap = new Map();
     products.forEach((prod: any) => {
       productMap.set(prod.id, prod);
     });
 
-    // 게시글 목록에 상품 정보 결합 (소프트 삭제 배제 및 연동)
     let mergedPosts = posts
       .filter((post: any) => !post.deleted_at)
       .map((post: any) => {
@@ -43,11 +76,14 @@ export async function GET(req: Request) {
         };
       });
 
-    // scheduled_at을 기준으로 정렬 (예약 시간이 가까운 것/최신 것 순)
+    // 3. 비동기 실시간 네이버 공감 수치 동기화 (응답 지연 방지 백그라운드 구동)
+    syncNaverLikes(mergedPosts).catch(() => {});
+
+    // 4. 최근 등록순 정렬 (가장 최근에 생성/등록된 포스트가 최상단 1순위에 배치)
     mergedPosts.sort((a: any, b: any) => {
-      const dateA = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0;
-      const dateB = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0;
-      return dateB - dateA; // 내림차순 정렬
+      const idA = Number(a.id) || 0;
+      const idB = Number(b.id) || 0;
+      return idB - idA;
     });
 
     return NextResponse.json({ success: true, posts: mergedPosts });
@@ -111,8 +147,8 @@ export async function PATCH(req: Request) {
     const finalUpdates = { ...updates };
     if (updates.status === 'POSTED') {
       finalUpdates.posted_at = new Date().toISOString();
-      finalUpdates.views_count = Math.floor(Math.random() * 80) + 20; // 20~100 사이의 가상 조회수 부여
-      finalUpdates.likes_count = Math.floor(Math.random() * 15) + 3;  // 3~18 사이의 가상 공감수 부여
+      if (finalUpdates.views_count === undefined) finalUpdates.views_count = 0;
+      if (finalUpdates.likes_count === undefined) finalUpdates.likes_count = 0;
     }
 
     await updateRows('crm_naver_blog_posts', finalUpdates, { filters: { id: String(id) } });

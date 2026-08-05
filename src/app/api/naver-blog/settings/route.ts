@@ -20,6 +20,32 @@ const DEFAULT_SETTINGS = {
 // 세션 상태 파일 경로
 const SESSION_FILE_PATH = path.join(process.cwd(), 'scripts', 'naver_session.json');
 
+/**
+ * naver_session.json 파일 존재 및 NID_AUT / NID_SES 쿠키 보유 여부 실용 검증
+ */
+function checkSessionValidity(): number {
+  if (!fs.existsSync(SESSION_FILE_PATH)) return 0;
+  try {
+    const raw = fs.readFileSync(SESSION_FILE_PATH, 'utf-8');
+    const parsed = JSON.parse(raw);
+    const cookies = parsed.cookies || [];
+    
+    if (!cookies || cookies.length === 0) return 0;
+
+    const hasNidCookie = cookies.some((c: any) => c.name === 'NID_AUT' || c.name === 'NID_SES');
+    if (!hasNidCookie) {
+      console.warn('⚠️ [API] naver_session.json 파일은 존재하지만 NID_AUT/NID_SES 쿠키가 없습니다.');
+      return 0;
+    }
+
+    console.log('🎉 [API] naver_session.json 로컬 세션 인증 쿠키 보유 확인 완료! 🟢');
+    return 1;
+  } catch (e: any) {
+    console.error('⚠️ [API] 세션 검증 예외:', e.message);
+    return 0;
+  }
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -58,14 +84,14 @@ export async function GET(req: Request) {
     // 3. ID가 1인 설정을 조회
     const result = await queryTable('naver_blog_marketing_settings', { filters: { id: '1' } });
     
-    // 로컬 세션 파일 유효 상태 체크
-    const hasSessionFile = fs.existsSync(SESSION_FILE_PATH) ? 1 : 0;
+    // 로컬 세션 파일 실시간 쿠키 유효성 검증
+    const hasValidSession = checkSessionValidity();
 
     if (result.rows && result.rows.length > 0) {
       return NextResponse.json({ 
         success: true, 
         settings: result.rows[0],
-        has_session: hasSessionFile
+        has_session: hasValidSession
       });
     }
 
@@ -74,7 +100,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ 
       success: true, 
       settings: DEFAULT_SETTINGS,
-      has_session: hasSessionFile
+      has_session: hasValidSession
     });
   } catch (error: any) {
     console.error('네이버 블로그 설정 조회 에러:', error);

@@ -244,6 +244,24 @@ export async function setupDatabase() {
     { name: 'data_schema', type: 'TEXT', notNull: true }
   ], { tableName: 'crm_custom_pages', uniqueKeyColumns: ['id'] });
 
+  // 💡 [신규] 네이버 블로그 포스팅 이력 및 예약 대장 테이블 생성 (post_url 보장)
+  await safeCreateTable('네이버 블로그 포스팅 이력 및 예약', [
+    { name: 'id', type: 'INTEGER', notNull: true },
+    { name: 'product_id', type: 'TEXT' },
+    { name: 'status', type: 'TEXT', notNull: true },
+    { name: 'title', type: 'TEXT' },
+    { name: 'content', type: 'TEXT' },
+    { name: 'target_keywords', type: 'TEXT' },
+    { name: 'image_url', type: 'TEXT' },
+    { name: 'sub_image_url', type: 'TEXT' },
+    { name: 'scheduled_at', type: 'TEXT' },
+    { name: 'posted_at', type: 'TEXT' },
+    { name: 'post_url', type: 'TEXT' },
+    { name: 'error_message', type: 'TEXT' },
+    { name: 'views_count', type: 'INTEGER' },
+    { name: 'likes_count', type: 'INTEGER' }
+  ], { tableName: 'crm_naver_blog_posts', uniqueKeyColumns: ['id'] });
+
   // 💡 [신규] 맞춤형 커스텀 페이지 데이터 테이블 생성
   await safeCreateTable('맞춤형 커스텀 페이지 데이터', [
     { name: 'id', type: 'INTEGER', notNull: true },

@@ -1,14 +1,17 @@
 import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows } from '../../../../../egdesk-helpers';
+import { queryTable, insertRows, callAICenterTool } from '../../../../../egdesk-helpers';
 
 export async function POST(req: Request) {
   try {
     const { product_id, prompt, tone_style, target_keywords, generate_image } = await req.json();
 
-    // 1. DB에서 구글 AI API 키 조회
-    const settingsRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } });
-    const apiKey = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
+    // 1. DB 또는 환경변수에서 구글 AI API 키 조회 (전천후 파싱)
+    const settingsRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } }).catch(() => null);
+    let apiKey = settingsRes?.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
+    if (!apiKey) {
+      apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+    }
 
     // 2. 상품 정보 조회 (선택 사항)
     let productInfo = '';
@@ -71,23 +74,60 @@ ${prompt || '이 상품을 블로그 포스팅으로 상세하게 소개해주�
 3. 본문은 공백 제외 최소 800자 이상의 충분하고 상세한 장문으로 작성하여 SEO 점수를 확보해야 합니다.
 `;
 
-    if (apiKey) {
+    // 3. AI 블로그 원고 및 제목 생성 (표준 AI Caller: callAICenterTool 활용)
+    // AI API 호출 시 항시 표준 AI Caller 함수인 callAICenterTool을 경유하여 통합 관리합니다.
+    try {
+      console.log('🤖 [AI Route] callAICenterTool 표준 AI Caller를 통한 블로그 원고 생성 시작...');
+      
+      const userInstruction = `위 정보를 바탕으로 '${selectedTone}' 어조의 블로그 제목과 본문 원고를 [TITLE]과 [BODY] 형식에 맞춰 성실하게 생성해주세요. 타겟 키워드(${keywordsStr})가 본문에 자연스럽게 자주 언급되어야 합니다.`;
+
+      const aiCallerResult = await callAICenterTool('ai_center_create_run', {
+        workflowId: 'naver_blog_generation',
+        inputData: {
+          productName,
+          productPrice,
+          productInfo,
+          prompt,
+          tone_style: selectedTone,
+          target_keywords: keywordsStr,
+          systemPrompt,
+          userInstruction,
+          apiKey
+        }
+      }).catch(() => null);
+
+      if (aiCallerResult) {
+        if (typeof aiCallerResult === 'string') {
+          const rawText = aiCallerResult;
+          const titleMatch = rawText.match(/\[TITLE\]([\s\S]*?)\[\/TITLE\]/);
+          const bodyMatch = rawText.match(/\[BODY\]([\s\S]*?)\[\/BODY\]/);
+          if (titleMatch) generatedTitle = titleMatch[1].trim();
+          if (bodyMatch) generatedBody = bodyMatch[1].trim();
+        } else if (aiCallerResult.title && aiCallerResult.content) {
+          generatedTitle = aiCallerResult.title;
+          generatedBody = aiCallerResult.content;
+        } else if (aiCallerResult.rawText) {
+          const rawText = aiCallerResult.rawText;
+          const titleMatch = rawText.match(/\[TITLE\]([\s\S]*?)\[\/TITLE\]/);
+          const bodyMatch = rawText.match(/\[BODY\]([\s\S]*?)\[\/BODY\]/);
+          if (titleMatch) generatedTitle = titleMatch[1].trim();
+          if (bodyMatch) generatedBody = bodyMatch[1].trim();
+        }
+      }
+    } catch (aiCallerErr: any) {
+      console.warn('⚠️ [AI Route] callAICenterTool 실행 중 예외 발생:', aiCallerErr.message);
+    }
+
+    // (보조 AI Caller 폴백) 만약 AI Caller 도구 미배치 시 Gemini Direct 호출을 가동
+    if ((!generatedTitle || !generatedBody) && apiKey) {
       try {
         const response = await fetchGeminiWithFallback(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            systemInstruction: {
-              parts: [{ text: systemPrompt }]
-            },
-            contents: [
-              { parts: [{ text: `위 정보를 바탕으로 '${selectedTone}' 어조의 블로그 제목과 본문 원고를 [TITLE]과 [BODY] 형식에 맞춰 성실하게 생성해주세요. 타겟 키워드(${keywordsStr})가 본문에 자연스럽게 자주 언급되어야 합니다.` }] }
-            ],
-            generationConfig: {
-              temperature: 0.8
-            }
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ parts: [{ text: `위 정보를 바탕으로 '${selectedTone}' 어조의 블로그 제목과 본문 원고를 [TITLE]과 [BODY] 형식에 맞춰 성실하게 생성해주세요. 타겟 키워드(${keywordsStr})가 본문에 자연스럽게 자주 언급되어야 합니다.` }] }],
+            generationConfig: { temperature: 0.8 }
           })
         });
 
@@ -95,7 +135,6 @@ ${prompt || '이 상품을 블로그 포스팅으로 상세하게 소개해주�
           const geminiData = await response.json();
           const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
           
-          // AI 토큰 사용량 로깅
           try {
             const prompt_tokens = geminiData.usageMetadata?.promptTokenCount || 0;
             const completion_tokens = geminiData.usageMetadata?.candidatesTokenCount || 0;
@@ -114,23 +153,20 @@ ${prompt || '이 상품을 블로그 포스팅으로 상세하게 소개해주�
           } catch (e: any) {
             console.error('AI 토큰 로깅 실패:', e.message);
           }
-          
-          // TITLE과 BODY 파싱
+
           const titleMatch = rawText.match(/\[TITLE\]([\s\S]*?)\[\/TITLE\]/);
           const bodyMatch = rawText.match(/\[BODY\]([\s\S]*?)\[\/BODY\]/);
-          
           if (titleMatch) generatedTitle = titleMatch[1].trim();
           if (bodyMatch) generatedBody = bodyMatch[1].trim();
           
           if (!generatedTitle || !generatedBody) {
-            // 파싱 실패 시 폴백
             const splitText = rawText.split('\n');
             generatedTitle = splitText[0].replace(/제목:|Title:/i, '').replace(/[*#]/g, '').trim();
             generatedBody = splitText.slice(1).join('\n').trim();
           }
         }
       } catch (err) {
-        console.error('Gemini API 호출 중 오류 발생, 폴백 문구 작동:', err);
+        console.error('Gemini API 직접 호출 중 오류 발생:', err);
       }
     }
 

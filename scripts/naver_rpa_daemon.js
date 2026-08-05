@@ -59,22 +59,41 @@ async function runNaverRpaDaemon() {
 
       await loginPage.goto('https://nid.naver.com/nidlogin.login');
 
-      // 사용자가 직접 로그인을 마무리하고 네이버 메인 또는 블로그로 이동할 때까지 5분간 대기
+      // 사용자가 직접 로그인을 마무리할 때까지 NID_AUT/NID_SES 로그인 인증 쿠키 실시간 감지 (최대 5분)
       try {
-        await loginPage.waitForURL((url) => {
-          const href = url.href;
-          return href.includes('naver.com') && !href.includes('nidlogin.login');
-        }, { timeout: 300000 });
-        console.log('🎉 [RPA] 네이버 로그인 완착 감지! 세션 파일로 덤프합니다.');
+        let loggedIn = false;
+        const startTime = Date.now();
 
-        const storageState = await context.storageState();
-        fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(storageState, null, 2));
-        console.log(`💾 [RPA] 쿠키 데이터가 안전하게 저장되었습니다: ${SESSION_FILE_PATH}`);
+        while (Date.now() - startTime < 300000) {
+          if (loginPage.isClosed()) break;
+
+          const currentUrl = loginPage.url();
+          const cookies = await context.cookies().catch(() => []);
+          const hasNidCookie = cookies.some(c => c.name === 'NID_AUT' || c.name === 'NID_SES');
+
+          if (hasNidCookie || (currentUrl.includes('naver.com') && !currentUrl.includes('nidlogin'))) {
+            console.log('🎉 [RPA] 네이버 로그인 완료 감지! 쿠키 및 세션 데이터 저장 중...');
+            const storageState = await context.storageState();
+            fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(storageState, null, 2));
+            console.log(`💾 [RPA] 세션 쿠키 데이터 저장을 성공하였습니다: ${SESSION_FILE_PATH}`);
+            loggedIn = true;
+            await jitterSleep(1000, 1500);
+            break;
+          }
+          await jitterSleep(1000, 1500);
+        }
+
+        if (!loggedIn && !loginPage.isClosed()) {
+          const storageState = await context.storageState();
+          fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(storageState, null, 2));
+        }
       } catch (e) {
-        console.warn('⚠️ [RPA] 로그인 대기 시간 초과 또는 사용자가 창을 닫았습니다.');
+        console.warn('⚠️ [RPA] 로그인 감지 대기 중 예외:', e.message);
       }
 
-      await browser.close();
+      if (!loginPage.isClosed()) {
+        await browser.close().catch(() => {});
+      }
 
       if (isLoginOnly) {
         console.log('✅ [RPA] 로그인 인증 덤프 절차가 종료되었습니다.');
@@ -126,10 +145,10 @@ async function runNaverRpaDaemon() {
           if (dataList.success && dataList.posts) {
             activeAppUrl = testUrl;
             console.log(`🌐 [RPA] 활성 이지데스크 백엔드 포트 자동 바인딩 성공: ${activeAppUrl}`);
-            const nowThreshold = Date.now() + 120000;
+            const nowThreshold = Date.now() + 600000; // 10분 넉넉한 타임 마진 부여
             pendingPosts = dataList.posts
-              .filter((post) => post.status === 'SCHEDULED' && post.scheduled_at && new Date(post.scheduled_at).getTime() <= nowThreshold)
-              .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+              .filter((post) => post.status === 'SCHEDULED' && (!post.scheduled_at || new Date(post.scheduled_at).getTime() <= nowThreshold))
+              .sort((a, b) => new Date(a.scheduled_at || a.created_at || 0).getTime() - new Date(b.scheduled_at || b.created_at || 0).getTime());
             break;
           }
         }
@@ -196,6 +215,28 @@ async function runNaverRpaDaemon() {
       await page.goto(secondaryWriteUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
     }
     await jitterSleep(4000, 6000);
+
+    // 3. 네이버 로그인 페이지(nidlogin.login) 리다이렉트 감지 체크 (로그인 세션 만료 대응)
+    const currentUrl = page.url();
+    if (currentUrl.includes('nidlogin.login') || currentUrl.includes('nidlogin')) {
+      console.warn('⚠️ [RPA] 네이버 로그인 세션 쿠키가 만료되거나 유효하지 않아 로그인 화면(nidlogin.login)으로 리다이렉트되었습니다.');
+      console.warn('⚠️ [RPA] 키보드 타이핑을 즉시 중단하고 포스트 상태를 [FAILED]로 반영합니다.');
+
+      await fetch(`${activeAppUrl}/api/naver-blog/posts`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: targetPost.id,
+          updates: {
+            status: 'FAILED',
+            error_message: '네이버 로그인 세션이 만료되어 로그인 화면(nidlogin)으로 리다이렉트되었습니다. 1단계 계정 관리에서 다시 로그인 인증을 진행해 주세요.'
+          }
+        })
+      }).catch(() => {});
+
+      if (browser) await browser.close();
+      return;
+    }
 
     // mainFrame iframe 여부 탐색
     let frame = page;
@@ -279,10 +320,36 @@ async function runNaverRpaDaemon() {
 
     if (!titleClicked) {
       // DOM 클릭 폴백
-      await page.evaluate(() => {
+      const domSuccess = await page.evaluate(() => {
         const titleEl = document.querySelector('.se-document-title [contenteditable="true"], .se-title-text');
-        if (titleEl) titleEl.click();
+        if (titleEl) {
+          titleEl.click();
+          return true;
+        }
+        return false;
+      }).catch(() => false);
+
+      if (domSuccess) titleClicked = true;
+    }
+
+    // 만약 스마트에디터 제목 포커스 클릭에 실패했다면(로그인 화면 등), 키보드 포스트 제목 주입을 엄격히 금지
+    if (!titleClicked) {
+      console.warn('⚠️ [RPA] 네이버 스마트에디터 제목 입력 필드를 찾지 못해 제목 키보드 주입을 안전하게 취소합니다.');
+      
+      await fetch(`${activeAppUrl}/api/naver-blog/posts`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: targetPost.id,
+          updates: {
+            status: 'FAILED',
+            error_message: '네이버 블로그 에디터 제목 영역을 찾을 수 없습니다. (로그인 세션 만료 또는 페이지 이동 실패)'
+          }
+        })
       }).catch(() => {});
+
+      if (browser) await browser.close();
+      return;
     }
 
     await jitterSleep(500, 1000);
@@ -345,7 +412,7 @@ async function runNaverRpaDaemon() {
       const tempImgPath = path.join(__dirname, `temp_blog_upload_${Date.now()}.jpg`);
 
       // 1순위: 포스트에 명시된 image_url, 2순위: Google Imagen 3 API 호출 또는 최신 AI 모델 폴백
-      let imageBuffer: Buffer | null = null;
+      let imageBuffer = null;
       const keywordSeed = targetPost.target_keywords || targetPost.title || 'technology product';
       const imagen3Prompt = `Professional high quality realistic lifestyle blog photo about ${keywordSeed}, 8k resolution, cinematic lighting, studio product photography, clean background`;
 
@@ -590,35 +657,66 @@ async function runNaverRpaDaemon() {
     }
 
     // 9. 결과 주소(URL) 피드백 획득 및 Next.js DB 상태 완료 처리
-    if (isPostedReal || !finalUrl.includes('Redirect=Write')) {
-      console.log(`🎉 [RPA] 네이버 블로그 실제 게시글 게재 리다이렉트 완착 성공!`);
-      console.log(`🔗 실제 등록된 게시글 URL: ${finalUrl}`);
-    } else {
-      console.warn(`⚠️ [RPA] 글쓰기 폼에 머물러 있어 포스팅 게재 미완료 가능성이 있습니다. URL: ${finalUrl}`);
-    }
-    console.log(`🔗 게시글 URL: ${finalUrl}`);
+    const isWritePage = finalUrl.includes('Redirect=Write') || finalUrl.includes('PostWriteForm') || finalUrl.includes('nidlogin');
+    const isSuccessPosted = isPostedReal && !isWritePage;
 
-    const patchRes = await fetch(`${activeAppUrl}/api/naver-blog/posts`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: targetPost.id,
-        updates: {
-          status: 'POSTED',
-          posted_at: new Date().toISOString()
-        }
-      })
-    });
-    
-    const patchData = await patchRes.json();
-    if (patchData.success) {
-      console.log('💾 [RPA] Next.js SQLite DB 내부 포스팅 상태가 [POSTED]로 동기화 갱신 완료되었습니다.');
+    if (isSuccessPosted) {
+      console.log(`🎉 [RPA] 네이버 블로그 실제 게시글 게재 완료 성공! URL: ${finalUrl}`);
+      
+      const patchRes = await fetch(`${activeAppUrl}/api/naver-blog/posts`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: targetPost.id,
+          updates: {
+            status: 'POSTED',
+            posted_at: new Date().toISOString(),
+            post_url: finalUrl,
+            error_message: null
+          }
+        })
+      });
+      const patchData = await patchRes.json().catch(() => ({}));
+      if (patchData.success) {
+        console.log('💾 [RPA] DB 포스팅 상태가 [POSTED]로 동기화 완료되었습니다.');
+      }
     } else {
-      console.log('❌ [RPA] DB 상태 업데이트 API 호출이 실패했습니다.');
+      console.warn(`❌ [RPA] 네이버 블로그 포스팅 게재 실패 (글쓰기 폼 미이탈/인증 만료). URL: ${finalUrl}`);
+      
+      const patchRes = await fetch(`${activeAppUrl}/api/naver-blog/posts`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: targetPost.id,
+          updates: {
+            status: 'FAILED',
+            error_message: '네이버 스마트에디터 발행 버튼 클릭 실패 또는 로그인 세션 만료로 실제 블로그에 포스팅이 게재되지 않았습니다.'
+          }
+        })
+      });
+      const patchData = await patchRes.json().catch(() => ({}));
+      if (patchData.success) {
+        console.log('💾 [RPA] DB 포스팅 상태가 [FAILED]로 정확하게 동기화 기록되었습니다.');
+      }
     }
 
   } catch (error) {
     console.error('❌ [RPA] 네이버 자동화 발행 처리 중 치명적 오류 발생:', error.message);
+    if (targetPost && targetPost.id) {
+      try {
+        await fetch(`${APP_URL}/api/naver-blog/posts`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: targetPost.id,
+            updates: {
+              status: 'FAILED',
+              error_message: `RPA 런타임 오류 발생: ${error.message}`
+            }
+          })
+        });
+      } catch (e) {}
+    }
   } finally {
     if (browser) {
       await browser.close();

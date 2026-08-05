@@ -27,6 +27,7 @@ export interface NaverPost {
   error_message: string | null;
   views_count: number;
   likes_count: number;
+  post_url?: string | null;
   product?: Product | null;
 }
 
