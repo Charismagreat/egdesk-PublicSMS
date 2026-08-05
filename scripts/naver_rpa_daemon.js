@@ -45,42 +45,75 @@ async function getAppUrlWithFallback() {
 // 네이버 로그인 폼 자동 타이핑 및 클릭 헬퍼 함수
 async function autoPerformNaverLogin(page, activeAppUrl) {
   try {
-    const settingsRes = await fetch(`${activeAppUrl}/api/naver-blog/settings`).catch(() => null);
-    if (!settingsRes || !settingsRes.ok) return false;
-    const settingsData = await settingsRes.json().catch(() => null);
-    const savedId = settingsData?.settings?.naver_login_id?.trim();
-    const savedPw = settingsData?.settings?.naver_login_pw?.trim();
+    let savedId = '';
+    let savedPw = '';
+
+    // 백엔드 API 포트 탐색을 통한 설정 데이터 조회
+    const candidatePorts = [activeAppUrl, 'http://localhost:4002', 'http://localhost:4000', 'http://localhost:4001', 'http://localhost:4003'];
+    for (const targetUrl of candidatePorts) {
+      if (!targetUrl) continue;
+      try {
+        const cleanUrl = targetUrl.replace(/\/$/, '');
+        const settingsRes = await fetch(`${cleanUrl}/api/naver-blog/settings`).catch(() => null);
+        if (settingsRes && settingsRes.ok) {
+          const settingsData = await settingsRes.json().catch(() => null);
+          if (settingsData?.settings?.naver_login_id && settingsData?.settings?.naver_login_pw) {
+            savedId = settingsData.settings.naver_login_id.trim();
+            savedPw = settingsData.settings.naver_login_pw.trim();
+            if (savedId && savedPw) break;
+          }
+        }
+      } catch (e) {}
+    }
 
     if (!savedId || !savedPw) {
-      console.log('ℹ️ [RPA Auto-Login] 저장된 네이버 계정 정보(ID/PW)가 없어 사용자의 직접 수동 로그인을 대기합니다.');
+      console.log('ℹ️ [RPA Auto-Login] DB에 저장된 네이버 계정 정보(ID/PW)가 비어 있어, 사용자 직접 로그인을 대기합니다.');
       return false;
     }
 
     console.log(`🤖 [RPA Auto-Login] 저장된 네이버 계정(@${savedId})으로 무인 자동 로그인을 개시합니다.`);
-    await page.waitForSelector('#id', { timeout: 8000 }).catch(() => {});
-    await jitterSleep(600, 1000);
+    
+    // 네이버 로그인 폼 요소 감지 대기 (최대 12초)
+    await page.waitForSelector('#id', { timeout: 12000 }).catch(() => {});
+    await jitterSleep(800, 1500);
 
-    // 1. #id 필드 클릭 및 직접 키보드 타이핑
+    // 1. #id 필드 클리어 및 직접 입력
     const idInput = page.locator('#id');
     if (await idInput.count() > 0) {
-      await idInput.click();
-      await idInput.fill('');
-      await page.keyboard.type(savedId, { delay: 60 });
+      await idInput.click({ force: true }).catch(() => {});
+      await idInput.fill(savedId).catch(() => {});
+      await page.keyboard.type(savedId, { delay: 50 }).catch(() => {});
     }
 
-    await jitterSleep(400, 800);
+    await jitterSleep(500, 1000);
 
-    // 2. #pw 필드 클릭 및 직접 키보드 타이핑
+    // 2. #pw 필드 클리어 및 직접 입력
     const pwInput = page.locator('#pw');
     if (await pwInput.count() > 0) {
-      await pwInput.click();
-      await pwInput.fill('');
-      await page.keyboard.type(savedPw, { delay: 60 });
+      await pwInput.click({ force: true }).catch(() => {});
+      await pwInput.fill(savedPw).catch(() => {});
+      await page.keyboard.type(savedPw, { delay: 50 }).catch(() => {});
     }
 
-    await jitterSleep(800, 1200);
+    // 3. 백업 DOM 평가 주입 (네이버 보안 폼 보정)
+    await page.evaluate(({ idVal, pwVal }) => {
+      const idEl = document.querySelector('#id');
+      const pwEl = document.querySelector('#pw');
+      if (idEl && !idEl.value) {
+        idEl.value = idVal;
+        idEl.dispatchEvent(new Event('input', { bubbles: true }));
+        idEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (pwEl && !pwEl.value) {
+        pwEl.value = pwVal;
+        pwEl.dispatchEvent(new Event('input', { bubbles: true }));
+        pwEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, { idVal: savedId, pwVal: savedPw }).catch(() => {});
 
-    // 3. 로그인 버튼 클릭
+    await jitterSleep(1000, 1800);
+
+    // 4. 로그인 버튼 강력 타격
     const loginBtn = page.locator('#log\\.login, button.btn_login, .btn_global').first();
     if (await loginBtn.count() > 0) {
       console.log('🚀 [RPA Auto-Login] "로그인" 버튼을 타격하여 무인 인가를 완료합니다.');
