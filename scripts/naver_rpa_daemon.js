@@ -236,9 +236,9 @@ async function runNaverRpaDaemon() {
           if (dataList.success && dataList.posts) {
             activeAppUrl = testUrl;
             console.log(`🌐 [RPA] 활성 이지데스크 백엔드 포트 자동 바인딩 성공: ${activeAppUrl}`);
-            const nowThreshold = Date.now() + 600000; // 10분 넉넉한 타임 마진 부여
+            const nowThreshold = Date.now() + 1800000; // 30분 타임 마진 부여
             pendingPosts = dataList.posts
-              .filter((post) => post.status === 'SCHEDULED' && (!post.scheduled_at || new Date(post.scheduled_at).getTime() <= nowThreshold))
+              .filter((post) => (post.status === 'SCHEDULED' || (post.status === 'POSTED' && !post.post_url)) && (!post.scheduled_at || new Date(post.scheduled_at).getTime() <= nowThreshold))
               .sort((a, b) => new Date(a.scheduled_at || a.created_at || 0).getTime() - new Date(b.scheduled_at || b.created_at || 0).getTime());
             break;
           }

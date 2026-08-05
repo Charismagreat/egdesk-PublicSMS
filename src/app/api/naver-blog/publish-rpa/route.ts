@@ -124,10 +124,10 @@ export async function POST(req: Request) {
     isRpaRunning = true;
     console.log('🤖 [API] 네이버 블로그 RPA 자동 발행 데몬을 즉시 기동합니다...');
 
-    // 25초 안전 타임아웃 락 해제
+    // 5초 안전 타임아웃 락 해제
     const lockTimer = setTimeout(() => {
       isRpaRunning = false;
-    }, 25000);
+    }, 5000);
 
     // 4. 요청 헤더(Host 및 Referer)에서 사용자의 현재 포트 동적 추출
     const referer = req.headers.get('referer');
