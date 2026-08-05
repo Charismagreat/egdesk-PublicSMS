@@ -82,7 +82,7 @@ export default function StatsGrid({
           </div>
         </div>
         <p className="text-xs text-slate-450 mt-4 truncate font-semibold">
-          네이버 서버 실시간 집계: <strong className="text-emerald-600 font-extrabold">댓글 {totalComments}개 · 공감 {totalLikes}개</strong>
+          리스트 실시간 통계 총합: <strong className="text-emerald-600 font-extrabold">💬 {totalComments}개 · 👁️ {avgViews}회 · ❤️ {totalLikes}개</strong>
         </p>
       </motion.div>
 

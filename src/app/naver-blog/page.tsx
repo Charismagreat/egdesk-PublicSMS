@@ -208,12 +208,10 @@ export default function NaverBlogMarketingPortal() {
     : '예약된 포스팅이 없습니다';
 
   const postedPosts = posts.filter(p => p.status === 'POSTED');
-  const avgViews = postedPosts.length > 0
-    ? Math.round(postedPosts.reduce((acc, p) => acc + (p.views_count || 0), 0) / postedPosts.length)
-    : 0;
+  const totalViews = postedPosts.reduce((acc, p) => acc + (p.views_count || 0), 0);
   const viewsSubtext = postedPosts.length > 0
-    ? `최근 발행된 포스팅 ${postedPosts.length}개 기준 실시간 조회 분석`
-    : '발행된 글이 없어 조회수 집계 전입니다';
+    ? `발행 완료된 포스팅 ${postedPosts.length}개 실시간 통계 합계`
+    : '발행된 글이 없어 수집 전입니다';
 
   const failedCount = posts.filter(p => p.status === 'FAILED').length;
   const totalProcessed = uploadedCount + failedCount;
@@ -910,7 +908,7 @@ export default function NaverBlogMarketingPortal() {
         isConnected={isConnected}
         displayAccountStatus={displayAccountStatus}
         accountSubtext={accountSubtext}
-        avgViews={avgViews}
+        avgViews={totalViews}
         viewsSubtext={viewsSubtext}
         totalComments={postedPosts.reduce((acc, p) => acc + (p.comments_count || 0), 0)}
         totalLikes={postedPosts.reduce((acc, p) => acc + (p.likes_count || 0), 0)}
