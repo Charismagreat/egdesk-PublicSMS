@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Users, TrendingUp, CheckCircle, Sparkles } from 'lucide-react';
+import { Users, TrendingUp, CheckCircle, Sparkles, BarChart3 } from 'lucide-react';
 
 interface StatsGridProps {
   isConnected: boolean;
