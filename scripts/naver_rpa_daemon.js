@@ -95,9 +95,13 @@ async function autoPerformNaverLogin(page, activeAppUrl) {
 
 async function runNaverRpaDaemon() {
   console.log('🤖 [RPA] 네이버 블로그 자동 발행 데몬 동작을 개시합니다.');
-  const activeAppUrl = await getAppUrlWithFallback();
+  let activeAppUrl = 'http://localhost:4002';
+  try {
+    activeAppUrl = await getAppUrlWithFallback();
+  } catch (e) {}
   console.log(`🌐 백엔드 연동 서버 주소: ${activeAppUrl}`);
 
+  let targetPost = null;
   const isLoginOnly = process.argv.includes('--login');
   const hasSession = fs.existsSync(SESSION_FILE_PATH);
 
@@ -195,12 +199,8 @@ async function runNaverRpaDaemon() {
       }
     }
 
-    // 1. Next.js 백엔드 API를 통해 예약 포스트 리스트 호출 (전 포트 범주 동적 자동 탐색)
-    let pendingPosts = [];
     const portsToScan = [4002, 4000, 4006, 4001, 4003, 4004, 4005, 3000, 8080, 8000];
     const candidateUrls = Array.from(new Set([APP_URL, ...portsToScan.map(p => `http://localhost:${p}`)]));
-    let activeAppUrl = APP_URL;
-
     for (const testUrl of candidateUrls) {
       try {
         const controller = new AbortController();
@@ -323,7 +323,6 @@ async function runNaverRpaDaemon() {
         if (browser) await browser.close();
         return;
       }
-    }
 
     // mainFrame iframe 여부 탐색
     let frame = page;
@@ -789,9 +788,9 @@ async function runNaverRpaDaemon() {
 
   } catch (error) {
     console.error('❌ [RPA] 네이버 자동화 발행 처리 중 치명적 오류 발생:', error.message);
-    if (targetPost && targetPost.id) {
+    if (typeof targetPost !== 'undefined' && targetPost && targetPost.id) {
       try {
-        await fetch(`${APP_URL}/api/naver-blog/posts`, {
+        await fetch(`${activeAppUrl}/api/naver-blog/posts`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
