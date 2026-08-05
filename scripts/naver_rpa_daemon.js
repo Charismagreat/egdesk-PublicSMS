@@ -708,7 +708,44 @@ async function runNaverRpaDaemon() {
 
     // 2단계: egdesk-scratch의 5초 정밀 완충 대기 (발행 옵션 레이어 팝업 애니메이션 안정화)
     console.log('⏳ [RPA] [egdesk-scratch 기술] 발행 옵션 팝업 애니메이션 안정화를 위해 5초간 완충 대기합니다...');
-    await jitterSleep(5000, 5000);
+    await jitterSleep(3000, 4000);
+
+    // 💡 [신규] '공감허용', '댓글허용', '검색허용' 옵션 체크박스 강제 활성화 (공감 수치 수집 보장!)
+    try {
+      console.log('💡 [RPA] 네이버 포스팅 발행 옵션("공감허용", "댓글허용", "검색허용")을 강제 체크 활성화합니다.');
+      await page.evaluate(() => {
+        const labels = Array.from(document.querySelectorAll('label, span, div'));
+        labels.forEach(el => {
+          if (el.textContent && el.textContent.includes('공감허용')) {
+            const parent = el.closest('label') || el.closest('div') || el;
+            const checkbox = parent.querySelector('input[type="checkbox"]') || el.querySelector('input[type="checkbox"]');
+            if (checkbox && !checkbox.checked) {
+              checkbox.click();
+            } else if (parent && !parent.querySelector('input[type="checkbox"]:checked')) {
+              parent.click();
+            }
+          }
+          if (el.textContent && el.textContent.includes('댓글허용')) {
+            const parent = el.closest('label') || el.closest('div') || el;
+            const checkbox = parent.querySelector('input[type="checkbox"]') || el.querySelector('input[type="checkbox"]');
+            if (checkbox && !checkbox.checked) checkbox.click();
+          }
+        });
+      }).catch(() => {});
+
+      // Playwright Locator Fallback
+      const sympathyLabel = page.locator('label:has-text("공감허용"), span:has-text("공감허용")').first();
+      if (await sympathyLabel.count() > 0 && await sympathyLabel.isVisible()) {
+        const isChecked = await sympathyLabel.locator('input[type="checkbox"]').isChecked().catch(() => false);
+        if (!isChecked) {
+          await sympathyLabel.click({ force: true }).catch(() => {});
+        }
+      }
+    } catch (optErr) {
+      console.warn('⚠️ [RPA] 발행 옵션 체크박스 클릭 처리 예외:', optErr.message);
+    }
+
+    await jitterSleep(1500, 2000);
 
     // 3단계: 우측 발행 옵션 팝업 내 최종 V 발행 버튼 클릭 (egdesk-scratch 공식 최종 XPath 적용)
     console.log('🚀 [RPA] [egdesk-scratch 기술] 우측 레이어 팝업 내 최종 "V 발행" 버튼을 정밀 타격합니다.');
