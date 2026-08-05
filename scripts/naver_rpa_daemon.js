@@ -847,7 +847,7 @@ async function runNaverRpaDaemon() {
       if (patchData.success) {
         console.log('💾 [RPA] DB 포스팅 상태가 [POSTED]로 동기화 완료되었습니다.');
         // 📊 포스팅 성공 후 전체 글 방문수(조회수) 즉시 수집 & DB 업데이트
-        await fetchNaverPostViewsWithRpa(page, activeAppUrl, settings).catch(() => {});
+        await fetchNaverPostViewsWithRpa(page, activeAppUrl).catch(() => {});
       }
     } else {
       console.warn(`❌ [RPA] 네이버 블로그 포스팅 게재 실패 (글쓰기 폼 미이탈/인증 만료). URL: ${finalUrl}`);
@@ -895,10 +895,16 @@ async function runNaverRpaDaemon() {
 }
 
 // 네이버 통계/글관리 센터에서 각 포스트의 실제 조회수(방문수)를 파싱하여 백엔드 DB로 전달하는 헬퍼 함수
-async function fetchNaverPostViewsWithRpa(page, activeAppUrl, settings) {
+async function fetchNaverPostViewsWithRpa(page, activeAppUrl) {
   try {
-    const blogId = settings?.naver_blog_id;
-    if (!blogId) return;
+    let blogId = 'nocodelife';
+    try {
+      const setRes = await fetch(`${activeAppUrl}/api/naver-blog/settings`);
+      const setData = await setRes.json();
+      if (setData.settings?.naver_blog_id) {
+        blogId = setData.settings.naver_blog_id.trim();
+      }
+    } catch (e) {}
 
     console.log(`📊 [RPA 방문수 수집] ${blogId} 네이버 블로그 글 목록 통계 조회수 수집을 시작합니다...`);
 
