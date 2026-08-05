@@ -59,6 +59,47 @@ async function runNaverRpaDaemon() {
 
       await loginPage.goto('https://nid.naver.com/nidlogin.login');
 
+      // 저장된 네이버 계정 ID/PW가 설정되어 있는 경우 100% 무인 자동 로그인 시도
+      try {
+        const settingsRes = await fetch(`${activeAppUrl}/api/naver-blog/settings`).catch(() => null);
+        if (settingsRes && settingsRes.ok) {
+          const settingsData = await settingsRes.json().catch(() => null);
+          const savedId = settingsData?.settings?.naver_login_id?.trim();
+          const savedPw = settingsData?.settings?.naver_login_pw?.trim();
+
+          if (savedId && savedPw) {
+            console.log(`🤖 [RPA Auto-Login] 저장된 네이버 마케팅 계정(@${savedId})으로 무인 자동 로그인을 시도합니다.`);
+            await loginPage.waitForSelector('#id', { timeout: 5000 }).catch(() => {});
+            await jitterSleep(500, 1000);
+
+            await loginPage.evaluate(({ idVal, pwVal }) => {
+              const idEl = document.querySelector('#id');
+              const pwEl = document.querySelector('#pw');
+              if (idEl) {
+                idEl.value = idVal;
+                idEl.dispatchEvent(new Event('input', { bubbles: true }));
+                idEl.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+              if (pwEl) {
+                pwEl.value = pwVal;
+                pwEl.dispatchEvent(new Event('input', { bubbles: true }));
+                pwEl.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            }, { idVal: savedId, pwVal: savedPw });
+
+            await jitterSleep(800, 1200);
+
+            const loginBtn = loginPage.locator('#log\\.login, button.btn_login, .btn_global').first();
+            if (await loginBtn.count() > 0) {
+              console.log('🚀 [RPA Auto-Login] "로그인" 버튼을 타격하여 무인 인가를 완료합니다.');
+              await loginBtn.click({ force: true }).catch(() => {});
+            }
+          }
+        }
+      } catch (autoErr) {
+        console.warn('⚠️ [RPA Auto-Login] 무인 자동 로그인 타이핑 시도 예외:', autoErr.message);
+      }
+
       // 사용자가 직접 로그인을 마무리할 때까지 NID_AUT/NID_SES 로그인 인증 쿠키 실시간 감지 (최대 5분)
       try {
         let loggedIn = false;

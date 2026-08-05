@@ -262,6 +262,20 @@ export async function setupDatabase() {
     { name: 'likes_count', type: 'INTEGER' }
   ], { tableName: 'crm_naver_blog_posts', uniqueKeyColumns: ['id'] });
 
+  // 💡 [신규] 네이버 블로그 마케팅 설정 대장 테이블 생성 (자동 로그인 ID/PW 컬럼 포함)
+  await safeCreateTable('네이버 블로그 마케팅 설정 대장', [
+    { name: 'id', type: 'INTEGER', notNull: true },
+    { name: 'is_autopilot', type: 'INTEGER' },
+    { name: 'autopilot_interval', type: 'TEXT' },
+    { name: 'autopilot_time', type: 'TEXT' },
+    { name: 'tone_style', type: 'TEXT' },
+    { name: 'naver_blog_id', type: 'TEXT' },
+    { name: 'naver_login_id', type: 'TEXT' },
+    { name: 'naver_login_pw', type: 'TEXT' },
+    { name: 'api_client_id', type: 'TEXT' },
+    { name: 'api_client_secret', type: 'TEXT' }
+  ], { tableName: 'naver_blog_marketing_settings', uniqueKeyColumns: ['id'] });
+
   // 💡 [신규] 맞춤형 커스텀 페이지 데이터 테이블 생성
   await safeCreateTable('맞춤형 커스텀 페이지 데이터', [
     { name: 'id', type: 'INTEGER', notNull: true },

@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS = {
   autopilot_time: '10:00', // 발행 시간 (HH:MM)
   tone_style: '정보제공형', // 정보제공형, 솔직리뷰형, 전문칼럼형, 친근한일상형
   naver_blog_id: '', // 연동 블로그 ID
+  naver_login_id: '', // 자동 로그인 네이버 ID
+  naver_login_pw: '', // 자동 로그인 네이버 비밀번호
   api_client_id: '', // (더이상 사용하지 않으나 하위 호환 유지)
   api_client_secret: '', // (더이상 사용하지 않으나 하위 호환 유지)
 };
@@ -21,9 +23,10 @@ const DEFAULT_SETTINGS = {
 const SESSION_FILE_PATH = path.join(process.cwd(), 'scripts', 'naver_session.json');
 
 /**
- * naver_session.json 파일 존재 및 NID_AUT / NID_SES 쿠키 보유 여부 실용 검증
+ * naver_session.json 쿠키로 네이버 Live Ping (https://nid.naver.com/user2/help/myInfo)을 수행하여
+ * 실제 네이버 서버에서 로그인 세션이 유지되어 있는지 100% 실시간 검증합니다.
  */
-function checkSessionValidity(): number {
+async function checkSessionValidity(): Promise<number> {
   if (!fs.existsSync(SESSION_FILE_PATH)) return 0;
   try {
     const raw = fs.readFileSync(SESSION_FILE_PATH, 'utf-8');
@@ -32,13 +35,35 @@ function checkSessionValidity(): number {
     
     if (!cookies || cookies.length === 0) return 0;
 
-    const hasNidCookie = cookies.some((c: any) => c.name === 'NID_AUT' || c.name === 'NID_SES');
-    if (!hasNidCookie) {
-      console.warn('⚠️ [API] naver_session.json 파일은 존재하지만 NID_AUT/NID_SES 쿠키가 없습니다.');
+    const nidAut = cookies.find((c: any) => c.name === 'NID_AUT')?.value;
+    const nidSes = cookies.find((c: any) => c.name === 'NID_SES')?.value;
+
+    if (!nidAut || !nidSes) {
+      console.warn('⚠️ [API] naver_session.json 파일에 필수 로그인 인증 쿠키(NID_AUT/NID_SES)가 누락되었습니다.');
       return 0;
     }
 
-    console.log('🎉 [API] naver_session.json 로컬 세션 인증 쿠키 보유 확인 완료! 🟢');
+    // 네이버 서버 Live Ping 수행 (302 Redirect 발생 시 세션 만료로 판정)
+    const cookieHeader = `NID_AUT=${nidAut}; NID_SES=${nidSes}`;
+    const liveRes = await fetch('https://nid.naver.com/user2/help/myInfo', {
+      headers: {
+        'Cookie': cookieHeader,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      redirect: 'manual'
+    }).catch(() => null);
+
+    if (liveRes) {
+      const location = liveRes.headers.get('location') || '';
+      // 302 Redirect 또는 nidlogin 유도 시 세션 만료 처리
+      if (liveRes.status === 302 && location.includes('nidlogin')) {
+        console.warn('🔴 [API Live Ping] 네이버 서버에서 로그인 세션 거부(만료)가 감지되었습니다. 잔여 세션 파일을 정리합니다.');
+        try { fs.unlinkSync(SESSION_FILE_PATH); } catch (e) {}
+        return 0;
+      }
+    }
+
+    console.log('🎉 [API Live Ping] 네이버 인증 세션이 살아있음을 확인했습니다! 🟢');
     return 1;
   } catch (e: any) {
     console.error('⚠️ [API] 세션 검증 예외:', e.message);
@@ -84,8 +109,8 @@ export async function GET(req: Request) {
     // 3. ID가 1인 설정을 조회
     const result = await queryTable('naver_blog_marketing_settings', { filters: { id: '1' } });
     
-    // 로컬 세션 파일 실시간 쿠키 유효성 검증
-    const hasValidSession = checkSessionValidity();
+    // 로컬 세션 파일 실시간 네이버 Live Ping 쿠키 유효성 검증
+    const hasValidSession = await checkSessionValidity();
 
     if (result.rows && result.rows.length > 0) {
       return NextResponse.json({ 
@@ -121,6 +146,8 @@ export async function POST(req: Request) {
       autopilot_time: data.autopilot_time || '10:00',
       tone_style: data.tone_style || '정보제공형',
       naver_blog_id: data.naver_blog_id !== undefined ? data.naver_blog_id : (checkExist.rows?.[0]?.naver_blog_id || ''),
+      naver_login_id: data.naver_login_id !== undefined ? data.naver_login_id : (checkExist.rows?.[0]?.naver_login_id || ''),
+      naver_login_pw: data.naver_login_pw !== undefined ? data.naver_login_pw : (checkExist.rows?.[0]?.naver_login_pw || ''),
       api_client_id: data.api_client_id !== undefined ? data.api_client_id : (checkExist.rows?.[0]?.api_client_id || ''),
       api_client_secret: data.api_client_secret !== undefined ? data.api_client_secret : (checkExist.rows?.[0]?.api_client_secret || ''),
     };

@@ -39,6 +39,8 @@ export interface AutopilotSettings {
   autopilot_time: string;
   tone_style: string;
   naver_blog_id: string;
+  naver_login_id?: string;
+  naver_login_pw?: string;
   api_client_id: string;
   api_client_secret: string;
 }

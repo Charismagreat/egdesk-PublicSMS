@@ -101,6 +101,8 @@ export default function NaverBlogMarketingPortal() {
 
   // 계정 연결 상태 및 하이브리드 연동 관련 상태 변수
   const [naverBlogIdInput, setNaverBlogIdInput] = useState('');
+  const [naverLoginIdInput, setNaverLoginIdInput] = useState('');
+  const [naverLoginPwInput, setNaverLoginPwInput] = useState('');
   const [apiClientIdInput, setApiClientIdInput] = useState('');
   const [apiClientSecretInput, setApiClientSecretInput] = useState('');
   const [isAccountConnected, setIsAccountConnected] = useState(false);
@@ -253,6 +255,8 @@ export default function NaverBlogMarketingPortal() {
         
         setApiClientIdInput(data.settings.api_client_id || '');
         setApiClientSecretInput(data.settings.api_client_secret || '');
+        setNaverLoginIdInput(data.settings.naver_login_id || '');
+        setNaverLoginPwInput(data.settings.naver_login_pw || '');
 
         if (data.settings.naver_blog_id) {
           setNaverBlogIdInput(data.settings.naver_blog_id);
@@ -612,19 +616,21 @@ export default function NaverBlogMarketingPortal() {
     const isCurrentSessionValid = isRpaMode ? isRpaValid : (isApiValid || isRpaValid);
 
     if (!isCurrentSessionValid) {
-      showToast('⚠️ 네이버 로그인 세션이 만료되었습니다. 상단 1단계 계정 관리를 확인해 주세요.', 'error');
+      showToast('⚠️ 네이버 로그인 세션이 만료되었습니다. 로그인 브라우저를 자동 기동합니다.', 'error');
       
-      const confirmRedirect = window.confirm(
-        '⚠️ [발행 사전 방지 경고]\n\n' +
-        '네이버 RPA 로그인 인증 세션(naver_session.json)이 만료되어 네이버 서버에서 세션을 거부했습니다.\n' +
-        '이대로 진행 시 블로그 포스팅 자동 발행이 실패하게 됩니다.\n\n' +
-        '상단 [1단계: 네이버 블로그 마케터 계정 연동] 영역으로 이동하여 [RPA 로그인 인증]을 진행하시겠습니까?'
+      const confirmAutoLogin = window.confirm(
+        '⚠️ [네이버 로그인 세션 만료 및 자동 구동 안내]\n\n' +
+        '네이버 RPA 로그인 인증 세션이 만료되었거나 연동이 끊겨 있습니다.\n' +
+        '이대로 진행 시 블로그 포스팅이 실패하게 됩니다.\n\n' +
+        '[확인]을 누르시면 지금 바로 네이버 로그인 브라우저 창이 자동으로 열립니다.\n' +
+        '로그인을 완료해 주시겠습니까?'
       );
 
-      if (confirmRedirect) {
+      if (confirmAutoLogin) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        handleTriggerRpaLogin();
       }
-      return; // 불필요한 시도 사전 차단!
+      return; // 불필요한 실패 포스팅 사전 차단!
     }
 
     // 0-2. 버튼 클릭 즉시 화면 100% 시각적 반응 보장
@@ -1052,6 +1058,10 @@ export default function NaverBlogMarketingPortal() {
             isRpaLaunching={isRpaLaunching}
             naverBlogIdInput={naverBlogIdInput}
             setNaverBlogIdInput={setNaverBlogIdInput}
+            naverLoginIdInput={naverLoginIdInput}
+            setNaverLoginIdInput={setNaverLoginIdInput}
+            naverLoginPwInput={naverLoginPwInput}
+            setNaverLoginPwInput={setNaverLoginPwInput}
             apiClientIdInput={apiClientIdInput}
             setApiClientIdInput={setApiClientIdInput}
             apiClientSecretInput={apiClientSecretInput}

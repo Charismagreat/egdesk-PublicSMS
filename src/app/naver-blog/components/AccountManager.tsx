@@ -16,6 +16,10 @@ interface AccountManagerProps {
   isRpaLaunching: boolean;
   naverBlogIdInput: string;
   setNaverBlogIdInput: (v: string) => void;
+  naverLoginIdInput?: string;
+  setNaverLoginIdInput?: (v: string) => void;
+  naverLoginPwInput?: string;
+  setNaverLoginPwInput?: (v: string) => void;
   apiClientIdInput: string;
   setApiClientIdInput: (v: string) => void;
   apiClientSecretInput: string;
@@ -38,6 +42,10 @@ export default function AccountManager({
   isRpaLaunching,
   naverBlogIdInput,
   setNaverBlogIdInput,
+  naverLoginIdInput = '',
+  setNaverLoginIdInput = () => {},
+  naverLoginPwInput = '',
+  setNaverLoginPwInput = () => {},
   apiClientIdInput,
   setApiClientIdInput,
   apiClientSecretInput,
@@ -190,8 +198,8 @@ export default function AccountManager({
               </button>
             </div>
 
-            {/* 블로그 아이디 설정 폼 */}
-            <form onSubmit={handleConnectAccount} className="space-y-2.5 border-t border-slate-100 pt-4 mt-2">
+            {/* 블로그 아이디 및 무인 자동 로그인 계정 설정 폼 */}
+            <form onSubmit={handleConnectAccount} className="space-y-4 border-t border-slate-100 pt-4 mt-2">
               <div>
                 <label className="text-[10px] text-slate-400 font-extrabold block uppercase tracking-wider">연동할 네이버 블로그 ID</label>
                 <div className="flex gap-2.5 mt-1.5">
@@ -213,6 +221,39 @@ export default function AccountManager({
                   >
                     {isRpaIdUnchanged && naverBlogIdInput.trim() ? '최신 상태 ✅' : '저장 💾'}
                   </button>
+                </div>
+              </div>
+
+              {/* 100% 무인 자동 로그인 계정 설정 (선택 항목) */}
+              <div className="p-4 rounded-2xl bg-emerald-50/40 border border-emerald-100 space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-extrabold text-emerald-800">
+                  <Sliders className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>100% 무인 자동 로그인 계정 설정 (선택 사항)</span>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
+                  네이버 아이디와 비밀번호를 미리 설정해 두시면, 세션이 끊겼을 때 RPA가 직접 100% 무인으로 자동 로그인을 완료하여 세션을 복구합니다.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-bold block mb-1">네이버 로그인 ID</label>
+                    <input
+                      type="text"
+                      placeholder="네이버 아이디"
+                      value={naverLoginIdInput}
+                      onChange={(e) => setNaverLoginIdInput(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-bold block mb-1">네이버 비밀번호 (PW)</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={naverLoginPwInput}
+                      onChange={(e) => setNaverLoginPwInput(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-emerald-500 font-bold"
+                    />
+                  </div>
                 </div>
               </div>
             </form>
