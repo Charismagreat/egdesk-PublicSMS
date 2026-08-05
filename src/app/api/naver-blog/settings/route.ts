@@ -84,13 +84,13 @@ export async function GET(req: Request) {
       
       const isWindows = process.platform === 'win32';
       if (isWindows) {
-        const cmd = `start "EGDesk Naver RPA Login" cmd /k "chcp 65001 > nul && node \"${daemonScriptPath}\" --login"`;
-        exec(cmd, { cwd: process.cwd() });
+        const psCmd = `powershell -NoProfile -WindowStyle Hidden -Command "Start-Process node -ArgumentList '""${daemonScriptPath}"" --login' -WindowStyle Hidden"`;
+        exec(psCmd, { cwd: process.cwd() });
       } else {
         const child = spawn(process.execPath, [daemonScriptPath, '--login'], {
           cwd: process.cwd(),
           detached: true,
-          windowsHide: false,
+          windowsHide: true,
           stdio: 'ignore'
         });
         child.unref();

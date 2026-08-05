@@ -141,15 +141,15 @@ export async function POST(req: Request) {
 
     const isWindows = process.platform === 'win32';
     if (isWindows) {
-      // Windows 데스크톱 GUI 세션에 UTF-8 이모지 지원 실시간 RPA 모니터링 창 및 팝업 브라우저 기동
-      const cmd = `start "EGDesk Naver RPA" cmd /k "chcp 65001 > nul && node \"${daemonScriptPath}\""`;
-      exec(cmd, { cwd: process.cwd(), env });
+      // 검은 CMD 콘솔 창을 완전히 숨기고(Hidden) Playwright Chrome 브라우저 창만 깔끔하게 팝업
+      const psCmd = `powershell -NoProfile -WindowStyle Hidden -Command "Start-Process node -ArgumentList '""${daemonScriptPath}""' -WindowStyle Hidden"`;
+      exec(psCmd, { cwd: process.cwd(), env });
     } else {
       const child = spawn(process.execPath, [daemonScriptPath], {
         cwd: process.cwd(),
         env,
         detached: true,
-        windowsHide: false,
+        windowsHide: true,
         stdio: 'ignore'
       });
       child.unref();
