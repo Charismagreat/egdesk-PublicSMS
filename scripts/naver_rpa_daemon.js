@@ -224,28 +224,39 @@ async function runNaverRpaDaemon() {
 
     let pendingPosts = [];
     const portsToScan = [4002, 4000, 4006, 4001, 4003, 4004, 4005, 3000, 8080, 8000];
-    const candidateUrls = Array.from(new Set([APP_URL, ...portsToScan.map(p => `http://localhost:${p}`)]));
+    const candidateUrls = Array.from(new Set([
+      process.env.NEXT_PUBLIC_APP_URL,
+      'http://localhost:4002',
+      APP_URL,
+      ...portsToScan.map(p => `http://localhost:${p}`)
+    ].filter(Boolean)));
+
     for (const testUrl of candidateUrls) {
       try {
+        const cleanUrl = testUrl.replace(/\/$/, '');
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5초 빠른 포트 타임아웃
-        const resList = await fetch(`${testUrl}/api/naver-blog/posts`, { signal: controller.signal });
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const resList = await fetch(`${cleanUrl}/api/naver-blog/posts`, { signal: controller.signal });
         clearTimeout(timeoutId);
 
         if (resList.ok) {
           const dataList = await resList.json();
-          if (dataList.success && dataList.posts) {
-            activeAppUrl = testUrl;
-            console.log(`🌐 [RPA] 활성 이지데스크 백엔드 포트 자동 바인딩 성공: ${activeAppUrl}`);
-            const nowThreshold = Date.now() + 1800000; // 30분 타임 마진 부여
-            pendingPosts = dataList.posts
+          if (dataList.success && Array.isArray(dataList.posts) && dataList.posts.length > 0) {
+            const nowThreshold = Date.now() + 1800000; // 30분 타임 마진
+            const foundPending = dataList.posts
               .filter((post) => (post.status === 'SCHEDULED' || (post.status === 'POSTED' && !post.post_url)) && (!post.scheduled_at || new Date(post.scheduled_at).getTime() <= nowThreshold))
               .sort((a, b) => new Date(a.scheduled_at || a.created_at || 0).getTime() - new Date(b.scheduled_at || b.created_at || 0).getTime());
-            break;
+
+            if (foundPending.length > 0 || !activeAppUrl) {
+              activeAppUrl = cleanUrl;
+              pendingPosts = foundPending;
+              console.log(`🌐 [RPA] 활성 이지데스크 백엔드 포트 자동 바인딩 성공: ${activeAppUrl} (대상 포스트: ${pendingPosts.length}건)`);
+              if (pendingPosts.length > 0) break; // 실행할 대상글이 있는 포트 감지 시 즉시 확정!
+            }
           }
         }
       } catch (fetchErr) {
-        // 포트 연속 스캔 진행
+        // 다음 포트 스캔
       }
     }
 
