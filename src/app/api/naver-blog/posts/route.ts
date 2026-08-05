@@ -7,11 +7,24 @@ async function syncNaverLikes(posts: any[]) {
   const targetPosts = posts.filter((p: any) => p.status === 'POSTED' && p.post_url);
   for (const post of targetPosts) {
     try {
-      const urlObj = new URL(post.post_url);
-      const pathParts = urlObj.pathname.split('/').filter(Boolean);
-      if (pathParts.length >= 2) {
-        const blogId = pathParts[0];
-        const logNo = pathParts[1];
+      let blogId = '';
+      let logNo = '';
+
+      // 1) blog.naver.com/blogId/logNo 및 m.blog.naver.com/blogId/logNo 패턴
+      const matchPath = post.post_url.match(/blog\.naver\.com\/([^\/\?]+)\/(\d+)/i);
+      if (matchPath) {
+        blogId = matchPath[1];
+        logNo = matchPath[2];
+      } else {
+        // 2) ?blogId=...&logNo=... 쿼리파라미터 패턴
+        const matchQuery = post.post_url.match(/blogId=([^&]+).*logNo=(\d+)/i) || post.post_url.match(/logNo=(\d+).*blogId=([^&]+)/i);
+        if (matchQuery) {
+          blogId = matchQuery[1];
+          logNo = matchQuery[2];
+        }
+      }
+
+      if (blogId && logNo) {
         const likeApiUrl = `https://blog.like.naver.com/v1/search/contents?suppress_response_codes=true&q=BLOG[${blogId}_${logNo}]`;
         const likeRes = await fetch(likeApiUrl, {
           headers: {
@@ -27,7 +40,7 @@ async function syncNaverLikes(posts: any[]) {
 
           if (totalLikes !== post.likes_count) {
             post.likes_count = totalLikes;
-            await updateRows('crm_naver_blog_posts', { likes_count: totalLikes }, { ids: [post.id] }).catch(() => {});
+            await updateRows('crm_naver_blog_posts', { likes_count: totalLikes }, { filters: { id: String(post.id) } }).catch(() => {});
           }
         }
       }
