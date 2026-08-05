@@ -640,17 +640,35 @@ export default function NaverBlogMarketingPortal() {
     // 0-2. 버튼 클릭 즉시 화면 100% 시각적 반응 보장
     showToast(isImmediate ? '🚀 즉시 포스팅 기동 중... 백그라운드 프로세스를 구동합니다!' : '⏰ 예약 포스팅 등록 중...', 'info');
 
+    // 다채로운 고화질 라이프스타일/감성 이미지 템플릿 풀
+    const DYNAMIC_SENSITIVE_IMAGES = [
+      'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1491553895911-0055eca6402d?w=800&auto=format&fit=crop&q=80'
+    ];
+
+    const getRandomFallbackImage = (offset = 0) => {
+      const idx = (Math.floor(Math.random() * DYNAMIC_SENSITIVE_IMAGES.length) + offset) % DYNAMIC_SENSITIVE_IMAGES.length;
+      return DYNAMIC_SENSITIVE_IMAGES[idx];
+    };
+
     let finalImageUrl = '';
     let finalSubImageUrl = '';
-    const defaultMainImg = 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80';
-    const defaultSubImg = 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&auto=format&fit=crop&q=80';
 
     if (imageTab === 'product') {
-      finalImageUrl = selectedProduct?.main_image_url || defaultMainImg;
-      finalSubImageUrl = defaultSubImg;
+      finalImageUrl = selectedProduct?.main_image_url || getRandomFallbackImage(0);
+      finalSubImageUrl = getRandomFallbackImage(1);
     } else {
-      finalImageUrl = generatedImageUrl || selectedProduct?.main_image_url || defaultMainImg;
-      finalSubImageUrl = generatedSubImageUrl || defaultSubImg;
+      // AI 감성 탭 모드인 경우 생성된 이미지 > 상품 이미지 > 동적 라이프스타일 랜덤 이미지 순 적용
+      finalImageUrl = generatedImageUrl || selectedProduct?.main_image_url || getRandomFallbackImage(0);
+      finalSubImageUrl = generatedSubImageUrl || getRandomFallbackImage(2);
     }
 
     let activeTitle = postTitle?.trim();
