@@ -234,20 +234,20 @@ export default function PostBuilder({
         <div className="flex flex-col md:flex-row items-end gap-3.5 w-full pb-1">
           
           {/* 1. 예약 발행 일시 설정 */}
-          <div className="flex flex-col gap-1.5 w-full md:w-[320px] shrink-0">
+          <div className="flex flex-col gap-1.5 w-full md:w-[370px] shrink-0">
             <label className="text-[10px] text-slate-450 font-extrabold block uppercase tracking-wider">예약 발행 일시</label>
             <div className="flex items-center gap-2.5 w-full">
               <input 
                 type="date" 
                 value={scheduleDate}
                 onChange={(e) => setScheduleDate(e.target.value)}
-                className="flex-1 min-w-0 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 font-bold shadow-3xs h-[45px]"
+                className="flex-1 min-w-0 px-3.5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 font-bold shadow-3xs h-[45px]"
               />
               <input 
                 type="time" 
                 value={scheduleTime}
                 onChange={(e) => setScheduleTime(e.target.value)}
-                className="w-[120px] shrink-0 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 font-bold shadow-3xs h-[45px]"
+                className="w-[155px] shrink-0 px-3.5 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 font-bold shadow-3xs h-[45px]"
               />
             </div>
           </div>
