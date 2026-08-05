@@ -100,23 +100,14 @@ export async function POST(req: Request) {
 
     const hasSession = fs.existsSync(sessionFilePath);
 
-    // 2-1. API 인증키와 RPA 세션 둘 다 없는 경우 최고관리자 실패 원인 기록 및 반환
-    if (!clientId && !hasSession) {
-      console.warn('⚠️ [API] 네이버 API 인증 키와 RPA 로그인 세션이 모두 없습니다. 포스팅을 FAILED 처리합니다.');
-      
-      const postsRes = await queryTable('crm_naver_blog_posts', { limit: 10000 });
-      const pendingPosts = (postsRes.rows || []).filter((p: any) => p.status === 'SCHEDULED');
-
-      for (const p of pendingPosts) {
-        await updateRows('crm_naver_blog_posts', {
-          status: 'FAILED',
-          error_message: '네이버 공식 API 인증 키(Client ID/Secret) 미등록 및 RPA 자동화 로그인 세션(naver_session.json)이 등록되어 있지 않습니다.'
-        }, { filters: { id: String(p.id) } });
-      }
-
+    const hasLoginInfo = !!(settings?.naver_login_id?.trim() && settings?.naver_login_pw?.trim());
+    
+    // 2-1. API 인증키, 세션, 저장된 로그인 계정이 모두 없는 경우에만 연동 안내 반환
+    if (!clientId && !hasSession && !hasLoginInfo) {
+      console.warn('⚠️ [API] 네이버 API 인증 키, 로그인 세션, 저장 계정 정보가 모두 없습니다. 0단계 계정 설정을 진행해주세요.');
       return NextResponse.json({
         success: false,
-        error: '네이버 API 인증 키 및 RPA 로그인 세션이 미등록 상태입니다. 1단계 계정 관리에서 연동 설정을 완료해 주세요.',
+        error: '네이버 계정 정보(ID/PW) 및 세션이 미등록 상태입니다. 0단계 계정 설정에서 ID와 비밀번호를 입력하고 [저장]을 눌러주세요.',
         reason_code: 'NO_AUTH_SETTING'
       }, { status: 400 });
     }
