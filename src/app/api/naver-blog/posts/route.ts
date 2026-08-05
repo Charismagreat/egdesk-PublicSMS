@@ -1,10 +1,26 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, deleteRows } from '../../../../../egdesk-helpers';
+import fs from 'fs';
+import path from 'path';
 
-// 네이버 공감 & 댓글 수치 실시간 수집 헬퍼 함수
+// 네이버 공감 & 댓글 & 방문수(조회수) 수치 실시간 수집 헬퍼 함수
 async function syncNaverMetrics(posts: any[]) {
   const targetPosts = posts.filter((p: any) => p.status === 'POSTED' && p.post_url);
+  
+  // 네이버 세션 쿠키 수집
+  let cookieHeader = '';
+  try {
+    const sessionPath = path.join(process.cwd(), 'scripts', 'naver_session.json');
+    if (fs.existsSync(sessionPath)) {
+      const sessionData = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
+      const cookies = sessionData.cookies || [];
+      cookieHeader = cookies.map((c: any) => `${c.name}=${c.value}`).join('; ');
+    }
+  } catch (e) {}
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   for (const post of targetPosts) {
     try {
       let blogId = '';
@@ -29,6 +45,8 @@ async function syncNaverMetrics(posts: any[]) {
         let likesFetched = false;
         let totalComments = post.comments_count || 0;
         let commentsFetched = false;
+        let totalViews = post.views_count || 0;
+        let viewsFetched = false;
 
         // A. 💖 공감 수치 수집 (1순위 공식 API)
         try {
@@ -49,24 +67,6 @@ async function syncNaverMetrics(posts: any[]) {
           }
         } catch (e) {}
 
-        // Fallback: blog.like.naver.com API
-        if (!likesFetched) {
-          const likeApiUrl = `https://blog.like.naver.com/v1/search/contents?suppress_response_codes=true&q=BLOG[${blogId}_${logNo}]`;
-          const likeRes = await fetch(likeApiUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Referer': post.post_url
-            }
-          }).catch(() => null);
-
-          if (likeRes && likeRes.ok) {
-            const likeData = await likeRes.json().catch(() => null);
-            const reactions = likeData?.contents?.[0]?.reactions || [];
-            totalLikes = reactions.reduce((sum: number, r: any) => sum + (Number(r.count) || 0), 0);
-            likesFetched = true;
-          }
-        }
-
         // B. 💬 댓글 수치 수집 (모바일 PostView 정규식 스크레이퍼)
         try {
           const mUrl = `https://m.blog.naver.com/PostView.naver?blogId=${blogId}&logNo=${logNo}`;
@@ -86,6 +86,29 @@ async function syncNaverMetrics(posts: any[]) {
           }
         } catch (e) {}
 
+        // C. 👁️ 방문수(조회수) 수집 (공식 네이버 통계 API)
+        try {
+          const cvApiUrl = `https://blog.stat.naver.com/api/blog/article/cv?timeDimension=DATE&startDate=${todayStr}&contentId=${logNo}`;
+          const cvRes = await fetch(cvApiUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Referer': `https://blog.stat.naver.com/blog/article/${logNo}/cv`,
+              'Cookie': cookieHeader
+            }
+          }).catch(() => null);
+
+          if (cvRes && cvRes.ok) {
+            const cvData = await cvRes.json().catch(() => null);
+            const rows = cvData?.result?.statDataList?.[0]?.data?.rows;
+            if (rows && Array.isArray(rows.cv) && rows.cv.length > 0) {
+              // 최신 조회수 Sum / Max 파싱
+              const sumViews = rows.cv.reduce((acc: number, val: number) => acc + (Number(val) || 0), 0);
+              totalViews = sumViews;
+              viewsFetched = true;
+            }
+          }
+        } catch (e) {}
+
         // DB 업데이트 감지
         const updatePayload: any = {};
         if (likesFetched && totalLikes !== post.likes_count) {
@@ -95,6 +118,10 @@ async function syncNaverMetrics(posts: any[]) {
         if (commentsFetched && totalComments !== post.comments_count) {
           post.comments_count = totalComments;
           updatePayload.comments_count = totalComments;
+        }
+        if (viewsFetched && totalViews !== post.views_count) {
+          post.views_count = totalViews;
+          updatePayload.views_count = totalViews;
         }
 
         if (Object.keys(updatePayload).length > 0) {

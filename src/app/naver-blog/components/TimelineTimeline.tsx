@@ -127,7 +127,7 @@ export default function TimelineTimeline({
               <th className="py-3.5 px-4">타겟 키워드</th>
               <th className="py-3.5 px-4">예약 예정 일시</th>
               <th className="py-3.5 px-4">발행 상태</th>
-              <th className="py-3.5 px-4">댓글 / 공감</th>
+              <th className="py-3.5 px-4">댓글 / 방문 / 공감</th>
               <th className="py-3.5 px-4 text-center rounded-r-xl">액션 및 제어</th>
             </tr>
           </thead>
@@ -221,11 +221,15 @@ export default function TimelineTimeline({
                 <td className="py-4 px-4">
                   {post.status === 'POSTED' ? (
                     <div className="flex items-center gap-2.5 text-[10px] font-extrabold">
-                      <span className="flex items-center gap-1 text-emerald-650 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100/60" title="댓글 수">
+                      <span className="flex items-center gap-1 text-emerald-650 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100/60" title="댓글 수">
                         <MessageSquare className="w-3 h-3 text-emerald-600" />
                         {post.comments_count || 0}
                       </span>
-                      <span className="flex items-center gap-1 text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100/60" title="공감 수">
+                      <span className="flex items-center gap-1 text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded" title="네이버 공식 실측 방문수(조회수)">
+                        <Eye className="w-3 h-3 text-slate-500" />
+                        {post.views_count || 0}
+                      </span>
+                      <span className="flex items-center gap-1 text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100/60" title="공감 수">
                         <Heart className="w-3 h-3 fill-rose-500/20 text-rose-500" />
                         {post.likes_count || 0}
                       </span>

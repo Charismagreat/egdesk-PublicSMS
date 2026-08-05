@@ -56,7 +56,7 @@ export default function StatsGrid({
         <p className="text-xs text-slate-450 mt-4 truncate font-medium">{accountSubtext}</p>
       </motion.div>
 
-      {/* 댓글 / 공감 실시간 반응 센터 카드 */}
+      {/* 댓글 / 방문 / 공감 실시간 반응 센터 카드 */}
       <motion.div 
         whileHover={{ y: -5 }}
         className="p-6 rounded-3xl border border-slate-200/50 bg-white/70 backdrop-blur-xl shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden group"
@@ -64,12 +64,15 @@ export default function StatsGrid({
         <div className="absolute top-0 right-0 w-24 h-24 bg-teal-50/20 rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform" />
         <div className="flex justify-between items-start">
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">댓글 / 공감 소통 반응</p>
-            <div className="flex items-center gap-2.5 mt-2">
-              <span className="text-sm font-black text-emerald-650 flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100/80 shadow-3xs" title="실시간 댓글 수">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">댓글 / 방문 / 공감</p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs font-black text-emerald-650 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100/80 shadow-3xs" title="실시간 댓글 수">
                 💬 {totalComments}
               </span>
-              <span className="text-sm font-black text-rose-600 flex items-center gap-1 bg-rose-50 px-2.5 py-1 rounded-xl border border-rose-100/80 shadow-3xs" title="실시간 공감 수">
+              <span className="text-xs font-black text-slate-700 flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-lg shadow-3xs" title="네이버 공식 실측 방문수(조회수)">
+                👁️ {avgViews}
+              </span>
+              <span className="text-xs font-black text-rose-600 flex items-center gap-1 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100/80 shadow-3xs" title="실시간 공감 수">
                 ❤️ {totalLikes}
               </span>
             </div>
@@ -79,7 +82,7 @@ export default function StatsGrid({
           </div>
         </div>
         <p className="text-xs text-slate-450 mt-4 truncate font-semibold">
-          게시글 실시간 반응: <strong className="text-emerald-600 font-extrabold">{totalComments + totalLikes}건</strong> 수집 완료
+          네이버 서버 실시간 집계: <strong className="text-emerald-600 font-extrabold">댓글 {totalComments}개 · 공감 {totalLikes}개</strong>
         </p>
       </motion.div>
 
