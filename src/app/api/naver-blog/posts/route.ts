@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, deleteRows } from '../../../../../egdesk-helpers';
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
 
 // 네이버 공감 & 댓글 & 방문수(조회수) 수치 실시간 수집 헬퍼 함수
 async function syncNaverMetrics(posts: any[]) {
@@ -134,6 +135,21 @@ async function syncNaverMetrics(posts: any[]) {
   }
 }
 
+// 🤖 지연된 예약 포스트 감지 시 RPA 데몬 자가 복구 헬퍼
+let lastWatchdogTrigger = 0;
+function autoHealRpaDaemon() {
+  const now = Date.now();
+  if (now - lastWatchdogTrigger < 30000) return; // 30초 쿨다운
+  lastWatchdogTrigger = now;
+  try {
+    const daemonPath = path.join(process.cwd(), 'scripts', 'naver_rpa_daemon.js');
+    const nodePath = process.execPath;
+    const cmd = `start "" /min "${nodePath}" "${daemonPath}"`;
+    exec(cmd, { cwd: process.cwd() }, () => {});
+    console.log('🤖 [RPA Watchdog] 지연된 예약 포스트 감지 ➔ RPA 자동화 데몬 자가 복구(Self-Healing) 기동 완료');
+  } catch (e) {}
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -147,6 +163,13 @@ export async function GET(req: Request) {
     // 1. 네이버 블로그 게시글 목록 조회
     const postsRes = await queryTable('crm_naver_blog_posts', { filters });
     const posts = postsRes.rows || [];
+
+    // 2. 예약 시각이 지났는데 아직 게재 안된 포스트 존재 시 RPA 데몬 자가 복구
+    const nowTime = Date.now();
+    const overduePost = posts.find((p: any) => p.status === 'SCHEDULED' && p.scheduled_at && new Date(p.scheduled_at).getTime() <= nowTime + 60000);
+    if (overduePost) {
+      autoHealRpaDaemon();
+    }
 
     // 2. 연관된 상품 정보 매핑을 위해 전체 상품 조회
     const productsRes = await queryTable('products', {});
