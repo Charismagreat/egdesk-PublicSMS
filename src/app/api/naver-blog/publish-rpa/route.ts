@@ -144,6 +144,7 @@ export async function POST(req: Request) {
       env,
       detached: true,
       windowsHide: false,
+      shell: true,
       stdio: 'ignore'
     });
 

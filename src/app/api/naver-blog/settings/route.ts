@@ -86,6 +86,7 @@ export async function GET(req: Request) {
         cwd: process.cwd(),
         detached: true,
         windowsHide: false,
+        shell: true,
         stdio: 'ignore'
       });
       child.unref();
