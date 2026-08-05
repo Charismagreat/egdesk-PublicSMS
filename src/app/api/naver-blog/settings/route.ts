@@ -84,7 +84,7 @@ export async function GET(req: Request) {
       
       const isWindows = process.platform === 'win32';
       if (isWindows) {
-        const cmd = `start "EGDesk Naver RPA Login" node "${daemonScriptPath}" --login`;
+        const cmd = `start "EGDesk Naver RPA Login" cmd /k "chcp 65001 > nul && node \"${daemonScriptPath}\" --login"`;
         exec(cmd, { cwd: process.cwd() });
       } else {
         const child = spawn(process.execPath, [daemonScriptPath, '--login'], {

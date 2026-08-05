@@ -141,8 +141,8 @@ export async function POST(req: Request) {
 
     const isWindows = process.platform === 'win32';
     if (isWindows) {
-      // Windows 데스크톱 GUI 세션에 직접 콘솔 및 Playwright 팝업 브라우저 띄우기
-      const cmd = `start "EGDesk Naver RPA" node "${daemonScriptPath}"`;
+      // Windows 데스크톱 GUI 세션에 UTF-8 이모지 지원 실시간 RPA 모니터링 창 및 팝업 브라우저 기동
+      const cmd = `start "EGDesk Naver RPA" cmd /k "chcp 65001 > nul && node \"${daemonScriptPath}\""`;
       exec(cmd, { cwd: process.cwd(), env });
     } else {
       const child = spawn(process.execPath, [daemonScriptPath], {
