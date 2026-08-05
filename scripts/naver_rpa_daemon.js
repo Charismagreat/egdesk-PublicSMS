@@ -77,49 +77,36 @@ async function autoPerformNaverLogin(page, activeAppUrl) {
     await page.waitForSelector('#id', { timeout: 12000 }).catch(() => {});
     await jitterSleep(800, 1500);
 
-    // 1. #id 필드 클리어 및 직접 입력
+    // 1. #id 필드 클리어 및 단일 정확 입력
     const idInput = page.locator('#id');
     if (await idInput.count() > 0) {
       await idInput.click({ force: true }).catch(() => {});
+      await idInput.fill('').catch(() => {});
       await idInput.fill(savedId).catch(() => {});
-      await page.keyboard.type(savedId, { delay: 50 }).catch(() => {});
+    }
+
+    await jitterSleep(300, 600);
+
+    // 2. #pw 필드 클리어 및 단일 정확 입력
+    const pwInput = page.locator('#pw');
+    if (await pwInput.count() > 0) {
+      await pwInput.click({ force: true }).catch(() => {});
+      await pwInput.fill('').catch(() => {});
+      await pwInput.fill(savedPw).catch(() => {});
     }
 
     await jitterSleep(500, 1000);
 
-    // 2. #pw 필드 클리어 및 직접 입력
-    const pwInput = page.locator('#pw');
-    if (await pwInput.count() > 0) {
-      await pwInput.click({ force: true }).catch(() => {});
-      await pwInput.fill(savedPw).catch(() => {});
-      await page.keyboard.type(savedPw, { delay: 50 }).catch(() => {});
-    }
+    // 3. 엔터키(Enter) 제출 및 로그인 버튼 강력 타격
+    console.log('🚀 [RPA Auto-Login] 엔터키(Enter) 및 "로그인" 버튼을 타격하여 무인 인가를 완료합니다.');
+    await page.keyboard.press('Enter').catch(() => {});
+    await jitterSleep(300, 500);
 
-    // 3. 백업 DOM 평가 주입 (네이버 보안 폼 보정)
-    await page.evaluate(({ idVal, pwVal }) => {
-      const idEl = document.querySelector('#id');
-      const pwEl = document.querySelector('#pw');
-      if (idEl && !idEl.value) {
-        idEl.value = idVal;
-        idEl.dispatchEvent(new Event('input', { bubbles: true }));
-        idEl.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-      if (pwEl && !pwEl.value) {
-        pwEl.value = pwVal;
-        pwEl.dispatchEvent(new Event('input', { bubbles: true }));
-        pwEl.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    }, { idVal: savedId, pwVal: savedPw }).catch(() => {});
-
-    await jitterSleep(1000, 1800);
-
-    // 4. 로그인 버튼 강력 타격
-    const loginBtn = page.locator('#log\\.login, button.btn_login, .btn_global').first();
+    const loginBtn = page.locator('#log\\.login, button[type="submit"], button.btn_global, button.btn_login, .btn_login_wrap button').first();
     if (await loginBtn.count() > 0) {
-      console.log('🚀 [RPA Auto-Login] "로그인" 버튼을 타격하여 무인 인가를 완료합니다.');
       await loginBtn.click({ force: true }).catch(() => {});
-      return true;
     }
+    return true;
   } catch (err) {
     console.warn('⚠️ [RPA Auto-Login] 자동 입력 시도 예외:', err.message);
   }
