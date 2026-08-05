@@ -82,14 +82,19 @@ export async function GET(req: Request) {
       
       const daemonScriptPath = path.join(process.cwd(), 'scripts', 'naver_rpa_daemon.js');
       
-      const child = spawn(process.execPath, [daemonScriptPath, '--login'], {
-        cwd: process.cwd(),
-        detached: true,
-        windowsHide: false,
-        shell: true,
-        stdio: 'ignore'
-      });
-      child.unref();
+      const isWindows = process.platform === 'win32';
+      if (isWindows) {
+        const cmd = `start "EGDesk Naver RPA Login" node "${daemonScriptPath}" --login`;
+        exec(cmd, { cwd: process.cwd() });
+      } else {
+        const child = spawn(process.execPath, [daemonScriptPath, '--login'], {
+          cwd: process.cwd(),
+          detached: true,
+          windowsHide: false,
+          stdio: 'ignore'
+        });
+        child.unref();
+      }
       console.log('🚀 [API] 독립형 GUI 프로세스로 로그인 브라우저를 성공적으로 스폰하였습니다.');
 
       return NextResponse.json({ 

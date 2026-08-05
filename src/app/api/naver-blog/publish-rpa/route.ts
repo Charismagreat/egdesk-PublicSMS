@@ -139,16 +139,21 @@ export async function POST(req: Request) {
     
     console.log(`🚀 [API] RPA 데몬 바인딩 실행 (CWD: ${process.cwd()}, Node: ${process.execPath})`);
 
-    const child = spawn(process.execPath, [daemonScriptPath], {
-      cwd: process.cwd(),
-      env,
-      detached: true,
-      windowsHide: false,
-      shell: true,
-      stdio: 'ignore'
-    });
-
-    child.unref();
+    const isWindows = process.platform === 'win32';
+    if (isWindows) {
+      // Windows 데스크톱 GUI 세션에 직접 콘솔 및 Playwright 팝업 브라우저 띄우기
+      const cmd = `start "EGDesk Naver RPA" node "${daemonScriptPath}"`;
+      exec(cmd, { cwd: process.cwd(), env });
+    } else {
+      const child = spawn(process.execPath, [daemonScriptPath], {
+        cwd: process.cwd(),
+        env,
+        detached: true,
+        windowsHide: false,
+        stdio: 'ignore'
+      });
+      child.unref();
+    }
 
     // 25초 후 글로벌 락 자동 해제
     setTimeout(() => {
