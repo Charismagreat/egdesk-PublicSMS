@@ -119,8 +119,7 @@ export default function PostBuilder({
                     : 'bg-white border-slate-250 text-slate-550 hover:text-slate-700'
                 }`}
               >
-                <span>AI 다중 감성샷</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/20 font-black">🎨 조합</span>
+                AI 다중 감성샷
               </button>
             </div>
             {selectedProduct && imageTab === 'ai' && (
