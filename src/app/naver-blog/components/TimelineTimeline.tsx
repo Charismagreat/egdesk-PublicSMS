@@ -181,7 +181,7 @@ export default function TimelineTimeline({
                   )}
                 </td>
                 <td className="py-4 px-4 text-slate-500 font-bold whitespace-nowrap">
-                  {post.scheduled_at ? formatDate(post.scheduled_at) : '-'}
+                  {post.scheduled_at ? new Date(post.scheduled_at).toLocaleString('ko-KR', { hour12: false }) : '-'}
                 </td>
                 <td className="py-4 px-4 whitespace-nowrap">
                   {post.status === 'POSTED' && post.post_url ? (
