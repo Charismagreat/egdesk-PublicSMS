@@ -257,26 +257,86 @@ async function runNaverRpaDaemon() {
     }
     await jitterSleep(4000, 6000);
 
-    // 3. 네이버 로그인 페이지(nidlogin.login) 리다이렉트 감지 체크 (로그인 세션 만료 대응)
-    const currentUrl = page.url();
+    // 3. 네이버 로그인 페이지(nidlogin.login) 리다이렉트 감지 체크 (자동 로그인 복구 시도)
+    let currentUrl = page.url();
     if (currentUrl.includes('nidlogin.login') || currentUrl.includes('nidlogin')) {
-      console.warn('⚠️ [RPA] 네이버 로그인 세션 쿠키가 만료되거나 유효하지 않아 로그인 화면(nidlogin.login)으로 리다이렉트되었습니다.');
-      console.warn('⚠️ [RPA] 키보드 타이핑을 즉시 중단하고 포스트 상태를 [FAILED]로 반영합니다.');
+      console.warn('⚠️ [RPA] 네이버 로그인 세션 쿠키가 만료되어 로그인 화면(nidlogin.login)으로 리다이렉트되었습니다.');
 
-      await fetch(`${activeAppUrl}/api/naver-blog/posts`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: targetPost.id,
-          updates: {
-            status: 'FAILED',
-            error_message: '네이버 로그인 세션이 만료되어 로그인 화면(nidlogin)으로 리다이렉트되었습니다. 1단계 계정 관리에서 다시 로그인 인증을 진행해 주세요.'
+      // 저장된 ID/PW 계정 설정 정보 가져오기
+      let savedId = '';
+      let savedPw = '';
+      try {
+        const settingsRes = await fetch(`${activeAppUrl}/api/naver-blog/settings`).catch(() => null);
+        if (settingsRes && settingsRes.ok) {
+          const settingsData = await settingsRes.json().catch(() => null);
+          savedId = settingsData?.settings?.naver_login_id?.trim() || '';
+          savedPw = settingsData?.settings?.naver_login_pw?.trim() || '';
+        }
+      } catch (e) {}
+
+      if (savedId && savedPw) {
+        console.log(`🤖 [RPA Auto-Login] 저장된 네이버 마케팅 계정(@${savedId})으로 포스팅을 위한 무인 자동 로그인을 즉시 수행합니다!`);
+        try {
+          await page.waitForSelector('#id', { timeout: 5000 }).catch(() => {});
+          await jitterSleep(500, 1000);
+
+          await page.evaluate(({ idVal, pwVal }) => {
+            const idEl = document.querySelector('#id');
+            const pwEl = document.querySelector('#pw');
+            if (idEl) {
+              idEl.value = idVal;
+              idEl.dispatchEvent(new Event('input', { bubbles: true }));
+              idEl.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            if (pwEl) {
+              pwEl.value = pwVal;
+              pwEl.dispatchEvent(new Event('input', { bubbles: true }));
+              pwEl.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }, { idVal: savedId, pwVal: savedPw });
+
+          await jitterSleep(800, 1200);
+
+          const loginBtn = page.locator('#log\\.login, button.btn_login, .btn_global').first();
+          if (await loginBtn.count() > 0) {
+            console.log('🚀 [RPA Auto-Login] "로그인" 버튼을 클릭하여 무인 인가를 완료합니다.');
+            await loginBtn.click({ force: true }).catch(() => {});
+            await jitterSleep(3000, 5000);
+
+            // 로그인 성공 후 쿠키 세션 저장
+            const storageState = await context.storageState();
+            fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(storageState, null, 2));
+            console.log('💾 [RPA Auto-Login] 새로 복구된 로그인 세션 쿠키를 성공적으로 저장하였습니다.');
+
+            // 글쓰기 폼으로 재진입
+            console.log('🔄 [RPA Auto-Login] 로그인 완료! 글쓰기 폼으로 무중단 재진입합니다.');
+            await page.goto(primaryWriteUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+            await jitterSleep(3000, 5000);
+            currentUrl = page.url();
           }
-        })
-      }).catch(() => {});
+        } catch (autoErr) {
+          console.warn('⚠️ [RPA Auto-Login] 무인 자동 로그인 시도 중 예외:', autoErr.message);
+        }
+      }
 
-      if (browser) await browser.close();
-      return;
+      // 여전히 로그인 페이지에 머물러 있는 경우 최종 FAILED 처리
+      if (currentUrl.includes('nidlogin.login') || currentUrl.includes('nidlogin')) {
+        console.warn('❌ [RPA] 네이버 로그인 세션 복구 실패. 포스트 상태를 [FAILED]로 반영합니다.');
+        await fetch(`${activeAppUrl}/api/naver-blog/posts`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: targetPost.id,
+            updates: {
+              status: 'FAILED',
+              error_message: '네이버 로그인 세션이 만료되었습니다. 계정 관리자 탭에서 [저장된 ID/PW]를 확인하시거나 [RPA 최초 로그인 브라우저 기동]을 진행해 주세요.'
+            }
+          })
+        }).catch(() => {});
+
+        if (browser) await browser.close();
+        return;
+      }
     }
 
     // mainFrame iframe 여부 탐색
