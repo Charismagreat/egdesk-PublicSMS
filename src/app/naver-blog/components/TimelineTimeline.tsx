@@ -200,9 +200,17 @@ export default function TimelineTimeline({
                       <span>발행 완료</span>
                     </span>
                   ) : post.status === 'SCHEDULED' ? (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black bg-sky-50 text-sky-600 border border-sky-200">
-                      <span>실시간 발행 처리 중</span>
-                    </span>
+                    new Date(post.scheduled_at).getTime() <= Date.now() + 30000 ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black bg-sky-50 text-sky-700 border border-sky-200 shadow-3xs animate-pulse" title="RPA 자동화 엔진이 포스팅을 게재 처리 중입니다">
+                        <Send className="w-3 h-3 text-sky-600 animate-spin shrink-0" />
+                        <span>실시간 발행 처리 중</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black bg-amber-50 text-amber-700 border border-amber-200/90 shadow-3xs" title="설정된 예약 발행 시각에 자동 포스팅됩니다">
+                        <Calendar className="w-3 h-3 text-amber-600 shrink-0" />
+                        <span>예약 발행 대기</span>
+                      </span>
+                    )
                   ) : (
                     <button
                       type="button"
