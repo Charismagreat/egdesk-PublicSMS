@@ -87,7 +87,7 @@ export default function AccountManager({
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2.5">
             <SettingsIcon className="w-5 h-5 text-[#03C75A]" />
-            <h4 className="text-base font-bold text-slate-800">네이버 블로그 계정 관리자</h4>
+            <h4 className="text-base font-bold text-slate-800">0단계: 네이버 블로그 계정 설정</h4>
           </div>
           {/* 현재 가동 모드 표시 배지 */}
           <span className={`text-[10px] px-3 py-1 rounded-full font-extrabold tracking-wider ${

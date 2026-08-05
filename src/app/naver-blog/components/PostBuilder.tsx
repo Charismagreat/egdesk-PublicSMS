@@ -62,7 +62,7 @@ export default function PostBuilder({
           <FileText className="w-4.5 h-4.5" />
         </span>
         <h3 className="text-base font-bold text-slate-800">
-          2단계: 네이버 블로그 포스팅 원고 빌더
+          3단계: 네이버 블로그 포스팅 원고 빌더
         </h3>
       </div>
 

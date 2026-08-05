@@ -61,7 +61,7 @@ export default function TimelineTimeline({
           </span>
           <div>
             <h3 className="text-base font-bold text-slate-800">
-              3단계: 네이버 블로그 예약 및 발행 타임라인 이력 관리
+              4단계: 네이버 블로그 예약 및 발행 타임라인 이력 관리
             </h3>
             <p className="text-[10px] text-slate-500 mt-1 font-bold">
               AI 오토파일럿 데몬 또는 관리자가 등록한 블로그 콘텐츠 일체 조회 및 양방향 실시간 라이브 프리뷰 바인딩
