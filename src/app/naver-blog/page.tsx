@@ -498,9 +498,11 @@ export default function NaverBlogMarketingPortal() {
         return;
       }
       const data = await saveSettings({
-        naver_blog_id: naverBlogIdInput,
-        api_client_id: apiClientIdInput,
-        api_client_secret: apiClientSecretInput
+        naver_blog_id: naverBlogIdInput.trim(),
+        naver_login_id: naverLoginIdInput.trim(),
+        naver_login_pw: naverLoginPwInput.trim(),
+        api_client_id: apiClientIdInput.trim(),
+        api_client_secret: apiClientSecretInput.trim()
       });
       if (data && data.success) {
         setIsAccountConnected(true);
@@ -508,13 +510,15 @@ export default function NaverBlogMarketingPortal() {
       }
     } else {
       const data = await saveSettings({
-        naver_blog_id: naverBlogIdInput,
+        naver_blog_id: naverBlogIdInput.trim(),
+        naver_login_id: naverLoginIdInput.trim(),
+        naver_login_pw: naverLoginPwInput.trim(),
         api_client_id: '',
         api_client_secret: ''
       });
       if (data && data.success) {
         setIsAccountConnected(data.has_session === 1);
-        showToast(`RPA 블로그 아이디(@${naverBlogIdInput}) 설정이 저장되었습니다.`, 'success');
+        showToast(`RPA 블로그 계정(@${naverBlogIdInput}) 및 무인 자동 로그인 설정이 성공적으로 저장되었습니다! 🟢`, 'success');
       }
     }
   };
