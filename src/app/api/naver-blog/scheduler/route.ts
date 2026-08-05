@@ -117,40 +117,19 @@ export async function GET(req: Request) {
       }
     }
 
-    // 4. 상품 기반 오토파일럿 블로그 포스트 자동 생성
-    const selectedTone = settings.tone_style || '정보제공형';
+    // 4. 상품 기반 고품질 AI 오토파일럿 블로그 원고 실시간 집필
+    const selectedTone = settings.tone_style || '솔직리뷰형';
     const productName = targetProduct.name;
     const priceText = targetProduct.price ? `${Number(targetProduct.price).toLocaleString()}원` : '합리적인 가격대';
-    const descriptionText = targetProduct.description || '최고의 선택';
+    const descriptionText = targetProduct.description || '최고의 선택과 만족감을 선사하는 웰메이드 가전 제품';
+    const brandName = targetProduct.brand || '인기 브랜드';
     
     // 오토파일럿 전용 자동 가상 속성 매핑 (Product Spec-to-Keyword) 키워드 3개 선정
-    let targetKeywords = '';
+    let targetKeywords = `${productName} 추천, ${productName} 솔직후기, ${brandName} 가전`;
     let title = '';
     let content = '';
 
     if (selectedTone === '정보제공형') {
-      targetKeywords = `${productName} 추천, ${productName} 가격, 가성비 가전`;
-      title = `[가전 스펙 분석] ${productName}의 주요 특징 및 스마트한 추천 이유`;
-      content = `안녕하세요. 오늘 소개해드릴 인기 상품은 바로 [${productName}] 입니다.
-
-이 제품은 최근 많은 분들의 스마트한 소비 트렌드에 발맞추어 출시된 웰메이드 모델입니다.
-현재 시장 판매가는 [${priceText}] 선으로 형성되어 있어 뛰어난 가성비를 자랑하는 가전제품으로 인기를 모으고 있습니다.
-
-■ ${productName}의 핵심 스펙 포인트
-1. 실사용자의 눈높이에 맞춘 세련된 미니멀리즘 디자인
-2. 장시간 작동 시에도 안전성과 고성능을 유지하는 튼튼한 하드웨어 설계
-3. 어떤 공간에 두어도 위화감 없이 모던하게 스며드는 컬러 및 마감 텍스처
-
-가성비 좋은 신제품을 고민하고 계시다면, 해당 모델을 적극 추천해 드립니다. 
-상세한 가격 정보와 추가 문의사항은 댓글로 남겨주시면 정성껏 답변해 드리겠습니다. 감사합니다.
-
-#${productName.replace(/\s+/g, '')} #가성비가전 #스펙리뷰 #인기가전추천 #합리적소비`;
-    } else if (selectedTone === '솔직리뷰형') {
-      targetKeywords = `${productName} 솔직후기, 내돈내산 ${productName}, 여름 가전`;
-      title = `품절 대란 ${productName} 내돈내산 3주 사용 솔직 후기 (장단점 대공개!)`;
-      content = `여러분 안녕하세요! 🌸 
-오늘도 제 블로그에 방문해 주셔서 너무너무 감사해요!!
-
 오늘은 최근 인스타그램이나 커뮤니티에서 정말 핫하게 떠오르고 있는 품절 대란 주인공, [${productName}] 을 데려왔습니다!
 제가 직접 내돈내산으로 구매해 약 3주간 꼼꼼하게 실사용해보고 적는 100% 리얼 후기예요. 💸
 
