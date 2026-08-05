@@ -26,6 +26,7 @@ interface PostBuilderProps {
   setScheduleTime: (v: string) => void;
   handleSavePost: (isImmediate: boolean) => Promise<void>;
   keywordInputRef: React.RefObject<HTMLInputElement | null>;
+  handleGenerateAIImagesOnly?: () => void;
 }
 
 export default function PostBuilder({
@@ -49,7 +50,8 @@ export default function PostBuilder({
   scheduleTime,
   setScheduleTime,
   handleSavePost,
-  keywordInputRef
+  keywordInputRef,
+  handleGenerateAIImagesOnly
 }: PostBuilderProps) {
   
   return (
@@ -105,8 +107,11 @@ export default function PostBuilder({
               <button
                 type="button"
                 disabled={!selectedProduct}
-                onClick={() => setImageTab('ai')}
-                className={`py-2.5 px-3 rounded-2xl text-xs font-bold border transition-all cursor-pointer shadow-3xs active:scale-95 ${
+                onClick={() => {
+                  setImageTab('ai');
+                  if (handleGenerateAIImagesOnly) handleGenerateAIImagesOnly();
+                }}
+                className={`py-2.5 px-3 rounded-2xl text-xs font-bold border transition-all cursor-pointer shadow-3xs active:scale-95 flex items-center justify-center gap-1.5 ${
                   !selectedProduct
                     ? 'bg-slate-200 border-slate-200 text-slate-400 cursor-not-allowed opacity-40'
                     : imageTab === 'ai'
@@ -114,9 +119,22 @@ export default function PostBuilder({
                     : 'bg-white border-slate-250 text-slate-550 hover:text-slate-700'
                 }`}
               >
-                AI 다중 감성샷
+                <span>AI 다중 감성샷</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/20 font-black">🎨 조합</span>
               </button>
             </div>
+            {selectedProduct && imageTab === 'ai' && (
+              <div className="mt-2.5 flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-100">
+                <span className="text-[11px] text-emerald-800 font-extrabold">✨ AI 감성 썸네일 새로 조합하기</span>
+                <button
+                  type="button"
+                  onClick={handleGenerateAIImagesOnly}
+                  className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-black hover:bg-emerald-700 active:scale-95 transition-all shadow-2xs cursor-pointer"
+                >
+                  AI 감성샷 새로 생성 🎨
+                </button>
+              </div>
+            )}
             {!selectedProduct && (
               <span className="text-[10px] text-amber-600 font-bold flex items-center gap-1 mt-2.5 animate-pulse">
                 ⚠️ 상품을 먼저 선택하시면 이미지 모드가 활성화됩니다.

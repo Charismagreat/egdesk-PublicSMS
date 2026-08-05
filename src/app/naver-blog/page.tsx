@@ -331,6 +331,32 @@ export default function NaverBlogMarketingPortal() {
     }
   };
 
+  // AI 감성 썸네일 전용 1클릭 조합 함수
+  const handleGenerateAIImagesOnly = () => {
+    if (!selectedProduct) {
+      showToast('⚠️ 상품을 먼저 선택해 주세요.', 'error');
+      return;
+    }
+    setImageTab('ai');
+    const DYNAMIC_SENSITIVE_IMAGES = [
+      'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=800&auto=format&fit=crop&q=80'
+    ];
+    const rand1 = DYNAMIC_SENSITIVE_IMAGES[Math.floor(Math.random() * DYNAMIC_SENSITIVE_IMAGES.length)];
+    let rand2 = DYNAMIC_SENSITIVE_IMAGES[Math.floor(Math.random() * DYNAMIC_SENSITIVE_IMAGES.length)];
+    if (rand2 === rand1) rand2 = DYNAMIC_SENSITIVE_IMAGES[(DYNAMIC_SENSITIVE_IMAGES.indexOf(rand1) + 1) % DYNAMIC_SENSITIVE_IMAGES.length];
+    
+    setGeneratedImageUrl(rand1);
+    setGeneratedSubImageUrl(rand2);
+    showToast('🎨 세련된 AI 감성 썸네일 이미지 2장이 조합 매핑되었습니다!', 'success');
+  };
+
   // 마그네틱 원클릭 주입 시스템 구현
   const handleKeywordInject = (keyword: string, event: React.MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -1131,6 +1157,7 @@ export default function NaverBlogMarketingPortal() {
             setAiPrompt={setAiPrompt}
             isGenerating={isGenerating}
             handleGenerateAI={handleGenerateAI}
+            handleGenerateAIImagesOnly={handleGenerateAIImagesOnly}
             targetKeywords={targetKeywords}
             setTargetKeywords={setTargetKeywords}
             postTitle={postTitle}
