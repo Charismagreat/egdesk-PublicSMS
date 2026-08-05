@@ -183,13 +183,16 @@ async function runNaverRpaDaemon() {
         console.warn('⚠️ [RPA] 로그인 감지 대기 중 예외:', e.message);
       }
 
-      if (!loginPage.isClosed()) {
-        await browser.close().catch(() => {});
-      }
-
-      if (isLoginOnly) {
-        console.log('✅ [RPA] 로그인 인증 덤프 절차가 종료되었습니다.');
-        return;
+      if (loggedIn) {
+        console.log('🎉 [RPA] 로그인 세션 확보 성공! 곧바로 네이버 스마트에디터 포스팅을 연속 진행합니다.');
+      } else {
+        if (!loginPage.isClosed()) {
+          await browser.close().catch(() => {});
+        }
+        if (isLoginOnly) {
+          console.log('✅ [RPA] 로그인 인증 절차가 종료되었습니다.');
+          return;
+        }
       }
 
       // 세션 파일이 덤프되지 않았다면 포스팅 중단 및 펜딩건 FAILED 업데이트
