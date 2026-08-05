@@ -911,6 +911,8 @@ export default function NaverBlogMarketingPortal() {
         accountSubtext={accountSubtext}
         avgViews={avgViews}
         viewsSubtext={viewsSubtext}
+        totalComments={postedPosts.reduce((acc, p) => acc + (p.comments_count || 0), 0)}
+        totalLikes={postedPosts.reduce((acc, p) => acc + (p.likes_count || 0), 0)}
         uploadedCount={uploadedCount}
         totalCount={totalCount}
         uploadSubtext={uploadSubtext}

@@ -259,7 +259,8 @@ export async function setupDatabase() {
     { name: 'post_url', type: 'TEXT' },
     { name: 'error_message', type: 'TEXT' },
     { name: 'views_count', type: 'INTEGER' },
-    { name: 'likes_count', type: 'INTEGER' }
+    { name: 'likes_count', type: 'INTEGER' },
+    { name: 'comments_count', type: 'INTEGER' }
   ], { tableName: 'crm_naver_blog_posts', uniqueKeyColumns: ['id'] });
 
   // 💡 [신규] 네이버 블로그 마케팅 설정 대장 테이블 생성 (자동 로그인 ID/PW 컬럼 포함)

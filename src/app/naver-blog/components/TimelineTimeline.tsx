@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Layers, RefreshCw, Search, CheckCircle, Calendar, Send,
-  Eye, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Heart,
+  Eye, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Heart, MessageSquare,
   AlertTriangle, AlertCircle, Wrench, ArrowRight, X, ShieldAlert, ExternalLink
 } from 'lucide-react';
 import { NaverPost } from '../types';
@@ -127,7 +127,7 @@ export default function TimelineTimeline({
               <th className="py-3.5 px-4">타겟 키워드</th>
               <th className="py-3.5 px-4">예약 예정 일시</th>
               <th className="py-3.5 px-4">발행 상태</th>
-              <th className="py-3.5 px-4">방문수/공감</th>
+              <th className="py-3.5 px-4">댓글 / 방문 / 공감</th>
               <th className="py-3.5 px-4 text-center rounded-r-xl">액션 및 제어</th>
             </tr>
           </thead>
@@ -230,14 +230,18 @@ export default function TimelineTimeline({
                 </td>
                 <td className="py-4 px-4">
                   {post.status === 'POSTED' ? (
-                    <div className="flex items-center gap-3 text-[10px] text-slate-500 font-extrabold">
-                      <span className="flex items-center gap-1">
-                        <Eye className="w-4 h-4" />
-                        {post.views_count}
+                    <div className="flex items-center gap-2.5 text-[10px] text-slate-500 font-extrabold">
+                      <span className="flex items-center gap-1 text-emerald-650 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100/60" title="댓글 수">
+                        <MessageSquare className="w-3 h-3 text-emerald-600" />
+                        {post.comments_count || 0}
                       </span>
-                      <span className="flex items-center gap-1 text-red-500">
-                        <Heart className="w-3.5 h-3.5 fill-red-500/10 text-red-500" />
-                        {post.likes_count}
+                      <span className="flex items-center gap-1 text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded" title="방문 수">
+                        <Eye className="w-3 h-3 text-slate-500" />
+                        {post.views_count || 0}
+                      </span>
+                      <span className="flex items-center gap-1 text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100/60" title="공감 수">
+                        <Heart className="w-3 h-3 fill-rose-500/20 text-rose-500" />
+                        {post.likes_count || 0}
                       </span>
                     </div>
                   ) : (

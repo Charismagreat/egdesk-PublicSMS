@@ -2,8 +2,8 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, deleteRows } from '../../../../../egdesk-helpers';
 
-// 네이버 공감 수치 비동기 수집 헬퍼 함수
-async function syncNaverLikes(posts: any[]) {
+// 네이버 공감 & 댓글 수치 실시간 수집 헬퍼 함수
+async function syncNaverMetrics(posts: any[]) {
   const targetPosts = posts.filter((p: any) => p.status === 'POSTED' && p.post_url);
   for (const post of targetPosts) {
     try {
@@ -25,10 +25,12 @@ async function syncNaverLikes(posts: any[]) {
       }
 
       if (blogId && logNo) {
-        let totalLikes = 0;
-        let fetchedSuccess = false;
+        let totalLikes = post.likes_count || 0;
+        let likesFetched = false;
+        let totalComments = post.comments_count || 0;
+        let commentsFetched = false;
 
-        // 1순위 타격: 네이버 공식 블로그 공감 API (/api/blogs/{blogId}/posts/{logNo}/sympathy-users)
+        // A. 💖 공감 수치 수집 (1순위 공식 API)
         try {
           const sympathyApiUrl = `https://blog.naver.com/api/blogs/${blogId}/posts/${logNo}/sympathy-users`;
           const sympathyRes = await fetch(sympathyApiUrl, {
@@ -42,13 +44,13 @@ async function syncNaverLikes(posts: any[]) {
             const sympathyData = await sympathyRes.json().catch(() => null);
             if (sympathyData?.isSuccess && typeof sympathyData?.result?.totalCount === 'number') {
               totalLikes = sympathyData.result.totalCount;
-              fetchedSuccess = true;
+              likesFetched = true;
             }
           }
         } catch (e) {}
 
-        // 2순위 타격 (Fallback): blog.like.naver.com API
-        if (!fetchedSuccess) {
+        // Fallback: blog.like.naver.com API
+        if (!likesFetched) {
           const likeApiUrl = `https://blog.like.naver.com/v1/search/contents?suppress_response_codes=true&q=BLOG[${blogId}_${logNo}]`;
           const likeRes = await fetch(likeApiUrl, {
             headers: {
@@ -61,13 +63,42 @@ async function syncNaverLikes(posts: any[]) {
             const likeData = await likeRes.json().catch(() => null);
             const reactions = likeData?.contents?.[0]?.reactions || [];
             totalLikes = reactions.reduce((sum: number, r: any) => sum + (Number(r.count) || 0), 0);
-            fetchedSuccess = true;
+            likesFetched = true;
           }
         }
 
-        if (fetchedSuccess && totalLikes !== post.likes_count) {
+        // B. 💬 댓글 수치 수집 (모바일 PostView 정규식 스크레이퍼)
+        try {
+          const mUrl = `https://m.blog.naver.com/PostView.naver?blogId=${blogId}&logNo=${logNo}`;
+          const mRes = await fetch(mUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
+            }
+          }).catch(() => null);
+
+          if (mRes && mRes.ok) {
+            const htmlText = await mRes.text().catch(() => '');
+            const cMatch = htmlText.match(/commentCount="(\d+)"/i) || htmlText.match(/commentCount='(\d+)'/i) || htmlText.match(/commentCount:\s*"?(\d+)"?/i);
+            if (cMatch) {
+              totalComments = parseInt(cMatch[1], 10) || 0;
+              commentsFetched = true;
+            }
+          }
+        } catch (e) {}
+
+        // DB 업데이트 감지
+        const updatePayload: any = {};
+        if (likesFetched && totalLikes !== post.likes_count) {
           post.likes_count = totalLikes;
-          await updateRows('crm_naver_blog_posts', { likes_count: totalLikes }, { filters: { id: String(post.id) } }).catch(() => {});
+          updatePayload.likes_count = totalLikes;
+        }
+        if (commentsFetched && totalComments !== post.comments_count) {
+          post.comments_count = totalComments;
+          updatePayload.comments_count = totalComments;
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+          await updateRows('crm_naver_blog_posts', updatePayload, { filters: { id: String(post.id) } }).catch(() => {});
         }
       }
     } catch (err: any) {
@@ -115,8 +146,8 @@ export async function GET(req: Request) {
         };
       });
 
-    // 3. 실시간 네이버 블로그 공식 공감 수치 즉시 수집 & DB 동기화
-    await syncNaverLikes(mergedPosts).catch(() => {});
+    // 3. 실시간 네이버 블로그 공감 및 댓글 수치 즉시 수집 & DB 동기화
+    await syncNaverMetrics(mergedPosts).catch(() => {});
 
     // 4. 최근 등록순 정렬 (가장 최근에 생성/등록된 포스트가 최상단 1순위에 배치)
     mergedPosts.sort((a: any, b: any) => {
