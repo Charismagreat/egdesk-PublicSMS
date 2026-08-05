@@ -141,15 +141,15 @@ export async function POST(req: Request) {
 
     const isWindows = process.platform === 'win32';
     if (isWindows) {
-      // 검은 CMD 콘솔 창을 완전히 숨기고(Hidden) Playwright Chrome 브라우저 창만 깔끔하게 팝업
-      const psCmd = `powershell -NoProfile -WindowStyle Hidden -Command "Start-Process node -ArgumentList '""${daemonScriptPath}""' -WindowStyle Hidden"`;
-      exec(psCmd, { cwd: process.cwd(), env });
+      // 검은 CMD 콘솔 창은 최소화(/min)하여 바탕화면을 가리지 않고, Playwright 크롬 브라우저 팝업 창만 상단에 주출력!
+      const cmd = `start "" /min node "${daemonScriptPath}"`;
+      exec(cmd, { cwd: process.cwd(), env });
     } else {
       const child = spawn(process.execPath, [daemonScriptPath], {
         cwd: process.cwd(),
         env,
         detached: true,
-        windowsHide: true,
+        windowsHide: false,
         stdio: 'ignore'
       });
       child.unref();

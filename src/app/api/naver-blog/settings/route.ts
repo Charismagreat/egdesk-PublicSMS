@@ -84,13 +84,13 @@ export async function GET(req: Request) {
       
       const isWindows = process.platform === 'win32';
       if (isWindows) {
-        const psCmd = `powershell -NoProfile -WindowStyle Hidden -Command "Start-Process node -ArgumentList '""${daemonScriptPath}"" --login' -WindowStyle Hidden"`;
-        exec(psCmd, { cwd: process.cwd() });
+        const cmd = `start "" /min node "${daemonScriptPath}" --login`;
+        exec(cmd, { cwd: process.cwd() });
       } else {
         const child = spawn(process.execPath, [daemonScriptPath, '--login'], {
           cwd: process.cwd(),
           detached: true,
-          windowsHide: true,
+          windowsHide: false,
           stdio: 'ignore'
         });
         child.unref();
