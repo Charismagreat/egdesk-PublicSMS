@@ -222,6 +222,7 @@ async function runNaverRpaDaemon() {
       }
     }
 
+    let pendingPosts = [];
     const portsToScan = [4002, 4000, 4006, 4001, 4003, 4004, 4005, 3000, 8080, 8000];
     const candidateUrls = Array.from(new Set([APP_URL, ...portsToScan.map(p => `http://localhost:${p}`)]));
     for (const testUrl of candidateUrls) {
