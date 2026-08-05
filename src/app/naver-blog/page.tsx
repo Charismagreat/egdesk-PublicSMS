@@ -640,9 +640,10 @@ export default function NaverBlogMarketingPortal() {
     // 사전 계정 연동 및 로그인 세션 유효성 가드 체크 (사전 실패 방지)
     const isRpaMode = activeModeTab === 'rpa';
     const isApiValid = !!(currentSettings.api_client_id?.trim() && currentSettings.api_client_secret?.trim());
-    const isRpaValid = currentHasSession;
+    const hasLoginCredentials = !!(currentSettings.naver_login_id?.trim() && currentSettings.naver_login_pw?.trim());
+    const isRpaValid = currentHasSession || hasLoginCredentials;
 
-    // RPA 모드인 경우 반드시 네이버 서버 Live Ping(currentHasSession)이 유효해야 함!
+    // RPA 모드인 경우 세션 쿠키 또는 저장된 ID/PW가 유효하면 즉시 기동 진행!
     const isCurrentSessionValid = isRpaMode ? isRpaValid : (isApiValid || isRpaValid);
 
     if (!isCurrentSessionValid) {
