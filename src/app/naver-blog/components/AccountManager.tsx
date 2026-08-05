@@ -73,9 +73,12 @@ export default function AccountManager({
   const isApiFormEmpty = !naverBlogIdInput.trim() || !apiClientIdInput.trim() || !apiClientSecretInput.trim();
   const isApiSaveDisabled = isApiFormEmpty || isApiSettingsUnchanged;
 
-  // RPA 설정 변경점 체크
-  const isRpaIdUnchanged = naverBlogIdInput.trim() === (settings.naver_blog_id || '').trim();
-  const isRpaSaveDisabled = !naverBlogIdInput.trim() || isRpaIdUnchanged;
+  // RPA 설정 변경점 체크 (블로그 ID, 로그인 ID, 로그인 PW 변경 감지)
+  const isRpaSettingsUnchanged = 
+    naverBlogIdInput.trim() === (settings.naver_blog_id || '').trim() &&
+    naverLoginIdInput.trim() === (settings.naver_login_id || '').trim() &&
+    naverLoginPwInput.trim() === (settings.naver_login_pw || '').trim();
+  const isRpaSaveDisabled = !naverBlogIdInput.trim() || isRpaSettingsUnchanged;
 
   return (
     <div className="space-y-8">
@@ -219,7 +222,7 @@ export default function AccountManager({
                         : 'bg-slate-900 text-white hover:bg-slate-800 cursor-pointer active:scale-95'
                     }`}
                   >
-                    {isRpaIdUnchanged && naverBlogIdInput.trim() ? '최신 상태 ✅' : '저장 💾'}
+                    {isRpaSettingsUnchanged && naverBlogIdInput.trim() ? '최신 상태 ✅' : '저장 💾'}
                   </button>
                 </div>
               </div>
