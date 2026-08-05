@@ -25,23 +25,49 @@ async function syncNaverLikes(posts: any[]) {
       }
 
       if (blogId && logNo) {
-        const likeApiUrl = `https://blog.like.naver.com/v1/search/contents?suppress_response_codes=true&q=BLOG[${blogId}_${logNo}]`;
-        const likeRes = await fetch(likeApiUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': post.post_url
-          }
-        }).catch(() => null);
+        let totalLikes = 0;
+        let fetchedSuccess = false;
 
-        if (likeRes && likeRes.ok) {
-          const likeData = await likeRes.json().catch(() => null);
-          const reactions = likeData?.contents?.[0]?.reactions || [];
-          const totalLikes = reactions.reduce((sum: number, r: any) => sum + (Number(r.count) || 0), 0);
+        // 1순위 타격: 네이버 공식 블로그 공감 API (/api/blogs/{blogId}/posts/{logNo}/sympathy-users)
+        try {
+          const sympathyApiUrl = `https://blog.naver.com/api/blogs/${blogId}/posts/${logNo}/sympathy-users`;
+          const sympathyRes = await fetch(sympathyApiUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Referer': `https://blog.naver.com/${blogId}/${logNo}`
+            }
+          }).catch(() => null);
 
-          if (totalLikes !== post.likes_count) {
-            post.likes_count = totalLikes;
-            await updateRows('crm_naver_blog_posts', { likes_count: totalLikes }, { filters: { id: String(post.id) } }).catch(() => {});
+          if (sympathyRes && sympathyRes.ok) {
+            const sympathyData = await sympathyRes.json().catch(() => null);
+            if (sympathyData?.isSuccess && typeof sympathyData?.result?.totalCount === 'number') {
+              totalLikes = sympathyData.result.totalCount;
+              fetchedSuccess = true;
+            }
           }
+        } catch (e) {}
+
+        // 2순위 타격 (Fallback): blog.like.naver.com API
+        if (!fetchedSuccess) {
+          const likeApiUrl = `https://blog.like.naver.com/v1/search/contents?suppress_response_codes=true&q=BLOG[${blogId}_${logNo}]`;
+          const likeRes = await fetch(likeApiUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Referer': post.post_url
+            }
+          }).catch(() => null);
+
+          if (likeRes && likeRes.ok) {
+            const likeData = await likeRes.json().catch(() => null);
+            const reactions = likeData?.contents?.[0]?.reactions || [];
+            totalLikes = reactions.reduce((sum: number, r: any) => sum + (Number(r.count) || 0), 0);
+            fetchedSuccess = true;
+          }
+        }
+
+        if (fetchedSuccess && totalLikes !== post.likes_count) {
+          post.likes_count = totalLikes;
+          await updateRows('crm_naver_blog_posts', { likes_count: totalLikes }, { filters: { id: String(post.id) } }).catch(() => {});
         }
       }
     } catch (err: any) {
@@ -89,8 +115,8 @@ export async function GET(req: Request) {
         };
       });
 
-    // 3. 비동기 실시간 네이버 공감 수치 동기화 (응답 지연 방지 백그라운드 구동)
-    syncNaverLikes(mergedPosts).catch(() => {});
+    // 3. 실시간 네이버 블로그 공식 공감 수치 즉시 수집 & DB 동기화
+    await syncNaverLikes(mergedPosts).catch(() => {});
 
     // 4. 최근 등록순 정렬 (가장 최근에 생성/등록된 포스트가 최상단 1순위에 배치)
     mergedPosts.sort((a: any, b: any) => {
