@@ -28,9 +28,75 @@ const jitterSleep = (min = 1500, max = 4000) => {
   return new Promise((resolve) => setTimeout(resolve, delay));
 };
 
+// 백엔드 실행 포트 감지 헬퍼 함수
+async function getAppUrlWithFallback() {
+  const candidatePorts = [process.env.NEXT_PUBLIC_APP_URL, 'http://localhost:4002', 'http://localhost:4000', 'http://localhost:4001', 'http://localhost:4003'];
+  for (const url of candidatePorts) {
+    if (!url) continue;
+    try {
+      const cleanUrl = url.replace(/\/$/, '');
+      const res = await fetch(`${cleanUrl}/api/naver-blog/settings`, { method: 'GET' });
+      if (res.ok) return cleanUrl;
+    } catch (e) {}
+  }
+  return 'http://localhost:4002';
+}
+
+// 네이버 로그인 폼 자동 타이핑 및 클릭 헬퍼 함수
+async function autoPerformNaverLogin(page, activeAppUrl) {
+  try {
+    const settingsRes = await fetch(`${activeAppUrl}/api/naver-blog/settings`).catch(() => null);
+    if (!settingsRes || !settingsRes.ok) return false;
+    const settingsData = await settingsRes.json().catch(() => null);
+    const savedId = settingsData?.settings?.naver_login_id?.trim();
+    const savedPw = settingsData?.settings?.naver_login_pw?.trim();
+
+    if (!savedId || !savedPw) {
+      console.log('ℹ️ [RPA Auto-Login] 저장된 네이버 계정 정보(ID/PW)가 없어 사용자의 직접 수동 로그인을 대기합니다.');
+      return false;
+    }
+
+    console.log(`🤖 [RPA Auto-Login] 저장된 네이버 계정(@${savedId})으로 무인 자동 로그인을 개시합니다.`);
+    await page.waitForSelector('#id', { timeout: 8000 }).catch(() => {});
+    await jitterSleep(600, 1000);
+
+    // 1. #id 필드 클릭 및 직접 키보드 타이핑
+    const idInput = page.locator('#id');
+    if (await idInput.count() > 0) {
+      await idInput.click();
+      await idInput.fill('');
+      await page.keyboard.type(savedId, { delay: 60 });
+    }
+
+    await jitterSleep(400, 800);
+
+    // 2. #pw 필드 클릭 및 직접 키보드 타이핑
+    const pwInput = page.locator('#pw');
+    if (await pwInput.count() > 0) {
+      await pwInput.click();
+      await pwInput.fill('');
+      await page.keyboard.type(savedPw, { delay: 60 });
+    }
+
+    await jitterSleep(800, 1200);
+
+    // 3. 로그인 버튼 클릭
+    const loginBtn = page.locator('#log\\.login, button.btn_login, .btn_global').first();
+    if (await loginBtn.count() > 0) {
+      console.log('🚀 [RPA Auto-Login] "로그인" 버튼을 타격하여 무인 인가를 완료합니다.');
+      await loginBtn.click({ force: true }).catch(() => {});
+      return true;
+    }
+  } catch (err) {
+    console.warn('⚠️ [RPA Auto-Login] 자동 입력 시도 예외:', err.message);
+  }
+  return false;
+}
+
 async function runNaverRpaDaemon() {
   console.log('🤖 [RPA] 네이버 블로그 자동 발행 데몬 동작을 개시합니다.');
-  console.log(`🌐 백엔드 연동 서버 주소: ${APP_URL}`);
+  const activeAppUrl = await getAppUrlWithFallback();
+  console.log(`🌐 백엔드 연동 서버 주소: ${activeAppUrl}`);
 
   const isLoginOnly = process.argv.includes('--login');
   const hasSession = fs.existsSync(SESSION_FILE_PATH);
@@ -40,7 +106,6 @@ async function runNaverRpaDaemon() {
     // 0. 로그인 전용 모드 또는 세션 쿠키가 전혀 없는 경우 즉시 팝업 브라우저 띄우기
     if (isLoginOnly || !hasSession) {
       console.log('🔑 [RPA] 네이버 로그인 인증 브라우저 팝업 창을 엽니다.');
-      console.log('💡 [RPA] 브라우저 창에서 로그인 및 2단계 인증을 마무리해 주십시오. (최대 5분 대기)');
 
       browser = await chromium.launch({
         headless: false,
@@ -59,46 +124,8 @@ async function runNaverRpaDaemon() {
 
       await loginPage.goto('https://nid.naver.com/nidlogin.login');
 
-      // 저장된 네이버 계정 ID/PW가 설정되어 있는 경우 100% 무인 자동 로그인 시도
-      try {
-        const settingsRes = await fetch(`${activeAppUrl}/api/naver-blog/settings`).catch(() => null);
-        if (settingsRes && settingsRes.ok) {
-          const settingsData = await settingsRes.json().catch(() => null);
-          const savedId = settingsData?.settings?.naver_login_id?.trim();
-          const savedPw = settingsData?.settings?.naver_login_pw?.trim();
-
-          if (savedId && savedPw) {
-            console.log(`🤖 [RPA Auto-Login] 저장된 네이버 마케팅 계정(@${savedId})으로 무인 자동 로그인을 시도합니다.`);
-            await loginPage.waitForSelector('#id', { timeout: 5000 }).catch(() => {});
-            await jitterSleep(500, 1000);
-
-            await loginPage.evaluate(({ idVal, pwVal }) => {
-              const idEl = document.querySelector('#id');
-              const pwEl = document.querySelector('#pw');
-              if (idEl) {
-                idEl.value = idVal;
-                idEl.dispatchEvent(new Event('input', { bubbles: true }));
-                idEl.dispatchEvent(new Event('change', { bubbles: true }));
-              }
-              if (pwEl) {
-                pwEl.value = pwVal;
-                pwEl.dispatchEvent(new Event('input', { bubbles: true }));
-                pwEl.dispatchEvent(new Event('change', { bubbles: true }));
-              }
-            }, { idVal: savedId, pwVal: savedPw });
-
-            await jitterSleep(800, 1200);
-
-            const loginBtn = loginPage.locator('#log\\.login, button.btn_login, .btn_global').first();
-            if (await loginBtn.count() > 0) {
-              console.log('🚀 [RPA Auto-Login] "로그인" 버튼을 타격하여 무인 인가를 완료합니다.');
-              await loginBtn.click({ force: true }).catch(() => {});
-            }
-          }
-        }
-      } catch (autoErr) {
-        console.warn('⚠️ [RPA Auto-Login] 무인 자동 로그인 타이핑 시도 예외:', autoErr.message);
-      }
+      // 저장된 ID/PW 계정 정보로 무인 자동 로그인 시도
+      await autoPerformNaverLogin(loginPage, activeAppUrl);
 
       // 사용자가 직접 로그인을 마무리할 때까지 NID_AUT/NID_SES 로그인 인증 쿠키 실시간 감지 (최대 5분)
       try {
@@ -262,62 +289,21 @@ async function runNaverRpaDaemon() {
     if (currentUrl.includes('nidlogin.login') || currentUrl.includes('nidlogin')) {
       console.warn('⚠️ [RPA] 네이버 로그인 세션 쿠키가 만료되어 로그인 화면(nidlogin.login)으로 리다이렉트되었습니다.');
 
-      // 저장된 ID/PW 계정 설정 정보 가져오기
-      let savedId = '';
-      let savedPw = '';
-      try {
-        const settingsRes = await fetch(`${activeAppUrl}/api/naver-blog/settings`).catch(() => null);
-        if (settingsRes && settingsRes.ok) {
-          const settingsData = await settingsRes.json().catch(() => null);
-          savedId = settingsData?.settings?.naver_login_id?.trim() || '';
-          savedPw = settingsData?.settings?.naver_login_pw?.trim() || '';
-        }
-      } catch (e) {}
+      const loginDone = await autoPerformNaverLogin(page, activeAppUrl);
+      if (loginDone) {
+        await jitterSleep(3000, 5000);
+        // 로그인 성공 후 쿠키 세션 저장
+        const storageState = await context.storageState();
+        fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(storageState, null, 2));
+        console.log('💾 [RPA Auto-Login] 새로 복구된 로그인 세션 쿠키를 성공적으로 저장하였습니다.');
 
-      if (savedId && savedPw) {
-        console.log(`🤖 [RPA Auto-Login] 저장된 네이버 마케팅 계정(@${savedId})으로 포스팅을 위한 무인 자동 로그인을 즉시 수행합니다!`);
-        try {
-          await page.waitForSelector('#id', { timeout: 5000 }).catch(() => {});
-          await jitterSleep(500, 1000);
-
-          await page.evaluate(({ idVal, pwVal }) => {
-            const idEl = document.querySelector('#id');
-            const pwEl = document.querySelector('#pw');
-            if (idEl) {
-              idEl.value = idVal;
-              idEl.dispatchEvent(new Event('input', { bubbles: true }));
-              idEl.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-            if (pwEl) {
-              pwEl.value = pwVal;
-              pwEl.dispatchEvent(new Event('input', { bubbles: true }));
-              pwEl.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-          }, { idVal: savedId, pwVal: savedPw });
-
-          await jitterSleep(800, 1200);
-
-          const loginBtn = page.locator('#log\\.login, button.btn_login, .btn_global').first();
-          if (await loginBtn.count() > 0) {
-            console.log('🚀 [RPA Auto-Login] "로그인" 버튼을 클릭하여 무인 인가를 완료합니다.');
-            await loginBtn.click({ force: true }).catch(() => {});
-            await jitterSleep(3000, 5000);
-
-            // 로그인 성공 후 쿠키 세션 저장
-            const storageState = await context.storageState();
-            fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(storageState, null, 2));
-            console.log('💾 [RPA Auto-Login] 새로 복구된 로그인 세션 쿠키를 성공적으로 저장하였습니다.');
-
-            // 글쓰기 폼으로 재진입
-            console.log('🔄 [RPA Auto-Login] 로그인 완료! 글쓰기 폼으로 무중단 재진입합니다.');
-            await page.goto(primaryWriteUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
-            await jitterSleep(3000, 5000);
-            currentUrl = page.url();
-          }
-        } catch (autoErr) {
-          console.warn('⚠️ [RPA Auto-Login] 무인 자동 로그인 시도 중 예외:', autoErr.message);
-        }
+        // 글쓰기 폼으로 재진입
+        console.log('🔄 [RPA Auto-Login] 로그인 완료! 글쓰기 폼으로 무중단 재진입합니다.');
+        await page.goto(primaryWriteUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+        await jitterSleep(3000, 5000);
+        currentUrl = page.url();
       }
+    }
 
       // 여전히 로그인 페이지에 머물러 있는 경우 최종 FAILED 처리
       if (currentUrl.includes('nidlogin.login') || currentUrl.includes('nidlogin')) {
