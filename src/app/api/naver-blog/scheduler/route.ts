@@ -1,8 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows } from '../../../../../egdesk-helpers';
-import { exec } from 'child_process';
-import path from 'path';
 
 // RPA 발행 데몬 백그라운드 자동 기동 헬퍼 (publish-rpa 경유로 싱글톤 락 준수)
 async function triggerRpaDaemon(requestUrl?: string) {
@@ -25,6 +23,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const targetProductIdParam = searchParams.get('productId');
     const targetProductIdsParam = searchParams.get('productIds'); // 다중 선택된 상품 ID들 ("PROD-1,PROD-2")
+    const customToneStyle = searchParams.get('toneStyle'); // 다중 규칙 지정 톤앤매너 파라미터
+    const customScheduledTime = searchParams.get('scheduledTime'); // 다중 규칙 지정 발행 시각 파라미터 ("10:00")
 
     // 0. 예약 시각이 지난 포스트 탐색 및 RPA 자동 기동
     const allPostsRes = await queryTable('crm_naver_blog_posts', { limit: 10000 });
@@ -45,7 +45,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: '설정 테이블이 초기화되지 않았습니다.' }, { status: 400 });
     }
 
-    if (Number(settings.is_autopilot) !== 1) {
+    // 수동 맞춤 구동(customToneStyle)이 아닌 자동 스케줄링일 경우 마스터 ON/OFF 체크
+    const isManualTrigger = Boolean(customToneStyle || customScheduledTime);
+    if (!isManualTrigger && Number(settings.is_autopilot) !== 1) {
       if (pendingPosts.length > 0) {
         return NextResponse.json({
           success: true,
@@ -66,7 +68,6 @@ export async function GET(req: Request) {
     if (targetProductIdsParam) {
       const idsArr = targetProductIdsParam.split(',').map(s => s.trim()).filter(Boolean);
       if (idsArr.length > 0) {
-        // 선택된 상품 풀(Pool) 중에서 픽업 (아직 포스팅 안 된 상품 우선, 또는 무작위 픽업)
         const poolProductsRes = await queryTable('products', { limit: 10000 });
         const poolProducts = (poolProductsRes.rows || []).filter((p: any) => !p.deleted_at && idsArr.includes(String(p.id)));
 
@@ -117,20 +118,21 @@ export async function GET(req: Request) {
       }
     }
 
-    // 4. 상품 기반 고품질 AI 오토파일럿 블로그 원고 실시간 집필
-    const selectedTone = settings.tone_style || '솔직리뷰형';
+    // 4. 상품 기반 고품질 AI 오토파일럿 블로그 원고 실시간 집필 (다중 규칙 톤앤매너 지원)
+    const selectedTone = customToneStyle || settings.tone_style || '정보제공형';
     const productName = targetProduct.name;
     const priceText = targetProduct.price ? `${Number(targetProduct.price).toLocaleString()}원` : '합리적인 가격대';
     const descriptionText = targetProduct.description || '최고의 선택과 만족감을 선사하는 웰메이드 가전 제품';
     const brandName = targetProduct.brand || '인기 브랜드';
     
-    // 오토파일럿 전용 자동 가상 속성 매핑 (Product Spec-to-Keyword) 키워드 3개 선정
     let targetKeywords = `${productName} 추천, ${productName} 솔직후기, ${brandName} 가전`;
     let title = '';
     let content = '';
 
-    if (selectedTone === '정보제공형') {
-오늘은 최근 인스타그램이나 커뮤니티에서 정말 핫하게 떠오르고 있는 품절 대란 주인공, [${productName}] 을 데려왔습니다!
+    if (selectedTone.includes('정보제공형') || selectedTone.includes('스펙')) {
+      targetKeywords = `${productName} 추천, ${productName} 스펙, ${brandName} 가전`;
+      title = `[내돈내산] ${productName} 솔직 후기! 장단점 총정리`;
+      content = `오늘은 최근 인스타그램이나 커뮤니티에서 정말 핫하게 떠오르고 있는 품절 대란 주인공, [${productName}] 을 데려왔습니다!
 제가 직접 내돈내산으로 구매해 약 3주간 꼼꼼하게 실사용해보고 적는 100% 리얼 후기예요. 💸
 
 일단 처음에 [${priceText}] 대의 가격을 보고 '과연 돈값을 할까?' 싶었는데, 박스를 뜯어보고 직접 써보는 순간 그런 걱정이 싹 사라졌답니다.
@@ -145,7 +147,7 @@ export async function GET(req: Request) {
 고민은 배송만 늦출 뿐! 고민하고 계셨던 이웃님들이라면 이번 혜택 기회에 꼭 득템하셔서 삶의 질 수직상승을 경험해 보세요! 😊
 
 #${productName.replace(/\s+/g, '')} #솔직후기 #내돈내산 #리얼리뷰 #사용후기 #강력추천 #삶의질향상`;
-    } else if (selectedTone === '전문가형' || selectedTone === '전문칼럼형') {
+    } else if (selectedTone.includes('전문가') || selectedTone.includes('칼럼')) {
       targetKeywords = `${productName} 스펙, 테크 리뷰 ${productName}, 프리미엄 가전`;
       title = `[전문가 분석] ${productName} 하드웨어 완성도와 가격 대비 가치 심층 고찰`;
       content = `현대 가전 시장에서 기기의 원초적 사용 편의성과 기술적 완성도는 어떻게 정의될까요?
@@ -184,12 +186,11 @@ export async function GET(req: Request) {
     const subImageUrl = `https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&auto=format&fit=crop&q=80&sig=${randomSeed2}`;
 
     // 5. 오토파일럿 예약글 생성
-    // 스케줄러 시간 분석 ("10:00" -> 오늘 혹은 내일 설정 시간)
     const today = new Date();
-    const timeParts = (settings.autopilot_time || "10:00").split(":");
-    const scheduledDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), Number(timeParts[0]), Number(timeParts[1] || 0));
+    const targetTimeStr = customScheduledTime || settings.autopilot_time || "10:00";
+    const timeParts = targetTimeStr.split(":");
+    const scheduledDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), Number(timeParts[0] || 10), Number(timeParts[1] || 0));
     
-    // 이미 오늘 설정 시각이 지났다면 내일로 예약 설정
     if (scheduledDate.getTime() < today.getTime()) {
       scheduledDate.setDate(scheduledDate.getDate() + 1);
     }
@@ -197,7 +198,7 @@ export async function GET(req: Request) {
     const newPost = {
       id: Date.now(),
       product_id: targetProduct.id,
-      status: 'SCHEDULED', // 오토파일럿으로 예약 완료 상태 적재
+      status: 'SCHEDULED',
       title: title,
       content: content,
       target_keywords: targetKeywords,
@@ -212,7 +213,6 @@ export async function GET(req: Request) {
 
     await insertRows('crm_naver_blog_posts', [newPost]);
 
-    // 예약 일시가 현재 시각 이하이면 바로 RPA 데몬 기동
     if (new Date(newPost.scheduled_at) <= new Date()) {
       triggerRpaDaemon();
     }
@@ -220,7 +220,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       triggered: true,
-      message: `네이버 블로그 오토파일럿 스케줄링 성공! 대상 상품 [${productName}]이 ${scheduledDate.toLocaleString()} 예약 포스팅으로 자동 생성되었습니다.`,
+      message: `네이버 블로그 [${selectedTone}] 오토파일럿 포스팅 성공! 대상 상품 [${productName}]이 ${scheduledDate.toLocaleString()} 예약으로 생성되었습니다.`,
       post: newPost
     });
 

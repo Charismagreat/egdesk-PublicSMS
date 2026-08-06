@@ -160,11 +160,26 @@ export default function GuideModals({
                   <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 shadow-3xs">
                     <div className="flex items-center gap-2">
                       <span className="w-5 h-5 rounded-md bg-emerald-50 text-emerald-600 text-xs font-black flex items-center justify-center border border-emerald-100">4</span>
-                      <h5 className="text-xs font-black text-slate-800">네이버 로그인 및 세션 동기화</h5>
+                      <h5 className="text-xs font-black text-slate-800">네이버 로그인 및 세션 자동 동기화</h5>
                     </div>
                     <p className="text-[11px] text-slate-555 leading-relaxed font-semibold">
-                      모든 준비가 끝났다면 계정 카드 하단의 <strong>[RPA 최초 로그인 브라우저 기동 🚀]</strong>을 클릭하여 크로미움 브라우저 팝업을 띄우고, 네이버 로그인을 손수 완료해 주세요. 로그인 성공 확인 후 바로 아래의 <strong>[세션 동기화 실시간 갱신 🔄]</strong>을 클릭하면 연결 표시등이 🟢 초록빛으로 점등됩니다.
+                      모든 준비가 끝났다면 계정 카드 하단의 <strong>[RPA 최초 로그인 브라우저 기동 🚀]</strong>을 클릭하여 크로미움 브라우저 팝업을 띄우고, 네이버 로그인을 완료해 주세요. 로그인에 성공하면 시스템이 세션을 실시간으로 자동 탐색 및 주입하여 연결 표시등이 🟢 초록빛으로 활성화됩니다.
                     </p>
+                  </div>
+
+                  {/* 💡 신규 핵심 기능 사용자 가이드 */}
+                  <div className="p-4 bg-emerald-50/40 border border-emerald-200 rounded-2xl space-y-2.5 shadow-3xs">
+                    <h5 className="text-xs font-black text-emerald-800 flex items-center gap-1.5">
+                      <span>✨ 신규 기능 사용 가이드 (복수 오토파일럿 & 대형 선택 팝업)</span>
+                    </h5>
+                    <ul className="text-[11px] text-slate-600 space-y-1.5 font-semibold list-disc pl-4">
+                      <li>
+                        <strong>100% 무인 AI 오토파일럿 다중 마케팅 엔진</strong>: [➕ 새 오토파일럿 규칙 추가] 버튼을 통해 발행 주기(매일/주말/주간/월간), 시각, 원고 톤앤매너(정보제공형/친근한일상형/전문가형)를 다채롭게 조합하여 입체적인 포스팅 자동 발행을 구축할 수 있습니다.
+                      </li>
+                      <li>
+                        <strong>대형 상품 선택 팝업 모달</strong>: 1단계 카드의 [대형 팝업으로 상품 선택 📦]을 클릭하면 화면의 85% 이상을 활용하는 널찍한 팝업에서 수십 개의 상품을 시원하게 실시간 검색하고 다중 선택할 수 있습니다.
+                      </li>
+                    </ul>
                   </div>
                 </div>
 

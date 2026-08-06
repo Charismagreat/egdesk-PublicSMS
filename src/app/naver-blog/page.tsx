@@ -537,8 +537,8 @@ export default function NaverBlogMarketingPortal() {
         naver_blog_id: naverBlogIdInput.trim(),
         naver_login_id: naverLoginIdInput.trim(),
         naver_login_pw: naverLoginPwInput.trim(),
-        api_client_id: '',
-        api_client_secret: ''
+        api_client_id: apiClientIdInput.trim() || settings.api_client_id || '',
+        api_client_secret: apiClientSecretInput.trim() || settings.api_client_secret || ''
       });
       if (data && data.success) {
         setIsAccountConnected(data.has_session === 1);
@@ -925,178 +925,9 @@ export default function NaverBlogMarketingPortal() {
         {/* 왼쪽 & 중간 영역 */}
         <div className="lg:col-span-2 space-y-8">
           
-          {/* 가상 컨텐츠 연동 알림창 */}
-          {!isConnected && (
-            <div className="p-5 rounded-2xl bg-amber-50/80 backdrop-blur-md border border-amber-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-xs">
-              <div className="flex items-start gap-3">
-                <span className="text-amber-500 shrink-0 mt-0.5 text-lg">⚠️</span>
-                <div>
-                  <h4 className="text-sm font-bold text-amber-800">
-                    {activeModeTab === 'api' 
-                      ? '네이버 공식 API 미설정' 
-                      : '네이버 RPA 자동 발행 세션(쿠키) 인증 필요'}
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    {activeModeTab === 'api' 
-                      ? '현재 공식 API 키가 등록되지 않아 가상 모드로 작동 중입니다. 실제 발행을 위해 아래 설정 카드에서 API 키를 등록해주세요.' 
-                      : 'RPA 자동 발행용 로그인 쿠키 세션이 존재하지 않습니다. 아래 계정 관리자에서 [최초 1회 로그인 브라우저 기동]을 실행하여 인증을 완료해주세요.'}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {activeModeTab === 'rpa' && (
-                  <button 
-                    onClick={handleTriggerRpaLogin}
-                    disabled={isRpaLaunching}
-                    className="px-4 py-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
-                  >
-                    {isRpaLaunching ? '인증 브라우저 기동 중...' : 'RPA 로그인 기동 🚀'}
-                  </button>
-                )}
-                <button 
-                  onClick={() => {
-                    const el = document.getElementById('account-connection-card');
-                    el?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
-                >
-                  계정 설정으로 이동
-                </button>
-              </div>
-            </div>
-          )}
 
-          {/* 4대 독점 기술 쇼케이스 배너 */}
-          <div className="p-6 lg:p-8 rounded-3xl bg-white/70 backdrop-blur-xl border border-slate-200/50 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50/20 rounded-full blur-3xl pointer-events-none"></div>
-            
-            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-4 mb-6 gap-4">
-              <div>
-                <h2 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-emerald-500" />
-                  N-BLOG AI Keyword Lab 4대 독점 특장점
-                </h2>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* 1. 상품 자동 속성 매핑 추천 */}
-              <div 
-                onClick={() => {
-                  const el = document.getElementById('ai-keyword-lab-section');
-                  el?.scrollIntoView({ behavior: 'smooth' });
-                  showToast("1. 상품 자동 속성 매핑 추천 영역으로 이동했습니다! 📊", "info");
-                }}
-                className="p-5 rounded-2xl bg-white/95 border border-slate-200/60 hover:border-emerald-500/50 transition-all hover:bg-emerald-50/10 cursor-pointer group flex flex-col justify-between h-full relative hover:shadow-md hover:-translate-y-0.5 duration-300"
-              >
-                <div className="space-y-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform">
-                    📊
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-bold text-slate-800 flex flex-col gap-0.5">
-                      <span>1. 자동 속성 매핑</span>
-                      <span className="text-[9px] w-fit px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 font-semibold">Spec-to-Keyword</span>
-                    </h4>
-                    <p className="text-[11px] text-slate-550 leading-relaxed font-medium">
-                      상품 클릭 즉시 브랜드, 스펙 명세, 가격대 속성을 스스로 분석해 대표 연관 키워드를 자동 도출합니다.
-                    </p>
-                  </div>
-                </div>
-                <div className="text-[10px] text-slate-400 border-t border-slate-100 pt-3 mt-4 flex items-center justify-between font-semibold">
-                  <span>LG 에어컨 ➔ #여름가전</span>
-                  <span className="text-emerald-600 group-hover:translate-x-1 transition-transform">이동 ➔</span>
-                </div>
-              </div>
 
-              {/* 2. 신호등 경쟁 강도 시뮬레이션 */}
-              <div 
-                onClick={() => {
-                  const el = document.getElementById('ai-keyword-lab-section');
-                  el?.scrollIntoView({ behavior: 'smooth' });
-                  showToast("2. 경쟁 강도 시뮬레이션 영역으로 이동했습니다! 🚦", "info");
-                }}
-                className="p-5 rounded-2xl bg-white/95 border border-slate-200/60 hover:border-emerald-500/50 transition-all hover:bg-emerald-50/10 cursor-pointer group flex flex-col justify-between h-full hover:shadow-md hover:-translate-y-0.5 duration-300"
-              >
-                <div className="space-y-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform">
-                    🚦
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-bold text-slate-800 flex flex-col gap-0.5">
-                      <span>2. 경쟁 강도 매칭</span>
-                      <span className="text-[9px] w-fit px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-semibold">Traffic Lights</span>
-                    </h4>
-                    <p className="text-[11px] text-slate-550 leading-relaxed font-medium">
-                      추천 키워드마다 🔴치열, 🟡보통, 🟢초강추 신호등 배지를 부여하여 노출 유력 키워드를 직관적으로 선별합니다.
-                    </p>
-                  </div>
-                </div>
-                <div className="text-[10px] text-slate-400 border-t border-slate-100 pt-3 mt-4 flex items-center justify-between font-semibold">
-                  <span>초록색 배지(🟢) 공략!</span>
-                  <span className="text-amber-600 group-hover:translate-x-1 transition-transform">이동 ➔</span>
-                </div>
-              </div>
-
-              {/* 3. 핵심 구매 페르소나별 분할 제안 */}
-              <div 
-                onClick={() => {
-                  const el = document.getElementById('ai-keyword-lab-section');
-                  el?.scrollIntoView({ behavior: 'smooth' });
-                  showToast("3. 핵심 구매 페르소나별 키워드 분할 제안 영역으로 이동했습니다! 👥", "info");
-                }}
-                className="p-5 rounded-2xl bg-white/95 border border-slate-200/60 hover:border-emerald-500/50 transition-all hover:bg-emerald-50/10 cursor-pointer group flex flex-col justify-between h-full hover:shadow-md hover:-translate-y-0.5 duration-300"
-              >
-                <div className="space-y-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform">
-                    👥
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-bold text-slate-800 flex flex-col gap-0.5">
-                      <span>3. 페르소나 분할 제안</span>
-                      <span className="text-[9px] w-fit px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-semibold">Persona-Splitting</span>
-                    </h4>
-                    <p className="text-[11px] text-slate-550 leading-relaxed font-medium">
-                      독자층을 🤱가정, 🧑‍💻1인, 🧹반려동물 등 라이프스타일별로 세분화하여 맞춤형 세부 공감 키워드를 제공합니다.
-                    </p>
-                  </div>
-                </div>
-                <div className="text-[10px] text-slate-400 border-t border-slate-100 pt-3 mt-4 flex items-center justify-between font-semibold">
-                  <span>맞춤형 세부 필터링 제공</span>
-                  <span className="text-purple-600 group-hover:translate-x-1 transition-transform">이동 ➔</span>
-                </div>
-              </div>
-
-              {/* 4. 마그네틱 원클릭 주입 시스템 */}
-              <div 
-                onClick={() => {
-                  const el = document.getElementById('ai-keyword-lab-section');
-                  el?.scrollIntoView({ behavior: 'smooth' });
-                  showToast("4. 마그네틱 원클릭 주입 시스템 영역으로 이동했습니다! ⚡", "info");
-                }}
-                className="p-5 rounded-2xl bg-white/95 border border-slate-200/60 hover:border-emerald-500/50 transition-all hover:bg-emerald-50/10 cursor-pointer group flex flex-col justify-between h-full hover:shadow-md hover:-translate-y-0.5 duration-300"
-              >
-                <div className="space-y-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-lg group-hover:scale-110 transition-transform">
-                    ⚡
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-bold text-slate-800 flex flex-col gap-0.5">
-                      <span>4. 마그네틱 원클릭 주입</span>
-                      <span className="text-[9px] w-fit px-1.5 py-0.5 rounded bg-sky-50 text-sky-600 font-semibold">One-Click Inject</span>
-                    </h4>
-                    <p className="text-[11px] text-slate-550 leading-relaxed font-medium">
-                      AI 키워드 카드를 클릭만 하면 좌측 타겟 키워드 인풋으로 자석처럼 쏙 날아가는 마이크로 모션을 제공합니다.
-                    </p>
-                  </div>
-                </div>
-                <div className="text-[10px] text-slate-400 border-t border-slate-100 pt-3 mt-4 flex items-center justify-between font-semibold">
-                  <span>원클릭 콤마 자동 구분</span>
-                  <span className="text-sky-600 group-hover:translate-x-1 transition-transform">이동 ➔</span>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* 계정 관리 카드 (AccountManager 서브 컴포넌트) */}
           <AccountManager
@@ -1123,6 +954,10 @@ export default function NaverBlogMarketingPortal() {
             saveSettings={saveSettings}
             setIsGuideModalOpen={setIsGuideModalOpen}
             setIsDaemonInfoOpen={setIsDaemonInfoOpen}
+            showToast={showToast}
+            selectedProducts={selectedProducts}
+            selectedProduct={selectedProduct}
+            fetchPosts={fetchPosts}
           />
 
           {/* 1단계: 상품선택 카드 (ProductSelector 서브 컴포넌트) */}
@@ -1175,8 +1010,8 @@ export default function NaverBlogMarketingPortal() {
 
         </div>
 
-        {/* 우측 네이버 모바일 블로그 뷰어 목업 영역 (MobilePreview 서브 컴포넌트) */}
-        <div id="mobile-preview-section" className="w-full xl:w-[420px] shrink-0">
+        {/* 우측 네이버 모바일 블로그 뷰어 목업 및 4대 독점 특장점 영역 (MobilePreview 서브 컴포넌트) */}
+        <div id="mobile-preview-section" className="w-full xl:w-[420px] shrink-0 space-y-6">
           <MobilePreview
             naverBlogIdInput={naverBlogIdInput}
             viewTitle={viewTitle}
@@ -1187,6 +1022,144 @@ export default function NaverBlogMarketingPortal() {
             systemTime={systemTime}
             selectedPostForPreview={selectedPostForPreview}
           />
+
+          {/* 4대 독점 기술 쇼케이스 배너 (스마트폰 하단 세로 재배치) */}
+          <div className="p-5 rounded-3xl bg-white/70 backdrop-blur-xl border border-slate-200/50 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-50/20 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div className="border-b border-slate-100 pb-3 mb-4">
+              <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-500" />
+                N-BLOG AI Keyword Lab 4대 독점 특장점
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3.5">
+              {/* 1. 상품 자동 속성 매핑 추천 */}
+              <div 
+                onClick={() => {
+                  const el = document.getElementById('ai-keyword-lab-section');
+                  el?.scrollIntoView({ behavior: 'smooth' });
+                  showToast("1. 상품 자동 속성 매핑 추천 영역으로 이동했습니다! 📊", "info");
+                }}
+                className="p-4 rounded-2xl bg-white/95 border border-slate-200/60 hover:border-emerald-500/50 transition-all hover:bg-emerald-50/10 cursor-pointer group flex flex-col justify-between relative hover:shadow-md hover:-translate-y-0.5 duration-300"
+              >
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-base shrink-0 group-hover:scale-110 transition-transform">
+                      📊
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                        <span>1. 자동 속성 매핑</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 font-semibold">Spec-to-Keyword</span>
+                      </h4>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                    상품 클릭 즉시 브랜드, 스펙 명세, 가격대 속성을 스스로 분석해 대표 연관 키워드를 자동 도출합니다.
+                  </p>
+                </div>
+                <div className="text-[10px] text-slate-400 border-t border-slate-100 pt-2.5 mt-3 flex items-center justify-between font-semibold">
+                  <span>LG 에어컨 ➔ #여름가전</span>
+                  <span className="text-emerald-600 group-hover:translate-x-1 transition-transform">이동 ➔</span>
+                </div>
+              </div>
+
+              {/* 2. 신호등 경쟁 강도 시뮬레이션 */}
+              <div 
+                onClick={() => {
+                  const el = document.getElementById('ai-keyword-lab-section');
+                  el?.scrollIntoView({ behavior: 'smooth' });
+                  showToast("2. 경쟁 강도 시뮬레이션 영역으로 이동했습니다! 🚦", "info");
+                }}
+                className="p-4 rounded-2xl bg-white/95 border border-slate-200/60 hover:border-emerald-500/50 transition-all hover:bg-emerald-50/10 cursor-pointer group flex flex-col justify-between relative hover:shadow-md hover:-translate-y-0.5 duration-300"
+              >
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-base shrink-0 group-hover:scale-110 transition-transform">
+                      🚦
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                        <span>2. 경쟁 강도 매칭</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-semibold">Traffic Lights</span>
+                      </h4>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                    추천 키워드마다 🔴치열, 🟡보통, 🟢초강추 신호등 배지를 부여하여 노출 유력 키워드를 직관적으로 선별합니다.
+                  </p>
+                </div>
+                <div className="text-[10px] text-slate-400 border-t border-slate-100 pt-2.5 mt-3 flex items-center justify-between font-semibold">
+                  <span>초록색 배지(🟢) 공략!</span>
+                  <span className="text-amber-600 group-hover:translate-x-1 transition-transform">이동 ➔</span>
+                </div>
+              </div>
+
+              {/* 3. 핵심 구매 페르소나별 분할 제안 */}
+              <div 
+                onClick={() => {
+                  const el = document.getElementById('ai-keyword-lab-section');
+                  el?.scrollIntoView({ behavior: 'smooth' });
+                  showToast("3. 핵심 구매 페르소나별 키워드 분할 제안 영역으로 이동했습니다! 👥", "info");
+                }}
+                className="p-4 rounded-2xl bg-white/95 border border-slate-200/60 hover:border-emerald-500/50 transition-all hover:bg-emerald-50/10 cursor-pointer group flex flex-col justify-between relative hover:shadow-md hover:-translate-y-0.5 duration-300"
+              >
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-base shrink-0 group-hover:scale-110 transition-transform">
+                      👥
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                        <span>3. 페르소나 분할 제안</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-semibold">Persona-Splitting</span>
+                      </h4>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-550 leading-relaxed font-medium">
+                    독자층을 🤱가정, 🧑‍💻1인, 🧹반려동물 등 라이프스타일별로 세분화하여 맞춤형 세부 공감 키워드를 제공합니다.
+                  </p>
+                </div>
+                <div className="text-[10px] text-slate-400 border-t border-slate-100 pt-2.5 mt-3 flex items-center justify-between font-semibold">
+                  <span>맞춤형 세부 필터링 제공</span>
+                  <span className="text-purple-600 group-hover:translate-x-1 transition-transform">이동 ➔</span>
+                </div>
+              </div>
+
+              {/* 4. 마그네틱 원클릭 주입 시스템 */}
+              <div 
+                onClick={() => {
+                  const el = document.getElementById('ai-keyword-lab-section');
+                  el?.scrollIntoView({ behavior: 'smooth' });
+                  showToast("4. 마그네틱 원클릭 주입 시스템 영역으로 이동했습니다! ⚡", "info");
+                }}
+                className="p-4 rounded-2xl bg-white/95 border border-slate-200/60 hover:border-emerald-500/50 transition-all hover:bg-emerald-50/10 cursor-pointer group flex flex-col justify-between relative hover:shadow-md hover:-translate-y-0.5 duration-300"
+              >
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-base shrink-0 group-hover:scale-110 transition-transform">
+                      ⚡
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                        <span>4. 마그네틱 원클릭 주입</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-600 font-semibold">One-Click Inject</span>
+                      </h4>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-550 leading-relaxed font-medium">
+                    AI 키워드 카드를 클릭만 하면 좌측 타겟 키워드 인풋으로 자석처럼 쏙 날아가는 마이크로 모션을 제공합니다.
+                  </p>
+                </div>
+                <div className="text-[10px] text-slate-400 border-t border-slate-100 pt-2.5 mt-3 flex items-center justify-between font-semibold">
+                  <span>원클릭 콤마 자동 구분</span>
+                  <span className="text-sky-600 group-hover:translate-x-1 transition-transform">이동 ➔</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
       </div>
