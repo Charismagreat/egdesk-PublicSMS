@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import { Settings, RefreshCw, ToggleLeft, ToggleRight, AlertTriangle, BookOpen } from "lucide-react";
 import { AutopilotSettings } from "../types";
 
+import { usePersistedState } from "@/hooks/usePersistedState";
+
 interface AutopilotManagerProps {
   /**
    * 오토파일럿 설정
@@ -44,7 +46,24 @@ export default function AutopilotManager({
 }: AutopilotManagerProps) {
   const [sessionLoginName, setSessionLoginName] = useState("");
   const [sessionPassword, setSessionPassword] = useState("");
-  const [connectionMode, setConnectionMode] = useState<"session" | "graph">("session");
+  const [connectionMode, setConnectionMode] = usePersistedState<"session" | "graph">("ig_connection_mode", "session");
+
+  // Graph API 독립 폼 상태 (입력 포커스 이탈 방지)
+  const [localIgUserId, setLocalIgUserId] = useState(settings.ig_user_id || "");
+  const [localAccessToken, setLocalAccessToken] = useState(settings.access_token || "");
+
+  React.useEffect(() => {
+    setLocalIgUserId(settings.ig_user_id || "");
+    setLocalAccessToken(settings.access_token || "");
+  }, [settings.ig_user_id, settings.access_token]);
+
+  const handleGraphSave = () => {
+    onSaveSettings({
+      ig_user_id: localIgUserId.trim(),
+      access_token: localAccessToken.trim(),
+      instagram_username: settings.instagram_username || localIgUserId.trim() || "business_account",
+    });
+  };
 
   const handleSessionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -229,25 +248,46 @@ export default function AutopilotManager({
               <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left">
                 <div className="flex items-center gap-2 text-xs font-semibold text-cyan-600">
                   <BookOpen className="w-3.5 h-3.5" />
-                  안전한 Graph API 비즈니스 연동 가이드
+                  Meta Graph API 2-Step 미디어 자동 발행 공식 연동
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                  개인 계정 세션 연동은 임시 조치이며, 인스타 차단 위험을 원천 방지하기 위해 **무료 프로페셔널(비즈니스) 전환**을 강력히 권장합니다.
+                  인스타그램 공식 API(Meta Graph API)를 사용하여 계정 제재 리스크 없이 **2-Step Media Container Direct Publishing**으로 100% 무인 자동 발행됩니다.
                 </p>
                 <div className="text-xs space-y-1.5 text-slate-600 font-bold">
-                  <p>1. 인스타 앱 설정 ➔ '프로페셔널 계정으로 전환'</p>
-                  <p>2. 관리자 페이스북 페이지와 인스타 계정 연결</p>
-                  <p>3. 페이스북 개발자 포털에서 Graph API 연동 토큰 발급</p>
+                  <p>1. 인스타 앱 설정 ➔ '프로페셔널 계정으로 전환' (비즈니스/크리에이터)</p>
+                  <p>2. 관리자 페이스북 페이지와 인스타 계정 연결 후 `ig_user_id` 획득</p>
+                  <p>3. Meta 개발자 포털 ➔ Graph API Access Token 발급 및 입력</p>
                 </div>
-                <input
-                  type="text"
-                  placeholder="Graph Access Token 입력"
-                  value={
-                    settings.access_token && !settings.access_token.startsWith("session") ? settings.access_token : ""
-                  }
-                  onChange={(e) => onSaveSettings({ access_token: e.target.value })}
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-pink-500 transition"
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Instagram Business User ID (`ig_user_id`)</label>
+                    <input
+                      type="text"
+                      placeholder="예: 17841400000000000"
+                      value={localIgUserId}
+                      onChange={(e) => setLocalIgUserId(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-pink-500 transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Graph Access Token (`access_token`)</label>
+                    <input
+                      type="text"
+                      placeholder="EAAG..."
+                      value={localAccessToken}
+                      onChange={(e) => setLocalAccessToken(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-pink-500 transition"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGraphSave}
+                  className="w-full mt-2 bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-95 text-xs font-bold text-white py-2 rounded-xl shadow-sm transition cursor-pointer border-0"
+                >
+                  Graph API 연동 정보 저장 💾
+                </button>
               </div>
             )}
           </div>

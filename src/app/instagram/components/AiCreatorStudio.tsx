@@ -210,35 +210,19 @@ export default function AiCreatorStudio({
     const bgImg = new Image();
     bgImg.crossOrigin = "anonymous";
 
-    // 3-Way 중 활성화된 이미지 소스 선택
-    let imgSrc = "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80"; // 폴백
+    // 3-Way 중 활성화된 이미지 소스 우선순위 결정
+    let imgSrc = "";
     if (customImageFile) {
       imgSrc = customImageFile;
     } else if (imageTab === "ai" && generatedImageUrl) {
       imgSrc = generatedImageUrl;
     } else if (selectedProduct?.main_image_url) {
       imgSrc = selectedProduct.main_image_url;
+    } else if (generatedImageUrl) {
+      imgSrc = generatedImageUrl;
     }
 
-    bgImg.onload = () => {
-      // 1. 이미지 비율 맞추어 그리기 (Aspect Fill)
-      const canvasRatio = canvas.width / canvas.height;
-      const imgRatio = bgImg.width / bgImg.height;
-      let drawWidth = canvas.width;
-      let drawHeight = canvas.height;
-      let drawX = 0;
-      let drawY = 0;
-
-      if (imgRatio > canvasRatio) {
-        drawWidth = bgImg.width * (canvas.height / bgImg.height);
-        drawX = (canvas.width - drawWidth) / 2;
-      } else {
-        drawHeight = bgImg.height * (canvas.width / bgImg.width);
-        drawY = (canvas.height - drawHeight) / 2;
-      }
-
-      ctx.drawImage(bgImg, drawX, drawY, drawWidth, drawHeight);
-
+    const drawCanvasOverlayAndText = () => {
       // 2. 가독성을 위한 레이어 오버레이 투명 배경
       ctx.fillStyle = canvasOverlayColor;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -333,7 +317,40 @@ export default function AiCreatorStudio({
       // 7. 하단 워터마크 브랜드 마크 그리기
       ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
       ctx.font = "bold 28px sans-serif";
-      ctx.fillText(`@${instagramUsername || "EGD_AI_MARKETER"}`, canvas.width / 2, 1020);
+      ctx.fillText(`@${instagramUsername || "EGDESK_MARKETING_AI"}`, canvas.width / 2, 1020);
+    };
+
+    if (!imgSrc) {
+      // 이미지 소스가 없는 경우 감성 모던 그라데이션 솔리드 배경 렌더링
+      const bgGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      bgGrad.addColorStop(0, "#4f46e5");
+      bgGrad.addColorStop(0.5, "#7c3aed");
+      bgGrad.addColorStop(1, "#ec4899");
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      drawCanvasOverlayAndText();
+      return;
+    }
+
+    bgImg.onload = () => {
+      // 1. 이미지 비율 맞추어 그리기 (Aspect Fill)
+      const canvasRatio = canvas.width / canvas.height;
+      const imgRatio = bgImg.width / bgImg.height;
+      let drawWidth = canvas.width;
+      let drawHeight = canvas.height;
+      let drawX = 0;
+      let drawY = 0;
+
+      if (imgRatio > canvasRatio) {
+        drawWidth = bgImg.width * (canvas.height / bgImg.height);
+        drawX = (canvas.width - drawWidth) / 2;
+      } else {
+        drawHeight = bgImg.height * (canvas.width / bgImg.width);
+        drawY = (canvas.height - drawHeight) / 2;
+      }
+
+      ctx.drawImage(bgImg, drawX, drawY, drawWidth, drawHeight);
+      drawCanvasOverlayAndText();
     };
 
     // CORS 캐싱 우회
@@ -473,10 +490,22 @@ export default function AiCreatorStudio({
 
           {/* 카피 편집 에디터 패널 */}
           <div>
-            <label className="text-xs font-semibold text-slate-500 block mb-2 flex items-center justify-between font-bold">
-              <span>인스타그램 본문 문구 피드 에디터</span>
-              <span className="text-[10px] text-slate-400">줄바꿈, 이모지 및 해시태그 포함</span>
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-slate-500 flex items-center gap-1 font-bold">
+                <span>인스타그램 본문 문구 피드 에디터</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!generatedText) return;
+                  navigator.clipboard.writeText(generatedText);
+                  alert("피드 문구가 클립보드에 성공적으로 복사되었습니다!");
+                }}
+                className="text-[10px] font-bold text-pink-600 bg-pink-50 hover:bg-pink-100 border border-pink-200 px-2.5 py-1 rounded-lg transition flex items-center gap-1 cursor-pointer"
+              >
+                피드 문구 원터치 복사 📋
+              </button>
+            </div>
             <textarea
               rows={7}
               value={generatedText}
@@ -630,6 +659,21 @@ export default function AiCreatorStudio({
                       </select>
                     </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const canvas = canvasRef.current;
+                      if (!canvas) return;
+                      const link = document.createElement("a");
+                      link.download = `instagram_cardnews_${Date.now()}.png`;
+                      link.href = canvas.toDataURL("image/png");
+                      link.click();
+                    }}
+                    className="w-full mt-2 py-2 rounded-lg bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    카드뉴스 고해상도 PNG 다운로드 📥
+                  </button>
                 </div>
               </div>
             )}

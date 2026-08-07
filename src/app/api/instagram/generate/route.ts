@@ -13,18 +13,20 @@ export async function POST(req: Request) {
     // 2. 상품 정보 조회 (선택 사항)
     let productInfo = '';
     let productName = '신상품';
+    let productDescription = '인증된 프리미엄 퀄리티 추천 상품';
     let productImageUrl = '';
     
     if (product_id) {
-      const prodRes = await queryTable('products', { filters: { id: String(product_id) } });
+      const prodRes = await queryTable('products', { filters: { id: String(product_id), deleted_at: null } });
       if (prodRes.rows && prodRes.rows.length > 0) {
         const prod = prodRes.rows[0];
         productName = prod.name;
+        productDescription = prod.description || '인증된 프리미엄 퀄리티 추천 상품';
         productImageUrl = prod.main_image_url || '';
         productInfo = `
 상품명: ${prod.name}
-가격: ${prod.price || '별도 문의'}
-상품 설명: ${prod.description || '없음'}
+가격: ${prod.price ? `${prod.price.toLocaleString()}원` : '별도 문의'}
+상품 설명: ${productDescription}
 상품 URL: ${prod.url || ''}
         `;
       }
@@ -52,10 +54,17 @@ ${prompt || '이 상품을 인스타그램 피드로 돋보이게 소개해주�
   * 유머형: 트렌디한 밈이나 재치 있는 유머, 반전 매력을 주어 가볍고 재미있게 소통.
 
 [출력 요구 조건]
-1. 본문 상단에 시선을 끄는 훅(Hook) 문장을 배치할 것.
-2. 인스타그램에 바로 복사/붙여넣기 할 수 있게 줄바꿈과 어울리는 이모지를 적절히 조합할 것.
-3. 맨 하단에 관련 있는 인기 해시태그와 브랜드 해시태그를 5~10개 포함할 것.
-4. 마크다운 기호(예: # header 등)는 본문에 쓰지 말 것. (해시태그 #는 허용)
+1. 반드시 아래 태그 포맷으로 분리해서 반환할 것:
+[HOOK]
+1초 시선강탈 훅 문장
+[/HOOK]
+[CAPTION]
+본문 세부 홍보 캡션
+[/CAPTION]
+[HASHTAGS]
+추천 인스타그램 해시태그 5~10개
+[/HASHTAGS]
+2. 마크다운 기호(# header 등)는 쓰지 말 것.
 `;
 
     if (apiKey) {
@@ -130,28 +139,44 @@ ${prompt || '이 상품을 인스타그램 피드로 돋보이게 소개해주�
       generatedText = templates[Math.floor(Math.random() * templates.length)];
     }
 
-    // 4. AI 이미지 생성 (DALL-E 3 가상 이미지 / Unsplash fallback)
-    let imageUrl = productImageUrl || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80'; // 기본 상품 이미지나 멋진 오브제 시계 썸네일
+    // 4. Google Imagen 3 (imagen-3.0-generate-002) AI 이미지 직접 생성 Engine
+    // 요구사항: "상품명 + 상품 상세 설명 + 사용자 프롬프트" 기반 조합
+    let imageUrl = productImageUrl || '';
 
     if (generate_image) {
-      // DALL-E 3 AI 생성 이미지 시뮬레이션용 감성 라이프스타일 큐레이팅
-      // 사용자의 프롬프트 키워드에 최적화된 Unsplash 고해상도 이미지를 AI 이미지 생성 기능처럼 세련되게 반환
-      const keywords = prompt ? prompt.split(' ').slice(0, 3).join(',') : 'lifestyle,aesthetic,product';
-      const cleanKeywords = encodeURIComponent(keywords);
-      const randomSeed = Math.floor(Math.random() * 1000);
-      imageUrl = `https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80&sig=${randomSeed}&q=${cleanKeywords}`;
+      const combinedImagePrompt = `Professional aesthetic Instagram 1:1 photograph of product "${productName}". Details: ${productDescription}. User emphasis: ${prompt || 'lifestyle aesthetic clean photography'}. 8k resolution, studio lighting, photorealistic, clean background, luxury instagram post.`;
 
-      // 특정 키워드 카테고리 매칭을 통해 어울리는 프리미엄 사진 바인딩
-      if (prompt && (prompt.includes('커피') || prompt.includes('카페') || prompt.includes('원두'))) {
-        imageUrl = `https://images.unsplash.com/photo-1507133750040-4a8f57021571?w=800&auto=format&fit=crop&q=80&sig=${randomSeed}`;
-      } else if (prompt && (prompt.includes('화장품') || prompt.includes('뷰티') || prompt.includes('피부'))) {
-        imageUrl = `https://images.unsplash.com/photo-1556228720-195a672e8a03?w=800&auto=format&fit=crop&q=80&sig=${randomSeed}`;
-      } else if (prompt && (prompt.includes('가구') || prompt.includes('인테리어') || prompt.includes('방'))) {
-        imageUrl = `https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&auto=format&fit=crop&q=80&sig=${randomSeed}`;
-      } else if (prompt && (prompt.includes('의류') || prompt.includes('패션') || prompt.includes('옷'))) {
-        imageUrl = `https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&auto=format&fit=crop&q=80&sig=${randomSeed}`;
-      } else if (prompt && (prompt.includes('음식') || prompt.includes('맛집') || prompt.includes('디저트'))) {
-        imageUrl = `https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=800&auto=format&fit=crop&q=80&sig=${randomSeed}`;
+      if (apiKey) {
+        try {
+          console.log(`✨ [Instagram AI] Google Imagen 3 이미지 생성 시도: "${productName}"`);
+          const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+          const imagenRes = await fetch(imagenUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              instances: [{ prompt: combinedImagePrompt }],
+              parameters: { sampleCount: 1, aspectRatio: '1:1', outputOptions: { mimeType: 'image/jpeg' } }
+            })
+          });
+
+          if (imagenRes.ok) {
+            const imagenJson = await imagenRes.json();
+            const b64Data = imagenJson?.predictions?.[0]?.bytesBase64Encoded;
+            if (b64Data) {
+              imageUrl = `data:image/jpeg;base64,${b64Data}`;
+              console.log('🎉 [Instagram AI] Google Imagen 3 1:1 이미지 실시간 생성 성공!');
+            }
+          }
+        } catch (imagenErr: any) {
+          console.warn('⚠️ [Instagram AI] Google Imagen 3 생성 예외, Pollinations AI 폴백 사용:', imagenErr.message);
+        }
+      }
+
+      // API Key가 없거나 Imagen 3 실패 시 Pollinations AI 고화질 렌더링 폴백
+      if (!imageUrl || imageUrl === productImageUrl) {
+        const randomSeed = Math.floor(Math.random() * 1000000);
+        const seedKeywords = encodeURIComponent(`${productName} ${productDescription} ${prompt || ''}`.slice(0, 80));
+        imageUrl = `https://image.pollinations.ai/prompt/${seedKeywords}?width=800&height=800&seed=${randomSeed}&nologo=true`;
       }
     }
 

@@ -4,14 +4,17 @@ import { apiFetch } from '@/lib/api';
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, AlertCircle, AlertTriangle } from "lucide-react";
+import { usePersistedState } from '@/hooks/usePersistedState';
 
 import { Product, InstagramPost, AutopilotSettings } from "./types";
 import InstagramHeader from "./components/InstagramHeader";
 import InstagramStats from "./components/InstagramStats";
 import AutopilotManager from "./components/AutopilotManager";
 import AiCreatorStudio from "./components/AiCreatorStudio";
+import HashtagLab from "./components/HashtagLab";
 import MobileFeedPreview from "./components/MobileFeedPreview";
 import TimelineCalendar from "./components/TimelineCalendar";
+import { HashtagResponse } from "@/app/api/instagram/generate-hashtags/route";
 
 export default function InstagramMarketingPortal() {
   // 상태 변수
@@ -29,29 +32,30 @@ export default function InstagramMarketingPortal() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  // AI 생성 폼 상태
-  const [aiPrompt, setAiPrompt] = useState("");
+  // AI 생성 폼 상태 (이탈 방지 보존)
+  const [aiPrompt, setAiPrompt] = usePersistedState<string>("ig_ai_prompt", "");
   const [aiTone, setAiTone] = useState("인플루언서형");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedText, setGeneratedText] = useState("");
+  const [generatedText, setGeneratedText] = usePersistedState<string>("ig_generated_text", "");
   const [generatedImageUrl, setGeneratedImageUrl] = useState("");
 
   // 3-Way 이미지 셀렉터 탭
   const [imageTab, setImageTab] = useState<"product" | "ai" | "canvas">("product");
   const [customImageFile, setCustomImageFile] = useState<string | null>(null);
 
-  // 카드뉴스 캔버스 옵션
-  const [canvasTitle, setCanvasTitle] = useState("SPECIAL SALE");
-  const [canvasSubtitle, setCanvasSubtitle] = useState("오늘 단 하루, 특별한 혜택");
-  const [canvasDiscount, setCanvasDiscount] = useState("30% OFF");
+  // 카드뉴스 캔버스 옵션 (이탈 방지 보존)
+  const [canvasTitle, setCanvasTitle] = usePersistedState<string>("ig_canvas_title", "SPECIAL SALE");
+  const [canvasSubtitle, setCanvasSubtitle] = usePersistedState<string>("ig_canvas_subtitle", "오늘 단 하루, 특별한 혜택");
+  const [canvasDiscount, setCanvasDiscount] = usePersistedState<string>("ig_canvas_discount", "30% OFF");
   const [canvasOverlayColor, setCanvasOverlayColor] = useState("rgba(0, 0, 0, 0.4)");
   const [canvasTheme, setCanvasTheme] = useState("gradient-gold"); // gradient-gold, neon-pink, modern-dark
 
-  // 예약 설정
-  const [scheduleDate, setScheduleDate] = useState(
+  // 예약 설정 (이탈 방지 보존)
+  const [scheduleDate, setScheduleDate] = usePersistedState<string>(
+    "ig_schedule_date",
     new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0]
   );
-  const [scheduleTime, setScheduleTime] = useState("10:00");
+  const [scheduleTime, setScheduleTime] = usePersistedState<string>("ig_schedule_time", "10:00");
 
   // 계정 연결 상태
   const [isSessionConnected, setIsSessionConnected] = useState(false);
@@ -65,6 +69,50 @@ export default function InstagramMarketingPortal() {
 
   // 캔버스 Ref
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // AI Keyword/Hashtag Lab 상태
+  const [isGeneratingHashtags, setIsGeneratingHashtags] = useState(false);
+  const [hashtagData, setHashtagData] = useState<HashtagResponse>({
+    specKeywords: [],
+    familyKeywords: [],
+    singleKeywords: [],
+    petKeywords: [],
+    officeKeywords: [],
+  });
+
+  const handleGenerateHashtags = async () => {
+    setIsGeneratingHashtags(true);
+    try {
+      const res = await apiFetch("/api/instagram/generate-hashtags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: selectedProduct?.name || "추천 상품",
+          brand: selectedProduct?.brand || "자체 제작",
+          description: selectedProduct?.description || aiPrompt,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.keywords) {
+        setHashtagData(data.keywords);
+        showToast("AI 해시태그 연구소가 최적의 인기 해시태그를 도출했습니다!", "success");
+      } else {
+        showToast("해시태그 생성 실패: " + data.error, "error");
+      }
+    } catch (err: any) {
+      showToast("해시태그 생성 중 오류: " + err.message, "error");
+    } finally {
+      setIsGeneratingHashtags(false);
+    }
+  };
+
+  const handleAddHashtagToText = (hashtag: string) => {
+    setGeneratedText((prev) => {
+      if (prev.includes(hashtag)) return prev;
+      return prev ? `${prev} ${hashtag}` : hashtag;
+    });
+    showToast(`해시태그 [${hashtag}] 피드 에디터에 추가되었습니다!`, "info");
+  };
 
   // 초기 로딩
   useEffect(() => {
@@ -89,9 +137,10 @@ export default function InstagramMarketingPortal() {
       const data = await res.json();
       if (data.success && data.settings) {
         setSettings(data.settings);
-        if (data.settings.instagram_username) {
-          setIsSessionConnected(true);
-        }
+        const hasConnection = Boolean(
+          data.settings.instagram_username || data.settings.access_token || data.settings.ig_user_id
+        );
+        setIsSessionConnected(hasConnection);
       }
     } catch (err) {
       console.error("설정 로딩 에러:", err);
@@ -416,6 +465,15 @@ export default function InstagramMarketingPortal() {
             scheduleTime={scheduleTime}
             onScheduleTimeChange={setScheduleTime}
             onSchedulePost={handleSchedulePost}
+          />
+
+          {/* 4. AI 해시태그 & 페르소나 연구소 */}
+          <HashtagLab
+            selectedProduct={selectedProduct}
+            isGeneratingHashtags={isGeneratingHashtags}
+            onGenerateHashtags={handleGenerateHashtags}
+            hashtagData={hashtagData}
+            onAddHashtagToText={handleAddHashtagToText}
           />
         </div>
 

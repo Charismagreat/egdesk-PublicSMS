@@ -74,7 +74,7 @@ export default function MobileFeedPreview({
                 </div>
               </div>
               <div className="text-left">
-                <p className="font-extrabold text-[10px] text-slate-800">@{instagramUsername || "instagram_user"}</p>
+                <p className="font-extrabold text-[10px] text-slate-800">@{instagramUsername || "my_brand_official"}</p>
                 <p className="text-[8px] text-slate-500 font-medium">Sponsored • AI Autopilot</p>
               </div>
             </div>

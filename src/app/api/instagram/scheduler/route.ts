@@ -4,8 +4,8 @@ import { queryTable, insertRows } from '../../../../../egdesk-helpers';
 
 export async function GET() {
   try {
-    // 1. 인스타그램 설정 조회
-    const settingsRes = await queryTable('instagram_marketing_settings', { filters: { id: '1' } });
+    // 1. 인스타그램 설정 조회 (소프트 삭제 제외)
+    const settingsRes = await queryTable('instagram_marketing_settings', { filters: { id: '1', deleted_at: null } });
     const settings = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0] : null;
 
     if (!settings) {
@@ -20,8 +20,8 @@ export async function GET() {
       });
     }
 
-    // 2. 전체 상품 목록 조회
-    const productsRes = await queryTable('products', {});
+    // 2. 전체 상품 목록 조회 (소프트 삭제 제외)
+    const productsRes = await queryTable('products', { filters: { deleted_at: null } });
     const products = productsRes.rows || [];
 
     if (products.length === 0) {
@@ -32,8 +32,8 @@ export async function GET() {
       });
     }
 
-    // 3. 이미 인스타그램 게시글로 등록된 상품들의 ID 조회
-    const postsRes = await queryTable('crm_instagram_posts', {});
+    // 3. 이미 인스타그램 게시글로 등록된 상품들의 ID 조회 (소프트 삭제 제외)
+    const postsRes = await queryTable('crm_instagram_posts', { filters: { deleted_at: null } });
     const posts = postsRes.rows || [];
     const postedProductIds = new Set(posts.map((post: any) => post.product_id).filter(Boolean));
 
@@ -63,8 +63,7 @@ export async function GET() {
     const randomSeed = Math.floor(Math.random() * 1000);
     const imageUrl = targetProduct.main_image_url || `https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80&sig=${randomSeed}`;
 
-    // 5. 오토파일럿 예약글 생성
-    // 스케줄러 시간 분석 ("10:00" -> 오늘 혹은 내일 설정 시간)
+    // 5. 오토파일럿 예약글 생성 (감사 7종 컬럼 반영)
     const today = new Date();
     const timeParts = (settings.autopilot_time || "10:00").split(":");
     const scheduledDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), Number(timeParts[0]), Number(timeParts[1] || 0));
@@ -74,8 +73,12 @@ export async function GET() {
       scheduledDate.setDate(scheduledDate.getDate() + 1);
     }
 
+    const nowStr = today.toISOString().replace('T', ' ').slice(0, 19);
+    const uuidStr = 'IGP-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+
     const newPost = {
       id: Date.now(),
+      uuid: uuidStr,
       product_id: targetProduct.id,
       status: 'SCHEDULED', // 오토파일럿으로 예약 완료 상태 적재
       content: content,
@@ -84,7 +87,13 @@ export async function GET() {
       posted_at: null,
       error_message: null,
       likes_count: 0,
-      comments_count: 0
+      comments_count: 0,
+      updated_at: nowStr,
+      updated_by: 'autopilot',
+      deleted_at: null,
+      deleted_by: null,
+      restored_at: null,
+      restored_by: null,
     };
 
     await insertRows('crm_instagram_posts', [newPost]);

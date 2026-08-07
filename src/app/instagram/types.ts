@@ -7,6 +7,8 @@ export interface Product {
   id: string;
   name: string;
   price: string;
+  brand?: string;
+  description?: string;
   main_image_url: string;
   url: string;
 }
@@ -39,4 +41,5 @@ export interface AutopilotSettings {
   tone_style: string;
   instagram_username: string;
   access_token: string;
+  ig_user_id?: string;
 }
