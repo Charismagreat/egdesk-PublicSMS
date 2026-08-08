@@ -1123,10 +1123,30 @@ export async function POST(request: Request) {
 
     // [신규] 임직원 모바일 현장 작업 요청 접수 (create_mobile_request & create_log 모두 호환)
     if (action === 'create_mobile_request' || action === 'create_log') {
-      const { title, doc_title, subject, name, task_name, req_title, reason, note, voiceText, files = [], photos = [], operator, submitter, user_name } = body;
+      const { title, doc_title, subject, name, task_name, req_title, reason, note, voiceText, files = [], photos = [], attachments = [], documents = [], operator, submitter, user_name } = body;
       let requestTitle = (title || doc_title || subject || name || task_name || req_title || '').trim();
       const requestReason = (reason || note || voiceText || '').trim();
-      const allFiles = [...(Array.isArray(files) ? files : []), ...(Array.isArray(photos) ? photos : [])];
+      
+      const rawAllFiles = [
+        ...(Array.isArray(files) ? files : []), 
+        ...(Array.isArray(photos) ? photos : []),
+        ...(Array.isArray(attachments) ? attachments : []),
+        ...(Array.isArray(documents) ? documents : []),
+        ...(Array.isArray(body.data?.files) ? body.data.files : []),
+        ...(Array.isArray(body.data?.photos) ? body.data.photos : []),
+        ...(Array.isArray(body.data?.attachments) ? body.data.attachments : [])
+      ];
+
+      // 중복 파일 제거
+      const allFiles: any[] = [];
+      rawAllFiles.forEach((f: any) => {
+        if (!f) return;
+        const fUrl = f.base64 || f.url || f.preview || f.data || '';
+        const fName = f.name || f.filename || '';
+        if (!allFiles.some(af => (af.name || af.filename) === fName && (af.base64 || af.url || af.preview) === fUrl)) {
+          allFiles.push(f);
+        }
+      });
 
       // 💡 모바일 현장 상신자 이름 정제 (body의 operator/submitter/user_name 우선 -> auth_token 쿠키 -> fallback '김직원')
       let finalOperator = (operator || submitter || user_name || '').trim();
@@ -1161,13 +1181,17 @@ export async function POST(request: Request) {
         }
       }
 
-      const reqId = `mobile_req_${Date.now()}`;
-      
+      // 💡 원자적 타임스탬프 1:1 고정 (reqId, docId, taskId)
+      const nowTimestamp = Date.now();
+      const reqId = `mobile_req_${nowTimestamp}`;
+      const docId = `REQ-${nowTimestamp}`;
+      const taskId = `ST-${nowTimestamp}`;
+
       // 1. 거버넌스 승인 요청 로그 인서트 (상신자: finalOperator)
       await insertRows('crm_governance_logs', [{
         id: reqId,
         doc_type: 'mobile_request',
-        doc_id: `REQ-${Date.now()}`,
+        doc_id: docId,
         doc_title: requestTitle,
         status: 'PENDING_APPROVAL',
         reason: requestReason || '모바일 현장 수동 접수 요청 건',
@@ -1180,7 +1204,6 @@ export async function POST(request: Request) {
 
       // 2. 메인 [할 일] (스냅태스크) 생성
       const tenantId = await resolveTenantId();
-      const taskId = `ST-${Date.now()}`;
       await insertRows('crm_snaptasks', [{
         id: taskId,
         title: requestTitle.startsWith('[상신]') ? requestTitle : `[상신] ${requestTitle}`,
