@@ -33,16 +33,24 @@ export async function GET() {
       });
 
       const resText = await res.text();
-      if (resText.includes('429') || resText.includes('depleted') || resText.includes('Quota') || resText.includes('prepayment')) {
+      if (resText.includes('depleted') || resText.includes('prepayment')) {
+        status = 'CREDITS_DEPLETED';
+        message = '⚠️ AI API 결제 크레딧 소진 (Google AI Studio 잔액 충전 또는 API Key 교체 필요)';
+        isError = true;
+      } else if (resText.includes('429') || resText.includes('Quota')) {
         status = 'QUOTA_EXCEEDED';
-        message = '⚠️ AI API 쿼터 한도 초과 발생 (Google Generative AI prepayment credits depleted)';
+        message = '⚠️ AI API 일일 호출 한도 초과 (자정 쿼터 리셋 후 자동 재시도 구동 중)';
         isError = true;
       }
     } catch (e: any) {
       const errMsg = e.message || String(e);
-      if (errMsg.includes('429') || errMsg.includes('depleted') || errMsg.includes('Quota') || errMsg.includes('prepayment')) {
+      if (errMsg.includes('depleted') || errMsg.includes('prepayment')) {
+        status = 'CREDITS_DEPLETED';
+        message = '⚠️ AI API 결제 크레딧 소진 (Google AI Studio 잔액 충전 또는 API Key 교체 필요)';
+        isError = true;
+      } else if (errMsg.includes('429') || errMsg.includes('Quota')) {
         status = 'QUOTA_EXCEEDED';
-        message = '⚠️ AI API 쿼터 한도 초과 발생 (Google Generative AI prepayment credits depleted)';
+        message = '⚠️ AI API 일일 호출 한도 초과 (자정 쿼터 리셋 후 자동 재시도 구동 중)';
         isError = true;
       } else {
         status = 'NETWORK_ERROR';

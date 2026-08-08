@@ -432,17 +432,25 @@ export default function EasyBot() {
     fetchUserRole();
   }, []);
 
-  // 💡 AI API 실시간 핑/쿼터 상태 체크 (429 Quota Exceeded 감지 시 이지봇 플로팅 단추에 붉은 경고 뱃지 시각화)
+  // 💡 AI API 실시간 핑/쿼터 상태 체크 (429 Quota Exceeded / Depleted 감지 시 이지봇 단추에 붉은 경고 뱃지 시각화)
+  const [aiQuotaExceeded, setAiQuotaExceeded] = useState(false);
+  const [aiCreditsDepleted, setAiCreditsDepleted] = useState(false);
+
   useEffect(() => {
     const checkAiStatus = async () => {
       try {
         const res = await apiFetch('/api/ai/health');
         if (res.ok) {
           const data = await res.json();
-          if (data.status === 'QUOTA_EXCEEDED' || data.message?.includes('429') || data.message?.includes('한도 초과')) {
+          if (data.status === 'CREDITS_DEPLETED' || data.message?.includes('depleted') || data.message?.includes('크레딧 소진')) {
+            setAiCreditsDepleted(true);
             setAiQuotaExceeded(true);
+          } else if (data.status === 'QUOTA_EXCEEDED' || data.message?.includes('429') || data.message?.includes('한도 초과')) {
+            setAiQuotaExceeded(true);
+            setAiCreditsDepleted(false);
           } else {
             setAiQuotaExceeded(false);
+            setAiCreditsDepleted(false);
           }
         }
       } catch (e) {
@@ -456,13 +464,17 @@ export default function EasyBot() {
 
   // 💡 채팅 메시지 내용 중 429 / depleted / 쿼터 초과 에러가 발견되면 즉시 aiQuotaExceeded = true 켜기
   useEffect(() => {
+    const hasDepleted = chat.messages.some(m => m.content?.includes('depleted') || m.content?.includes('prepayment credits'));
     const hasQuotaErr = chat.messages.some(m => 
       m.content?.includes('429') || 
       m.content?.includes('depleted') || 
       m.content?.includes('prepayment credits') ||
       m.content?.includes('쿼터 한도 초과')
     );
-    if (hasQuotaErr) {
+    if (hasDepleted) {
+      setAiCreditsDepleted(true);
+      setAiQuotaExceeded(true);
+    } else if (hasQuotaErr) {
       setAiQuotaExceeded(true);
     }
   }, [chat.messages]);
@@ -531,12 +543,16 @@ export default function EasyBot() {
                 : 'bottom-24 h-[640px] max-h-[82vh] w-[390px] rounded-3xl'
             }`}
           >
-            {/* 💡 AI 쿼터 초과 시 상단 긴급 안내 띠 */}
+            {/* 💡 AI 쿼터/크레딧 소진 시 상단 긴급 안내 띠 */}
             {aiQuotaExceeded && (
               <div className="bg-rose-600 text-white px-4 py-2 text-[11px] font-extrabold flex items-center justify-between shadow-xs shrink-0">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                  <span>⚠️ [긴급 AI 관제] AI API 쿼터 한도 초과 (자정 배치 자동 재시도 구동 중)</span>
+                  <span>
+                    {aiCreditsDepleted 
+                      ? "⚠️ [긴급 AI 관제] Google AI 크레딧 소진 (AI Studio 충전/Key 교체 필요)"
+                      : "⚠️ [긴급 AI 관제] AI API 일일 한도 초과 (자정 쿼터 리셋 후 자동 재시도)"}
+                  </span>
                 </span>
               </div>
             )}
