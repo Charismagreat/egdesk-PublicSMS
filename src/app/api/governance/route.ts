@@ -1123,10 +1123,10 @@ export async function POST(request: Request) {
 
     // [신규] 임직원 모바일 현장 작업 요청 접수 (create_mobile_request & create_log 모두 호환)
     if (action === 'create_mobile_request' || action === 'create_log') {
-      const { title, doc_title, reason, note, voiceText, files = [], photos = [], operator, submitter, user_name } = body;
-      const requestTitle = (title || doc_title || '').trim();
-      const requestReason = (reason || note || '').trim();
-      const allFiles = [...files, ...photos];
+      const { title, doc_title, subject, name, task_name, req_title, reason, note, voiceText, files = [], photos = [], operator, submitter, user_name } = body;
+      let requestTitle = (title || doc_title || subject || name || task_name || req_title || '').trim();
+      const requestReason = (reason || note || voiceText || '').trim();
+      const allFiles = [...(Array.isArray(files) ? files : []), ...(Array.isArray(photos) ? photos : [])];
 
       // 💡 모바일 현장 상신자 이름 정제 (body의 operator/submitter/user_name 우선 -> auth_token 쿠키 -> fallback '김직원')
       let finalOperator = (operator || submitter || user_name || '').trim();
@@ -1149,8 +1149,16 @@ export async function POST(request: Request) {
         finalOperator = '김직원';
       }
       
+      // 💡 제목 자동 폴백 가드: 파일/사진이 첨부되어 있거나 제목이 공백인 경우 스마트 기본 타이틀 자동 할당
       if (!requestTitle) {
-        return NextResponse.json({ success: false, error: '요청 제목이 누락되었습니다.' }, { status: 400 });
+        if (allFiles.length > 0) {
+          const firstFileName = allFiles[0]?.name || allFiles[0]?.filename || '현장 첨부 자료';
+          requestTitle = `[상신] ${firstFileName}`;
+        } else if (requestReason) {
+          requestTitle = `[상신] ${requestReason.substring(0, 30)}`;
+        } else {
+          requestTitle = `[상신] 모바일 현장 업무 및 수주 접수`;
+        }
       }
 
       const reqId = `mobile_req_${Date.now()}`;

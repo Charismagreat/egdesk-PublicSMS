@@ -558,9 +558,10 @@ export default function MobileHubPage() {
   };
 
   // AI 관제 상신 & 스냅태스크 발급 처리 함수
-  const handleSendGovernanceRequest = async (title: string, note: string, photosInput?: any[], filesInput?: any[]) => {
+  const handleSendGovernanceRequest = async (titleInput: string, note: string, photosInput?: any[], filesInput?: any[]) => {
     try {
-      const formattedTitle = title.startsWith("[상신]") ? title : `[상신] ${title}`;
+      const rawTitle = (titleInput || "").trim() || "수주 등록 및 현장 접수";
+      const formattedTitle = rawTitle.startsWith("[상신]") ? rawTitle : `[상신] ${rawTitle}`;
       const photosToSend = photosInput && photosInput.length > 0 ? photosInput : requestPhotos;
       const filesToSend = filesInput && filesInput.length > 0 ? filesInput : requestFiles;
 
@@ -569,6 +570,7 @@ export default function MobileHubPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          title: formattedTitle,
           doc_title: formattedTitle,
           doc_type: "FIELD_COLLECTION",
           note: note,
