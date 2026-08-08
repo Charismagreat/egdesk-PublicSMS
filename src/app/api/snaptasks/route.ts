@@ -217,11 +217,21 @@ export async function GET(req: Request) {
             const isLogApproved = log.status === 'APPROVED' || log.status === 'FORCE_APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED';
             const logNowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
-            // 💡 crm_governance_logs에 연동된 실물 첨부파일 및 서류 마이닝 조인
-            const logMatchedItems = itemsRows.filter((it: any) => 
-              (String(it.task_id) === String(log.id) || String(it.task_id) === String(log.doc_id) || String(it.task_id) === String(log.uuid)) &&
-              it.file_url && it.file_url.trim() !== ''
-            );
+            // 💡 crm_governance_logs에 연동된 실물 첨부파일 및 서류 마이닝 조인 (ST-, REQ-, mobile_req_ 접두사 흡수)
+            const pureLogId = String(log.id || '').replace(/^(mobile_req_|REQ-|ST-)/, '');
+            const pureDocId = String(log.doc_id || '').replace(/^(mobile_req_|REQ-|ST-)/, '');
+
+            const logMatchedItems = itemsRows.filter((it: any) => {
+              if (!it.file_url || it.file_url.trim() === '') return false;
+              const pureItemId = String(it.task_id || '').replace(/^(mobile_req_|REQ-|ST-)/, '');
+              
+              return (
+                String(it.task_id) === String(log.id) ||
+                String(it.task_id) === String(log.doc_id) ||
+                String(it.task_id) === String(log.uuid) ||
+                Boolean(pureItemId && (pureItemId === pureLogId || pureItemId === pureDocId))
+              );
+            });
 
             const logAttachments = logMatchedItems.map((it: any) => {
               const fileName = it.content_text ? it.content_text.replace('[상신 첨부] ', '').trim() : `첨부서류_${it.id}`;
