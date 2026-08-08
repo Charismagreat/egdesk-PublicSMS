@@ -427,9 +427,23 @@ export default function CompanySettingsCard() {
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             <span>📊 회사 프로필 엑셀 등록</span>
           </button>
-          <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2.5 py-1 rounded-full border border-slate-250/30">
-            시스템 연동
-          </span>
+          <button
+            type="button"
+            onClick={(e) => handleSave(e as any)}
+            disabled={saving}
+            className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all border-0 shadow-xs active:scale-95 cursor-pointer ${
+              saving
+                ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20'
+            }`}
+          >
+            {saving ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            <span>본사 정보 저장</span>
+          </button>
         </div>
       </div>
 
@@ -677,44 +691,23 @@ export default function CompanySettingsCard() {
           </span>
         </div>
 
-        {/* 폼 하단 고정 액션 푸터 바 */}
-        <div className="border-t border-slate-100 bg-slate-50/70 -mx-6 -mb-6 p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex-1 w-full sm:w-auto">
-            {message && (
-              <div
-                className={`flex items-center gap-2 p-3 rounded-xl border text-xs font-semibold ${
-                  message.type === 'success'
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                    : 'bg-rose-50 border-rose-200 text-rose-800'
-                }`}
-              >
-                {message.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                )}
-                <span>{message.text}</span>
-              </div>
-            )}
-          </div>
-
-          <button
-            type="submit"
-            disabled={saving}
-            className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black transition-all border-0 shadow-xs active:scale-95 cursor-pointer shrink-0 ${
-              saving
-                ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20'
+        {/* 저장 알림 메시지 */}
+        {message && (
+          <div
+            className={`flex items-center gap-2 p-3.5 rounded-xl border text-xs font-semibold ${
+              message.type === 'success'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-rose-50 border-rose-200 text-rose-800'
             }`}
           >
-            {saving ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
+            {message.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             ) : (
-              <Save className="w-4 h-4" />
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             )}
-            <span>본사 정보 변경 사항 저장 💾</span>
-          </button>
-        </div>
+            <span>{message.text}</span>
+          </div>
+        )}
 
       </form>
 
