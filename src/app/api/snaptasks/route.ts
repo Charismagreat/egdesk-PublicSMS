@@ -196,6 +196,19 @@ export async function GET(req: Request) {
             if (log.due_date) {
               existingTask.due_date = log.due_date;
             }
+            if ((!existingTask.attachments || existingTask.attachments.length === 0) && log.details) {
+              try {
+                const parsedDetails = JSON.parse(log.details);
+                if (parsedDetails && (parsedDetails.file_url || parsedDetails.url)) {
+                  existingTask.attachments = [{
+                    id: `gov_att_${log.id}`,
+                    name: parsedDetails.file_name || parsedDetails.name || `${log.doc_title || '상신'} 서류`,
+                    url: parsedDetails.file_url || parsedDetails.url,
+                    fileType: 'DOCUMENT'
+                  }];
+                }
+              } catch (pe) {}
+            }
             // 💡 취소 요청 로그가 존재하는 경우 원본 카드 상태를 PENDING_APPROVAL로 전파
             if (isCancelLog) {
               if (log.status !== 'APPROVED' && log.status !== 'RESOLVED' && log.status !== 'REJECTED') {
@@ -210,6 +223,38 @@ export async function GET(req: Request) {
             // 💡 취소 요청 로그(isCancelLog)는 독립 신규 카드를 절대 추가 생성하지 않음!
             const isLogApproved = log.status === 'APPROVED' || log.status === 'FORCE_APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED';
             const logNowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+            // 💡 crm_governance_logs에 연동된 실물 첨부파일 및 서류 마이닝 조인
+            const logMatchedItems = itemsRows.filter((it: any) => 
+              (String(it.task_id) === String(log.id) || String(it.task_id) === String(log.doc_id) || String(it.task_id) === String(log.uuid)) &&
+              it.file_url && it.file_url.trim() !== ''
+            );
+
+            const logAttachments = logMatchedItems.map((it: any) => {
+              const fileName = it.content_text ? it.content_text.replace('[상신 첨부] ', '').trim() : `첨부서류_${it.id}`;
+              const downloadUrl = `/api/shared/files?tableName=crm_snaptask_items&rowId=${it.id}&columnName=file_url`;
+              return {
+                id: it.id,
+                name: fileName,
+                url: downloadUrl,
+                fileType: it.file_type || 'DOCUMENT'
+              };
+            });
+
+            if (logAttachments.length === 0 && log.details) {
+              try {
+                const parsedDetails = JSON.parse(log.details);
+                if (parsedDetails && (parsedDetails.file_url || parsedDetails.url)) {
+                  logAttachments.push({
+                    id: `gov_att_${log.id}`,
+                    name: parsedDetails.file_name || parsedDetails.name || `${log.doc_title || '상신'} 서류`,
+                    url: parsedDetails.file_url || parsedDetails.url,
+                    fileType: 'DOCUMENT'
+                  });
+                }
+              } catch (pe) {}
+            }
+
             tasks.push({
               id: log.id || log.doc_id,
               title: log.doc_title || '관제 업무',
@@ -217,7 +262,8 @@ export async function GET(req: Request) {
               description: log.reason || '모바일 현장 수동 접수 요청 건',
               assignee_name: log.operator || '김직원',
               created_at: log.created_at || logNowStr,
-              due_date: log.due_date || null
+              due_date: log.due_date || null,
+              attachments: logAttachments
             });
           }
         });
