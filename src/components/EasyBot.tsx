@@ -415,6 +415,7 @@ export default function EasyBot() {
 
   // 🔑 세션 사용자 역할(Role) 조회를 통한 모바일 및 최고관리자 전용 노출 제어
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [aiQuotaExceeded, setAiQuotaExceeded] = useState(false);
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -429,6 +430,28 @@ export default function EasyBot() {
       }
     };
     fetchUserRole();
+  }, []);
+
+  // 💡 AI API 실시간 핑/쿼터 상태 체크 (429 Quota Exceeded 감지 시 이지봇 플로팅 단추에 붉은 경고 뱃지 시각화)
+  useEffect(() => {
+    const checkAiStatus = async () => {
+      try {
+        const res = await apiFetch('/api/ai/health');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === 'QUOTA_EXCEEDED' || data.message?.includes('429') || data.message?.includes('한도 초과')) {
+            setAiQuotaExceeded(true);
+          } else {
+            setAiQuotaExceeded(false);
+          }
+        }
+      } catch (e) {
+        console.warn('EasyBot AI health check warning:', e);
+      }
+    };
+    checkAiStatus();
+    const interval = setInterval(checkAiStatus, 30000); // 30초 주기 자동 감지
+    return () => clearInterval(interval);
   }, []);
 
   const isSuperAdmin = userRole ? ['SUPER_ADMIN', 'PRESIDENT', 'SYSTEM_ADMIN', 'TENANT_ADMIN'].includes(userRole.toUpperCase()) : false;
@@ -456,20 +479,29 @@ export default function EasyBot() {
   return (
     <>
       {/* 1. 이지봇 플로팅 트리거 단추 (Harmonic Indigo 그라데이션) */}
-      <button
-        data-easybot-widget="trigger"
-        onClick={() => {
-          setIsOpen(!isOpen);
-          voice.stopSpeaking();
-        }}
-        className="ignore-capture fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95 cursor-pointer focus:outline-none print:hidden"
-        style={{
-          background: 'linear-gradient(135deg, #7000ff 0%, #bc2a8d 50%, #f91f7f 100%)',
-          boxShadow: '0 8px 24px rgba(112, 0, 255, 0.25)'
-        }}
-      >
-        {isOpen ? <X size={24} /> : <MessageSquare size={24} />}
-      </button>
+      <div className="ignore-capture fixed bottom-6 right-6 z-40 print:hidden">
+        <button
+          data-easybot-widget="trigger"
+          onClick={() => {
+            setIsOpen(!isOpen);
+            voice.stopSpeaking();
+          }}
+          className="relative flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95 cursor-pointer focus:outline-none"
+          style={{
+            background: 'linear-gradient(135deg, #7000ff 0%, #bc2a8d 50%, #f91f7f 100%)',
+            boxShadow: '0 8px 24px rgba(112, 0, 255, 0.25)'
+          }}
+        >
+          {isOpen ? <X size={24} /> : <MessageSquare size={24} />}
+
+          {/* 💡 AI API 쿼터 한도 초과/지연 시 이지봇 단추 우측 상단 붉은 경고 뱃지 */}
+          {aiQuotaExceeded && (
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 ring-2 ring-white shadow-md animate-pulse" title="⚠️ AI API 쿼터 한도 초과 (자정 배치 자동 재시도 구동 중)">
+              <span className="text-[10px] font-black text-white">⚠️</span>
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* 2. 대화창 본체 레이아웃 */}
       <AnimatePresence>
@@ -486,6 +518,16 @@ export default function EasyBot() {
                 : 'bottom-24 h-[640px] max-h-[82vh] w-[390px] rounded-3xl'
             }`}
           >
+            {/* 💡 AI 쿼터 초과 시 상단 긴급 안내 띠 */}
+            {aiQuotaExceeded && (
+              <div className="bg-rose-600 text-white px-4 py-2 text-[11px] font-extrabold flex items-center justify-between shadow-xs">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                  <span>⚠️ [긴급 AI 관제] AI API 쿼터 한도 초과 (자정 배치 자동 재시도 구동 중)</span>
+                </span>
+              </div>
+            )}
+
             {/* 헤더 바 */}
             <div 
               className="bg-white border-b border-slate-50 px-5 py-4.5 flex justify-between items-center shrink-0"
