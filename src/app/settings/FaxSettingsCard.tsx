@@ -149,7 +149,7 @@ export default function FaxSettingsCard() {
         <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-4.5 space-y-2.5">
           <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-            인터넷 팩스(SaaS) 연동 가이드
+            인터넷 팩스 연동 가이드
           </span>
           <div className="text-[11px] text-emerald-950/80 leading-relaxed space-y-1.5">
             <p>본 시스템은 안정적인 팩스 통신 인프라 제공을 위해 <strong>인터넷 팩스 전문 API (예: 팝빌)</strong> 연동을 지원합니다.</p>
