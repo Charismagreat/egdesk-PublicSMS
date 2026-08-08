@@ -21,9 +21,23 @@ export async function GET() {
     let isError = false;
 
     try {
-      const testRes = await fetch('http://localhost:4002/api/easybot/ocr/confirm', { method: 'GET' }).catch(() => null);
+      // 💡 실제 GoogleGenerativeAI 백엔드 AI 엔진(ai-help) 핑 시도
+      const testRes = await fetch('http://localhost:4002/api/ai-help', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'PING_HEALTH_CHECK_TEST' })
+      }).catch(() => null);
+
+      if (testRes) {
+        const resText = await testRes.text();
+        if (resText.includes('429') || resText.includes('depleted') || resText.includes('Quota') || resText.includes('prepayment')) {
+          status = 'QUOTA_EXCEEDED';
+          message = '⚠️ AI API 쿼터 한도 초과 발생 (Google Generative AI prepayment credits depleted)';
+          isError = true;
+        }
+      }
     } catch (e: any) {
-      if (e.message?.includes('429') || e.message?.includes('Quota')) {
+      if (e.message?.includes('429') || e.message?.includes('depleted') || e.message?.includes('Quota')) {
         status = 'QUOTA_EXCEEDED';
         message = '⚠️ AI API 쿼터 한도 초과 발생 (자정 배치 자동 이관 모드 구동 중)';
         isError = true;

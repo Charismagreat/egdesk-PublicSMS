@@ -454,6 +454,19 @@ export default function EasyBot() {
     return () => clearInterval(interval);
   }, []);
 
+  // 💡 채팅 메시지 내용 중 429 / depleted / 쿼터 초과 에러가 발견되면 즉시 aiQuotaExceeded = true 켜기
+  useEffect(() => {
+    const hasQuotaErr = chat.messages.some(m => 
+      m.content?.includes('429') || 
+      m.content?.includes('depleted') || 
+      m.content?.includes('prepayment credits') ||
+      m.content?.includes('쿼터 한도 초과')
+    );
+    if (hasQuotaErr) {
+      setAiQuotaExceeded(true);
+    }
+  }, [chat.messages]);
+
   const isSuperAdmin = userRole ? ['SUPER_ADMIN', 'PRESIDENT', 'SYSTEM_ADMIN', 'TENANT_ADMIN'].includes(userRole.toUpperCase()) : false;
   const isMobilePath = pathname.startsWith('/m');
 
@@ -520,7 +533,7 @@ export default function EasyBot() {
           >
             {/* 💡 AI 쿼터 초과 시 상단 긴급 안내 띠 */}
             {aiQuotaExceeded && (
-              <div className="bg-rose-600 text-white px-4 py-2 text-[11px] font-extrabold flex items-center justify-between shadow-xs">
+              <div className="bg-rose-600 text-white px-4 py-2 text-[11px] font-extrabold flex items-center justify-between shadow-xs shrink-0">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-white animate-ping" />
                   <span>⚠️ [긴급 AI 관제] AI API 쿼터 한도 초과 (자정 배치 자동 재시도 구동 중)</span>
@@ -543,8 +556,10 @@ export default function EasyBot() {
                 <div>
                   <h3 className="text-xs font-black text-slate-800 tracking-wide">이지데스크 AI 이지봇</h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-                    <span className="text-[9px] text-slate-400 font-bold">인공지능 어시스턴트 온라인</span>
+                    <span className={`h-1.5 w-1.5 rounded-full animate-ping ${aiQuotaExceeded ? "bg-rose-500" : "bg-emerald-500"}`} />
+                    <span className={`text-[9px] font-bold ${aiQuotaExceeded ? "text-rose-600 font-black" : "text-slate-400"}`}>
+                      {aiQuotaExceeded ? "⚠️ AI API 쿼터 한도 초과 (자정 배치 대기)" : "인공지능 어시스턴트 온라인"}
+                    </span>
                   </div>
                 </div>
               </div>
