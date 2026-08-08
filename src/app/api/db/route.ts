@@ -92,8 +92,11 @@ export async function GET(request: Request) {
           const hasDeletedCol = columns.some((col: any) => col.name === 'deleted_at');
           const hasTenantIdCol = columns.some((col: any) => col.name === 'tenant_id');
           
-          // MY DB 물리 관제 센터: 전체 물리 레코드 수 카운트 (queryFilters 생략)
+          // 🛡️ 해당 테넌트 데이터만 조회 (테넌트 격리 원칙 엄격 적용)
           const queryFilters: any = {};
+          if (hasTenantIdCol && role !== 'SUPER_ADMIN') {
+            queryFilters.tenant_id = tenantId;
+          }
 
           let cnt = 0;
           let rows: any[] = [];
@@ -201,8 +204,11 @@ export async function GET(request: Request) {
       const hasTenantIdCol = columns.some((col: any) => col.name === 'tenant_id');
       const pkCol = columns.find((col: any) => col.pk === 1 || col.pk === true || col.name === 'id')?.name || 'id';
 
-      // 🛡️ MY DB 물리 관제 센터: 모든 물리 데이터 100% 관제 조회 허용
+      // 🛡️ 해당 테넌트 데이터만 조회 (테넌트 격리 원칙 엄격 적용)
       const queryFilters: any = {};
+      if (hasTenantIdCol && role !== 'SUPER_ADMIN') {
+        queryFilters.tenant_id = tenantId;
+      }
 
       let rows: any[] = [];
       let currentOffset = 0;
