@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { executeSQL } from '@/../egdesk-helpers';
+import { queryTable } from '@/../egdesk-helpers';
 
 export async function GET(req: Request) {
   try {
@@ -10,103 +10,96 @@ export async function GET(req: Request) {
     const limit = Math.max(1, parseInt(searchParams.get('limit') || '15', 10));
     const offset = (page - 1) * limit;
 
-    // 한국 표준시 (KST, UTC+9) 기준 날짜 계산
-    const now = new Date();
-    const kstOffset = 9 * 60 * 60 * 1000;
-    const kstNow = new Date(now.getTime() + kstOffset);
+    // 1. egdesk-helpers.ts의 queryTable 표준 API를 사용하여 최신 AI 토큰 로그 데이터 조회
+    const logsResult = await queryTable('ai_token_usage_logs', {
+      orderBy: 'created_at',
+      orderDirection: 'DESC',
+      limit: 5000
+    });
 
-    // 오늘 날짜 YYYY-MM-DD
-    const todayStr = kstNow.toISOString().split('T')[0];
+    const allRows = logsResult?.rows || [];
 
-    let whereClause = "";
-    const params: any[] = [];
+    // 2. 한국 표준시 (KST, UTC+9) 기준 날짜 비교 기준선 계산
+    const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const todayStartStr = `${nowKST.toISOString().split('T')[0]}T00:00:00`;
+    const todayDateOnly = nowKST.toISOString().split('T')[0];
+    
+    const weekAgoDate = new Date(nowKST.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const weekStartStr = `${weekAgoDate.toISOString().split('T')[0]}T00:00:00`;
+    const weekDateOnly = weekAgoDate.toISOString().split('T')[0];
 
-    if (range === 'today') {
-      whereClause = " WHERE created_at >= ? ";
-      params.push(`${todayStr} 00:00:00`);
-    } else if (range === 'week') {
-      const d = new Date(kstNow.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const weekStr = d.toISOString().split('T')[0];
-      whereClause = " WHERE created_at >= ? ";
-      params.push(`${weekStr} 00:00:00`);
-    } else if (range === 'month') {
-      const d = new Date(kstNow.getTime() - 30 * 24 * 60 * 60 * 1000);
-      const monthStr = d.toISOString().split('T')[0];
-      whereClause = " WHERE created_at >= ? ";
-      params.push(`${monthStr} 00:00:00`);
-    }
-    // range === 'all' 인 경우 WHERE 절 생략
+    const monthAgoDate = new Date(nowKST.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const monthStartStr = `${monthAgoDate.toISOString().split('T')[0]}T00:00:00`;
+    const monthDateOnly = monthAgoDate.toISOString().split('T')[0];
 
-    // 1. 기간별 요약 통계 SQL
-    const summarySql = `
-      SELECT 
-        COUNT(*) as api_calls,
-        COALESCE(SUM(prompt_tokens), 0) as total_prompt_tokens,
-        COALESCE(SUM(completion_tokens), 0) as total_completion_tokens,
-        COALESCE(SUM(total_tokens), 0) as total_tokens
-      FROM ai_token_usage_logs
-      ${whereClause}
-    `;
+    // 3. 선택된 기간(range)에 맞춰 메모리 정밀 필터링
+    const filteredRows = allRows.filter((row: any) => {
+      if (range === 'all') return true;
+      const createdAt = row.created_at || '';
+      if (range === 'today') {
+        return createdAt >= todayStartStr || createdAt.startsWith(todayDateOnly);
+      } else if (range === 'week') {
+        return createdAt >= weekStartStr || createdAt.startsWith(weekDateOnly) || createdAt >= weekDateOnly;
+      } else if (range === 'month') {
+        return createdAt >= monthStartStr || createdAt.startsWith(monthDateOnly) || createdAt >= monthDateOnly;
+      }
+      return true;
+    });
 
-    const summaryRes = await executeSQL(summarySql, params);
-    const summaryRow = summaryRes.rows?.[0] || {};
+    // 4. 요약 통계(summary) 집계
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let totalTokens = 0;
+    const purposeMap: Record<string, { calls: number; tokens: number }> = {};
+    const modelMap: Record<string, { calls: number; tokens: number }> = {};
+
+    filteredRows.forEach((row: any) => {
+      const prompt = Number(row.prompt_tokens || 0);
+      const completion = Number(row.completion_tokens || 0);
+      const tokens = Number(row.total_tokens || 0);
+      const purpose = row.purpose || 'unknown';
+      const model = row.model || 'unknown';
+
+      totalPromptTokens += prompt;
+      totalCompletionTokens += completion;
+      totalTokens += tokens;
+
+      // 목적별 집계
+      if (!purposeMap[purpose]) purposeMap[purpose] = { calls: 0, tokens: 0 };
+      purposeMap[purpose].calls += 1;
+      purposeMap[purpose].tokens += tokens;
+
+      // 모델별 집계
+      if (!modelMap[model]) modelMap[model] = { calls: 0, tokens: 0 };
+      modelMap[model].calls += 1;
+      modelMap[model].tokens += tokens;
+    });
+
     const summary = {
-      api_calls: Number(summaryRow.api_calls || 0),
-      total_prompt_tokens: Number(summaryRow.total_prompt_tokens || 0),
-      total_completion_tokens: Number(summaryRow.total_completion_tokens || 0),
-      total_tokens: Number(summaryRow.total_tokens || 0)
+      api_calls: filteredRows.length,
+      total_prompt_tokens: totalPromptTokens,
+      total_completion_tokens: totalCompletionTokens,
+      total_tokens: totalTokens
     };
 
-    // 2. 사용 목적(Purpose)별 통계 SQL (기간 필터 적용)
-    const purposeSql = `
-      SELECT 
-        COALESCE(purpose, 'unknown') as purpose,
-        COUNT(*) as calls,
-        COALESCE(SUM(total_tokens), 0) as tokens
-      FROM ai_token_usage_logs
-      ${whereClause}
-      GROUP BY purpose
-      ORDER BY tokens DESC
-    `;
-    const purposeRes = await executeSQL(purposeSql, params);
-    const purposes = (purposeRes.rows || []).map((r: any) => ({
-      purpose: r.purpose,
-      calls: Number(r.calls || 0),
-      tokens: Number(r.tokens || 0)
-    }));
+    // 5. 사용 목적별 및 모델별 내림차순 정렬 가공
+    const purposes = Object.entries(purposeMap).map(([purpose, stat]) => ({
+      purpose,
+      calls: stat.calls,
+      tokens: stat.tokens
+    })).sort((a, b) => b.tokens - a.tokens);
 
-    // 3. 모델(Model)별 통계 SQL (기간 필터 적용)
-    const modelSql = `
-      SELECT 
-        COALESCE(model, 'unknown') as model,
-        COUNT(*) as calls,
-        COALESCE(SUM(total_tokens), 0) as tokens
-      FROM ai_token_usage_logs
-      ${whereClause}
-      GROUP BY model
-      ORDER BY tokens DESC
-    `;
-    const modelRes = await executeSQL(modelSql, params);
-    const models = (modelRes.rows || []).map((r: any) => ({
-      model: r.model,
-      calls: Number(r.calls || 0),
-      tokens: Number(r.tokens || 0)
-    }));
+    const models = Object.entries(modelMap).map(([model, stat]) => ({
+      model,
+      calls: stat.calls,
+      tokens: stat.tokens
+    })).sort((a, b) => b.tokens - a.tokens);
 
-    // 4. 기간별 감사록 로그 전체 건수 및 최근 페이지네이션 로그 SQL
-    const totalCountSql = `SELECT COUNT(*) as cnt FROM ai_token_usage_logs ${whereClause}`;
-    const countRes = await executeSQL(totalCountSql, params);
-    const totalLogs = Number(countRes.rows?.[0]?.cnt || 0);
+    // 6. 감사록 테이블 페이지네이션 슬라이스
+    const totalLogs = filteredRows.length;
+    const pagedRows = filteredRows.slice(offset, offset + limit);
 
-    const logsSql = `
-      SELECT id, model, purpose, prompt_tokens, completion_tokens, total_tokens, user_name, menu_path, created_at
-      FROM ai_token_usage_logs
-      ${whereClause}
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `;
-    const logsRes = await executeSQL(logsSql, [...params, limit, offset]);
-    const recentLogs = (logsRes.rows || []).map((l: any) => ({
+    const recentLogs = pagedRows.map((l: any) => ({
       id: String(l.id),
       model: l.model,
       purpose: l.purpose,
@@ -128,7 +121,7 @@ export async function GET(req: Request) {
         total: totalLogs,
         page,
         limit,
-        totalPages: Math.ceil(totalLogs / limit)
+        totalPages: Math.ceil(totalLogs / limit) || 1
       }
     });
 
