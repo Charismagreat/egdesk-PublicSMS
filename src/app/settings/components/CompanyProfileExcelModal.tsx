@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
+import * as XLSX from "xlsx";
+
 interface CompanyProfileExcelModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -71,7 +73,7 @@ export default function CompanyProfileExcelModal({
     document.body.removeChild(link);
   };
 
-  // 2. 엑셀/CSV 파일 업로드 및 판독
+  // 2. 엑셀/CSV 파일 업로드 및 판독 (SheetJS 적용)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -81,53 +83,99 @@ export default function CompanyProfileExcelModal({
 
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      if (!text) return;
+      try {
+        const buffer = evt.target?.result as ArrayBuffer;
+        if (!buffer) return;
 
-      const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
-      if (lines.length <= 1) {
-        setStatusMsg({ type: 'error', text: '파일에 회사 정보 데이터 행이 존재하지 않습니다.' });
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+
+        if (!sheet) {
+          setStatusMsg({ type: 'error', text: '엑셀 파일의 시트를 읽을 수 없습니다.' });
+          setParsedProfile(null);
+          return;
+        }
+
+        // sheet_to_json으로 2D 배열 및 객체 파싱
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[][];
+        const jsonObjects = XLSX.utils.sheet_to_json(sheet, { defval: "" }) as Record<string, any>[];
+
+        if ((!rows || rows.length < 2) && jsonObjects.length === 0) {
+          setStatusMsg({ type: 'error', text: '파일에 회사 정보 데이터 행이 존재하지 않습니다.' });
+          setParsedProfile(null);
+          return;
+        }
+
+        let profileObj: any = null;
+
+        if (jsonObjects.length > 0) {
+          const firstRow = jsonObjects[0];
+
+          // 컬럼 헤더 매핑 도우미 (유연한 키 검색)
+          const findVal = (keys: string[], defaultIdx: number) => {
+            for (const key of Object.keys(firstRow)) {
+              const cleanKey = key.replace(/\s+/g, "").toLowerCase();
+              if (keys.some(k => cleanKey.includes(k.toLowerCase()))) {
+                const val = firstRow[key];
+                return val !== undefined && val !== null ? String(val).trim() : "";
+              }
+            }
+            // 컬럼명이 맞지 않을 경우 인덱스로 폴백
+            if (rows[1] && rows[1][defaultIdx] !== undefined) {
+              return String(rows[1][defaultIdx]).trim();
+            }
+            return "";
+          };
+
+          profileObj = {
+            companyName: findVal(["회사명", "상호"], 0),
+            representative: findVal(["대표자", "대표명", "대표"], 1),
+            businessNumber: findVal(["사업자등록번호", "사업자번호"], 2),
+            phone: findVal(["대표전화번호", "대표전화", "전화번호", "연락처"], 3),
+            email: findVal(["대표이메일", "이메일"], 4),
+            homepage: findVal(["홈페이지주소", "홈페이지", "웹사이트"], 5),
+            sidebarMainTitle: findVal(["사이드바메인타이틀", "메인타이틀"], 6),
+            sidebarSubTitle: findVal(["사이드바서브타이틀", "서브타이틀"], 7),
+            address: findVal(["본점소재지주소", "본점주소", "소재지", "주소"], 8),
+            bankName: findVal(["입금은행명", "은행명", "입금은행", "은행"], 9),
+            accountNumber: findVal(["계좌번호", "입금계좌"], 10),
+            accountHolder: findVal(["예금주"], 11)
+          };
+        } else if (rows.length >= 2) {
+          const dataRow = rows[1];
+          profileObj = {
+            companyName: String(dataRow[0] || "").trim(),
+            representative: String(dataRow[1] || "").trim(),
+            businessNumber: String(dataRow[2] || "").trim(),
+            phone: String(dataRow[3] || "").trim(),
+            email: String(dataRow[4] || "").trim(),
+            homepage: String(dataRow[5] || "").trim(),
+            sidebarMainTitle: String(dataRow[6] || "").trim(),
+            sidebarSubTitle: String(dataRow[7] || "").trim(),
+            address: String(dataRow[8] || "").trim(),
+            bankName: String(dataRow[9] || "").trim(),
+            accountNumber: String(dataRow[10] || "").trim(),
+            accountHolder: String(dataRow[11] || "").trim()
+          };
+        }
+
+        if (!profileObj || (!profileObj.companyName && !profileObj.representative && !profileObj.businessNumber)) {
+          setStatusMsg({ type: 'error', text: '파일에서 유효한 회사 정보를 읽어올 수 없습니다.' });
+          setParsedProfile(null);
+          return;
+        }
+
+        setParsedProfile(profileObj);
+        setStatusMsg({ type: 'success', text: '✅ 엑셀 서식 파일에서 회사 정보 및 무통장 입금 계좌 설정 판독 완료!' });
+      } catch (err: any) {
+        console.error("Excel parsing error:", err);
+        setStatusMsg({ type: 'error', text: `엑셀 파일 판독 중 오류 발생: ${err.message}` });
         setParsedProfile(null);
-        return;
       }
-
-      // 2번째 줄(데이터 행) 파싱
-      const dataRow = lines[1];
-      const cols = dataRow.split(/,|\t/).map(c => c.replace(/^["']|["']$/g, '').trim());
-
-      const companyName = cols[0] || '(주)쿠스-게스트';
-      const representative = cols[1] || '차민수';
-      const businessNumber = cols[2] || '731-81-02023';
-      const phone = cols[3] || '010-7216-5884';
-      const email = cols[4] || 'chachogreat@gmail.com';
-      const homepage = cols[5] || 'https://egdesk.cloud';
-      const sidebarMainTitle = cols[6] || 'EGDESK SMS';
-      const sidebarSubTitle = cols[7] || '우리 회사 스마트 AI 시스템';
-      const address = cols[8] || '경기도 시흥시 서울대학로 59-69';
-      const bankName = cols[9] || '카카오뱅크';
-      const accountNumber = cols[10] || '3333-12-1695965';
-      const accountHolder = cols[11] || '차호석';
-
-      const profileObj = {
-        companyName,
-        representative,
-        businessNumber,
-        phone,
-        email,
-        homepage,
-        sidebarMainTitle,
-        sidebarSubTitle,
-        address,
-        bankName,
-        accountNumber,
-        accountHolder
-      };
-
-      setParsedProfile(profileObj);
-      setStatusMsg({ type: 'success', text: '✅ 엑셀 서식 파일에서 회사 정보 및 무통장 입금 계좌 설정 판독 완료!' });
     };
 
-    reader.readAsText(file, "UTF-8");
+    reader.readAsArrayBuffer(file);
   };
 
   // 3. 판독된 회사 정보 저장 및 서버 반영
