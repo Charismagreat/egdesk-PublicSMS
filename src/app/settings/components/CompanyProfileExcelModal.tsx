@@ -326,7 +326,7 @@ export default function CompanyProfileExcelModal({
                 </div>
               </div>
 
-              {/* 무통장 입금 계좌 정보 파독 미리보기 */}
+              {/* 무통장 입금 계좌 정보 판독 미리보기 */}
               <div className="pt-3 border-t border-indigo-100 bg-white/70 p-3 rounded-xl space-y-1">
                 <span className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
                   <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
