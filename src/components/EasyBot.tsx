@@ -415,7 +415,6 @@ export default function EasyBot() {
 
   // 🔑 세션 사용자 역할(Role) 조회를 통한 모바일 및 최고관리자 전용 노출 제어
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [aiQuotaExceeded, setAiQuotaExceeded] = useState(false);
 
   useEffect(() => {
     const fetchUserRole = async () => {
