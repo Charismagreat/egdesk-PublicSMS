@@ -25,6 +25,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
    - `In-app migration` 블록은 DB 내 모든 테이블을 동적으로 스캔하여 누락된 컬럼에 대해 무손실 `ALTER TABLE`을 가동하므로, 마이그레이션 시 기존 데이터를 드롭하지 않고 안전하게 보정하십시오.
 4. **조회 및 통계 쿼리 시 소프트 삭제 필터링 (`deleted_at IS NULL`) 필수 적용**:
    - `executeSQL` 등을 통해 원시 쿼리를 수행하거나 동적 AI 쿼리(EasyBot)를 생성할 때, 소프트 삭제를 지원하는 테이블에 대한 조회는 WHERE 절에 반드시 `deleted_at IS NULL` 조건을 기본 주입하여 삭제된 데이터가 화면 및 계산 지표에 노출되지 않도록 하십시오.
+5. **고유 식별자 ID (PK/FK) 기반 조인 및 맵핑 엄격 의무화**:
+   - 데이터 조인, 맵핑, 중복 제거(De-duplication) 처리 시 단순 제목(`title`)이나 타임스탬프 계산(`Date.now()`) 등의 불안정한 연산을 절대 사용해서는 안 됩니다.
+   - 모든 연결과 병합은 오직 **전역 고유 식별자 ID (`id`, `doc_id`, `task_id`) 간의 1:1 명확한 외래키(Foreign Key) 문자열 조인**으로만 수행해야 합니다.
+6. **대장 쿼리 시 최신순(`orderBy DESC`) 정렬 기본 주입 원칙**:
+   - `crm_snaptask_items` 등 대용량 레코드가 누적되는 대장 테이블을 `queryTable`로 조회할 때는 DB 조회 상한선(Limit)에 걸려 최신 첨부파일 및 레코드가 잘려 나가지 않도록 **반드시 `orderBy: 'id'`, `orderDirection: 'DESC'` 정렬을 필수 주입**하여 조회해야 합니다.
 <!-- END:database-audit-rules -->
 
 <!-- BEGIN:mobile-ui-rules -->
