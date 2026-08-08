@@ -213,8 +213,10 @@ export function useStorefront() {
       const res = await apiFetch('/api/products?status=ACTIVE&limit=10000');
       const json = await res.json();
       if (json.success) {
-        // status가 ACTIVE인 모든 판매 중 상품을 UI에 100% 노출 (카테고리 필터링 전면 해제)
-        setProducts(json.products || []);
+        const storeProducts = (json.products || []).filter((p: any) => 
+          !p.category || p.category === '스토어용' || p.category === '일반상품' || p.category === '미분류'
+        );
+        setProducts(storeProducts);
       }
     } catch (e) {
       console.error('Failed to fetch store products:', e);
