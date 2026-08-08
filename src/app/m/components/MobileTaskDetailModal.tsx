@@ -18,7 +18,22 @@ export default function MobileTaskDetailModal({
 
   const isPendingCancel = task.status === "PENDING_APPROVAL" || task.has_cancel_request;
   const isDone = task.status === "DONE";
-  const memoText = task.memo || task.note || task.customer_memo || task.data?.memo || task.data?.note;
+  const memoText = task.memo || task.note || task.customer_memo || task.reason || task.details || task.data?.memo || task.data?.note || task.data?.reason;
+
+  // 📷 사진 첨부파일 통집 (photos / images / data.photos 등)
+  const photosList: any[] = [
+    ...(Array.isArray(task.photos) ? task.photos : []),
+    ...(Array.isArray(task.data?.photos) ? task.data.photos : []),
+    ...(Array.isArray(task.images) ? task.images : []),
+  ];
+
+  // 📂 서류/기타 파일 첨부통집 (attachments / files / data.files / file_url 등)
+  const filesList: any[] = [
+    ...(Array.isArray(task.attachments) ? task.attachments : []),
+    ...(Array.isArray(task.files) ? task.files : []),
+    ...(Array.isArray(task.data?.files) ? task.data.files : []),
+    ...(task.file_url ? [{ name: task.file_name || '첨부 서류 파일', url: task.file_url }] : [])
+  ];
 
   const getStatusBadge = () => {
     if (isPendingCancel) {
@@ -126,29 +141,65 @@ export default function MobileTaskDetailModal({
             </div>
           )}
 
-          {/* 📎 상신 첨부 서류 및 실물 파일 */}
-          {task.attachments && task.attachments.length > 0 && (
+          {/* 📷 1. 등록된 현장 이미지/사진 미리보기 목록 */}
+          {photosList.length > 0 && (
             <div className="bg-white p-3 rounded-xl border border-slate-200/60 space-y-2">
               <span className="text-[11px] font-black text-indigo-700 flex items-center gap-1">
                 <Paperclip className="w-3.5 h-3.5 text-indigo-600" />
-                <span>상신 첨부 서류 ({task.attachments.length}건)</span>
+                <span>등록된 현장 사진 ({photosList.length}건)</span>
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {photosList.map((photo: any, idx: number) => {
+                  const imgUrl = photo.preview || photo.base64 || photo.url || photo;
+                  const imgName = photo.name || `사진_${idx + 1}`;
+                  return (
+                    <a
+                      key={idx}
+                      href={typeof imgUrl === 'string' ? imgUrl : '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 flex flex-col justify-end p-1.5 transition-all hover:border-indigo-400"
+                    >
+                      {typeof imgUrl === 'string' && (
+                        <img src={imgUrl} alt={imgName} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      )}
+                      <div className="relative z-10 bg-slate-900/70 backdrop-blur-3xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md truncate">
+                        {imgName}
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 📎 2. 상신 첨부 서류 및 실물 파일 목록 */}
+          {filesList.length > 0 && (
+            <div className="bg-white p-3 rounded-xl border border-slate-200/60 space-y-2">
+              <span className="text-[11px] font-black text-indigo-700 flex items-center gap-1">
+                <Paperclip className="w-3.5 h-3.5 text-indigo-600" />
+                <span>상신 첨부 서류 ({filesList.length}건)</span>
               </span>
               <div className="flex flex-col gap-1.5">
-                {task.attachments.map((att: any, idx: number) => (
-                  <a
-                    key={idx}
-                    href={att.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between bg-indigo-50/70 hover:bg-indigo-100 text-indigo-900 font-extrabold text-xs p-2 rounded-xl border border-indigo-200/80 transition-all text-decoration-none"
-                  >
-                    <div className="flex items-center gap-2 truncate pr-2">
-                      <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                      <span className="truncate">{att.name}</span>
-                    </div>
-                    <ExternalLink className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  </a>
-                ))}
+                {filesList.map((att: any, idx: number) => {
+                  const fileUrl = att.url || att.preview || att.base64;
+                  const fileName = att.name || att.filename || `서류파일_${idx + 1}`;
+                  return (
+                    <a
+                      key={idx}
+                      href={fileUrl || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between bg-indigo-50/70 hover:bg-indigo-100 text-indigo-900 font-extrabold text-xs p-2.5 rounded-xl border border-indigo-200/80 transition-all text-decoration-none"
+                    >
+                      <div className="flex items-center gap-2 truncate pr-2">
+                        <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <span className="truncate">{fileName}</span>
+                      </div>
+                      <ExternalLink className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    </a>
+                  );
+                })}
               </div>
             </div>
           )}
