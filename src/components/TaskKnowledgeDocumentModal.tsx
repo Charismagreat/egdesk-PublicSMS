@@ -78,6 +78,16 @@ export default function TaskKnowledgeDocumentModal({
     }
   };
 
+  const filePath = document.file_path || "";
+  const fileName = document.file_name || document.title || "";
+  const lowerFileName = fileName.toLowerCase();
+  
+  const isCad = lowerFileName.endsWith('.dwg') || lowerFileName.endsWith('.dxf') || lowerFileName.endsWith('.dwf');
+  const isImage = (/\.(jpg|jpeg|png|gif|webp)$/i).test(lowerFileName) || filePath.includes('image');
+  const isAudio = (/\.(mp3|wav|m4a|aac)$/i).test(lowerFileName) || filePath.includes('audio');
+  const isVideo = (/\.(mp4|webm|mov|avi)$/i).test(lowerFileName) || filePath.includes('video');
+  const isPdf = lowerFileName.endsWith('.pdf') || filePath.includes('pdf');
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fade-in">
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden text-left">
@@ -106,6 +116,19 @@ export default function TaskKnowledgeDocumentModal({
           </div>
 
           <div className="flex items-center gap-2">
+            {filePath && (
+              <a
+                href={filePath}
+                download={fileName}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 no-underline shadow-2xs"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{isCad ? "📐 CAD 원본 도면 다운로드" : "📥 파일 원본 다운로드"}</span>
+              </a>
+            )}
+
             <button
               onClick={handleCopyContent}
               className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
@@ -127,6 +150,50 @@ export default function TaskKnowledgeDocumentModal({
         {/* 본문 콘텐츠 영역 */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           
+          {/* 📐 1. CAD 도면 (.dwg / .dxf) 전용 뷰어 뱃지 및 가이드 */}
+          {isCad && (
+            <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-amber-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-600" />
+                  <span>📐 CAD 설계 도면 파일 (.dwg / .dxf) 보관 및 판독 지식</span>
+                </span>
+                <a
+                  href={filePath}
+                  download={fileName}
+                  className="text-xs font-black text-amber-800 underline hover:text-amber-950"
+                >
+                  원본 도면 다운로드
+                </a>
+              </div>
+              <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                본 파일은 CAD 기술 도면 파일입니다. 상단의 <strong>[📐 CAD 원본 도면 다운로드]</strong>를 클릭하시면 사내 AutoCAD 및 CAD Viewer에서 100% 무손실 상태로 열어보실 수 있으며, 하단 텍스트 창에 추출된 도면 명세 및 지식을 확인하실 수 있습니다.
+              </p>
+            </div>
+          )}
+
+          {/* 🖼️ 2. 이미지 파일 미디어 캔버스 */}
+          {isImage && filePath && (
+            <div className="bg-slate-900 rounded-2xl p-3 flex justify-center items-center overflow-hidden border border-slate-800 shadow-inner">
+              <img src={filePath} alt={title} className="max-h-[360px] object-contain rounded-xl" />
+            </div>
+          )}
+
+          {/* 🎵 3. 오디오 파일 스트리밍 플레이어 */}
+          {isAudio && filePath && (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
+              <span className="text-xs font-black text-slate-700 block">🎵 음성 파일 스트리밍 재생</span>
+              <audio controls src={filePath} className="w-full h-10 outline-none" />
+            </div>
+          )}
+
+          {/* 🎬 4. 비디오 파일 스트리밍 플레이어 */}
+          {isVideo && filePath && (
+            <div className="bg-slate-900 rounded-2xl p-2 border border-slate-800 shadow-inner">
+              <video controls src={filePath} className="w-full max-h-[380px] rounded-xl outline-none" />
+            </div>
+          )}
+
           {/* AI 지식 요약 뱃지 */}
           <div className="bg-indigo-50/60 border border-indigo-100 p-4 rounded-2xl">
             <div className="flex items-center gap-2 mb-2 text-indigo-900 font-extrabold text-xs">
@@ -134,7 +201,7 @@ export default function TaskKnowledgeDocumentModal({
               <span>AI 지식 자동 추출 및 요약</span>
             </div>
             <p className="text-xs text-indigo-950 leading-relaxed font-semibold">
-              본 문서는 태스크 폴더 스캔을 통해 OCR 파싱 및 비즈니스 데이터 가공이 완료된 전사 공식 지식 자산입니다.
+              본 문서는 태스크 폴더 스캔을 통해 OCR/비전 판독 및 비즈니스 데이터 가공이 완료된 전사 공식 지식 자산입니다.
             </p>
           </div>
 
