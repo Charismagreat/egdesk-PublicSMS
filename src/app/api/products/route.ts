@@ -32,8 +32,10 @@ export async function GET(req: Request) {
     // 기존에 다른 테넌트 ID('tenant-guest-id-2222' 또는 NULL)로 적재된 상품 데이터를
     // 현재 세션의 활성 테넌트 ID(tenantId)로 자동 바인딩 보정 처리합니다. (다이렉트 SQL UPDATE 활용)
     try {
-      // ⚡ brand 컬럼 무손실 인앱 마이그레이션 자동 보정
+      // ⚡ brand, spec, unit 컬럼 무손실 인앱 마이그레이션 자동 보정
       await executeSQL(`ALTER TABLE products ADD COLUMN brand TEXT`).catch(() => {});
+      await executeSQL(`ALTER TABLE products ADD COLUMN spec TEXT`).catch(() => {});
+      await executeSQL(`ALTER TABLE products ADD COLUMN unit TEXT`).catch(() => {});
 
       if (tenantId !== 'tenant-guest-id-2222') {
         await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
@@ -62,7 +64,7 @@ export async function GET(req: Request) {
     try {
       let countQuery = `SELECT COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
       let dataQuery = `
-        SELECT p.*, i.barcode as inventory_barcode, i.stock as inventory_stock 
+        SELECT p.*, i.barcode as inventory_barcode, i.stock as inventory_stock, i.spec as inventory_spec, i.unitValue as inventory_unit 
         FROM products p
         LEFT JOIN inventory_items i ON p.inventory_item_id = i.id
         WHERE p.tenant_id = '${tenantId}' AND p.status = '${status}'
@@ -125,7 +127,9 @@ export async function GET(req: Request) {
         return {
           ...r,
           inventory_barcode: matched ? matched.barcode : null,
-          inventory_stock: matched ? matched.stock : 0
+          inventory_stock: matched ? matched.stock : 0,
+          inventory_spec: matched ? matched.spec : null,
+          inventory_unit: matched ? matched.unitValue : null
         };
       });
     }

@@ -57,7 +57,14 @@ export function ProductFormSection({
               placeholder="브랜드명 (예: 삼성, LG, 자사)" 
               value={form.brand || ''} 
               onChange={e => setForm(prev => ({...prev, brand: e.target.value}))} 
-              className="w-40 border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-pink-500 font-semibold text-sm" 
+              className="w-36 border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-pink-500 font-semibold text-sm" 
+            />
+            <input 
+              type="text" 
+              placeholder="규격/사양 (예: 150KG.검정.2.5M)" 
+              value={form.spec || ''} 
+              onChange={e => setForm(prev => ({...prev, spec: e.target.value}))} 
+              className="w-44 border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-pink-500 font-semibold text-sm" 
             />
             <div className="flex-[1] flex items-center gap-2 border rounded-lg px-3 py-2 bg-white">
               <input 

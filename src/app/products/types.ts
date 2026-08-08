@@ -3,6 +3,10 @@ export interface Product {
   name: string;
   price: string;
   brand?: string;
+  spec?: string;
+  unit?: string;
+  inventory_spec?: string;
+  inventory_unit?: string;
   url: string;
   description: string;
   main_image_url: string;
@@ -22,6 +26,8 @@ export interface ProductForm {
   name: string;
   price: string;
   brand: string;
+  spec: string;
+  unit: string;
   url: string;
   description: string;
   main_image_url: string;

@@ -43,6 +43,8 @@ export async function syncInventoryToProduct(item: any, action: 'INSERT' | 'UPDA
         name: item.name || '',
         price: item.price !== undefined && item.price !== null ? String(item.price) : '0',
         brand: item.brand || '',
+        spec: item.spec || '',
+        unit: item.unitValue || '',
         description: item.description || '',
         category: item.category || '',
         updated_at: nowStr,
