@@ -129,9 +129,6 @@ export default function SmtpSettingsCard() {
           <div>
             <h3 className="text-[16px] font-bold text-slate-800 flex items-center gap-2">
               발송 메일 SMTP 계정 설정
-              <span className="text-[10px] font-extrabold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">
-                정식 메일 서버 연동
-              </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">직원의 모바일 명함 전송이나 시스템 안내 메일 발송 시 활용될 정식 SMTP 발송 메일 서버를 등록합니다.</p>
           </div>
