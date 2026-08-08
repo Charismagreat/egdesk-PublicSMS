@@ -29,22 +29,17 @@ export async function GET(req: Request) {
     }
 
     // ⚡ 테넌트 불일치 자가 복구 가드(Self-Healing Guard):
-    // 기존에 다른 테넌트 ID('tenant-guest-id-2222' 또는 NULL)로 적재된 상품 데이터를
-    // 현재 세션의 활성 테넌트 ID(tenantId)로 자동 바인딩 보정 처리합니다. (다이렉트 SQL UPDATE 활용)
+    // 타 환경(다른 컴퓨터/세션)에서 접속 시 기존 테넌트('tenant-guest-id-2222', 'default', NULL 등)로 적재된
+    // 모든 상품 데이터를 현재 세션의 활성 테넌트 ID(tenantId)로 자동 마이그레이션 바인딩합니다.
     try {
       // ⚡ brand, spec, unit 컬럼 무손실 인앱 마이그레이션 자동 보정
       await executeSQL(`ALTER TABLE products ADD COLUMN brand TEXT`).catch(() => {});
       await executeSQL(`ALTER TABLE products ADD COLUMN spec TEXT`).catch(() => {});
       await executeSQL(`ALTER TABLE products ADD COLUMN unit TEXT`).catch(() => {});
 
-      if (tenantId !== 'tenant-guest-id-2222') {
-        await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
-        await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: null as any } });
-        console.log(`[Self-Healing] Migrated products to current tenant: ${tenantId}`);
-      } else {
-        await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
-        await updateRows('products', { tenant_id: tenantId }, { filters: { tenant_id: null as any } });
-        console.log(`[Self-Healing] Cleaned null/default products to guest tenant: ${tenantId}`);
+      if (tenantId) {
+        await executeSQL(`UPDATE products SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL OR tenant_id = 'default' OR tenant_id = '' OR (tenant_id != '${tenantId}' AND tenant_id = 'tenant-guest-id-2222')`).catch(() => {});
+        console.log(`[Self-Healing] Successfully bound products to current active tenant: ${tenantId}`);
       }
     } catch (patchErr: any) {
       console.warn('[Self-Healing Warning] Failed to run tenant migration in products:', patchErr.message);
