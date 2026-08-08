@@ -99,13 +99,21 @@ export function unwrapAiResponseText(res: any): string {
     return res;
   }
 
-  if (typeof res === 'object') {
+  if (typeof res === 'object' && res !== null) {
     if (typeof res.content === 'string') return unwrapAiResponseText(res.content);
     if (typeof res.text === 'string') return unwrapAiResponseText(res.text);
     if (typeof res.reply === 'string') return unwrapAiResponseText(res.reply);
     if (typeof res.answer === 'string') return unwrapAiResponseText(res.answer);
+    if (typeof res.message === 'string') return unwrapAiResponseText(res.message);
+    if (typeof res.error === 'string') return unwrapAiResponseText(res.error);
+    if (typeof res.error?.message === 'string') return unwrapAiResponseText(res.error.message);
     if (Array.isArray(res.candidates) && res.candidates[0]?.content?.parts?.[0]?.text) {
       return unwrapAiResponseText(res.candidates[0].content.parts[0].text);
+    }
+    try {
+      return JSON.stringify(res);
+    } catch {
+      return String(res);
     }
   }
 

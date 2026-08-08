@@ -152,7 +152,10 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
     }
 
     if (callerErr) {
-      throw new Error(`[GoogleGenerativeAI Error]: callAI 라우터 및 직접 폴백 호출 모두 실패. (최종 에러: ${callerErr.message || callerErr})`);
+      const errMsg = callerErr?.message 
+        ? callerErr.message 
+        : (typeof callerErr === 'object' ? JSON.stringify(callerErr) : String(callerErr));
+      throw new Error(`[GoogleGenerativeAI Error]: callAI 라우터 및 직접 폴백 호출 모두 실패. (최종 에러: ${errMsg})`);
     }
 
     text = unwrapAiResponseText(callerRes);
