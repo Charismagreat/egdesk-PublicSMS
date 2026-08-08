@@ -1308,6 +1308,8 @@ export default function MobileHubPage() {
         setVoiceText={setRequestVoiceText}
         onRemovePhoto={(idx) => setRequestPhotos((prev) => prev.filter((_, i) => i !== idx))}
         onRemoveFile={(idx) => setRequestFiles((prev) => prev.filter((_, i) => i !== idx))}
+        onAddPhoto={(p) => setRequestPhotos((prev) => [...prev, p])}
+        onAddFile={(f) => setRequestFiles((prev) => [...prev, f])}
         taskFolders={taskFolders}
         onSendGovernanceRequest={handleSendGovernanceRequest}
         onSaveToTaskFolder={handleSaveToTaskFolder}

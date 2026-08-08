@@ -28,6 +28,8 @@ interface MobileTaskRequestModalProps {
   setVoiceText: (text: string | ((prev: string) => string)) => void;
   onRemovePhoto: (index: number) => void;
   onRemoveFile: (index: number) => void;
+  onAddPhoto?: (photo: RequestPhoto) => void;
+  onAddFile?: (file: RequestFile) => void;
   taskFolders: any[];
   onSendGovernanceRequest: (title: string, note: string, photos?: RequestPhoto[], files?: RequestFile[]) => Promise<void>;
   onSaveToTaskFolder: (folderId: string, title: string, photos?: RequestPhoto[], files?: RequestFile[]) => Promise<void>;
@@ -42,6 +44,8 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
   setVoiceText,
   onRemovePhoto,
   onRemoveFile,
+  onAddPhoto,
+  onAddFile,
   taskFolders,
   onSendGovernanceRequest,
   onSaveToTaskFolder,
@@ -51,6 +55,10 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
   const [title, setTitle] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 📸 모달 내부 파일/사진 선택 전용 ref
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 🔍 미리보기 팝업 상태
   const [viewerItem, setViewerItem] = useState<any>(null);
@@ -257,15 +265,82 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
               </div>
             )}
 
+            {/* 📦 숨김 파일/사진 인풋 필드 */}
+            <input
+              type="file"
+              ref={photoInputRef}
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const selectedFiles = e.target.files;
+                if (!selectedFiles || selectedFiles.length === 0) return;
+                Array.from(selectedFiles).forEach((file) => {
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const base64Str = reader.result as string;
+                    if (onAddPhoto) {
+                      onAddPhoto({ name: file.name, preview: base64Str, base64: base64Str });
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                });
+                if (e.target) e.target.value = "";
+              }}
+            />
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const selectedFiles = e.target.files;
+                if (!selectedFiles || selectedFiles.length === 0) return;
+                Array.from(selectedFiles).forEach((file) => {
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const base64Str = reader.result as string;
+                    if (onAddFile) {
+                      onAddFile({
+                        name: file.name,
+                        size: (file.size / 1024).toFixed(1) + " KB",
+                        type: file.type,
+                        preview: base64Str,
+                        base64: base64Str,
+                        url: base64Str,
+                        file: file,
+                      });
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                });
+                if (e.target) e.target.value = "";
+              }}
+            />
+
             {/* 📦 등록된 자료 목록 */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-extrabold text-slate-400">
                   등록된 자료 ({photos.length + files.length}건)
                 </span>
-                <span className="text-[10px] font-bold text-indigo-600">
-                  💡 하단 + 버튼으로 계속 추가 가능
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] rounded-lg border border-indigo-200/80 cursor-pointer"
+                  >
+                    📷 사진 추가
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-extrabold text-[10px] rounded-lg border border-amber-200/80 cursor-pointer"
+                  >
+                    📎 서류 첨부
+                  </button>
+                </div>
               </div>
 
               {photos.length > 0 || files.length > 0 ? (
