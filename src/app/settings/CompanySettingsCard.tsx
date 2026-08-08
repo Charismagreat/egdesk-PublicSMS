@@ -427,23 +427,9 @@ export default function CompanySettingsCard() {
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             <span>📊 회사 프로필 엑셀 등록</span>
           </button>
-          <button
-            type="button"
-            onClick={(e) => handleSave(e as any)}
-            disabled={saving}
-            className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all border-0 shadow-xs active:scale-95 cursor-pointer ${
-              saving
-                ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20'
-            }`}
-          >
-            {saving ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Save className="w-3.5 h-3.5" />
-            )}
-            <span>본사 정보 저장</span>
-          </button>
+          <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2.5 py-1 rounded-full border border-slate-250/30">
+            시스템 연동
+          </span>
         </div>
       </div>
 
