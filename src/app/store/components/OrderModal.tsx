@@ -203,9 +203,23 @@ export function OrderModal({
             </div>
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <h4 className="font-extrabold text-slate-800 text-2xl md:text-3xl m-0">{selectedProduct.name}</h4>
-              {selectedProduct.valid_item_code && (
-                <span className="bg-indigo-50 text-indigo-700 text-[10px] font-black px-2.5 py-1 rounded-md border border-indigo-100/60 font-mono">
-                  유효품목코드: {selectedProduct.valid_item_code}
+              
+              {/* 🏷️ 품목코드 (바코드) 뱃지 */}
+              {(selectedProduct.inventory_barcode || (selectedProduct.itemCode && selectedProduct.itemCode !== 'INV-UNASSIGNED') || selectedProduct.valid_item_code) && (
+                <span className="bg-purple-50 text-purple-700 text-[11px] font-bold font-mono px-2.5 py-1 rounded-md border border-purple-200/80 shadow-3xs inline-flex items-center gap-1">
+                  <span className="text-[10px]">🏷️</span>
+                  <span>{selectedProduct.inventory_barcode || selectedProduct.itemCode || selectedProduct.valid_item_code}</span>
+                </span>
+              )}
+
+              {/* 📐 규격 정보 뱃지 */}
+              {(selectedProduct.inventory_spec || selectedProduct.spec) && (
+                <span className="bg-slate-100/90 text-slate-700 text-[11px] font-semibold font-mono px-2.5 py-1 rounded-md border border-slate-200/80 shadow-3xs inline-flex items-center gap-1">
+                  <span className="text-[10px]">📐</span>
+                  <span>{selectedProduct.inventory_spec || selectedProduct.spec}</span>
+                  {(selectedProduct.inventory_unit || selectedProduct.unit) && (
+                    <span className="text-[10px] text-slate-400 font-bold">({selectedProduct.inventory_unit || selectedProduct.unit})</span>
+                  )}
                 </span>
               )}
             </div>

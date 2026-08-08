@@ -132,9 +132,23 @@ export function ProductList({
                       {product.menu_category}
                     </span>
                   )}
-                  {product.valid_item_code && (
-                    <span className="bg-indigo-50 text-indigo-700 text-[9px] font-black px-2.5 py-0.5 rounded-md border border-indigo-100/60 font-mono">
-                      유효품목코드: {product.valid_item_code}
+
+                  {/* 🏷️ 품목코드 (바코드) 뱃지 */}
+                  {(product.inventory_barcode || (product.itemCode && product.itemCode !== 'INV-UNASSIGNED') || product.valid_item_code) && (
+                    <span className="bg-purple-50 text-purple-700 text-[10px] font-bold font-mono px-2 py-0.5 rounded-md border border-purple-200/80 shadow-3xs inline-flex items-center gap-1">
+                      <span className="text-[9px]">🏷️</span>
+                      <span>{product.inventory_barcode || product.itemCode || product.valid_item_code}</span>
+                    </span>
+                  )}
+
+                  {/* 📐 규격 정보 뱃지 */}
+                  {(product.inventory_spec || product.spec) && (
+                    <span className="bg-slate-100/90 text-slate-700 text-[10px] font-semibold font-mono px-2 py-0.5 rounded-md border border-slate-200/80 shadow-3xs inline-flex items-center gap-1">
+                      <span className="text-[9px]">📐</span>
+                      <span>{product.inventory_spec || product.spec}</span>
+                      {(product.inventory_unit || product.unit) && (
+                        <span className="text-[9px] text-slate-400 font-bold">({product.inventory_unit || product.unit})</span>
+                      )}
                     </span>
                   )}
                 </div>

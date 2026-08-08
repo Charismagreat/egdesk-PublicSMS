@@ -210,14 +210,16 @@ export function useStorefront() {
 
   const fetchProducts = async () => {
     try {
-      const res = await apiFetch('/api/products');
+      const res = await apiFetch('/api/products?status=ACTIVE&limit=10000');
       const json = await res.json();
       if (json.success) {
-        const storeProducts = json.products.filter((p: any) => p.category === '스토어용' || !p.category || p.category === '일반상품');
+        const storeProducts = (json.products || []).filter((p: any) => 
+          !p.category || p.category === '스토어용' || p.category === '일반상품' || p.category === '미분류'
+        );
         setProducts(storeProducts);
       }
     } catch (e) {
-      console.error(e);
+      console.error('Failed to fetch store products:', e);
     } finally {
       setLoading(false);
     }
