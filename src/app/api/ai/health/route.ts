@@ -1,49 +1,52 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable } from '../../../../../egdesk-helpers';
+import { fetchGeminiWithFallback } from '@/lib/gemini-fallback';
 
 /**
  * GET /api/ai/health
- * 현재 AI API (Gemini / AI 커넥터) 의 실시간 통신 상태 및 쿼터 한도를 즉시 진단합니다.
+ * 사내 공통 AI 통신 엔진(fetchGeminiWithFallback)을 사용하여 실시간 구글 Gemini API 핑 및 쿼터 한도를 정밀 진단합니다.
  */
 export async function GET() {
   const startTime = Date.now();
   try {
-    // 1. 이지데스크 AI 시스템 설정 DB 조회
     const configRes = await queryTable('egdesk_config', { limit: 10 }).catch(() => ({ rows: [] }));
     const configs = configRes.rows || [];
     const aiModelRow = configs.find((r: any) => r.config_key === 'AI_MODEL' || r.key === 'AI_MODEL');
     const activeModel = aiModelRow?.config_value || aiModelRow?.val || 'Gemini 2.0 Flash (Default)';
 
-    // 2. 실시간 AI API 핑(Ping) 통신 시도 (테스트 헬스체크 쿼리)
     let status = 'HEALTHY';
     let message = '✅ 모든 AI API (Gemini / 비전 OCR / RAG 지식 엔진) 가 100% 정상 작동 중입니다.';
     let isError = false;
 
+    // 💡 실제 사내 공통 AI 통신 헬퍼(fetchGeminiWithFallback)를 직접 호출하여 구글 Gemini 핑 테스트 수행
     try {
-      // 💡 실제 GoogleGenerativeAI 백엔드 AI 엔진(ai-help) 핑 시도
-      const testRes = await fetch('http://localhost:4002/api/ai-help', {
+      const pingUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
+      const pingBody = JSON.stringify({
+        contents: [{ parts: [{ text: 'PING_HEALTH_TEST' }] }]
+      });
+
+      const res = await fetchGeminiWithFallback(pingUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'PING_HEALTH_CHECK_TEST' })
-      }).catch(() => null);
+        body: pingBody
+      });
 
-      if (testRes) {
-        const resText = await testRes.text();
-        if (resText.includes('429') || resText.includes('depleted') || resText.includes('Quota') || resText.includes('prepayment')) {
-          status = 'QUOTA_EXCEEDED';
-          message = '⚠️ AI API 쿼터 한도 초과 발생 (Google Generative AI prepayment credits depleted)';
-          isError = true;
-        }
+      const resText = await res.text();
+      if (resText.includes('429') || resText.includes('depleted') || resText.includes('Quota') || resText.includes('prepayment')) {
+        status = 'QUOTA_EXCEEDED';
+        message = '⚠️ AI API 쿼터 한도 초과 발생 (Google Generative AI prepayment credits depleted)';
+        isError = true;
       }
     } catch (e: any) {
-      if (e.message?.includes('429') || e.message?.includes('depleted') || e.message?.includes('Quota')) {
+      const errMsg = e.message || String(e);
+      if (errMsg.includes('429') || errMsg.includes('depleted') || errMsg.includes('Quota') || errMsg.includes('prepayment')) {
         status = 'QUOTA_EXCEEDED';
-        message = '⚠️ AI API 쿼터 한도 초과 발생 (자정 배치 자동 이관 모드 구동 중)';
+        message = '⚠️ AI API 쿼터 한도 초과 발생 (Google Generative AI prepayment credits depleted)';
         isError = true;
       } else {
         status = 'NETWORK_ERROR';
-        message = '⚠️ AI API 네트워크 통신 일시 지연: ' + e.message;
+        message = '⚠️ AI API 네트워크 통신 일시 지연: ' + errMsg;
         isError = true;
       }
     }
@@ -58,9 +61,9 @@ export async function GET() {
       message,
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
       checked_endpoints: [
+        { name: "Google Gemini AI Engine (fetchGeminiWithFallback)", status: isError ? "DEGRADED (429 Quota Exceeded)" : "ONLINE" },
         { name: "Gemini Vision OCR Engine", status: isError ? "DEGRADED" : "ONLINE" },
-        { name: "EasyBot RAG Assistant", status: isError ? "DEGRADED" : "ONLINE" },
-        { name: "Smart File Summarizer", status: isError ? "DEGRADED" : "ONLINE" }
+        { name: "EasyBot RAG Assistant", status: isError ? "DEGRADED" : "ONLINE" }
       ]
     });
   } catch (error: any) {
