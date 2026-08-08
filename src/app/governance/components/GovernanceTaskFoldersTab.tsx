@@ -158,12 +158,32 @@ export default function GovernanceTaskFoldersTab({
                     <div className="p-2 rounded-xl bg-indigo-100/60 text-indigo-700 shrink-0">
                       <Paperclip className="w-4 h-4" />
                     </div>
-                    <div className="min-w-0">
-                      <span className="text-xs font-bold text-slate-800 block truncate max-w-[280px]">
-                        {file.content_text || file.file_name || `첨부파일 #${file.id}`}
-                      </span>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">
-                        등록일시: {file.created_at || '최근'}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs font-bold text-slate-800 truncate max-w-[280px]">
+                          {file.content_text || file.file_name || `첨부파일 #${file.id}`}
+                        </span>
+                        
+                        {/* 💡 AI 판독 상태 뱃지 시각화 */}
+                        {file.content_text?.includes('한도 초과') || file.ai_analysis?.includes('429') || file.content_text?.includes('자정 배치') ? (
+                          <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-md text-[10px] font-extrabold flex items-center gap-1 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            <span>한도초과 (자정 재시도 대기 ⚠️)</span>
+                          </span>
+                        ) : file.ai_analysis || file.content_text?.includes('파독') || file.content_text?.includes('판독') ? (
+                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-extrabold flex items-center gap-1 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span>AI 판독 완료 🟢</span>
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded-md text-[10px] font-bold flex items-center gap-1 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                            <span>미처리 (자정 배치 대기 🟡)</span>
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-slate-400 block">
+                        등록일시: {file.created_at || '최근'} | 수집자: {file.created_by || '임직원'}
                       </span>
                     </div>
                   </div>
