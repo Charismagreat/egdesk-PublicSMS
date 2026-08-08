@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { queryTable } from '../../../../egdesk-helpers';
+import { queryTable } from '../../../../../egdesk-helpers';
 
 /**
  * GET /api/ai/health
