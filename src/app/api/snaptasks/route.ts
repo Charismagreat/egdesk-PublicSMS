@@ -121,7 +121,7 @@ export async function GET(req: Request) {
 
       let itemsRows: any[] = [];
       try {
-        const itemsRes = await queryTable('crm_snaptask_items', { limit: 10000 });
+        const itemsRes = await queryTable('crm_snaptask_items', { limit: 10000, orderBy: 'id', orderDirection: 'DESC' });
         itemsRows = (itemsRes.rows || []).filter((it: any) => !it.deleted_at);
       } catch (ie) {
         console.error('스냅태스크 아이템 목록 조회 실패:', ie);
@@ -272,11 +272,12 @@ export async function GET(req: Request) {
         });
 
         // 💡 [중복 태스크 1:1 완벽 병합 정제 (De-duplication)]
-        // crm_snaptasks에 수동 등록되었던 취소 태스크와 원본 태스크를 pureTitle 기준으로 1개로 합침
+        // 동일 고유 식별자 키(pureSeed) 기준으로 crm_governance_logs와 crm_snaptasks를 1개로 합침
         const mergedTasksMap = new Map<string, any>();
         tasks.forEach((t: any) => {
-          const pure = getPureTitle(t.title);
-          const key = pure || String(t.id);
+          const pureTitle = getPureTitle(t.title);
+          const pureSeed = String(t.id || t.uuid || '').replace(/^(mobile_req_|REQ-|ST-)/, '');
+          const key = pureSeed || String(t.id);
 
           const isCancelTask = (t.title || '').includes('취소 요청') || t.status === 'PENDING_APPROVAL' || t.has_cancel_request;
 

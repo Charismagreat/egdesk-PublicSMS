@@ -244,8 +244,8 @@ export async function GET(request: Request) {
         const govRes = await queryTable('crm_governance_logs', { limit: 500 });
         const logs = govRes.rows || [];
         
-        // 💡 첨부 파일명 매칭을 위해 crm_snaptask_items 전체 목록 미리 조회
-        const itemsRes = await queryTable('crm_snaptask_items', { limit: 2000 });
+        // 💡 첨부 파일명 매칭을 위해 crm_snaptask_items 전체 목록 미리 조회 (최신순 DESC 정렬)
+        const itemsRes = await queryTable('crm_snaptask_items', { limit: 10000, orderBy: 'id', orderDirection: 'DESC' });
         const itemsRows = itemsRes.rows || [];
 
         // 💡 수입 통관 실물 서류 파일 정보 조회
@@ -314,23 +314,22 @@ export async function GET(request: Request) {
           let matchedFilename = log.matched_filename || log.file_name || '';
           let combinedAiAnalysisText = '';
 
-          const logNum = (log.id || '').replace(/[^0-9]/g, '');
-          const logDocNum = (log.doc_id || '').replace(/[^0-9]/g, '');
-
           const relatedItems = itemsRows.filter((item: any) => {
             if (!item.file_url || item.file_url.trim() === '') return false;
             
-            const itemTaskNum = String(item.task_id || '').replace(/[^0-9]/g, '');
+            // 💡 타임스탬프 연산 전면 제거: 오직 고유 ID(ID/doc_id/task_id) 문자열 1:1 완전 일치 외래키 조인
+            const itemTaskId = String(item.task_id || '').trim();
+            const logId = String(log.id || '').trim();
+            const logDocId = String(log.doc_id || '').trim();
 
-            // 1) task_id 완전 일치 검사
-            if (log.doc_id && String(item.task_id) === String(log.doc_id)) return true;
-            if (log.id && String(item.task_id) === String(log.id)) return true;
+            if (itemTaskId && (itemTaskId === logId || itemTaskId === logDocId)) return true;
             
-            // 2) REQ- vs ST- 접두사 탈락 방지 숫자 원자적 1:1 매칭
-            if (logDocNum && itemTaskNum && logDocNum === itemTaskNum) return true;
-            if (logNum && itemTaskNum && Math.abs(Number(itemTaskNum) - Number(logNum)) <= 5000) return true;
-            
-            return false;
+            // 하위 호환성: REQ- 및 ST- 접두사만 일치하는 동일 고유 키 대조
+            const pureItemKey = itemTaskId.replace(/^(ST-|REQ-|mobile_req_)/, '');
+            const pureLogKey = logId.replace(/^(ST-|REQ-|mobile_req_)/, '');
+            const pureDocKey = logDocId.replace(/^(ST-|REQ-|mobile_req_)/, '');
+
+            return Boolean(pureItemKey && (pureItemKey === pureLogKey || pureItemKey === pureDocKey));
           });
           relatedItems.forEach((item: any) => {
             const fileName = item.content_text ? item.content_text.replace('[상신 첨부] ', '').trim() : `첨부서류_${item.id}`;
@@ -1181,11 +1180,11 @@ export async function POST(request: Request) {
         }
       }
 
-      // 💡 원자적 타임스탬프 1:1 고정 (reqId, docId, taskId)
-      const nowTimestamp = Date.now();
-      const reqId = `mobile_req_${nowTimestamp}`;
-      const docId = `REQ-${nowTimestamp}`;
-      const taskId = `ST-${nowTimestamp}`;
+      // 💡 1:1 명확한 고유 식별자 ID 100% 통일 고정 (reqId, docId, taskId)
+      const uniqueSeed = Date.now();
+      const reqId = `mobile_req_${uniqueSeed}`;
+      const docId = `REQ-${uniqueSeed}`;
+      const taskId = `ST-${uniqueSeed}`;
 
       // 1. 거버넌스 승인 요청 로그 인서트 (상신자: finalOperator)
       await insertRows('crm_governance_logs', [{
