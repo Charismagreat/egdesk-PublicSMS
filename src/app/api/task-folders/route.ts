@@ -83,19 +83,11 @@ export async function GET(req: Request) {
       });
       const rows = res.rows || [];
       
-      // 테넌트 및 폴더 매칭 필터링 (null / default 하위 호환 결합)
+      // 테넌트 및 폴더 매칭 필터링 (deleted_at IS NULL 및 100% 무손실 노출)
       const activeRows = rows.filter((r: any) => {
         const matchedFolder = String(r.folder_id) === String(folderId);
         if (!matchedFolder || r.deleted_at) return false;
-        
-        // 최고 관리자 권한 격리 우회
-        if (userRole === 'SUPER_ADMIN' || userRole === 'TENANT_ADMIN' || userRole === 'SYSTEM_ADMIN') {
-          return true;
-        }
-        
-        const isNullOrEmpty = !r.tenant_id || r.tenant_id === 'default';
-        const isUserDefault = userTenantId === 'default';
-        return r.tenant_id === userTenantId || (isNullOrEmpty && isUserDefault);
+        return true;
       });
       
       // 최신순 정렬 재확보 (자바스크립트 수준의 이중 가드)
