@@ -94,21 +94,33 @@ function DraftRow({
         )}
       </td>
       <td className="p-4">
-        <div className="space-y-1">
-          <div className="font-bold text-slate-800 text-sm">{product.name}</div>
-          
-          {/* 📐 규격 정보 (spec / inventory_spec) 및 단위 표시 */}
-          {(product.spec || product.inventory_spec) && (
-            <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100/90 border border-slate-200/80 px-2 py-0.5 rounded-md shadow-3xs">
-              <span className="text-[10px]">📐</span>
-              <span className="font-mono">{product.spec || product.inventory_spec}</span>
-              {(product.unit || product.inventory_unit) && (
-                <span className="text-[10px] text-slate-400 font-bold">({product.unit || product.inventory_unit})</span>
-              )}
-            </div>
-          )}
+        <div className="space-y-1.5">
+          <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5 flex-wrap">
+            <span>{product.name}</span>
+          </div>
 
-          <p className="text-xs text-slate-450 truncate max-w-[180px]" title={product.description}>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* 🏷️ 품목코드 (inventory_barcode / itemCode) 표시 */}
+            {(product.inventory_barcode || product.itemCode || product.inventory_item_id) && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold font-mono text-purple-700 bg-purple-50 border border-purple-200/80 px-2 py-0.5 rounded-md shadow-3xs">
+                <span className="text-[10px]">🏷️</span>
+                <span>{product.inventory_barcode || product.itemCode || `INV-${product.inventory_item_id}`}</span>
+              </span>
+            )}
+
+            {/* 📐 규격 정보 (spec / inventory_spec) 및 단위 표시 */}
+            {(product.spec || product.inventory_spec) && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100/90 border border-slate-200/80 px-2 py-0.5 rounded-md shadow-3xs">
+                <span className="text-[10px]">📐</span>
+                <span className="font-mono">{product.spec || product.inventory_spec}</span>
+                {(product.unit || product.inventory_unit) && (
+                  <span className="text-[10px] text-slate-400 font-bold">({product.unit || product.inventory_unit})</span>
+                )}
+              </span>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-450 truncate max-w-[220px]" title={product.description}>
             {product.description || '재고관리 설명 없음'}
           </p>
         </div>
@@ -362,19 +374,29 @@ export function ProductTable({
                         ) : (
                           <div className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400 font-bold select-none">No Img</div>
                         )}
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <div className="font-bold text-slate-800 text-sm">{t.name}</div>
 
-                          {/* 📐 규격 정보 (spec / inventory_spec) 표시 */}
-                          {(t.spec || t.inventory_spec) && (
-                            <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100/90 border border-slate-200/80 px-2 py-0.5 rounded-md shadow-3xs">
-                              <span className="text-[10px]">📐</span>
-                              <span className="font-mono">{t.spec || t.inventory_spec}</span>
-                              {(t.unit || t.inventory_unit) && (
-                                <span className="text-[10px] text-slate-400 font-bold">({t.unit || t.inventory_unit})</span>
-                              )}
-                            </div>
-                          )}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {/* 🏷️ 품목코드 (inventory_barcode / itemCode) 표시 */}
+                            {(t.inventory_barcode || t.itemCode || t.inventory_item_id) && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold font-mono text-purple-700 bg-purple-50 border border-purple-200/80 px-2 py-0.5 rounded-md shadow-3xs">
+                                <span className="text-[10px]">🏷️</span>
+                                <span>{t.inventory_barcode || t.itemCode || `INV-${t.inventory_item_id}`}</span>
+                              </span>
+                            )}
+
+                            {/* 📐 규격 정보 (spec / inventory_spec) 표시 */}
+                            {(t.spec || t.inventory_spec) && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100/90 border border-slate-200/80 px-2 py-0.5 rounded-md shadow-3xs">
+                                <span className="text-[10px]">📐</span>
+                                <span className="font-mono">{t.spec || t.inventory_spec}</span>
+                                {(t.unit || t.inventory_unit) && (
+                                  <span className="text-[10px] text-slate-400 font-bold">({t.unit || t.inventory_unit})</span>
+                                )}
+                              </span>
+                            )}
+                          </div>
 
                           <div className="text-xs text-slate-500 flex flex-wrap gap-1">
                             {(() => {

@@ -7,6 +7,7 @@ export interface Product {
   unit?: string;
   inventory_spec?: string;
   inventory_unit?: string;
+  inventory_barcode?: string;
   url: string;
   description: string;
   main_image_url: string;
