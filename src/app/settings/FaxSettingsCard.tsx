@@ -133,9 +133,6 @@ export default function FaxSettingsCard() {
           <div>
             <h3 className="text-[16px] font-bold text-slate-800 flex items-center gap-2">
               팩스(Fax) 발신 설정
-              <span className="text-[10px] font-extrabold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-100">
-                방안 A: 인터넷 팩스 API (SaaS)
-              </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">B2B 거래처로 견적서를 직접 팩스 기기로 발송하기 위한 인터넷 팩스 API 서비스 설정을 제어합니다.</p>
           </div>
