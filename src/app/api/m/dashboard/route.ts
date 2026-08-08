@@ -98,12 +98,25 @@ export async function GET() {
     let todoTasks: any[] = [];
     let doneTasks: any[] = [];
     try {
+      // 모바일 화면에는 AI API 헬스/관제 경보/자율 대행 지침 누락 등의 시스템 관제 카드를 노출하지 않음 (PC 거버넌스 전용)
+      const isSystemAdminCard = (title: string = '') => {
+        if (!title) return false;
+        return (
+          title.includes('이지봇 자율 대행 작동 지침 누락') ||
+          title.includes('AI API 쿼터') ||
+          title.includes('AI API 헬스') ||
+          title.includes('긴급 AI 관제') ||
+          title.includes('작동 지침 누락 경보') ||
+          title.includes('관제 경보')
+        );
+      };
+
       const taskRes = await queryTable('crm_snaptasks', {});
-      const snaptasks = (taskRes.rows || []).filter((t: any) => !t.deleted_at);
+      const snaptasks = (taskRes.rows || []).filter((t: any) => !t.deleted_at && !isSystemAdminCard(t.title));
 
       // 모바일 현장 상신 및 거버넌스 할 일 레코드 병합 (crm_governance_logs)
       const govRes = await queryTable('crm_governance_logs', {}).catch(() => ({ rows: [] }));
-      const govLogs = (govRes.rows || []).filter((g: any) => !g.deleted_at && (g.doc_type === 'mobile_request' || g.doc_type === 'mobile_req'));
+      const govLogs = (govRes.rows || []).filter((g: any) => !g.deleted_at && (g.doc_type === 'mobile_request' || g.doc_type === 'mobile_req') && !isSystemAdminCard(g.doc_title));
 
       const govTasks = govLogs.map((g: any) => ({
         id: g.id || g.doc_id,

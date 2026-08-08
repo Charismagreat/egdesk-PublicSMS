@@ -124,7 +124,18 @@ export default function MobileHubPage() {
           if (contentType && contentType.includes("application/json")) {
             const json = await res.json();
             if (json.success && json.tasks) {
-              setTasks(json.tasks);
+              const filtered = json.tasks.filter((t: any) => {
+                const title = t.title || '';
+                return !(
+                  title.includes('이지봇 자율 대행 작동 지침 누락') ||
+                  title.includes('AI API 쿼터') ||
+                  title.includes('AI API 헬스') ||
+                  title.includes('긴급 AI 관제') ||
+                  title.includes('작동 지침 누락 경보') ||
+                  title.includes('관제 경보')
+                );
+              });
+              setTasks(filtered);
             }
           }
         }
