@@ -66,18 +66,18 @@ export async function GET(req: Request) {
         SELECT COUNT(DISTINCT p.id) as count 
         FROM products p 
         LEFT JOIN inventory_items inv ON (p.inventory_item_id IS NOT NULL AND (p.inventory_item_id = inv.id OR CAST(p.inventory_item_id AS TEXT) = CAST(inv.id AS TEXT)))
-        LEFT JOIN inventory_items inv2 ON (p.name IS NOT NULL AND p.name != '' AND p.name = inv2.name AND inv2.spec IS NOT NULL AND inv2.spec != '')
+        LEFT JOIN inventory_items inv2 ON (p.inventory_item_id IS NULL AND p.name IS NOT NULL AND p.name != '' AND p.name = inv2.name AND inv2.spec IS NOT NULL AND inv2.spec != '')
         WHERE p.tenant_id = '${tenantId}' AND p.status = '${status}'
       `;
       let dataQuery = `
         SELECT p.*, 
-               COALESCE(inv.spec, inv2.spec) as inventory_spec, 
-               COALESCE(inv.unitValue, inv2.unitValue) as inventory_unit,
-               COALESCE(inv.barcode, inv2.barcode) as inventory_barcode,
-               COALESCE(inv.stock, inv2.stock, 0) as inventory_stock
+               CASE WHEN inv.id IS NOT NULL THEN inv.spec ELSE inv2.spec END as inventory_spec, 
+               CASE WHEN inv.id IS NOT NULL THEN inv.unitValue ELSE inv2.unitValue END as inventory_unit,
+               CASE WHEN inv.id IS NOT NULL THEN inv.barcode ELSE inv2.barcode END as inventory_barcode,
+               CASE WHEN inv.id IS NOT NULL THEN inv.stock ELSE COALESCE(inv2.stock, 0) END as inventory_stock
         FROM products p
         LEFT JOIN inventory_items inv ON (p.inventory_item_id IS NOT NULL AND (p.inventory_item_id = inv.id OR CAST(p.inventory_item_id AS TEXT) = CAST(inv.id AS TEXT)))
-        LEFT JOIN inventory_items inv2 ON (p.name IS NOT NULL AND p.name != '' AND p.name = inv2.name AND inv2.spec IS NOT NULL AND inv2.spec != '')
+        LEFT JOIN inventory_items inv2 ON (p.inventory_item_id IS NULL AND p.name IS NOT NULL AND p.name != '' AND p.name = inv2.name AND inv2.spec IS NOT NULL AND inv2.spec != '')
         WHERE p.tenant_id = '${tenantId}' AND p.status = '${status}'
       `;
 
