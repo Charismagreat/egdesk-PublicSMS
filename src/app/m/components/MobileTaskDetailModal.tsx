@@ -20,20 +20,45 @@ export default function MobileTaskDetailModal({
   const isDone = task.status === "DONE";
   const memoText = task.memo || task.note || task.customer_memo || task.reason || task.details || task.data?.memo || task.data?.note || task.data?.reason;
 
-  // 📷 사진 첨부파일 통집 (photos / images / data.photos 등)
-  const photosList: any[] = [
+  // 📷 사진 첨부파일 원본 모음
+  const rawPhotosList: any[] = [
     ...(Array.isArray(task.photos) ? task.photos : []),
     ...(Array.isArray(task.data?.photos) ? task.data.photos : []),
     ...(Array.isArray(task.images) ? task.images : []),
   ];
 
-  // 📂 서류/기타 파일 첨부통집 (attachments / files / data.files / file_url 등)
-  const filesList: any[] = [
+  // 📂 서류/기타 파일 첨부 원본 모음
+  const rawFilesList: any[] = [
     ...(Array.isArray(task.attachments) ? task.attachments : []),
     ...(Array.isArray(task.files) ? task.files : []),
     ...(Array.isArray(task.data?.files) ? task.data.files : []),
     ...(task.file_url ? [{ name: task.file_name || '첨부 서류 파일', url: task.file_url }] : [])
   ];
+
+  // ⚡ 새로고침 후에도 attachments 속성 내의 이미지/파일 구분을 정밀 분류
+  const photosList: any[] = [...rawPhotosList];
+  const filesList: any[] = [];
+
+  rawFilesList.forEach((fileItem: any) => {
+    const fUrl = fileItem.url || fileItem.preview || fileItem.base64 || '';
+    const fName = fileItem.name || fileItem.filename || '';
+    const fType = fileItem.fileType || fileItem.type || '';
+
+    const isImage = 
+      fType === 'IMAGE' || 
+      fType?.startsWith('image/') || 
+      fName?.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i) || 
+      fUrl?.match(/\.(jpg|jpeg|png|gif|webp|heic)/i) ||
+      fUrl?.startsWith('data:image/');
+
+    if (isImage) {
+      if (!photosList.some(p => (p.url || p.preview || p.name) === (fUrl || fName))) {
+        photosList.push(fileItem);
+      }
+    } else {
+      filesList.push(fileItem);
+    }
+  });
 
   const getStatusBadge = () => {
     if (isPendingCancel) {
