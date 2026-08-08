@@ -1,113 +1,129 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { queryTable, aggregateTable } from '@/../egdesk-helpers';
+import { executeSQL } from '@/../egdesk-helpers';
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const range = searchParams.get('range') || 'today'; // 'today', 'week', 'month', 'all'
-
-    // 1. 기간 필터 설정 (Filters 객체화)
-    const filters: Record<string, string> = {};
-    const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000);
-    const todayStr = nowKST.toISOString().split('T')[0];
-    
-    if (range === 'today') {
-      filters['date(created_at)'] = todayStr;
-    } else if (range === 'week') {
-      const oneWeekAgo = new Date(nowKST.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const weekStr = oneWeekAgo.toISOString().split('T')[0];
-      filters['date(created_at) >='] = weekStr;
-    } else if (range === 'month') {
-      const oneMonthAgo = new Date(nowKST.getTime() - 30 * 24 * 60 * 60 * 1000);
-      const monthStr = oneMonthAgo.toISOString().split('T')[0];
-      filters['date(created_at) >='] = monthStr;
-    }
-
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-    const limit = Math.max(1, parseInt(searchParams.get('limit') || '20', 10));
+    const limit = Math.max(1, parseInt(searchParams.get('limit') || '15', 10));
     const offset = (page - 1) * limit;
 
-    // 2. 누적 소비량 통계 집계 실행 (aggregateTable API 사용)
-    const [countRes, promptRes, completionRes, totalRes, totalLogsRes] = await Promise.all([
-      aggregateTable('ai_token_usage_logs', 'id', 'COUNT', { filters }),
-      aggregateTable('ai_token_usage_logs', 'prompt_tokens', 'SUM', { filters }),
-      aggregateTable('ai_token_usage_logs', 'completion_tokens', 'SUM', { filters }),
-      aggregateTable('ai_token_usage_logs', 'total_tokens', 'SUM', { filters }),
-      aggregateTable('ai_token_usage_logs', 'id', 'COUNT'), // 감사록 총 데이터 수 (필터 없음)
-    ]);
+    // 한국 표준시 (KST, UTC+9) 기준 날짜 계산
+    const now = new Date();
+    const kstOffset = 9 * 60 * 60 * 1000;
+    const kstNow = new Date(now.getTime() + kstOffset);
 
+    // 오늘 날짜 YYYY-MM-DD
+    const todayStr = kstNow.toISOString().split('T')[0];
+
+    let whereClause = "";
+    const params: any[] = [];
+
+    if (range === 'today') {
+      whereClause = " WHERE created_at >= ? ";
+      params.push(`${todayStr} 00:00:00`);
+    } else if (range === 'week') {
+      const d = new Date(kstNow.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const weekStr = d.toISOString().split('T')[0];
+      whereClause = " WHERE created_at >= ? ";
+      params.push(`${weekStr} 00:00:00`);
+    } else if (range === 'month') {
+      const d = new Date(kstNow.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const monthStr = d.toISOString().split('T')[0];
+      whereClause = " WHERE created_at >= ? ";
+      params.push(`${monthStr} 00:00:00`);
+    }
+    // range === 'all' 인 경우 WHERE 절 생략
+
+    // 1. 기간별 요약 통계 SQL
+    const summarySql = `
+      SELECT 
+        COUNT(*) as api_calls,
+        COALESCE(SUM(prompt_tokens), 0) as total_prompt_tokens,
+        COALESCE(SUM(completion_tokens), 0) as total_completion_tokens,
+        COALESCE(SUM(total_tokens), 0) as total_tokens
+      FROM ai_token_usage_logs
+      ${whereClause}
+    `;
+
+    const summaryRes = await executeSQL(summarySql, params);
+    const summaryRow = summaryRes.rows?.[0] || {};
     const summary = {
-      api_calls: Number(countRes?.value || 0),
-      total_prompt_tokens: Number(promptRes?.value || 0),
-      total_completion_tokens: Number(completionRes?.value || 0),
-      total_tokens: Number(totalRes?.value || 0)
+      api_calls: Number(summaryRow.api_calls || 0),
+      total_prompt_tokens: Number(summaryRow.total_prompt_tokens || 0),
+      total_completion_tokens: Number(summaryRow.total_completion_tokens || 0),
+      total_tokens: Number(summaryRow.total_tokens || 0)
     };
 
-    const totalLogs = Number(totalLogsRes?.value || 0);
+    // 2. 사용 목적(Purpose)별 통계 SQL (기간 필터 적용)
+    const purposeSql = `
+      SELECT 
+        COALESCE(purpose, 'unknown') as purpose,
+        COUNT(*) as calls,
+        COALESCE(SUM(total_tokens), 0) as tokens
+      FROM ai_token_usage_logs
+      ${whereClause}
+      GROUP BY purpose
+      ORDER BY tokens DESC
+    `;
+    const purposeRes = await executeSQL(purposeSql, params);
+    const purposes = (purposeRes.rows || []).map((r: any) => ({
+      purpose: r.purpose,
+      calls: Number(r.calls || 0),
+      tokens: Number(r.tokens || 0)
+    }));
 
-    // 3. 사용 목적(Purpose)별 통계 집계 실행 (queryTable에서 limit 적용 후 가공 처리)
-    // GROUP BY 대신 전체 데이터를 안전하게 뽑아 JS단에서 Reduce 집계 처리하여 완벽하고 확실히 반환합니다.
-    const allLogsResult = await queryTable('ai_token_usage_logs', { filters, limit: 1000 });
-    const allLogs = allLogsResult?.rows || [];
+    // 3. 모델(Model)별 통계 SQL (기간 필터 적용)
+    const modelSql = `
+      SELECT 
+        COALESCE(model, 'unknown') as model,
+        COUNT(*) as calls,
+        COALESCE(SUM(total_tokens), 0) as tokens
+      FROM ai_token_usage_logs
+      ${whereClause}
+      GROUP BY model
+      ORDER BY tokens DESC
+    `;
+    const modelRes = await executeSQL(modelSql, params);
+    const models = (modelRes.rows || []).map((r: any) => ({
+      model: r.model,
+      calls: Number(r.calls || 0),
+      tokens: Number(r.tokens || 0)
+    }));
 
-    const purposeMap: Record<string, { calls: number; tokens: number }> = {};
-    const modelMap: Record<string, { calls: number; tokens: number }> = {};
+    // 4. 기간별 감사록 로그 전체 건수 및 최근 페이지네이션 로그 SQL
+    const totalCountSql = `SELECT COUNT(*) as cnt FROM ai_token_usage_logs ${whereClause}`;
+    const countRes = await executeSQL(totalCountSql, params);
+    const totalLogs = Number(countRes.rows?.[0]?.cnt || 0);
 
-    allLogs.forEach((log: any) => {
-      const purpose = log.purpose || 'unknown';
-      const model = log.model || 'unknown';
-      const tokens = Number(log.total_tokens || 0);
-
-      // Purpose 집계
-      if (!purposeMap[purpose]) purposeMap[purpose] = { calls: 0, tokens: 0 };
-      purposeMap[purpose].calls += 1;
-      purposeMap[purpose].tokens += tokens;
-
-      // Model 집계
-      if (!modelMap[model]) modelMap[model] = { calls: 0, tokens: 0 };
-      modelMap[model].calls += 1;
-      modelMap[model].tokens += tokens;
-    });
-
-    const purposeResult = Object.entries(purposeMap).map(([purpose, stat]) => ({
-      purpose,
-      calls: stat.calls,
-      tokens: stat.tokens
-    })).sort((a, b) => b.tokens - a.tokens);
-
-    const modelResult = Object.entries(modelMap).map(([model, stat]) => ({
-      model,
-      calls: stat.calls,
-      tokens: stat.tokens
-    })).sort((a, b) => b.tokens - a.tokens);
-
-    // 5. 최근 토큰 트랜잭션 페이지네이션 조회
-    const recentLogsResult = await queryTable('ai_token_usage_logs', {
-      orderBy: 'created_at',
-      orderDirection: 'DESC',
-      limit,
-      offset
-    });
-
-    const logsResult = recentLogsResult?.rows || [];
+    const logsSql = `
+      SELECT id, model, purpose, prompt_tokens, completion_tokens, total_tokens, user_name, menu_path, created_at
+      FROM ai_token_usage_logs
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+    const logsRes = await executeSQL(logsSql, [...params, limit, offset]);
+    const recentLogs = (logsRes.rows || []).map((l: any) => ({
+      id: String(l.id),
+      model: l.model,
+      purpose: l.purpose,
+      prompt_tokens: Number(l.prompt_tokens || 0),
+      completion_tokens: Number(l.completion_tokens || 0),
+      total_tokens: Number(l.total_tokens || 0),
+      user_name: l.user_name || '시스템',
+      menu_path: l.menu_path || '백그라운드',
+      created_at: l.created_at
+    }));
 
     return NextResponse.json({
       success: true,
       summary,
-      purposes: purposeResult,
-      models: modelResult,
-      recentLogs: logsResult.map((l: any) => ({
-        id: l.id,
-        model: l.model,
-        purpose: l.purpose,
-        prompt_tokens: l.prompt_tokens,
-        completion_tokens: l.completion_tokens,
-        total_tokens: l.total_tokens,
-        user_name: l.user_name || '시스템',
-        menu_path: l.menu_path || '백그라운드',
-        created_at: l.created_at
-      })),
+      purposes,
+      models,
+      recentLogs,
       pagination: {
         total: totalLogs,
         page,

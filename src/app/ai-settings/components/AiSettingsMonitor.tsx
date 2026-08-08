@@ -207,23 +207,27 @@ export function AiSettingsMonitor({
                   <p className="text-xs text-slate-400 py-6 text-center font-medium">소모 이력이 존재하지 않습니다.</p>
                 ) : (
                   <div className="space-y-3.5">
-                    {purposes.map(p => {
-                      const pct = summary.total_tokens > 0 ? (p.tokens / summary.total_tokens) * 100 : 0;
-                      return (
-                        <div key={p.purpose} className="space-y-1">
-                          <div className="flex justify-between text-xs font-semibold text-slate-750">
-                            <span className="truncate max-w-[180px]">{getPurposeLabel(p.purpose)}</span>
-                            <span className="shrink-0 flex items-center gap-1.5 font-mono">
-                              <span>{p.tokens.toLocaleString()} t ({pct.toFixed(1)}%)</span>
-                            </span>
+                    {(() => {
+                      const maxPurposeTokens = Math.max(...purposes.map(p => p.tokens), 1);
+                      return purposes.map(p => {
+                        const pct = summary.total_tokens > 0 ? (p.tokens / summary.total_tokens) * 100 : 0;
+                        const barWidth = Math.max((p.tokens / maxPurposeTokens) * 100, 1.5);
+                        return (
+                          <div key={p.purpose} className="space-y-1">
+                            <div className="flex justify-between text-xs font-semibold text-slate-750">
+                              <span className="truncate max-w-[180px]">{getPurposeLabel(p.purpose)}</span>
+                              <span className="shrink-0 flex items-center gap-1.5 font-mono">
+                                <span>{p.tokens.toLocaleString()} t ({pct.toFixed(1)}%)</span>
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-200/60 h-2.5 rounded-full overflow-hidden">
+                              <div className="bg-indigo-550 h-full rounded-full transition-all duration-500" style={{ width: `${barWidth}%` }}></div>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-semibold">{p.calls}회 호출됨</p>
                           </div>
-                          <div className="w-full bg-slate-200/60 h-2.5 rounded-full overflow-hidden">
-                            <div className="bg-indigo-550 h-full rounded-full transition-all duration-500" style={{ width: `${pct}%` }}></div>
-                          </div>
-                          <p className="text-[10px] text-slate-400 font-semibold">{p.calls}회 호출됨</p>
-                        </div>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
                   </div>
                 )}
               </div>
@@ -238,23 +242,27 @@ export function AiSettingsMonitor({
                   <p className="text-xs text-slate-400 py-6 text-center font-medium">소모 이력이 존재하지 않습니다.</p>
                 ) : (
                   <div className="space-y-3.5">
-                    {models.map(m => {
-                      const pct = summary.total_tokens > 0 ? (m.tokens / summary.total_tokens) * 100 : 0;
-                      return (
-                        <div key={m.model} className="space-y-1">
-                          <div className="flex justify-between text-xs font-bold text-slate-750">
-                            <span className="font-mono text-indigo-950 truncate max-w-[180px]">{m.model}</span>
-                            <span className="shrink-0 flex items-center gap-1.5 font-mono">
-                              <span>{m.tokens.toLocaleString()} t ({pct.toFixed(1)}%)</span>
-                            </span>
+                    {(() => {
+                      const maxModelTokens = Math.max(...models.map(m => m.tokens), 1);
+                      return models.map(m => {
+                        const pct = summary.total_tokens > 0 ? (m.tokens / summary.total_tokens) * 100 : 0;
+                        const barWidth = Math.max((m.tokens / maxModelTokens) * 100, 1.5);
+                        return (
+                          <div key={m.model} className="space-y-1">
+                            <div className="flex justify-between text-xs font-bold text-slate-750">
+                              <span className="font-mono text-indigo-950 truncate max-w-[180px]">{m.model}</span>
+                              <span className="shrink-0 flex items-center gap-1.5 font-mono">
+                                <span>{m.tokens.toLocaleString()} t ({pct.toFixed(1)}%)</span>
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-200/60 h-2.5 rounded-full overflow-hidden">
+                              <div className="bg-emerald-550 h-full rounded-full transition-all duration-500" style={{ width: `${barWidth}%` }}></div>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-semibold">{m.calls}회 호출됨</p>
                           </div>
-                          <div className="w-full bg-slate-200/60 h-2.5 rounded-full overflow-hidden">
-                            <div className="bg-emerald-550 h-full rounded-full transition-all duration-500" style={{ width: `${pct}%` }}></div>
-                          </div>
-                          <p className="text-[10px] text-slate-400 font-semibold">{m.calls}회 호출됨</p>
-                        </div>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
                   </div>
                 )}
               </div>
