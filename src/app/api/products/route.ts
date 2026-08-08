@@ -66,23 +66,21 @@ export async function GET(req: Request) {
         SELECT COUNT(DISTINCT p.id) as count 
         FROM products p 
         LEFT JOIN inventory_items inv ON (p.inventory_item_id IS NOT NULL AND (p.inventory_item_id = inv.id OR CAST(p.inventory_item_id AS TEXT) = CAST(inv.id AS TEXT)))
-        LEFT JOIN inventory_items inv2 ON (p.name IS NOT NULL AND p.name != '' AND p.name = inv2.name AND inv2.spec IS NOT NULL AND inv2.spec != '')
         WHERE p.tenant_id = '${tenantId}' AND p.status = '${status}'
       `;
       let dataQuery = `
         SELECT p.*, 
-               COALESCE(NULLIF(inv.spec, ''), inv2.spec) as inventory_spec, 
-               COALESCE(NULLIF(inv.unitValue, ''), inv2.unitValue) as inventory_unit,
-               COALESCE(NULLIF(inv.barcode, ''), inv2.barcode) as inventory_barcode,
-               COALESCE(inv.stock, inv2.stock, 0) as inventory_stock
+               inv.spec as inventory_spec, 
+               inv.unitValue as inventory_unit,
+               inv.barcode as inventory_barcode,
+               COALESCE(inv.stock, 0) as inventory_stock
         FROM products p
         LEFT JOIN inventory_items inv ON (p.inventory_item_id IS NOT NULL AND (p.inventory_item_id = inv.id OR CAST(p.inventory_item_id AS TEXT) = CAST(inv.id AS TEXT)))
-        LEFT JOIN inventory_items inv2 ON (p.name IS NOT NULL AND p.name != '' AND p.name = inv2.name AND inv2.spec IS NOT NULL AND inv2.spec != '')
         WHERE p.tenant_id = '${tenantId}' AND p.status = '${status}'
       `;
 
       if (search) {
-        const searchCond = ` AND (p.name LIKE '%${search}%' OR p.category LIKE '%${search}%' OR p.brand LIKE '%${search}%' OR p.description LIKE '%${search}%' OR inv.spec LIKE '%${search}%' OR inv2.spec LIKE '%${search}%')`;
+        const searchCond = ` AND (p.name LIKE '%${search}%' OR p.category LIKE '%${search}%' OR p.brand LIKE '%${search}%' OR p.description LIKE '%${search}%' OR inv.spec LIKE '%${search}%')`;
         countQuery += searchCond;
         dataQuery += searchCond;
       }
