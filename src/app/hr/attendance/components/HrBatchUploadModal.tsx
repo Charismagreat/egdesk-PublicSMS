@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
+import * as XLSX from "xlsx";
+
 interface HrBatchUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -99,7 +101,7 @@ export default function HrBatchUploadModal({
     document.body.removeChild(link);
   };
 
-  // 2. CSV/엑셀 파일 읽기 및 판독
+  // 2. CSV/엑셀 파일 읽기 및 판독 (XLSX 적용)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -109,46 +111,105 @@ export default function HrBatchUploadModal({
 
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      if (!text) return;
+      try {
+        const buffer = evt.target?.result as ArrayBuffer;
+        if (!buffer) return;
 
-      const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
-      if (lines.length <= 1) {
-        setStatusMsg({ type: 'error', text: '파일에 HR 인사 데이터 행이 존재하지 않습니다.' });
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+
+        if (!sheet) {
+          setStatusMsg({ type: 'error', text: '엑셀 파일의 시트를 읽을 수 없습니다.' });
+          setParsedRows([]);
+          return;
+        }
+
+        const jsonObjects = XLSX.utils.sheet_to_json(sheet, { defval: "" }) as Record<string, any>[];
+        const rowsArr = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[][];
+
+        if (jsonObjects.length === 0 && (!rowsArr || rowsArr.length < 2)) {
+          setStatusMsg({ type: 'error', text: '파일에 HR 인사 데이터 행이 존재하지 않습니다.' });
+          setParsedRows([]);
+          return;
+        }
+
+        const rows: any[] = [];
+
+        if (jsonObjects.length > 0) {
+          jsonObjects.forEach((rowObj, i) => {
+            const findVal = (keys: string[], defaultIdx: number) => {
+              for (const key of Object.keys(rowObj)) {
+                const cleanKey = key.replace(/\s+/g, "").toLowerCase();
+                if (keys.some(k => cleanKey.includes(k.toLowerCase()))) {
+                  const val = rowObj[key];
+                  return val !== undefined && val !== null ? String(val).trim() : "";
+                }
+              }
+              if (rowsArr[i + 1] && rowsArr[i + 1][defaultIdx] !== undefined) {
+                return String(rowsArr[i + 1][defaultIdx]).trim();
+              }
+              return "";
+            };
+
+            const name = findVal(["성명", "이름"], 0);
+            if (!name) return;
+
+            rows.push({
+              name,
+              username: findVal(["아이디", "사번"], 1) || `emp_${Date.now()}_${i + 1}`,
+              email: findVal(["이메일"], 2),
+              phone: findVal(["전화번호", "연락처"], 3) || '010-0000-0000',
+              department: findVal(["부서"], 4) || '경영지원팀',
+              role: findVal(["직급", "권한"], 5) || '일반직원',
+              hireDate: findVal(["입사일"], 6) || new Date().toISOString().split('T')[0],
+              hourlyWage: findVal(["시급"], 7) ? Number(findVal(["시급"], 7)) : 10030,
+              weeklyHours: findVal(["주당근무시간", "근무시간"], 8) ? Number(findVal(["주당근무시간", "근무시간"], 8)) : 40,
+              schoolName: findVal(["최종출신학교", "출신학교", "학교"], 9),
+              major: findVal(["전공"], 10),
+              degree: findVal(["학위"], 11) || '학사',
+              graduationDate: findVal(["졸업일"], 12),
+              companyName: findVal(["주요이전경력", "이전경력", "경력"], 13),
+              prevJobTitle: findVal(["이전직급"], 14),
+              leavingReason: findVal(["이직사유"], 15) || '이직'
+            });
+          });
+        } else if (rowsArr.length >= 2) {
+          for (let i = 1; i < rowsArr.length; i++) {
+            const cols = rowsArr[i];
+            if (!cols || cols.length < 1 || !cols[0]) continue;
+
+            rows.push({
+              name: String(cols[0] || '').trim(),
+              username: String(cols[1] || `emp_${Date.now()}_${i}`).trim(),
+              email: String(cols[2] || '').trim(),
+              phone: String(cols[3] || '010-0000-0000').trim(),
+              department: String(cols[4] || '경영지원팀').trim(),
+              role: String(cols[5] || '일반직원').trim(),
+              hireDate: String(cols[6] || new Date().toISOString().split('T')[0]).trim(),
+              hourlyWage: cols[7] ? Number(cols[7]) : 10030,
+              weeklyHours: cols[8] ? Number(cols[8]) : 40,
+              schoolName: String(cols[9] || '').trim(),
+              major: String(cols[10] || '').trim(),
+              degree: String(cols[11] || '학사').trim(),
+              graduationDate: String(cols[12] || '').trim(),
+              companyName: String(cols[13] || '').trim(),
+              prevJobTitle: String(cols[14] || '').trim(),
+              leavingReason: String(cols[15] || '이직').trim()
+            });
+          }
+        }
+
+        setParsedRows(rows);
+        setStatusMsg({ type: 'success', text: `✅ 총 ${rows.length}명의 HR 인사 데이터(기본, 학력, 경력, 시급조건) 판독 완료!` });
+      } catch (err: any) {
+        console.error("Excel parsing error:", err);
+        setStatusMsg({ type: 'error', text: `HR 엑셀 판독 중 오류 발생: ${err.message}` });
         setParsedRows([]);
-        return;
       }
-
-      const rows: any[] = [];
-      for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(/,|\t/).map(c => c.replace(/^["']|["']$/g, '').trim());
-        if (cols.length < 1 || !cols[0]) continue;
-
-        rows.push({
-          name: cols[0],
-          username: cols[1] || `emp_${Date.now()}_${i}`,
-          email: cols[2] || '',
-          phone: cols[3] || '010-0000-0000',
-          department: cols[4] || '경영지원팀',
-          role: cols[5] || '일반직원',
-          hireDate: cols[6] || new Date().toISOString().split('T')[0],
-          hourlyWage: cols[7] ? Number(cols[7]) : 10030,
-          weeklyHours: cols[8] ? Number(cols[8]) : 40,
-          schoolName: cols[9] || '',
-          major: cols[10] || '',
-          degree: cols[11] || '학사',
-          graduationDate: cols[12] || '',
-          companyName: cols[13] || '',
-          prevJobTitle: cols[14] || '',
-          leavingReason: cols[15] || '이직'
-        });
-      }
-
-      setParsedRows(rows);
-      setStatusMsg({ type: 'success', text: `✅ 총 ${rows.length}명의 HR 인사 데이터(기본, 학력, 경력, 시급조건) 판독 완료!` });
     };
 
-    reader.readAsText(file, "UTF-8");
+    reader.readAsArrayBuffer(file);
   };
 
   // 3. 서버에 HR 인사 일괄 등록 전송

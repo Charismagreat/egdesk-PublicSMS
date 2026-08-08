@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
+import * as XLSX from "xlsx";
+
 interface EmployeeBatchUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -64,7 +66,7 @@ export default function EmployeeBatchUploadModal({
     document.body.removeChild(link);
   };
 
-  // 2. 파일 판독 (CSV 및 텍스트 엑셀 포맷 파싱)
+  // 2. 파일 판독 (XLSX 및 CSV 바이너리 파싱 지원)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -74,68 +76,130 @@ export default function EmployeeBatchUploadModal({
 
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      if (!text) return;
+      try {
+        const buffer = evt.target?.result as ArrayBuffer;
+        if (!buffer) return;
 
-      const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
-      if (lines.length <= 1) {
-        setStatusMsg({ type: 'error', text: '파일에 등록할 직원 데이터 행이 존재하지 않습니다.' });
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+
+        if (!sheet) {
+          setStatusMsg({ type: 'error', text: '엑셀 파일의 시트를 읽을 수 없습니다.' });
+          setParsedData([]);
+          return;
+        }
+
+        const jsonObjects = XLSX.utils.sheet_to_json(sheet, { defval: "" }) as Record<string, any>[];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[][];
+
+        if (jsonObjects.length === 0 && (!rows || rows.length < 2)) {
+          setStatusMsg({ type: 'error', text: '파일에 등록할 직원 데이터 행이 존재하지 않습니다.' });
+          setParsedData([]);
+          return;
+        }
+
+        const parsedList: ParsedEmployee[] = [];
+
+        if (jsonObjects.length > 0) {
+          jsonObjects.forEach((rowObj, idx) => {
+            const findVal = (keys: string[], defaultIdx: number) => {
+              for (const key of Object.keys(rowObj)) {
+                const cleanKey = key.replace(/\s+/g, "").toLowerCase();
+                if (keys.some(k => cleanKey.includes(k.toLowerCase()))) {
+                  const val = rowObj[key];
+                  return val !== undefined && val !== null ? String(val).trim() : "";
+                }
+              }
+              if (rows[idx + 1] && rows[idx + 1][defaultIdx] !== undefined) {
+                return String(rows[idx + 1][defaultIdx]).trim();
+              }
+              return "";
+            };
+
+            const empNumber = findVal(["사원번호", "사번", "직원번호"], 0) || `EMP-${100 + idx + 1}`;
+            const name = findVal(["성명", "이름", "직원명"], 1);
+            const username = findVal(["아이디", "계정아이디", "계정"], 2);
+            const password = findVal(["비밀번호", "암호", "패스워드"], 3) || "1234";
+            const rawRole = findVal(["권한등급", "권한", "등급", "직급"], 4) || "일반직원";
+            const department = findVal(["부서", "소속부서", "팀"], 5);
+            const phone = findVal(["전화번호", "휴대폰", "연락처"], 6);
+            const startTime = findVal(["출근시각", "출근시간", "출근"], 7) || "09:00";
+            const endTime = findVal(["퇴근시각", "퇴근시간", "퇴근"], 8) || "18:00";
+
+            let role = 'EMPLOYEE';
+            if (rawRole.includes('최고관리자') || rawRole.toUpperCase() === 'SUPER_ADMIN') role = 'SUPER_ADMIN';
+            else if (rawRole.includes('부운영자') || rawRole.toUpperCase() === 'SUB_OPERATOR') role = 'SUB_OPERATOR';
+
+            let isValid = true;
+            let errorMsg = '';
+            if (!name) { isValid = false; errorMsg = '성명 누락'; }
+            else if (!username) { isValid = false; errorMsg = '아이디 누락'; }
+
+            parsedList.push({
+              employee_number: empNumber,
+              name,
+              username,
+              password,
+              role,
+              department,
+              phone,
+              work_start_time: startTime,
+              work_end_time: endTime,
+              isValid,
+              errorMsg
+            });
+          });
+        } else if (rows.length >= 2) {
+          rows.slice(1).forEach((cols, idx) => {
+            if (!cols || cols.length === 0) return;
+            const empNumber = String(cols[0] || `EMP-${100 + idx + 1}`).trim();
+            const name = String(cols[1] || '').trim();
+            const username = String(cols[2] || '').trim();
+            const password = String(cols[3] || '1234').trim();
+            const rawRole = String(cols[4] || '일반직원').trim();
+            const department = String(cols[5] || '').trim();
+            const phone = String(cols[6] || '').trim();
+            const startTime = String(cols[7] || '09:00').trim();
+            const endTime = String(cols[8] || '18:00').trim();
+
+            let role = 'EMPLOYEE';
+            if (rawRole.includes('최고관리자') || rawRole.toUpperCase() === 'SUPER_ADMIN') role = 'SUPER_ADMIN';
+            else if (rawRole.includes('부운영자') || rawRole.toUpperCase() === 'SUB_OPERATOR') role = 'SUB_OPERATOR';
+
+            let isValid = true;
+            let errorMsg = '';
+            if (!name) { isValid = false; errorMsg = '성명 누락'; }
+            else if (!username) { isValid = false; errorMsg = '아이디 누락'; }
+
+            parsedList.push({
+              employee_number: empNumber,
+              name,
+              username,
+              password,
+              role,
+              department,
+              phone,
+              work_start_time: startTime,
+              work_end_time: endTime,
+              isValid,
+              errorMsg
+            });
+          });
+        }
+
+        setParsedData(parsedList);
+        if (parsedList.length === 0) {
+          setStatusMsg({ type: 'error', text: '올바른 형식의 직원 데이터를 찾을 수 없습니다.' });
+        }
+      } catch (err: any) {
+        console.error("Excel parsing error:", err);
+        setStatusMsg({ type: 'error', text: `엑셀 판독 중 오류 발생: ${err.message}` });
         setParsedData([]);
-        return;
-      }
-
-      // 첫 번째 줄 헤더 무시 후 파싱
-      const rows = lines.slice(1);
-      const parsedList: ParsedEmployee[] = [];
-
-      rows.forEach((row, idx) => {
-        // CSV 파싱 (쉼표 또는 탭 분할)
-        const cols = row.split(/,|\t/).map(c => c.replace(/^["']|["']$/g, '').trim());
-        if (cols.length < 3) return; // 필수 컬럼 부족 시 건너뜀
-
-        const empNumber = cols[0] || `EMP-${100 + idx + 1}`;
-        const name = cols[1] || '';
-        const username = cols[2] || '';
-        const password = cols[3] || '1234';
-        const rawRole = cols[4] || '일반직원';
-        const department = cols[5] || '';
-        const phone = cols[6] || '';
-        const startTime = cols[7] || '09:00';
-        const endTime = cols[8] || '18:00';
-
-        // 권한 등급 변환
-        let role = 'EMPLOYEE';
-        if (rawRole.includes('최고관리자') || rawRole.toUpperCase() === 'SUPER_ADMIN') role = 'SUPER_ADMIN';
-        else if (rawRole.includes('부운영자') || rawRole.toUpperCase() === 'SUB_OPERATOR') role = 'SUB_OPERATOR';
-
-        // 유효성 체크
-        let isValid = true;
-        let errorMsg = '';
-        if (!name) { isValid = false; errorMsg = '성명 누락'; }
-        else if (!username) { isValid = false; errorMsg = '아이디 누락'; }
-
-        parsedList.push({
-          employee_number: empNumber,
-          name,
-          username,
-          password,
-          role,
-          department,
-          phone,
-          work_start_time: startTime,
-          work_end_time: endTime,
-          isValid,
-          errorMsg
-        });
-      });
-
-      setParsedData(parsedList);
-      if (parsedList.length === 0) {
-        setStatusMsg({ type: 'error', text: '올바른 형식의 직원 데이터를 찾을 수 없습니다.' });
       }
     };
 
-    reader.readAsText(file, "UTF-8");
+    reader.readAsArrayBuffer(file);
   };
 
   // 3. 서버에 직원 일괄 등록 전송
