@@ -92,9 +92,9 @@ export async function GET(request: Request) {
           const hasDeletedCol = columns.some((col: any) => col.name === 'deleted_at');
           const hasTenantIdCol = columns.some((col: any) => col.name === 'tenant_id');
           
-          // 개수 셀 때 본인 테넌트 데이터만 필터링
+          // 개수 셀 때 관리자 계정(admin, SYSTEM_ADMIN, SUPER_ADMIN)은 전체 데이터 조회 허용
           const queryFilters: any = {};
-          if (hasTenantIdCol && role !== 'SUPER_ADMIN') {
+          if (hasTenantIdCol && role !== 'SUPER_ADMIN' && role !== 'SYSTEM_ADMIN' && username !== 'admin') {
             queryFilters.tenant_id = tenantId;
           }
 
@@ -204,9 +204,9 @@ export async function GET(request: Request) {
       const hasTenantIdCol = columns.some((col: any) => col.name === 'tenant_id');
       const pkCol = columns.find((col: any) => col.pk === 1 || col.pk === true || col.name === 'id')?.name || 'id';
 
-      // 🛡️ 테넌트 격리 필터 주입
+      // 🛡️ 테넌트 격리 필터 주입 (admin, SYSTEM_ADMIN, SUPER_ADMIN 관리자는 전체 물리 데이터 조회 허용)
       const queryFilters: any = {};
-      if (hasTenantIdCol && role !== 'SUPER_ADMIN') {
+      if (hasTenantIdCol && role !== 'SUPER_ADMIN' && role !== 'SYSTEM_ADMIN' && username !== 'admin') {
         queryFilters.tenant_id = tenantId;
       }
 
