@@ -77,10 +77,14 @@ export default function EmployeeManagementTabContent() {
     loadCurrentUser();
   }, []);
 
+  // 선택된 계정 ID 목록 상태
+  const [selectedIds, setSelectedIds] = useState<any[]>([]);
+
   // 2. 직원 데이터 패칭 함수
   const fetchEmployees = async () => {
     setIsLoading(true);
     setErrorMsg("");
+    setSelectedIds([]); // 목록 새로고침 시 선택 상태 초기화
     try {
       const res = await apiFetch("/api/employees");
       const json = await res.json();
@@ -193,7 +197,7 @@ export default function EmployeeManagementTabContent() {
     }
   };
 
-  // 6. 직원 소프트 삭제 (퇴사 처리)
+  // 6. 직원 단일 소프트 삭제 (퇴사 처리)
   const handleDeleteEmployee = async (emp: any) => {
     if (emp.username === "admin") {
       showToast("기본 어드민 계정은 삭제할 수 없습니다.", "error");
@@ -244,6 +248,62 @@ export default function EmployeeManagementTabContent() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+  // 삭제 가능한 (어드민 / 오너본인 제외) 현재 화면의 직원들
+  const deletableDisplayedEmployees = displayedEmployees.filter(
+    emp => emp.username !== 'admin' && !(currentUser && emp.username === currentUser.username)
+  );
+
+  // 체크박스 선택/해제 로직
+  const handleToggleSelectAll = () => {
+    const deletableIds = deletableDisplayedEmployees.map(e => e.id);
+    const isAllSelected = deletableIds.every(id => selectedIds.includes(id));
+
+    if (isAllSelected) {
+      // 현재 페이지의 삭제 가능 항목 선택 해제
+      setSelectedIds(prev => prev.filter(id => !deletableIds.includes(id)));
+    } else {
+      // 현재 페이지의 삭제 가능 항목 전체 선택
+      const newSelected = Array.from(new Set([...selectedIds, ...deletableIds]));
+      setSelectedIds(newSelected);
+    }
+  };
+
+  const handleToggleSelect = (id: any) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  // 8. 복수 직원 선택 일괄 삭제 (퇴사 처리)
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+
+    const confirmDel = window.confirm(
+      `선택한 총 ${selectedIds.length}명의 직원 계정을 정말로 퇴사(일괄 삭제) 처리하시겠습니까?\n해당 사용자들은 즉시 로그인이 차단되며 명부에서 숨김 처리됩니다.`
+    );
+    if (!confirmDel) return;
+
+    try {
+      const res = await apiFetch(`/api/employees?ids=${selectedIds.join(",")}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast(`✓ 선택한 ${json.count || selectedIds.length}명의 직원이 성공적으로 일괄 퇴사 처리되었습니다.`, "success");
+        setSelectedIds([]);
+        fetchEmployees();
+      } else {
+        showToast(json.error || "일괄 퇴사 처리에 실패했습니다.", "error");
+      }
+    } catch (err) {
+      showToast("서버 통신 오류로 일괄 퇴사 처리를 완료하지 못했습니다.", "error");
+    }
+  };
+
+  const isAllDisplayedSelected = 
+    deletableDisplayedEmployees.length > 0 &&
+    deletableDisplayedEmployees.every(e => selectedIds.includes(e.id));
 
   return (
     <div className="w-full text-slate-800 relative space-y-6">
@@ -303,33 +363,50 @@ export default function EmployeeManagementTabContent() {
           </div>
         </div>
 
-        {/* 🔍 검색 바 및 검색 정보 요약 */}
+        {/* 🔍 검색 바 및 검색 정보 요약 + 일괄 삭제 컨트롤 */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="이름, 아이디, 사원번호 검색..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 focus:border-indigo-500 rounded-xl text-xs outline-none transition-colors"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => {
-                  setSearchQuery("");
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="이름, 아이디, 사원번호 검색..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 border-none bg-transparent hover:text-slate-655 cursor-pointer text-slate-400"
+                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 focus:border-indigo-500 rounded-xl text-xs outline-none transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 border-none bg-transparent hover:text-slate-655 cursor-pointer text-slate-400"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* 복수 선택 일괄 삭제 버튼 */}
+            {selectedIds.length > 0 && (
+              <button
+                onClick={handleBatchDelete}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
               >
-                <X className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>선택된 {selectedIds.length}명 일괄 삭제</span>
               </button>
             )}
           </div>
+
           <div className="text-xs font-semibold text-slate-500 text-left">
+            {selectedIds.length > 0 && (
+              <span className="text-rose-600 font-extrabold mr-3">선택됨: {selectedIds.length}명</span>
+            )}
             검색된 인원: <span className="text-indigo-600 font-bold">{filteredEmployees.length}</span>명 / 매장 총 인원: <span className="text-slate-700 font-bold">{employees.length}</span>명
           </div>
         </div>
@@ -363,6 +440,16 @@ export default function EmployeeManagementTabContent() {
               <table className="w-full border-collapse text-left text-xs">
                 <thead>
                   <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-600 font-black">
+                    <th className="py-3.5 px-4 w-12 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isAllDisplayedSelected}
+                        onChange={handleToggleSelectAll}
+                        disabled={deletableDisplayedEmployees.length === 0}
+                        className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                        title="현재 페이지의 모든 대상 선택/해제"
+                      />
+                    </th>
                     <th className="py-3.5 px-4 w-28">사원번호</th>
                     <th className="py-3.5 px-4">성명</th>
                     <th className="py-3.5 px-4">아이디</th>
@@ -376,9 +463,25 @@ export default function EmployeeManagementTabContent() {
                 <tbody className="divide-y divide-slate-100 text-slate-650">
                   {displayedEmployees.map((emp) => {
                     const isMe = currentUser && emp.username === currentUser.username;
-                    
+                    const isSystemAdmin = emp.username === "admin";
+                    const isDeletable = !isMe && !isSystemAdmin;
+                    const isChecked = selectedIds.includes(emp.id);
+
                     return (
-                      <tr key={emp.id} className="hover:bg-slate-50/40 transition-colors">
+                      <tr 
+                        key={emp.id} 
+                        className={`transition-colors ${isChecked ? "bg-indigo-50/40" : "hover:bg-slate-50/40"}`}
+                      >
+                        <td className="py-3.5 px-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleSelect(emp.id)}
+                            disabled={!isDeletable}
+                            className="w-4 h-4 accent-indigo-600 rounded cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
+                            title={isMe ? "자기 자신은 선택할 수 없습니다." : isSystemAdmin ? "어드민은 선택할 수 없습니다." : "선택"}
+                          />
+                        </td>
                         <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500 font-semibold">
                           {emp.employee_number || "-"}
                         </td>
@@ -426,9 +529,9 @@ export default function EmployeeManagementTabContent() {
                             
                             <button
                               onClick={() => handleDeleteEmployee(emp)}
-                              disabled={isMe || emp.username === "admin"}
+                              disabled={!isDeletable}
                               className={`p-1.5 rounded-xl border-none bg-transparent transition-colors ${
-                                isMe || emp.username === "admin"
+                                !isDeletable
                                   ? "text-slate-300 cursor-not-allowed"
                                   : "text-rose-500 hover:bg-rose-50 hover:text-rose-700 cursor-pointer"
                               }`}

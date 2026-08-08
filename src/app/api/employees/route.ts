@@ -226,7 +226,7 @@ export async function POST(req: Request) {
   }
 }
 
-// ✕ [DELETE] 직원 소프트 삭제 (본인 삭제 시도 차단 가드 포함)
+// ✕ [DELETE] 직원 소프트 삭제 (단일 및 복수 일괄 삭제 지원, 본인 삭제 시도 차단 가드 포함)
 export async function DELETE(req: Request) {
   try {
     const { isAuthorized, name: operatorName, tenantId, username: loggedUsername } = await verifyUserRole();
@@ -235,46 +235,60 @@ export async function DELETE(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
+    let idsParam = searchParams.get('id') || searchParams.get('ids');
 
-    if (!id) {
+    if (!idsParam) {
+      try {
+        const body = await req.json();
+        if (body.ids && Array.isArray(body.ids)) {
+          idsParam = body.ids.join(',');
+        } else if (body.id) {
+          idsParam = String(body.id);
+        }
+      } catch (e) {
+        // Body 없음
+      }
+    }
+
+    if (!idsParam) {
       return NextResponse.json({ success: false, error: '삭제할 대상 ID가 누락되었습니다.' }, { status: 400 });
     }
 
-    // 1. 대상 사용자 유효성 및 테넌트 소속 여부 선 조회
-    const opRes = await queryTable('crm_operators', { filters: { id } });
-    if (!opRes.rows || opRes.rows.length === 0) {
-      return NextResponse.json({ success: false, error: '존재하지 않는 사용자입니다.' }, { status: 404 });
-    }
-    const currentOp = opRes.rows[0];
-
-    // 타 테넌트 직원 무단 삭제 보안 차단
-    if (loggedUsername !== 'admin' && currentOp.tenant_id !== tenantId) {
-      return NextResponse.json({ success: false, error: '삭제 권한이 없는 대상입니다.' }, { status: 403 });
+    const targetIds = idsParam.split(',').map(s => s.trim()).filter(Boolean);
+    if (targetIds.length === 0) {
+      return NextResponse.json({ success: false, error: '삭제할 대상 ID가 올바르지 않습니다.' }, { status: 400 });
     }
 
-    // 2. 기본 최고관리자 admin 삭제 제한 및 본인 스스로 삭제 제한 가드
-    if (currentOp.username === 'admin') {
-      return NextResponse.json({ success: false, error: '기본 시스템 최고관리자 계정은 삭제할 수 없습니다.' }, { status: 400 });
-    }
-    if (currentOp.username === loggedUsername) {
-      return NextResponse.json({ success: false, error: '보안 정책 경고: 자기 자신(매장 오너) 계정은 리스트에서 직접 퇴사 처리할 수 없습니다.' }, { status: 400 });
-    }
-
-    // 3. 소프트 삭제(Soft Delete) 갱신 실행
+    let deletedCount = 0;
     const dateStr = new Date().toISOString();
-    
-    const updateFilters: any = { id: String(id) };
-    if (loggedUsername !== 'admin') {
-      updateFilters.tenant_id = tenantId;
+
+    for (const targetId of targetIds) {
+      // 1. 대상 사용자 유효성 및 테넌트 소속 여부 선 조회
+      const opRes = await queryTable('crm_operators', { filters: { id: targetId } });
+      if (!opRes.rows || opRes.rows.length === 0) continue;
+      const currentOp = opRes.rows[0];
+
+      // 타 테넌트 직원 무단 삭제 보안 차단
+      if (loggedUsername !== 'admin' && currentOp.tenant_id !== tenantId) continue;
+
+      // 2. 기본 최고관리자 admin 삭제 제한 및 본인 스스로 삭제 제한 가드
+      if (currentOp.username === 'admin' || currentOp.username === loggedUsername) continue;
+
+      // 3. 소프트 삭제(Soft Delete) 갱신 실행
+      const updateFilters: any = { id: String(targetId) };
+      if (loggedUsername !== 'admin') {
+        updateFilters.tenant_id = tenantId;
+      }
+
+      await updateRows('crm_operators', {
+        deleted_at: dateStr,
+        deleted_by: operatorName
+      }, { filters: updateFilters });
+
+      deletedCount++;
     }
 
-    await updateRows('crm_operators', {
-      deleted_at: dateStr,
-      deleted_by: operatorName
-    }, { filters: updateFilters });
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, count: deletedCount });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
