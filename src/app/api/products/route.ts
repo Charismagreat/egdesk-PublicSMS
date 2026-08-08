@@ -64,9 +64,13 @@ export async function GET(req: Request) {
     try {
       let countQuery = `SELECT COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
       let dataQuery = `
-        SELECT p.*, i.barcode as inventory_barcode, i.stock as inventory_stock, i.spec as inventory_spec, i.unitValue as inventory_unit 
+        SELECT p.*, 
+               i.barcode as inventory_barcode, 
+               i.stock as inventory_stock, 
+               COALESCE(p.spec, i.spec) as inventory_spec, 
+               COALESCE(p.unit, i.unitValue) as inventory_unit 
         FROM products p
-        LEFT JOIN inventory_items i ON p.inventory_item_id = i.id
+        LEFT JOIN inventory_items i ON (p.inventory_item_id = i.id OR (p.inventory_item_id IS NULL AND p.name = i.name))
         WHERE p.tenant_id = '${tenantId}' AND p.status = '${status}'
       `;
 
@@ -123,13 +127,13 @@ export async function GET(req: Request) {
       
       // 메모리 상에서 inventory_barcode 및 inventory_stock 필드 바인딩 백필
       rows = sliced.map((r: any) => {
-        const matched = invItems.find(i => String(i.id) === String(r.inventory_item_id));
+        const matched = invItems.find(i => String(i.id) === String(r.inventory_item_id) || (r.name && i.name === r.name));
         return {
           ...r,
           inventory_barcode: matched ? matched.barcode : null,
           inventory_stock: matched ? matched.stock : 0,
-          inventory_spec: matched ? matched.spec : null,
-          inventory_unit: matched ? matched.unitValue : null
+          inventory_spec: r.spec || (matched ? matched.spec : null),
+          inventory_unit: r.unit || (matched ? matched.unitValue : null)
         };
       });
     }
