@@ -71,7 +71,7 @@ export async function GET(req: Request) {
     }
 
     if (action === 'items') {
-      const folderId = searchParams.get('folderId');
+      const folderId = searchParams.get('folderId') || searchParams.get('folder_id');
       if (!folderId) {
         return NextResponse.json({ success: false, error: 'folderId가 필요합니다.' }, { status: 400 });
       }
