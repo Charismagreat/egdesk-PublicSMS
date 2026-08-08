@@ -282,17 +282,25 @@ export async function GET(req: Request) {
               ...t,
               title: `[상신] ${pure}`,
               status: isCancelTask ? 'PENDING_APPROVAL' : t.status,
-              has_cancel_request: isCancelTask ? true : t.has_cancel_request
+              has_cancel_request: isCancelTask ? true : t.has_cancel_request,
+              attachments: Array.isArray(t.attachments) ? [...t.attachments] : []
             });
           } else {
-            // 이미 원본이나 구 태스크가 존재하는 경우: 취소 요청 상태 및 최신 데이터 병합
+            // 이미 동일 제목의 태스크가 존재하는 경우: 첨부파일, 취소상태 및 최신 데이터 무손실 누적 합산
             const existing = mergedTasksMap.get(key);
             if (isCancelTask) {
               existing.status = 'PENDING_APPROVAL';
               existing.has_cancel_request = true;
             }
-            if (t.attachments && t.attachments.length > 0 && (!existing.attachments || existing.attachments.length === 0)) {
-              existing.attachments = t.attachments;
+            if (t.attachments && t.attachments.length > 0) {
+              const currentAtts = Array.isArray(existing.attachments) ? existing.attachments : [];
+              const combined = [...currentAtts];
+              t.attachments.forEach((att: any) => {
+                if (!combined.some(c => String(c.id) === String(att.id) || (c.url && att.url && c.url === att.url))) {
+                  combined.push(att);
+                }
+              });
+              existing.attachments = combined;
             }
             if (t.due_date && !existing.due_date) {
               existing.due_date = t.due_date;
