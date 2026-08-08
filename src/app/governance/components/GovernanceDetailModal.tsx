@@ -54,6 +54,51 @@ export default function GovernanceDetailModal({
 
   if (!selectedEvent) return null;
 
+  // 📷 사진 및 서류 첨부 파일 통합 추출
+  const rawPhotos = [
+    ...(Array.isArray(selectedEvent.photos) ? selectedEvent.photos : []),
+    ...(Array.isArray(selectedEvent.data?.photos) ? selectedEvent.data.photos : []),
+    ...(Array.isArray(selectedEvent.images) ? selectedEvent.images : []),
+    ...(Array.isArray(selectedEvent.data?.images) ? selectedEvent.data.images : []),
+  ];
+
+  const rawFiles = [
+    ...(Array.isArray(selectedEvent.attachments) ? selectedEvent.attachments : []),
+    ...(Array.isArray(selectedEvent.data?.attachments) ? selectedEvent.data.attachments : []),
+    ...(Array.isArray(selectedEvent.files) ? selectedEvent.files : []),
+    ...(Array.isArray(selectedEvent.data?.files) ? selectedEvent.data.files : []),
+    ...(selectedEvent.file_url || selectedEvent.data?.file_url ? [{ 
+      name: selectedEvent.data?.matched_filename || selectedEvent.matched_filename || '상신 첨부 서류 파일', 
+      url: selectedEvent.file_url || selectedEvent.data?.file_url 
+    }] : [])
+  ];
+
+  const modalPhotos: any[] = [...rawPhotos];
+  const modalFiles: any[] = [];
+
+  rawFiles.forEach((fItem: any) => {
+    const fUrl = fItem.url || fItem.preview || fItem.base64 || '';
+    const fName = fItem.name || fItem.filename || '';
+    const fType = fItem.fileType || fItem.type || '';
+
+    const isImg = 
+      fType === 'IMAGE' || 
+      fType?.startsWith('image/') || 
+      fName?.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i) || 
+      fUrl?.match(/\.(jpg|jpeg|png|gif|webp|heic)/i) ||
+      fUrl?.startsWith('data:image/');
+
+    if (isImg) {
+      if (!modalPhotos.some(p => (p.url || p.preview || p.name) === (fUrl || fName))) {
+        modalPhotos.push(fItem);
+      }
+    } else {
+      if (!modalFiles.some(f => (f.url || f.name) === (fUrl || fName))) {
+        modalFiles.push(fItem);
+      }
+    }
+  });
+
   const defaultActionsList = selectedEvent.data?.suggested_actions || [
     { code: "NOTIFY_USER", label: "관리자 / 담당자 알림 발송", description: "관제 이벤트를 담당 관리자에게 즉시 알림" },
     { code: "LOG_AUDIT", label: "감사 로그 보존", description: "본 사건 처리 이력을 전사 거버넌스 원장에 기록" },
@@ -169,47 +214,72 @@ export default function GovernanceDetailModal({
 
           {selectedEvent.type === 'RAG_HOLD' && (
             <div className="space-y-2">
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 space-y-1">
-                <span className="text-slate-400 font-medium block text-[10px]">현장 요청 사항 (음성 변환)</span>
-                <span className="font-semibold text-indigo-950 text-xs block leading-relaxed whitespace-pre-wrap">
-                  {selectedEvent.data.reason}
-                </span>
-              </div>
+              {selectedEvent.data?.reason && (
+                <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 space-y-1">
+                  <span className="text-slate-400 font-medium block text-[10px]">현장 요청 사항 (음성 변환)</span>
+                  <span className="font-semibold text-indigo-950 text-xs block leading-relaxed whitespace-pre-wrap">
+                    {selectedEvent.data.reason}
+                  </span>
+                </div>
+              )}
 
-              {/* 📎 [상신 첨부 파일 / 서류 미리보기 & 열기 리스트] */}
-              {((selectedEvent.data.attachments && selectedEvent.data.attachments.length > 0) || selectedEvent.data.file_url) && (
+              {/* 📷 1. [상신 첨부 현장 사진 썸네일 미리보기 리스트] */}
+              {modalPhotos.length > 0 && (
                 <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 space-y-1.5">
                   <span className="text-[10px] font-black text-indigo-700 flex items-center gap-1">
                     <Paperclip className="w-3 h-3 text-indigo-600" />
-                    <span>상신 첨부 서류 ({selectedEvent.data.attachments?.length || 1}건)</span>
+                    <span>등록된 현장 사진 ({modalPhotos.length}건)</span>
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {modalPhotos.map((photo: any, idx: number) => {
+                      const imgUrl = photo.preview || photo.base64 || photo.url || photo;
+                      const imgName = photo.name || `현장사진_${idx + 1}`;
+                      return (
+                        <a
+                          key={idx}
+                          href={typeof imgUrl === 'string' ? imgUrl : '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 flex flex-col justify-end p-1.5 transition-all hover:border-indigo-400"
+                        >
+                          {typeof imgUrl === 'string' && (
+                            <img src={imgUrl} alt={imgName} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          )}
+                          <div className="relative z-10 bg-slate-900/70 backdrop-blur-3xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md truncate">
+                            {imgName}
+                          </div>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 📎 2. [상신 첨부 서류 파일 다운로드/미리보기 리스트] */}
+              {modalFiles.length > 0 && (
+                <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 space-y-1.5">
+                  <span className="text-[10px] font-black text-indigo-700 flex items-center gap-1">
+                    <Paperclip className="w-3 h-3 text-indigo-600" />
+                    <span>상신 첨부 서류 ({modalFiles.length}건)</span>
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {selectedEvent.data.attachments && selectedEvent.data.attachments.length > 0 ? (
-                      selectedEvent.data.attachments.map((att: any, attIdx: number) => (
+                    {modalFiles.map((att: any, attIdx: number) => {
+                      const fileUrl = att.url || att.preview || att.base64;
+                      const fileName = att.name || att.filename || `서류파일_${attIdx + 1}`;
+                      return (
                         <a
                           key={attIdx}
-                          href={att.url}
+                          href={fileUrl || '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-extrabold text-[11px] px-2.5 py-1 rounded-lg border border-indigo-200/80 transition-all cursor-pointer text-decoration-none"
                         >
                           <FileText className="w-3 h-3 text-indigo-600 shrink-0" />
-                          <span className="truncate max-w-[180px]">{att.name}</span>
+                          <span className="truncate max-w-[200px]">{fileName}</span>
                           <ExternalLink className="w-3 h-3 text-indigo-400 shrink-0" />
                         </a>
-                      ))
-                    ) : (
-                      <a
-                        href={selectedEvent.data.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-extrabold text-[11px] px-2.5 py-1 rounded-lg border border-indigo-200/80 transition-all cursor-pointer text-decoration-none"
-                      >
-                        <FileText className="w-3 h-3 text-indigo-600 shrink-0" />
-                        <span className="truncate max-w-[200px]">{selectedEvent.data.matched_filename || '첨부서류 열기'}</span>
-                        <ExternalLink className="w-3 h-3 text-indigo-400 shrink-0" />
-                      </a>
-                    )}
+                      );
+                    })}
                   </div>
                 </div>
               )}

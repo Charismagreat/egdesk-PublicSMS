@@ -314,22 +314,22 @@ export async function GET(request: Request) {
           let matchedFilename = log.matched_filename || log.file_name || '';
           let combinedAiAnalysisText = '';
 
-          const targetNum = (log.id || '').replace(/[^0-9]/g, '') || (log.doc_id || '').replace(/[^0-9]/g, '');
+          const logNum = (log.id || '').replace(/[^0-9]/g, '');
+          const logDocNum = (log.doc_id || '').replace(/[^0-9]/g, '');
 
           const relatedItems = itemsRows.filter((item: any) => {
             if (!item.file_url || item.file_url.trim() === '') return false;
             
+            const itemTaskNum = String(item.task_id || '').replace(/[^0-9]/g, '');
+
             // 1) task_id 완전 일치 검사
             if (log.doc_id && String(item.task_id) === String(log.doc_id)) return true;
             if (log.id && String(item.task_id) === String(log.id)) return true;
             
-            // 2) 타임스탬프 원자적 생성 1:1 매칭
-            if (targetNum && targetNum.length >= 8) {
-              const itemTaskNum = String(item.task_id || '').replace(/[^0-9]/g, '');
-              if (itemTaskNum && Math.abs(Number(itemTaskNum) - Number(targetNum)) <= 1000) {
-                return true;
-              }
-            }
+            // 2) REQ- vs ST- 접두사 탈락 방지 숫자 원자적 1:1 매칭
+            if (logDocNum && itemTaskNum && logDocNum === itemTaskNum) return true;
+            if (logNum && itemTaskNum && Math.abs(Number(itemTaskNum) - Number(logNum)) <= 5000) return true;
+            
             return false;
           });
           relatedItems.forEach((item: any) => {
