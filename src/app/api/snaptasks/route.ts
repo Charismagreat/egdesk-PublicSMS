@@ -129,14 +129,7 @@ export async function GET(req: Request) {
 
       // 3) 조인 및 소프트 삭제 필터링 메모리 연산 + 첨부 파일 맵핑 + 테넌트 격리 가드 추가
       tasks = snaptasksRows
-        .filter((t: any) => {
-          if (t.deleted_at) return false;
-          if (userRole === 'SUPER_ADMIN') {
-            return true;
-          } else {
-            return t.created_by !== 'guest' && t.created_by !== '최고관리자';
-          }
-        })
+        .filter((t: any) => !t.deleted_at)
         .map((t: any) => {
           const matchedPartner = partnersRows.find(p => String(p.id) === String(t.partner_id));
           
