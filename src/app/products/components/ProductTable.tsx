@@ -94,16 +94,24 @@ function DraftRow({
         )}
       </td>
       <td className="p-4">
-        <div className="font-bold text-slate-800 text-sm">{product.name}</div>
-        {(product.spec || product.inventory_spec) && (
-          <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-md mt-1 shadow-3xs">
-            <span className="text-[10px]">📐</span>
-            <span className="font-mono">{product.spec || product.inventory_spec}</span>
-          </div>
-        )}
-        <p className="text-xs text-slate-450 mt-1 truncate max-w-[180px]" title={product.description}>
-          {product.description || '재고관리 설명 없음'}
-        </p>
+        <div className="space-y-1">
+          <div className="font-bold text-slate-800 text-sm">{product.name}</div>
+          
+          {/* 📐 규격 정보 (spec / inventory_spec) 및 단위 표시 */}
+          {(product.spec || product.inventory_spec) && (
+            <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100/90 border border-slate-200/80 px-2 py-0.5 rounded-md shadow-3xs">
+              <span className="text-[10px]">📐</span>
+              <span className="font-mono">{product.spec || product.inventory_spec}</span>
+              {(product.unit || product.inventory_unit) && (
+                <span className="text-[10px] text-slate-400 font-bold">({product.unit || product.inventory_unit})</span>
+              )}
+            </div>
+          )}
+
+          <p className="text-xs text-slate-450 truncate max-w-[180px]" title={product.description}>
+            {product.description || '재고관리 설명 없음'}
+          </p>
+        </div>
       </td>
       <td className="p-4 text-slate-600 font-semibold text-sm whitespace-nowrap text-right">
         {Number(product.price || 0).toLocaleString()}원
