@@ -254,29 +254,32 @@ export default function AiUsageMonitor() {
                   <p className="text-xs text-slate-400 py-6 text-center font-medium">소모 이력이 존재하지 않습니다.</p>
                 ) : (
                   <div className="space-y-3.5">
-                    {purposes.map(p => {
-                      const pTokens = Number(p.tokens) || 0;
-                      const totalToks = Number(summary.total_tokens) || 0;
-                      const pct = totalToks > 0 ? (pTokens / totalToks) * 100 : 0;
-                      const barWidth = pTokens > 0 ? Math.max(pct, 0.8) : 0;
-                      return (
-                        <div key={p.purpose} className="space-y-1">
-                          <div className="flex justify-between text-xs font-semibold text-slate-700">
-                            <span className="truncate max-w-[220px]">{getPurposeLabel(p.purpose)}</span>
-                            <span className="shrink-0 flex items-center gap-1.5 font-mono">
-                              <span>{pTokens.toLocaleString()} t ({pct.toFixed(1)}%)</span>
-                            </span>
+                    {(() => {
+                      const sumPurposeTokens = purposes.reduce((acc, cur) => acc + (Number(cur.tokens) || 0), 0);
+                      const totalToks = summary.total_tokens > 0 ? summary.total_tokens : (sumPurposeTokens || 1);
+                      return purposes.map(p => {
+                        const pTokens = Number(p.tokens) || 0;
+                        const pct = (pTokens / totalToks) * 100;
+                        const barWidth = pTokens > 0 ? Math.min(100, Math.max(pct, 0.8)) : 0;
+                        return (
+                          <div key={p.purpose} className="space-y-1">
+                            <div className="flex justify-between text-xs font-semibold text-slate-700">
+                              <span className="truncate max-w-[220px]">{getPurposeLabel(p.purpose)}</span>
+                              <span className="shrink-0 flex items-center gap-1.5 font-mono">
+                                <span>{pTokens.toLocaleString()} t ({pct.toFixed(1)}%)</span>
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
+                              <div
+                                className="h-full rounded-full transition-all duration-500 shadow-xs"
+                                style={{ width: `${barWidth.toFixed(2)}%`, backgroundColor: '#4f46e5' }}
+                              ></div>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-medium">{p.calls}회 호출됨</p>
                           </div>
-                          <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
-                            <div
-                              className="h-full rounded-full transition-all duration-500 shadow-xs"
-                              style={{ width: `${barWidth}%`, backgroundColor: '#4f46e5' }}
-                            ></div>
-                          </div>
-                          <p className="text-[10px] text-slate-400 font-medium">{p.calls}회 호출됨</p>
-                        </div>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
                   </div>
                 )}
               </div>
@@ -291,22 +294,6 @@ export default function AiUsageMonitor() {
                   <p className="text-xs text-slate-400 py-6 text-center font-medium">소모 이력이 존재하지 않습니다.</p>
                 ) : (
                   <div className="space-y-3.5">
-                    {models.map(m => {
-                      const mTokens = Number(m.tokens) || 0;
-                      const totalToks = Number(summary.total_tokens) || 0;
-                      const pct = totalToks > 0 ? (mTokens / totalToks) * 100 : 0;
-                      const barWidth = mTokens > 0 ? Math.max(pct, 0.8) : 0;
-                      return (
-                        <div key={m.model} className="space-y-1">
-                          <div className="flex justify-between text-xs font-bold text-slate-700">
-                            <span className="font-mono text-indigo-600 truncate max-w-[220px]">{m.model}</span>
-                            <span className="shrink-0 flex items-center gap-1.5 font-mono">
-                              <span>{mTokens.toLocaleString()} t ({pct.toFixed(1)}%)</span>
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
-                            <div
-                              className="h-full rounded-full transition-all duration-500 shadow-xs"
                               style={{ width: `${barWidth}%`, backgroundColor: '#10b981' }}
                             ></div>
                           </div>
