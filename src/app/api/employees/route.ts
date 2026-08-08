@@ -63,7 +63,7 @@ export async function GET(req: Request) {
   }
 }
 
-// 📥 [POST] 테넌트 격리형 신규 직원 등록 (연차 자동 지급 및 알림톡 발송 스케줄)
+// 📥 [POST] 테넌트 격리형 신규 직원 등록 및 퇴사자 재등록/복원 처리 (연차 자동 부여 및 알림톡)
 export async function POST(req: Request) {
   try {
     const { isAuthorized, name: operatorName, tenantId, username: loggedUsername } = await verifyUserRole();
@@ -73,8 +73,9 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const action = body?.action;
+    const nowStr = new Date().toISOString();
 
-    // 💡 [신규] 직원 엑셀 일괄 등록 처리
+    // 💡 [신규/재등록] 직원 엑셀 일괄 등록 처리
     if (action === 'batch_register') {
       const { employees = [] } = body;
       if (!Array.isArray(employees) || employees.length === 0) {
@@ -82,9 +83,13 @@ export async function POST(req: Request) {
       }
 
       const allExistingRes = await queryTable('crm_operators', { limit: 5000 });
-      const allActiveOps = (allExistingRes.rows || []).filter((op: any) => !op.deleted_at);
-      const existingUsernames = new Set(allActiveOps.map((op: any) => op.username));
-      const existingEmpNumbers = new Set(allActiveOps.filter((op: any) => op.tenant_id === tenantId).map((op: any) => op.employee_number));
+      const allRows = allExistingRes.rows || [];
+      
+      // username 기준으로 DB 레코드 맵 구성
+      const opMapByUsername = new Map<string, any>();
+      allRows.forEach((op: any) => {
+        opMapByUsername.set(op.username, op);
+      });
 
       const rowsToInsert: any[] = [];
       const leaveRowsToInsert: any[] = [];
@@ -95,42 +100,64 @@ export async function POST(req: Request) {
         const { username, password, name, role, employee_number, phone, department, work_start_time, work_end_time } = emp;
         if (!username || !name) continue;
 
-        // 아이디 및 사원번호 중복 스킵/처리
-        if (existingUsernames.has(username)) continue;
-
+        const existingOp = opMapByUsername.get(username);
         const finalEmpNumber = (employee_number || `EMP-${Date.now() % 10000 + i}`).trim();
         const pwdHash = await bcrypt.hash(password || '1234', 10);
-        const newOpId = Date.now() + i;
-        const nowStr = new Date().toISOString();
 
-        rowsToInsert.push({
-          id: newOpId,
-          username,
-          password_hash: pwdHash,
-          name,
-          role: role || 'EMPLOYEE',
-          employee_number: finalEmpNumber,
-          phone: (phone || '').trim(),
-          department: (department || '').trim(),
-          work_start_time: work_start_time || '09:00:00',
-          work_end_time: work_end_time || '18:00:00',
-          created_at: nowStr,
-          tenant_id: tenantId
-        });
+        if (existingOp) {
+          // 이미 활성(active) 상태인 사용자는 스킵
+          if (!existingOp.deleted_at) continue;
 
-        leaveRowsToInsert.push({
-          operator_id: String(newOpId),
-          total_allowed: 15.0,
-          used: 0.0,
-          remaining: 15.0,
-          year: new Date().getFullYear(),
-          created_at: nowStr,
-          tenant_id: tenantId
-        });
+          // 🔄 소프트 삭제되었던 직원이면 복원(Restored) 및 업데이트 처리
+          await updateRows('crm_operators', {
+            name,
+            password_hash: pwdHash,
+            role: role || 'EMPLOYEE',
+            employee_number: finalEmpNumber,
+            phone: (phone || '').trim(),
+            department: (department || '').trim(),
+            work_start_time: work_start_time || '09:00:00',
+            work_end_time: work_end_time || '18:00:00',
+            tenant_id: tenantId,
+            deleted_at: null,
+            deleted_by: null,
+            restored_at: nowStr,
+            restored_by: operatorName
+          }, { filters: { id: String(existingOp.id) } });
 
-        existingUsernames.add(username);
-        existingEmpNumbers.add(finalEmpNumber);
-        successCount++;
+          successCount++;
+        } else {
+          // 🆕 완전 신규 사용자 생성
+          const newOpId = Date.now() + i;
+
+          rowsToInsert.push({
+            id: newOpId,
+            username,
+            password_hash: pwdHash,
+            name,
+            role: role || 'EMPLOYEE',
+            employee_number: finalEmpNumber,
+            phone: (phone || '').trim(),
+            department: (department || '').trim(),
+            work_start_time: work_start_time || '09:00:00',
+            work_end_time: work_end_time || '18:00:00',
+            created_at: nowStr,
+            tenant_id: tenantId
+          });
+
+          leaveRowsToInsert.push({
+            operator_id: String(newOpId),
+            total_allowed: 15.0,
+            used: 0.0,
+            remaining: 15.0,
+            year: new Date().getFullYear(),
+            created_at: nowStr,
+            tenant_id: tenantId
+          });
+
+          opMapByUsername.set(username, { username, deleted_at: null });
+          successCount++;
+        }
       }
 
       if (rowsToInsert.length > 0) {
@@ -141,45 +168,73 @@ export async function POST(req: Request) {
       return NextResponse.json({
         success: true,
         count: successCount,
-        message: `🎉 ${successCount}명의 직원 계정이 성공적으로 일괄 등록되었습니다.`
+        message: `🎉 총 ${successCount}명의 직원 계정이 성공적으로 등록(복원)되었습니다.`
       });
     }
 
+    // 💡 [신규/재등록] 단일 직원 등록 처리
     const { username, password, name, newRole, employee_number, phone, department, workplace_id, work_start_time, work_end_time } = body;
 
     if (!username || !password || !name) {
-      return NextResponse.json({ success: false, error: '모든 필드를 입력해주세요.' }, { status: 400 });
+      return NextResponse.json({ success: false, error: '모든 필수 필드(아이디, 비밀번호, 이름)를 입력해주세요.' }, { status: 400 });
     }
 
-    // 1. 아이디(username) 전역 중복 검증 (로그인 계정 고유성 보장)
-    const existing = await queryTable('crm_operators', { filters: { username } });
-    const activeExisting = (existing.rows || []).filter((op: any) => !op.deleted_at);
-    if (activeExisting.length > 0) {
-      return NextResponse.json({ success: false, error: '이미 존재하는 아이디입니다.' }, { status: 400 });
-    }
-
-    // 사원번호 검증
     const finalEmpNumber = (employee_number || '').trim();
     if (!finalEmpNumber) {
       return NextResponse.json({ success: false, error: '사원번호를 입력해주세요.' }, { status: 400 });
     }
 
-    // 2. 사원번호 본인 매장(테넌트) 내 중복 체크
+    // 1. 아이디(username) 기준 기존 DB 사용자 조회
+    const existingRes = await queryTable('crm_operators', { filters: { username } });
+    const existingOp = existingRes.rows && existingRes.rows.length > 0 ? existingRes.rows[0] : null;
+
+    // 이미 다른 활성 직원이 사용 중인 아이디면 중복 차단
+    if (existingOp && !existingOp.deleted_at) {
+      return NextResponse.json({ success: false, error: '이미 사용 중인 활성 아이디입니다.' }, { status: 400 });
+    }
+
+    // 2. 사원번호 본인 매장(테넌트) 내 활성 유저 중복 체크
     const queryFilters: any = { employee_number: finalEmpNumber };
     if (loggedUsername !== 'admin') {
       queryFilters.tenant_id = tenantId;
     }
-    const existingEmpNum = await queryTable('crm_operators', { filters: queryFilters });
-    const activeEmpNum = (existingEmpNum.rows || []).filter((op: any) => !op.deleted_at);
-    if (activeEmpNum.length > 0) {
-      return NextResponse.json({ success: false, error: '매장 내에 이미 존재하는 사원번호입니다.' }, { status: 400 });
+    const existingEmpNumRes = await queryTable('crm_operators', { filters: queryFilters });
+    const activeEmpNumOps = (existingEmpNumRes.rows || []).filter((op: any) => !op.deleted_at && op.username !== username);
+    if (activeEmpNumOps.length > 0) {
+      return NextResponse.json({ success: false, error: '매장 내에 이미 활성화된 동일 사원번호가 존재합니다.' }, { status: 400 });
     }
 
     const password_hash = await bcrypt.hash(password, 10);
-    const dateStr = new Date().toISOString();
+
+    // 🔄 과거 소프트 삭제(퇴사)된 직원의 계정이면 복원(Restored) 및 업데이트
+    if (existingOp && existingOp.deleted_at) {
+      await updateRows('crm_operators', {
+        name,
+        password_hash,
+        role: newRole || 'EMPLOYEE',
+        employee_number: finalEmpNumber,
+        phone: (phone || '').trim(),
+        department: (department || '').trim(),
+        workplace_id: workplace_id ? Number(workplace_id) : null,
+        work_start_time: work_start_time || '09:00:00',
+        work_end_time: work_end_time || '18:00:00',
+        tenant_id: tenantId,
+        deleted_at: null,
+        deleted_by: null,
+        restored_at: nowStr,
+        restored_by: operatorName
+      }, { filters: { id: String(existingOp.id) } });
+
+      return NextResponse.json({ 
+        success: true, 
+        isRestored: true, 
+        message: '퇴사 처리되었던 기존 계정이 성공적으로 재등록(복원)되었습니다.' 
+      });
+    }
+
+    // 🆕 완전 신규 직원 등록
     const newOpId = Date.now();
 
-    // 3. 임직원 마스터 등록 (tenantId 및 workplace_id 연동 주입)
     await insertRows('crm_operators', [{
       id: newOpId,
       username,
@@ -192,20 +247,20 @@ export async function POST(req: Request) {
       workplace_id: workplace_id ? Number(workplace_id) : null,
       work_start_time: work_start_time || '09:00:00',
       work_end_time: work_end_time || '18:00:00',
-      created_at: dateStr,
+      created_at: nowStr,
       tenant_id: tenantId
     }]);
 
-    // 4. [온보딩 자동화] 신규 입사자 최초 연차 15일 자동 부여
+    // 연차 15일 자동 부여
     await insertRows('crm_operator_leave_balances', [{
       operator_id: String(newOpId),
       total_allowed: 15.0,
       used: 0.0,
       remaining: 15.0,
-      updated_at: dateStr
+      updated_at: nowStr
     }]);
 
-    // 5. [온보딩 자동화] 웰컴 알림 문자 발송 예약 (테넌트 ID 매핑)
+    // 웰컴 메시지 등록
     if (phone && phone.trim() !== '') {
       const welcomeContent = `[EGDesk] ${name}님의 입사를 환영합니다! 🎉\n사원번호: ${finalEmpNumber}\n임시 비밀번호: ${password}\n접속 URL: http://localhost:4000/login\n첫 온보딩 단계를 진행해 주세요.`;
       await insertRows('message_logs', [{
@@ -214,14 +269,14 @@ export async function POST(req: Request) {
         receiver: phone.trim(),
         content: welcomeContent,
         status: 'PENDING',
-        created_at: dateStr,
+        created_at: nowStr,
         tenant_id: tenantId
       }]);
     }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('사원 등록 에러:', error);
+    console.error('사원 등록/복원 에러:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
