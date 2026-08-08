@@ -634,20 +634,58 @@ export async function GET(request: Request) {
       }
     }
 
-    // 💡 [신규] 태스크 폴더 내부 파일 목록 반환
+    // 💡 [신규] 태스크 폴더 내부 파일 목록 반환 (crm_task_folder_items + crm_snaptask_items 통합 수집)
     if (action === 'get_folder_files') {
       try {
-        const folderId = searchParams.get('folder_id');
-        const itemsRes = await queryTable('crm_snaptask_items', {
-          orderBy: 'created_at DESC'
-        });
-        let items = (itemsRes.rows || []).filter((r: any) => !r.deleted_at);
+        const folderId = searchParams.get('folder_id') || searchParams.get('folderId');
+        
+        // 1) crm_task_folder_items 조회
+        const folderItemsRes = await queryTable('crm_task_folder_items', {
+          limit: 10000,
+          orderBy: 'created_at',
+          orderDirection: 'DESC'
+        }).catch(() => ({ rows: [] }));
+        
+        // 2) crm_snaptask_items 조회
+        const snapItemsRes = await queryTable('crm_snaptask_items', {
+          limit: 10000,
+          orderBy: 'id',
+          orderDirection: 'DESC'
+        }).catch(() => ({ rows: [] }));
+
+        let folderRows = (folderItemsRes.rows || []).filter((r: any) => !r.deleted_at);
+        let snapRows = (snapItemsRes.rows || []).filter((r: any) => !r.deleted_at);
 
         if (folderId) {
-          items = items.filter((r: any) => String(r.task_id || r.folder_id) === String(folderId));
+          folderRows = folderRows.filter((r: any) => String(r.folder_id || r.task_id) === String(folderId));
+          snapRows = snapRows.filter((r: any) => String(r.folder_id || r.task_id) === String(folderId));
         }
 
-        return NextResponse.json({ success: true, files: items });
+        // 두 대장 호환 포맷 병합
+        const combinedFiles = [
+          ...folderRows.map((r: any) => ({
+            id: String(r.id),
+            title: r.title || r.file_name || '수집 서류',
+            file_name: r.file_name || r.title || '첨부 서류',
+            file_size: r.file_size || '',
+            file_url: r.file_url || '',
+            content_text: r.content || r.title || '',
+            created_at: r.created_at,
+            created_by: r.created_by || '임직원'
+          })),
+          ...snapRows.map((r: any) => ({
+            id: String(r.id),
+            title: r.content_text || r.file_name || '상신 첨부 서류',
+            file_name: r.file_name || '첨부 서류',
+            file_size: '',
+            file_url: r.file_url || '',
+            content_text: r.content_text || '',
+            created_at: r.created_at,
+            created_by: r.created_by || '임직원'
+          }))
+        ];
+
+        return NextResponse.json({ success: true, files: combinedFiles });
       } catch (err: any) {
         return NextResponse.json({ success: false, error: err.message }, { status: 500 });
       }
