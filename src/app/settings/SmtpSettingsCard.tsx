@@ -148,7 +148,7 @@ export default function SmtpSettingsCard() {
         <div className="bg-blue-50/40 border border-blue-100 rounded-xl p-4.5 space-y-2.5">
           <span className="text-[10px] font-black text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-            구글(Gmail) 발송 계정 연동 가이드
+            G메일 발송 계정 연동 가이드
           </span>
           <div className="text-[11px] text-blue-950/80 leading-relaxed space-y-1.5">
             <p>본 시스템은 안정적인 연동을 위해 <strong>구글(Gmail) 서비스</strong>를 기본 권장합니다.</p>
