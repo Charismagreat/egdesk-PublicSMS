@@ -302,11 +302,12 @@ export function ProductTable({
                 </td>
               </tr>
             ) : (
-              paginatedData.map(t => {
+              paginatedData.map((t, idx) => {
+                const uniqueKey = `${t.id}-${idx}`;
                 if (isDraftTab) {
                   return (
                     <DraftRow
-                      key={t.id}
+                      key={uniqueKey}
                       product={t}
                       onApprove={onApprove!}
                       onDeleteClick={onDeleteClick}
@@ -318,7 +319,7 @@ export function ProductTable({
                 const isPriceTbd = t.price === '상담후결정';
                 const numericPrice = isPriceTbd ? 0 : Number(String(t.price).replace(/[^0-9]/g, ''));
                 return (
-                  <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
+                  <tr key={uniqueKey} className="hover:bg-slate-50/80 transition-colors">
                     <td className="p-4 text-xs font-mono text-slate-400">{String(t.id || '').slice(-6)}</td>
                     <td className="p-4">
                       <div className="flex flex-col gap-1 items-start">

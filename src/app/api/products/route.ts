@@ -62,25 +62,28 @@ export async function GET(req: Request) {
     let filteredCount = 0;
 
     try {
-      let countQuery = `SELECT COUNT(*) as count FROM products WHERE tenant_id = '${tenantId}' AND status = '${status}'`;
+      let countQuery = `SELECT COUNT(DISTINCT p.id) as count FROM products p LEFT JOIN inventory_items i ON (p.inventory_item_id = i.id OR (p.name IS NOT NULL AND p.name != '' AND p.name = i.name)) WHERE p.tenant_id = '${tenantId}' AND p.status = '${status}'`;
       let dataQuery = `
         SELECT p.*, 
                i.barcode as inventory_barcode, 
                i.stock as inventory_stock, 
-               COALESCE(p.spec, i.spec) as inventory_spec, 
-               COALESCE(p.unit, i.unitValue) as inventory_unit 
+               i.spec as inventory_spec, 
+               i.unitValue as inventory_unit 
         FROM products p
-        LEFT JOIN inventory_items i ON (p.inventory_item_id = i.id OR (p.inventory_item_id IS NULL AND p.name = i.name))
+        LEFT JOIN inventory_items i ON (
+          (p.inventory_item_id IS NOT NULL AND (p.inventory_item_id = i.id OR CAST(p.inventory_item_id AS TEXT) = CAST(i.id AS TEXT))) 
+          OR (p.name IS NOT NULL AND p.name != '' AND p.name = i.name)
+        )
         WHERE p.tenant_id = '${tenantId}' AND p.status = '${status}'
       `;
 
       if (search) {
-        const searchCond = ` AND (p.name LIKE '%${search}%' OR p.category LIKE '%${search}%' OR p.brand LIKE '%${search}%' OR p.description LIKE '%${search}%')`;
+        const searchCond = ` AND (p.name LIKE '%${search}%' OR p.category LIKE '%${search}%' OR p.brand LIKE '%${search}%' OR p.description LIKE '%${search}%' OR i.spec LIKE '%${search}%')`;
         countQuery += searchCond;
         dataQuery += searchCond;
       }
 
-      dataQuery += ` ORDER BY p.id DESC LIMIT ${limit} OFFSET ${offset}`;
+      dataQuery += ` GROUP BY p.id ORDER BY p.id DESC LIMIT ${limit} OFFSET ${offset}`;
 
       const countRes = await executeSQL(countQuery);
       filteredCount = countRes.rows?.[0]?.count || 0;
