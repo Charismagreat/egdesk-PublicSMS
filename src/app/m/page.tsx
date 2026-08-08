@@ -1322,11 +1322,21 @@ export default function MobileHubPage() {
           if (!file) return;
           const reader = new FileReader();
           reader.onload = () => {
-            setRequestPhotos((prev) => [
-              ...prev,
-              { name: file.name, preview: reader.result as string, base64: reader.result as string },
-            ]);
-            setIsTaskRequestModalOpen(true);
+            const base64Str = reader.result as string;
+            if (base64Str) {
+              setRequestPhotos((prev) => [
+                ...prev,
+                { 
+                  name: file.name || '현장사진.jpg', 
+                  type: file.type || 'image/jpeg',
+                  preview: base64Str, 
+                  base64: base64Str,
+                  url: base64Str,
+                  data: base64Str
+                },
+              ]);
+              setIsTaskRequestModalOpen(true);
+            }
           };
           reader.readAsDataURL(file);
           if (e.target) e.target.value = "";
@@ -1337,18 +1347,21 @@ export default function MobileHubPage() {
           const reader = new FileReader();
           reader.onload = () => {
             const base64Str = reader.result as string;
-            setRequestFiles((prev) => [
-              ...prev,
-              { 
-                name: file.name, 
-                size: (file.size / 1024).toFixed(1) + " KB", 
-                type: file.type, 
-                preview: base64Str,
-                base64: base64Str,
-                url: base64Str
-              },
-            ]);
-            setIsTaskRequestModalOpen(true);
+            if (base64Str) {
+              setRequestFiles((prev) => [
+                ...prev,
+                { 
+                  name: file.name || '첨부서류.pdf', 
+                  size: (file.size / 1024).toFixed(1) + " KB", 
+                  type: file.type || 'application/pdf', 
+                  preview: base64Str,
+                  base64: base64Str,
+                  url: base64Str,
+                  data: base64Str
+                },
+              ]);
+              setIsTaskRequestModalOpen(true);
+            }
           };
           reader.readAsDataURL(file);
           if (e.target) e.target.value = "";

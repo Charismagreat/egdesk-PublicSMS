@@ -1221,7 +1221,7 @@ export async function POST(request: Request) {
         for (let i = 0; i < allFiles.length; i++) {
           const file = allFiles[i];
           if (!file) continue;
-          const fileContent = file.base64 || file.url || file.preview || '';
+          const fileContent = file.base64 || file.url || file.preview || file.data || '';
           if (!fileContent && !file.name) continue;
 
           const itemId = Date.now() + 100 + i;
