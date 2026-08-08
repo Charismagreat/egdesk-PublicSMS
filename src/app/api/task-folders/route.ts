@@ -260,7 +260,7 @@ export async function POST(req: Request) {
 
     if (action === 'create_item') {
       const { folderId, tags, title, content, fileName, fileSize, fileUrl } = body;
-      if (!folderId || !title) {
+      if (!folderId || (!title && !fileName)) {
         return NextResponse.json({ success: false, error: '필수 필드가 누락되었습니다.' }, { status: 400 });
       }
 
@@ -268,15 +268,29 @@ export async function POST(req: Request) {
       const items = itemsRes.rows || [];
       const nextId = items.length > 0 ? Math.max(...items.map((c: any) => parseInt(c.id) || 0)) + 1 : 1;
 
+      let finalFileUrl = fileUrl || '';
+
+      // Base64 인코딩 스트링인 경우 uploadFile 스토리지 헬퍼 연동
+      if (fileUrl && fileUrl.startsWith('data:')) {
+        try {
+          const uploadRes = await uploadFile('crm_task_folder_items', nextId, 'file_url', fileName || 'file.xlsx', fileUrl);
+          if (uploadRes && uploadRes.success) {
+            finalFileUrl = uploadRes.fileId || `/api/shared/files?tableName=crm_task_folder_items&rowId=${nextId}&columnName=file_url`;
+          }
+        } catch (uErr) {
+          console.warn("Base64 task-folder upload failed:", uErr);
+        }
+      }
+
       const res = await insertRows('crm_task_folder_items', [{
         id: nextId,
         folder_id: Number(folderId),
         tags: tags || '',
-        title,
+        title: title || fileName || '등록 자료',
         content: content || '',
         file_name: fileName || '',
         file_size: fileSize || '',
-        file_url: fileUrl || '',
+        file_url: finalFileUrl,
         created_at: nowStr,
         tenant_id: userTenantId,
         uuid: `STI-${nextId}-item`,
