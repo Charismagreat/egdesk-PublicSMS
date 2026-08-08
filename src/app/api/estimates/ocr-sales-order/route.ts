@@ -343,10 +343,20 @@ const geminiUrlPass1 = `https://generativelanguage.googleapis.com/v1beta/models/
     }
 
     const aiDataPass1 = await responsePass1.json();
-    const responseTextPass1 = aiDataPass1.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    let responseTextPass1 = '';
+    const part1 = aiDataPass1.candidates?.[0]?.content?.parts?.[0];
+    if (typeof part1 === 'string' && part1 !== '[object Object]') {
+      responseTextPass1 = part1;
+    } else if (part1 && typeof part1 === 'object') {
+      responseTextPass1 = part1.text || (typeof part1.content === 'string' ? part1.content : JSON.stringify(part1));
+    } else if (typeof aiDataPass1 === 'string' && aiDataPass1 !== '[object Object]') {
+      responseTextPass1 = aiDataPass1;
+    } else {
+      responseTextPass1 = JSON.stringify(aiDataPass1 || {});
+    }
     
-    if (!responseTextPass1) {
-      throw new Error('1차 AI 판독 결과 텍스트가 비어 있습니다.');
+    if (!responseTextPass1 || responseTextPass1 === '{}' || responseTextPass1 === '[object Object]') {
+      throw new Error('1차 AI 판독 결과 텍스트가 비어 있거나 올바르지 않습니다.');
     }
 
     // 2차 호출: Pass 2 (NLP Structuring + RAG 규칙 연동 - 최종 JSON 빌드)
@@ -448,7 +458,17 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
     }
 
     const aiDataPass2 = await responsePass2.json();
-    const responseTextPass2 = aiDataPass2.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    let responseTextPass2 = '';
+    const part2 = aiDataPass2.candidates?.[0]?.content?.parts?.[0];
+    if (typeof part2 === 'string' && part2 !== '[object Object]') {
+      responseTextPass2 = part2;
+    } else if (part2 && typeof part2 === 'object') {
+      responseTextPass2 = part2.text || (typeof part2.content === 'string' ? part2.content : JSON.stringify(part2));
+    } else if (typeof aiDataPass2 === 'string' && aiDataPass2 !== '[object Object]') {
+      responseTextPass2 = aiDataPass2;
+    } else {
+      responseTextPass2 = JSON.stringify(aiDataPass2 || {});
+    }
 
     // AI 토큰 사용량 로깅
     try {
@@ -473,20 +493,24 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
     let parsedData;
     let innerErrMsg = '';
     try {
-      const cleanJson = responseTextPass2.replace(/```json/g, '').replace(/```/g, '').trim();
-      
-      // text/plain 수신에 맞춰 단일 JSON 구문 수리 및 파싱 실행
-      try {
-        parsedData = JSON.parse(cleanJson);
-      } catch (err) {
-        console.warn('JSON 파싱 실패, repairJson 작동 시도...');
+      if (typeof responseTextPass2 === 'object' && responseTextPass2 !== null) {
+        parsedData = responseTextPass2;
+      } else {
+        const rawText = String(responseTextPass2 || '').trim();
+        const cleanJson = rawText.replace(/^```json/i, '').replace(/```$/g, '').replace(/^```/g, '').trim();
+        
         try {
-          const repaired = repairJson(cleanJson);
-          parsedData = JSON.parse(repaired);
-        } catch (repairErr: any) {
-          innerErrMsg = repairErr.message;
-          console.error('JSON Repair 복구 실패:', repairErr.message);
-          throw err;
+          parsedData = JSON.parse(cleanJson);
+        } catch (err) {
+          console.warn('JSON 파싱 실패, repairJson 작동 시도...');
+          try {
+            const repaired = repairJson(cleanJson);
+            parsedData = JSON.parse(repaired);
+          } catch (repairErr: any) {
+            innerErrMsg = repairErr.message;
+            console.error('JSON Repair 복구 실패:', repairErr.message);
+            throw err;
+          }
         }
       }
 
