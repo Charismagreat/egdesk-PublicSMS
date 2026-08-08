@@ -255,20 +255,25 @@ export default function AiUsageMonitor() {
                 ) : (
                   <div className="space-y-3.5">
                     {(() => {
-                      const maxPurposeTokens = Math.max(...purposes.map(p => p.tokens), 1);
+                      const maxPurposeTokens = Math.max(...purposes.map(p => Number(p.tokens) || 0), 1);
                       return purposes.map(p => {
-                        const pct = summary.total_tokens > 0 ? (p.tokens / summary.total_tokens) * 100 : 0;
-                        const barWidth = Math.max((p.tokens / maxPurposeTokens) * 100, 1.5);
+                        const pTokens = Number(p.tokens) || 0;
+                        const totalToks = Number(summary.total_tokens) || 0;
+                        const pct = totalToks > 0 ? (pTokens / totalToks) * 100 : 0;
+                        const barWidth = Math.max((pTokens / maxPurposeTokens) * 100, 2);
                         return (
                           <div key={p.purpose} className="space-y-1">
                             <div className="flex justify-between text-xs font-semibold text-slate-700">
-                              <span className="truncate max-w-[180px]">{getPurposeLabel(p.purpose)}</span>
-                              <span className="shrink-0 flex items-center gap-1.5">
-                                <span>{p.tokens.toLocaleString()} t ({pct.toFixed(1)}%)</span>
+                              <span className="truncate max-w-[220px]">{getPurposeLabel(p.purpose)}</span>
+                              <span className="shrink-0 flex items-center gap-1.5 font-mono">
+                                <span>{pTokens.toLocaleString()} t ({pct.toFixed(1)}%)</span>
                               </span>
                             </div>
-                            <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                              <div className="bg-indigo-500 h-full rounded-full transition-all duration-500" style={{ width: `${barWidth}%` }}></div>
+                            <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
+                              <div
+                                className="h-full rounded-full transition-all duration-500 shadow-xs"
+                                style={{ width: `${barWidth}%`, backgroundColor: '#4f46e5' }}
+                              ></div>
                             </div>
                             <p className="text-[10px] text-slate-400 font-medium">{p.calls}회 호출됨</p>
                           </div>
@@ -290,20 +295,25 @@ export default function AiUsageMonitor() {
                 ) : (
                   <div className="space-y-3.5">
                     {(() => {
-                      const maxModelTokens = Math.max(...models.map(m => m.tokens), 1);
+                      const maxModelTokens = Math.max(...models.map(m => Number(m.tokens) || 0), 1);
                       return models.map(m => {
-                        const pct = summary.total_tokens > 0 ? (m.tokens / summary.total_tokens) * 100 : 0;
-                        const barWidth = Math.max((m.tokens / maxModelTokens) * 100, 1.5);
+                        const mTokens = Number(m.tokens) || 0;
+                        const totalToks = Number(summary.total_tokens) || 0;
+                        const pct = totalToks > 0 ? (mTokens / totalToks) * 100 : 0;
+                        const barWidth = Math.max((mTokens / maxModelTokens) * 100, 2);
                         return (
                           <div key={m.model} className="space-y-1">
                             <div className="flex justify-between text-xs font-bold text-slate-700">
-                              <span className="font-mono text-indigo-650 truncate max-w-[180px]">{m.model}</span>
-                              <span className="shrink-0 flex items-center gap-1.5">
-                                <span>{m.tokens.toLocaleString()} t ({pct.toFixed(1)}%)</span>
+                              <span className="font-mono text-indigo-600 truncate max-w-[220px]">{m.model}</span>
+                              <span className="shrink-0 flex items-center gap-1.5 font-mono">
+                                <span>{mTokens.toLocaleString()} t ({pct.toFixed(1)}%)</span>
                               </span>
                             </div>
-                            <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                              <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${barWidth}%` }}></div>
+                            <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
+                              <div
+                                className="h-full rounded-full transition-all duration-500 shadow-xs"
+                                style={{ width: `${barWidth}%`, backgroundColor: '#10b981' }}
+                              ></div>
                             </div>
                             <p className="text-[10px] text-slate-400 font-medium">{m.calls}회 호출됨</p>
                           </div>
