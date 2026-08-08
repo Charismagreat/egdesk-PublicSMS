@@ -436,60 +436,6 @@ export default function CompanySettingsCard() {
       {/* 설정 폼 */}
       <form onSubmit={handleSave} className="p-6 space-y-6">
 
-        {/* 🛠️ AI 본사 사업자등록증 자동 완성 업로더 드롭존 */}
-        <div className="bg-slate-50/50 border border-slate-100 p-4.5 rounded-2xl space-y-3 shrink-0">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
-            우리 회사 사업자등록증 자동 스냅 채우기 (AI OCR)
-          </span>
-
-          {isOcrAnalyzing ? (
-            <div className="border border-indigo-200 bg-indigo-50/20 rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-3 animate-pulse relative overflow-hidden">
-              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 via-indigo-500 to-cyan-400 animate-shimmer"></div>
-              <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
-              <div>
-                <span className="text-xs font-black text-slate-700 block">AI 엔진이 본사 사업자등록증 문서를 스캔 중입니다...</span>
-                <span className="text-[10px] text-slate-400 font-bold block mt-1">상호, 대표자명, 주소, 번호를 고해상도로 판독하여 폼에 자동 입력합니다.</span>
-              </div>
-            </div>
-          ) : (
-            <div
-              onDragOver={(e) => { e.preventDefault(); setFileDragOver(true); }}
-              onDragLeave={() => setFileDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setFileDragOver(false);
-                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                  handleFileUpload(e.dataTransfer.files[0]);
-                }
-              }}
-              onClick={() => document.getElementById('company-license-uploader')?.click()}
-              className={`border-2 border-dashed rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
-                fileDragOver
-                  ? 'border-indigo-500 bg-indigo-50/30'
-                  : 'border-slate-200 hover:border-indigo-350 hover:bg-slate-50/50'
-              }`}
-            >
-              <Building2 className="w-6 h-6 text-slate-400 mb-2 group-hover:scale-110 transition-transform" />
-              <span className="text-xs font-black text-slate-700 block">이곳에 본사 사업자등록증 파일(이미지/PDF) 드롭 또는 클릭 업로드</span>
-              <span className="text-[9px] text-slate-400 font-semibold block mt-1.5">
-                지원 포맷: JPG, PNG, PDF (Gemini AI 자동 필드 주입)
-              </span>
-              <input
-                type="file"
-                id="company-license-uploader"
-                accept="image/*,application/pdf"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    handleFileUpload(e.target.files[0]);
-                  }
-                }}
-                className="hidden"
-              />
-            </div>
-          )}
-        </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
           
           {/* 1. 회사명 */}
