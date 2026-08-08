@@ -1,6 +1,38 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, deleteRows, executeSQL } from '../../../../egdesk-helpers';
+import { cookies } from 'next/headers';
+import { decodeJwt } from 'jose';
+
+async function getUserTenantId() {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    if (!token) return 'default';
+    const payload = decodeJwt(token);
+    return (payload.tenant_id as string) || 'default';
+  } catch {
+    return 'default';
+  }
+}
+
+/**
+ * 🛡️ crm_partners 테이블의 tenant_id 자율 자가치유(Auto-heal) 헬퍼
+ * tenant_id가 null이거나 비어있는 기존 물리 레코드들을 사용자의 테넌트 ID로 자동 귀속 업데이트합니다.
+ */
+async function healPartnerTenantData(targetTenantId: string = 'default') {
+  try {
+    const partnersRes = await queryTableAll('crm_partners');
+    const partners = partnersRes.rows || [];
+    for (const partner of partners) {
+      if (!partner.deleted_at && (!partner.tenant_id || partner.tenant_id === 'null')) {
+        await updateRows('crm_partners', { tenant_id: targetTenantId }, { filters: { id: partner.id } });
+      }
+    }
+  } catch (err: any) {
+    console.error('Partner tenant_id auto-heal fail:', err?.message || err);
+  }
+}
 
 /**
  * ⚡ 이지데스크 user_data_query 툴의 내부 1000개 수신 한계(Clamping Limit)를 우회하기 위해
@@ -295,6 +327,9 @@ export async function GET(req: Request) {
     // ────────────────────────────────────────────────────────
     // 2. 전체 거래처 리스트 조회 및 실시간 거래 지표 합계 산출
     // ────────────────────────────────────────────────────────
+    const tenantId = await getUserTenantId();
+    await healPartnerTenantData(tenantId);
+
     const partnersRes = await queryTableAll('crm_partners');
     const partners = (partnersRes.rows || []).filter((pt: any) => !pt.deleted_at);
 
@@ -391,6 +426,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const tenantId = await getUserTenantId();
 
     // 1. 대량 일괄 등록 (Bulk Import) 처리 분기
     if (body.partners && Array.isArray(body.partners)) {
@@ -480,7 +516,8 @@ export async function POST(req: Request) {
           credit_limit: parseInt(pt.credit_limit as any) || 0,
           business_license_url: '',
           memo: pt.memo || '',
-          created_at: nowStr
+          created_at: nowStr,
+          tenant_id: tenantId
         };
         rowsToInsert.push(newRow);
         newInsertedMap.set(companyName, newRow); // 이번 엑셀 삽입 추적 Map에 등록
@@ -591,7 +628,8 @@ export async function POST(req: Request) {
       credit_limit: parseInt(credit_limit as any) || 0,
       business_license_url,
       memo,
-      created_at: nowStr
+      created_at: nowStr,
+      tenant_id: tenantId
     }]);
 
     return NextResponse.json({

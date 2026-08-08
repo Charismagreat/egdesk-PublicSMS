@@ -83,7 +83,8 @@ export async function POST(req: Request) {
           await insertRows('crm_partners', [{
             type: 'BUYER', // 기본형 바이어 지정
             company_name: finalCompanyName,
-            created_at: nowStr
+            created_at: nowStr,
+            tenant_id: tenantId || 'default'
           }]);
 
           // 생성된 거래처의 실제 정수 id 획득

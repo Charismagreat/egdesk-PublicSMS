@@ -26,7 +26,8 @@ export async function handleBusinessCard(reqBody: any, nowStr: string) {
         {
           type: 'BUYER', // 기본 바이어로 세팅
           company_name: partnerName,
-          created_at: nowStr
+          created_at: nowStr,
+          tenant_id: reqBody.tenantId || 'default'
         }
       ]);
       

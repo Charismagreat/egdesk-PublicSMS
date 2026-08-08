@@ -25,7 +25,8 @@ export async function handleBusinessLicense(reqBody: any, nowStr: string) {
       vip_level: 'NORMAL',
       credit_limit: 0,
       memo: data.memo || '이지봇 AI 사업자등록증 신규 가입 완료',
-      created_at: nowStr
+      created_at: nowStr,
+      tenant_id: reqBody.tenantId || 'default'
     }]);
 
     return {

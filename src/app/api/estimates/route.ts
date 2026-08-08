@@ -501,7 +501,8 @@ export async function POST(req: Request) {
           credit_limit: 0,
           business_license_url: business_license_url,
           memo: '모바일 스마트 온보딩 채널을 통해 첫 견적 요청과 함께 자동 신규 가입되었습니다.',
-          created_at: nowStr
+          created_at: nowStr,
+          tenant_id: tenantId || 'default'
         }]);
         console.log(`B2B Partner auto-onboarded: ${partner_name} (${partnerId})`);
       }

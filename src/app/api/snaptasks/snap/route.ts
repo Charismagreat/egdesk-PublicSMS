@@ -316,7 +316,8 @@ If no fields are found for partner, contact or estimate, leave them as null in t
           credit_limit: 0,
           business_license_url: savedFileUrl,
           memo: `'ST-${taskId}' 스냅태스크 AI 자동 가입 처리됨.`,
-          created_at: nowStr
+          created_at: nowStr,
+          tenant_id: tenantId || 'default'
         }]);
 
         // 생성된 거래처의 실제 정수 id 획득

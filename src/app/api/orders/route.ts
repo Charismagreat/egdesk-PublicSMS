@@ -105,7 +105,8 @@ export async function POST(req: Request) {
           manager_email: taxEmail || '',
           vip_level: 'PENDING', // 💡 승인 대기 상태 표기
           memo: '[승인대기] 스토어 발주서 주문 자동 가입',
-          created_at: nowStr
+          created_at: nowStr,
+          tenant_id: tenantId || 'default'
         }]);
 
         // 새로 생성된 거래처 ID 재확인
