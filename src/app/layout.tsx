@@ -8,6 +8,7 @@ import EasyBot from "@/components/EasyBot";
 import AIHelpManager from "@/components/AIHelpManager";
 import DynamicTitle from "@/components/DynamicTitle";
 import AuthProvider from "@/components/AuthProvider";
+import ScrollToTopButton from "@/components/ScrollToTopButton";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -43,6 +44,7 @@ export default function RootLayout({
           </main>
           <EasyBot />
           <AIHelpManager />
+          <ScrollToTopButton />
         </AuthProvider>
       </body>
     </html>

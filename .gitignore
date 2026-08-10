@@ -50,3 +50,7 @@ proxy.backup.ts
 *.db-journal
 *.db-shm
 *.db-wal
+
+# temporary / scratch
+scratch/
+

@@ -1397,5 +1397,6 @@ export default function MobileHubPage() {
         onCancelTaskRequest={(taskId, title) => handleCancelTaskRequest({ id: taskId, title })}
       />
     </div>
+
   );
 }
