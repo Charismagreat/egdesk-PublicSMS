@@ -294,6 +294,18 @@ export default function AiUsageMonitor() {
                   <p className="text-xs text-slate-400 py-6 text-center font-medium">소모 이력이 존재하지 않습니다.</p>
                 ) : (
                   <div className="space-y-3.5">
+                    {models.map((m) => {
+                      const totalModelCalls = models.reduce((acc, curr) => acc + curr.calls, 0);
+                      const barWidth = totalModelCalls > 0 ? (m.calls / totalModelCalls) * 100 : 0;
+                      return (
+                        <div key={m.model} className="space-y-1">
+                          <div className="flex justify-between text-xs font-semibold text-slate-600">
+                            <span className="truncate max-w-[180px]">{m.model}</span>
+                            <span className="font-bold text-slate-700">{m.tokens.toLocaleString()} tokens ({barWidth.toFixed(1)}%)</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full rounded-full transition-all duration-500"
                               style={{ width: `${barWidth}%`, backgroundColor: '#10b981' }}
                             ></div>
                           </div>
