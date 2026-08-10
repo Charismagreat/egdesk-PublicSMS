@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Search, Plus, Edit2, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, FileSpreadsheet, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Partner } from "../types";
 
 interface PartnerTableProps {
@@ -43,6 +44,56 @@ export function PartnerTable({
   paginatedPartners
 }: PartnerTableProps) {
   
+  // 📥 거래처 목록 엑셀 다운로드 (Excel Export)
+  const handleExportExcel = () => {
+    if (!filteredPartners || filteredPartners.length === 0) {
+      alert("다운로드할 거래처 데이터가 존재하지 않습니다.");
+      return;
+    }
+
+    const exportRows = filteredPartners.map((pt, index) => {
+      const typeStr = (pt.type || "")
+        .split(",")
+        .map((t) => {
+          const trimT = t.trim();
+          if (trimT === "VENDOR") return "공급사(매입처)";
+          if (trimT === "BUYER") return "바이어(매출처)";
+          if (trimT === "AFFILIATE") return "관계사";
+          return trimT;
+        })
+        .join(", ");
+
+      return {
+        "일련번호": index + 1,
+        "거래처구분": typeStr,
+        "상호명": pt.company_name || "",
+        "사업자번호": pt.business_number || "",
+        "대표자명": pt.representative || "",
+        "대표번호": pt.phone || "",
+        "팩스번호": pt.fax || "",
+        "계산서이메일": pt.email || "",
+        "주소": pt.address || "",
+        "대표담당자": pt.manager_name || "",
+        "담당자직급": pt.manager_position || "",
+        "담당자연락처": pt.manager_phone || "",
+        "담당자이메일": pt.manager_email || "",
+        "우대등급": pt.vip_level || "NORMAL",
+        "여신한도": pt.credit_limit ? pt.credit_limit.toLocaleString() + "원" : "0원",
+        "누적거래실적": pt.total_performance ? pt.total_performance.toLocaleString() + "원" : "0원",
+        "비고": pt.memo || "",
+        "등록일시": pt.created_at || ""
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "거래처대장");
+
+    const todayStr = new Date().toISOString().split("T")[0];
+    const fileName = `거래처_목록_대장_${todayStr}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
   // 페이지 번호 리스트 계산 (최대 5개씩 묶어서 출력)
   const renderPageNumbers = () => {
     const pages = [];
@@ -76,7 +127,7 @@ export function PartnerTable({
   return (
     <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-5">
       
-      {/* 검색 및 추가/일괄 등록 버튼 */}
+      {/* 검색 및 추가/일괄 등록/다운로드 버튼 */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
@@ -90,6 +141,16 @@ export function PartnerTable({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* 📥 엑셀 다운로드 버튼 */}
+          <button
+            onClick={handleExportExcel}
+            title="현재 조회된 거래처 목록을 엑셀 파일로 내보냅니다."
+            className="px-4 py-3 bg-white hover:bg-emerald-50 text-emerald-700 text-xs font-black rounded-xl flex items-center gap-1.5 border border-emerald-200 cursor-pointer transition-all shadow-sm active:scale-95"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            엑셀 다운로드
+          </button>
+
           {/* 📂 엑셀 일괄 등록 버튼 */}
           <button
             onClick={handleBulkImportClick}
@@ -114,7 +175,8 @@ export function PartnerTable({
         <table className="w-full text-left text-xs font-semibold border-collapse min-w-[1300px]">
           <thead>
             <tr className="border-b border-slate-100 text-slate-400 bg-slate-50/50">
-              <th className="py-3 px-3.5 rounded-l-xl">구분 / 코드</th>
+              <th className="py-3 px-3.5 text-center rounded-l-xl w-14">No.</th>
+              <th className="py-3 px-3.5">구분</th>
               <th className="py-3 px-3.5">상호명 / 대표자 / 사업자번호</th>
               <th className="py-3 px-3.5">연락처 / 팩스 / 주소</th>
               <th className="py-3 px-3.5">대표담당자 정보</th>
@@ -127,38 +189,44 @@ export function PartnerTable({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-slate-400">거래처 목록 분석 중...</td>
+                <td colSpan={9} className="text-center py-12 text-slate-400">거래처 목록 분석 중...</td>
               </tr>
             ) : paginatedPartners.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-slate-400">
+                <td colSpan={9} className="text-center py-12 text-slate-400">
                   등록된 {activeTab === 'VENDOR' ? '공급처가' : activeTab === 'BUYER' ? '바이어가' : '관계사가'} 없습니다.
                 </td>
               </tr>
             ) : (
-              paginatedPartners.map(pt => (
-                <tr 
-                  key={pt.id} 
-                  onClick={() => openDetailPopup(pt)}
-                  className="border-b border-slate-50 hover:bg-slate-50/50 cursor-pointer transition-colors"
-                >
-                  {/* 1. 구분 및 코드 */}
-                  <td className="py-4 px-3.5">
-                    <div className="flex flex-wrap gap-1">
-                      {(pt.type || '').toUpperCase().split(',').filter(Boolean).map(t => (
-                        <span key={t} className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-black tracking-wider ${
-                          t === 'VENDOR' 
-                            ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
-                            : t === 'BUYER' 
-                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-                            : 'bg-amber-50 text-amber-600 border border-amber-100'
-                        }`}>
-                          {t === 'VENDOR' ? '공급사' : t === 'BUYER' ? '바이어' : t === 'AFFILIATE' ? '관계사' : t}
-                        </span>
-                      ))}
-                    </div>
-                    <span className="font-mono text-[10px] text-slate-400 block mt-1.5">{pt.id}</span>
-                  </td>
+              paginatedPartners.map((pt, index) => {
+                const rowNumber = (currentPage - 1) * 10 + index + 1;
+                return (
+                  <tr 
+                    key={pt.id} 
+                    onClick={() => openDetailPopup(pt)}
+                    className="border-b border-slate-50 hover:bg-slate-50/50 cursor-pointer transition-colors"
+                  >
+                    {/* 0. 일련번호 (No.) */}
+                    <td className="py-4 px-3.5 text-center font-mono text-xs font-bold text-slate-400">
+                      {rowNumber}
+                    </td>
+
+                    {/* 1. 구분 */}
+                    <td className="py-4 px-3.5">
+                      <div className="flex flex-wrap gap-1">
+                        {(pt.type || '').toUpperCase().split(',').filter(Boolean).map(t => (
+                          <span key={t} className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-black tracking-wider ${
+                            t === 'VENDOR' 
+                              ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
+                              : t === 'BUYER' 
+                              ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                              : 'bg-amber-50 text-amber-600 border border-amber-100'
+                          }`}>
+                            {t === 'VENDOR' ? '공급사' : t === 'BUYER' ? '바이어' : t === 'AFFILIATE' ? '관계사' : t}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
 
                   {/* 2. 상호명 / 대표자 / 사업자번호 */}
                   <td className="py-4 px-3.5">
@@ -255,8 +323,8 @@ export function PartnerTable({
                     </div>
                   </td>
                 </tr>
-              ))
-            )}
+              );
+            }))}
           </tbody>
         </table>
       </div>
