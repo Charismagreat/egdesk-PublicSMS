@@ -2,31 +2,25 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { Users, TrendingUp, CheckCircle, Sparkles } from "lucide-react";
-import { InstagramPost } from "../types";
+import { Users, TrendingUp, CheckCircle, Sparkles, RefreshCw } from "lucide-react";
+import { InstagramPost, McpInstagramHistoryEntry } from "../types";
 
 interface InstagramStatsProps {
-  /**
-   * 포스트 내역 목록
-   */
   posts: InstagramPost[];
-  /**
-   * 계정 연동 성공 상태
-   */
   isSessionConnected: boolean;
-  /**
-   * 연동된 계정 유저명
-   */
   instagramUsername: string;
+  mcpHistory?: McpInstagramHistoryEntry[];
+  onSyncStats?: () => void;
+  isSyncingStats?: boolean;
 }
 
-/**
- * 실시간 주요 데이터 지표 통계 스코어보드 컴포넌트
- */
 export default function InstagramStats({
   posts,
   isSessionConnected,
   instagramUsername,
+  mcpHistory = [],
+  onSyncStats,
+  isSyncingStats = false,
 }: InstagramStatsProps) {
   // 실제 데이터베이스 데이터 기반 실시간 통계 산출
   const postedPosts = posts.filter((p) => p.status === "POSTED");
@@ -59,7 +53,30 @@ export default function InstagramStats({
   const successSubtext = failedPosts.length > 0 ? `발행 오류 ${failedPosts.length}건 감지됨` : "시스템 오류율 0%";
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 relative z-10">
+    <div className="space-y-4 mb-8 relative z-10">
+      <div className="flex items-center justify-between bg-white border border-slate-200/80 rounded-2xl px-5 py-3 shadow-sm">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+          <span className="text-xs font-bold text-slate-700">EGDesk MCP 반응 성과 관제</span>
+          {mcpHistory.length > 0 && (
+            <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+              실물 이력 {mcpHistory.length}건 수집됨
+            </span>
+          )}
+        </div>
+        {onSyncStats && (
+          <button
+            onClick={onSyncStats}
+            disabled={isSyncingStats}
+            className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/60 px-3 py-1.5 rounded-xl transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingStats ? 'animate-spin' : ''}`} />
+            {isSyncingStats ? '실시간 반응 동기화 중...' : '실시간 반응 지표 동기화'}
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <motion.div
         whileHover={{ y: -5 }}
         className="p-6 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
@@ -134,5 +151,6 @@ export default function InstagramStats({
         <p className="text-xs text-slate-400 mt-4">{successSubtext}</p>
       </motion.div>
     </div>
+  </div>
   );
 }

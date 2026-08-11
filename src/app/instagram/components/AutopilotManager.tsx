@@ -1,91 +1,62 @@
 "use client";
 
 import React, { useState } from "react";
-import { Settings, RefreshCw, ToggleLeft, ToggleRight, AlertTriangle, BookOpen } from "lucide-react";
-import { AutopilotSettings } from "../types";
-
-import { usePersistedState } from "@/hooks/usePersistedState";
+import { Settings, RefreshCw, ToggleLeft, ToggleRight, Sparkles, Plus, Trash2, CheckCircle2, UserCheck } from "lucide-react";
+import { AutopilotSettings, McpInstagramConnection } from "../types";
 
 interface AutopilotManagerProps {
-  /**
-   * 오토파일럿 설정
-   */
   settings: AutopilotSettings;
-  /**
-   * 계정 연동 성공 상태
-   */
   isSessionConnected: boolean;
-  /**
-   * 설정 저장 콜백
-   */
+  mcpConnections?: McpInstagramConnection[];
+  selectedConnectionId?: string | null;
+  onSelectConnection?: (conn: McpInstagramConnection) => void;
   onSaveSettings: (updates: Partial<AutopilotSettings>) => Promise<void>;
-  /**
-   * 오토파일럿 수동 강제 구동 콜백
-   */
   onTriggerAutopilot: () => Promise<void>;
-  /**
-   * 계정 세션 로그인 연동 콜백
-   */
-  onConnectSession: (loginName: string, pass: string) => Promise<void>;
-  /**
-   * 계정 연동 해제 콜백
-   */
+  onConnectSession: (loginName: string, pass: string, handle?: string) => Promise<void>;
   onDisconnectSession: () => Promise<void>;
+  onDeleteConnection?: (connId: string) => Promise<void>;
 }
 
-/**
- * 인스타그램 오토파일럿 마케팅 주기 설정 및 계정 바인딩 관리 컴포넌트
- */
 export default function AutopilotManager({
   settings,
   isSessionConnected,
+  mcpConnections = [],
+  selectedConnectionId,
+  onSelectConnection,
   onSaveSettings,
   onTriggerAutopilot,
   onConnectSession,
   onDisconnectSession,
+  onDeleteConnection,
 }: AutopilotManagerProps) {
+  const [showAddForm, setShowAddForm] = useState(false);
   const [sessionLoginName, setSessionLoginName] = useState("");
   const [sessionPassword, setSessionPassword] = useState("");
-  const [connectionMode, setConnectionMode] = usePersistedState<"session" | "graph">("ig_connection_mode", "session");
-
-  // Graph API 독립 폼 상태 (입력 포커스 이탈 방지)
-  const [localIgUserId, setLocalIgUserId] = useState(settings.ig_user_id || "");
-  const [localAccessToken, setLocalAccessToken] = useState(settings.access_token || "");
-
-  React.useEffect(() => {
-    setLocalIgUserId(settings.ig_user_id || "");
-    setLocalAccessToken(settings.access_token || "");
-  }, [settings.ig_user_id, settings.access_token]);
-
-  const handleGraphSave = () => {
-    onSaveSettings({
-      ig_user_id: localIgUserId.trim(),
-      access_token: localAccessToken.trim(),
-      instagram_username: settings.instagram_username || localIgUserId.trim() || "business_account",
-    });
-  };
+  const [sessionHandle, setSessionHandle] = useState("");
 
   const handleSessionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sessionLoginName.trim()) return;
-    onConnectSession(sessionLoginName.trim(), sessionPassword.trim());
+    if (!sessionLoginName.trim() || !sessionPassword.trim()) return;
+    onConnectSession(sessionLoginName.trim(), sessionPassword.trim(), sessionHandle.trim());
     setSessionLoginName("");
     setSessionPassword("");
+    setSessionHandle("");
+    setShowAddForm(false);
   };
 
   return (
     <div className="p-6 lg:p-8 rounded-3xl border border-slate-100 bg-white shadow-sm relative overflow-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-6 gap-3">
         <div className="flex items-center gap-3">
-          <Settings className="w-5 h-5 text-pink-600" />
-          <h2 className="text-xl font-bold text-slate-800">인스타그램 오토파일럿 및 계정 바인딩</h2>
+          <Settings className="w-5 h-5 text-indigo-600" />
+          <h2 className="text-xl font-bold text-slate-800">EGDesk MCP 인스타그램 연동 관제</h2>
         </div>
         {settings.is_autopilot === 1 && (
           <button
             onClick={onTriggerAutopilot}
-            className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-pink-200 bg-pink-50 text-pink-700 font-semibold hover:bg-pink-100 hover:shadow-sm transition duration-200 cursor-pointer text-xs self-start sm:self-auto"
+            className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 font-semibold hover:bg-indigo-100 hover:shadow-sm transition duration-200 cursor-pointer text-xs self-start sm:self-auto"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-pink-600" />
+            <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
             오토파일럿 AI 즉시 가동
           </button>
         )}
@@ -102,7 +73,7 @@ export default function AutopilotManager({
                   <span
                     className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border shadow-sm transition-all ${
                       settings.is_autopilot === 1
-                        ? "bg-pink-50 text-pink-700 border-pink-200"
+                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
                         : "bg-slate-50 text-slate-600 border-slate-200"
                     }`}
                   >
@@ -120,7 +91,7 @@ export default function AutopilotManager({
                 className="focus:outline-none cursor-pointer border-0 bg-transparent"
               >
                 {settings.is_autopilot === 1 ? (
-                  <ToggleRight className="w-14 h-8 text-pink-600" />
+                  <ToggleRight className="w-14 h-8 text-indigo-600" />
                 ) : (
                   <ToggleLeft className="w-14 h-8 text-slate-300" />
                 )}
@@ -134,7 +105,7 @@ export default function AutopilotManager({
               <select
                 value={settings.autopilot_interval}
                 onChange={(e) => onSaveSettings({ autopilot_interval: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-pink-500 focus:bg-white transition"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
               >
                 <option value="DAILY">매일 (Daily)</option>
                 <option value="WEEKLY">매주 월/목 (Weekly)</option>
@@ -148,7 +119,7 @@ export default function AutopilotManager({
                 type="time"
                 value={settings.autopilot_time}
                 onChange={(e) => onSaveSettings({ autopilot_time: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-pink-500 focus:bg-white transition"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
               />
             </div>
           </div>
@@ -162,7 +133,7 @@ export default function AutopilotManager({
                   onClick={() => onSaveSettings({ tone_style: tone })}
                   className={`text-xs font-semibold py-2 px-1 rounded-lg border transition cursor-pointer ${
                     settings.tone_style === tone
-                      ? "border-pink-300 bg-pink-50 text-pink-700 font-extrabold"
+                      ? "border-indigo-300 bg-indigo-50 text-indigo-700 font-extrabold"
                       : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
                   }`}
                 >
@@ -173,120 +144,124 @@ export default function AutopilotManager({
           </div>
         </div>
 
-        {/* 오른쪽 칼럼: 계정 세션 연동 및 가이드 */}
+        {/* 오른쪽 칼럼: EGDesk MCP 계정 등록/선택 콤보박스 */}
         <div className="border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0 md:pl-8 space-y-6">
-          <div>
-            <div className="flex gap-2 mb-3">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-3 py-1.5 rounded-xl">
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                이지데스크 MCP 등록 계정 관리
+              </div>
+
               <button
-                onClick={() => setConnectionMode("session")}
-                className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition cursor-pointer ${
-                  connectionMode === "session"
-                    ? "border-pink-500 bg-pink-50 text-pink-700"
-                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                }`}
+                type="button"
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl transition cursor-pointer"
               >
-                개인 계정 세션 바인딩
-              </button>
-              <button
-                onClick={() => setConnectionMode("graph")}
-                className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition cursor-pointer ${
-                  connectionMode === "graph"
-                    ? "border-pink-500 bg-pink-50 text-pink-700"
-                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                }`}
-              >
-                비즈니스 Graph API 연동
+                <Plus className="w-3.5 h-3.5" />
+                {showAddForm ? "취소" : "새 계정 등록"}
               </button>
             </div>
 
-            {connectionMode === "session" ? (
-              <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left">
-                <div className="flex items-center gap-2 text-xs font-semibold text-pink-600">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  임시 세션 연동 인터페이스
-                </div>
+            {/* 1. 이지데스크 MCP 등록 계정 드롭다운/목록 */}
+            {mcpConnections.length > 0 && !showAddForm && (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-600 block">
+                  포스팅 수행할 MCP 계정 선택 ({mcpConnections.length}개 저장됨)
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {mcpConnections.map((conn) => {
+                    const isSelected = selectedConnectionId === conn.id || settings.instagram_username === conn.username;
+                    return (
+                      <div
+                        key={conn.id}
+                        onClick={() => onSelectConnection && onSelectConnection(conn)}
+                        className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition ${
+                          isSelected
+                            ? "bg-indigo-50/70 border-indigo-300 text-indigo-900 shadow-sm"
+                            : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <UserCheck className={`w-4 h-4 ${isSelected ? "text-indigo-600" : "text-slate-400"}`} />
+                          <div>
+                            <p className="text-xs font-bold">@{conn.username || conn.name}</p>
+                            {conn.handle && <p className="text-[10px] text-slate-400">@{conn.handle}</p>}
+                          </div>
+                        </div>
 
-                {isSessionConnected ? (
-                  <div className="pt-2 text-left">
-                    <p className="text-sm font-bold text-slate-800">@ {settings.instagram_username}</p>
-                    <span className="text-xs text-emerald-600 mt-1 block font-medium">
-                      ● 실시간 개인 계정 세션 연동 활성화
-                    </span>
-                    <button
-                      onClick={onDisconnectSession}
-                      className="mt-3 w-full bg-white hover:bg-slate-50 text-xs font-semibold text-slate-600 py-2 rounded-xl border border-slate-200 shadow-sm transition cursor-pointer"
-                    >
-                      인스타 계정 연동 해제
-                    </button>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSessionSubmit} className="space-y-3 pt-2">
-                    <input
-                      type="text"
-                      placeholder="인스타그램 사용자명 (예: instagram_user)"
-                      value={sessionLoginName}
-                      onChange={(e) => setSessionLoginName(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-pink-500 transition"
-                    />
-                    <input
-                      type="password"
-                      placeholder="인스타그램 비밀번호 (보안 암호화)"
-                      value={sessionPassword}
-                      onChange={(e) => setSessionPassword(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-pink-500 transition"
-                    />
-                    <button
-                      type="submit"
-                      className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-95 text-xs font-bold text-white py-2 rounded-xl shadow-sm transition cursor-pointer border-0"
-                    >
-                      개인 계정 세션 로그인 바인딩
-                    </button>
-                  </form>
-                )}
+                        <div className="flex items-center gap-2">
+                          {isSelected && (
+                            <span className="text-[10px] font-extrabold bg-indigo-600 text-white px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> 선택됨
+                            </span>
+                          )}
+                          {onDeleteConnection && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`계정 @${conn.username}을(를) 삭제하시겠습니까?`)) {
+                                  onDeleteConnection(conn.id);
+                                }
+                              }}
+                              className="text-slate-400 hover:text-rose-500 p-1 rounded hover:bg-rose-50 transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            ) : (
-              <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left">
-                <div className="flex items-center gap-2 text-xs font-semibold text-cyan-600">
-                  <BookOpen className="w-3.5 h-3.5" />
-                  Meta Graph API 2-Step 미디어 자동 발행 공식 연동
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                  인스타그램 공식 API(Meta Graph API)를 사용하여 계정 제재 리스크 없이 **2-Step Media Container Direct Publishing**으로 100% 무인 자동 발행됩니다.
-                </p>
-                <div className="text-xs space-y-1.5 text-slate-600 font-bold">
-                  <p>1. 인스타 앱 설정 ➔ '프로페셔널 계정으로 전환' (비즈니스/크리에이터)</p>
-                  <p>2. 관리자 페이스북 페이지와 인스타 계정 연결 후 `ig_user_id` 획득</p>
-                  <p>3. Meta 개발자 포털 ➔ Graph API Access Token 발급 및 입력</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Instagram Business User ID (`ig_user_id`)</label>
-                    <input
-                      type="text"
-                      placeholder="예: 17841400000000000"
-                      value={localIgUserId}
-                      onChange={(e) => setLocalIgUserId(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-pink-500 transition"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Graph Access Token (`access_token`)</label>
-                    <input
-                      type="text"
-                      placeholder="EAAG..."
-                      value={localAccessToken}
-                      onChange={(e) => setLocalAccessToken(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-pink-500 transition"
-                    />
-                  </div>
-                </div>
+            )}
 
+            {/* 2. 이지데스크 MCP 계정 신규 추가 등록 폼 */}
+            {showAddForm && (
+              <form onSubmit={handleSessionSubmit} className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <p className="text-xs font-bold text-slate-700">EGDesk MCP 인스타그램 계정 신규 저장</p>
+                <input
+                  type="text"
+                  placeholder="인스타그램 사용자명 (예: official_brand)"
+                  value={sessionLoginName}
+                  onChange={(e) => setSessionLoginName(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 transition"
+                />
+                <input
+                  type="password"
+                  placeholder="인스타그램 비밀번호 (보안 보관)"
+                  value={sessionPassword}
+                  onChange={(e) => setSessionPassword(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 transition"
+                />
+                <input
+                  type="text"
+                  placeholder="공개 @핸들 (선택 사항)"
+                  value={sessionHandle}
+                  onChange={(e) => setSessionHandle(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 transition"
+                />
                 <button
-                  type="button"
-                  onClick={handleGraphSave}
-                  className="w-full mt-2 bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-95 text-xs font-bold text-white py-2 rounded-xl shadow-sm transition cursor-pointer border-0"
+                  type="submit"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white py-2 rounded-xl shadow-sm transition cursor-pointer border-0"
                 >
-                  Graph API 연동 정보 저장 💾
+                  이지데스크 MCP에 계정 저장 🔒
+                </button>
+              </form>
+            )}
+
+            {/* 3. 계정이 없는 기본 안내 상태 */}
+            {mcpConnections.length === 0 && !showAddForm && (
+              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-center space-y-3">
+                <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                  등록된 이지데스크 MCP 계정이 없습니다. 계정을 추가 등록하시면 무인 자동 포스팅 및 성과 수집이 실행됩니다.
+                </p>
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white px-4 py-2 rounded-xl transition cursor-pointer border-0"
+                >
+                  첫번째 계정 추가 등록하기
                 </button>
               </div>
             )}

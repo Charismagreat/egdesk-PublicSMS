@@ -43,3 +43,40 @@ export interface AutopilotSettings {
   access_token: string;
   ig_user_id?: string;
 }
+
+/**
+ * EGDesk MCP 인스타그램 연동 계정 인터페이스
+ */
+export interface McpInstagramConnection {
+  id: string;
+  name: string;
+  username: string;
+  handle: string | null;
+  hasPassword?: boolean;
+  hasAccessToken?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * EGDesk MCP 인스타그램 실물 발행 및 성과 이력 인터페이스
+ */
+export interface McpInstagramHistoryEntry {
+  id: string;
+  source: 'schedule' | 'debug' | 'manual';
+  status: 'success' | 'failure';
+  connectionId?: string | null;
+  connectionName?: string | null;
+  username?: string | null;
+  title?: string | null;
+  caption?: string | null;
+  imagePath?: string | null;
+  postUrl?: string | null;
+  likes?: number | null;
+  comments?: number | null;
+  views?: number | null;
+  errorMessage?: string | null;
+  startedAt: string;
+  completedAt: string;
+}
+

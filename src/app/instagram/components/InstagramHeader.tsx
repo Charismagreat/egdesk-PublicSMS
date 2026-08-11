@@ -47,15 +47,22 @@ export default function InstagramHeader() {
   return (
     <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-200 pb-6 mb-8 relative z-10">
       <div className="space-y-1">
-        <h1 className="text-3xl font-bold text-slate-800 tracking-tight flex items-center">
-          <InstagramIcon className="w-8 h-8 text-pink-600 mr-3" />
-          인스타그램 마케팅 AI
+        <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+          <InstagramIcon className="w-8 h-8 text-indigo-600" />
+          인스타그램 마케팅 AI 관제 센터
         </h1>
+        <p className="text-slate-500 mt-2 text-sm">
+          이지데스크(EGDesk) Instagram MCP 계정 연동 및 Playwright 자동 포스팅, 반응 성과 통계를 한눈에 관제합니다.
+        </p>
       </div>
 
-      {/* 시스템 시간 표시 */}
+      {/* 시스템 시간 및 EGDesk MCP 상태 표시 */}
       <div className="mt-4 md:mt-0 flex items-center gap-3">
-        <span className="text-xs text-slate-500 font-semibold bg-slate-100/80 border border-slate-200/50 px-2.5 py-1 rounded-lg">
+        <span className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          EGDesk MCP 연동 활성화
+        </span>
+        <span className="text-xs text-slate-500 font-semibold bg-slate-100 border border-slate-200/60 px-3 py-1.5 rounded-xl">
           현재 시스템 시간: {systemTime || "12:00 PM"}
         </span>
       </div>

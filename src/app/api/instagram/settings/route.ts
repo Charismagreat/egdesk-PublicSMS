@@ -1,6 +1,12 @@
-export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, updateRows, executeSQL } from '../../../../../egdesk-helpers';
+import { 
+  queryTable, 
+  insertRows, 
+  updateRows, 
+  executeSQL, 
+  listInstagramConnections, 
+  saveInstagramConnection 
+} from '../../../../../egdesk-helpers';
 
 // 기본 설정 값 정의
 const DEFAULT_SETTINGS = {
@@ -23,6 +29,17 @@ export async function GET() {
       // 이미 컬럼이 존재하는 경우 지극히 정상
     }
 
+    // 이지데스크 MCP 계정 연동 목록 조회 시도
+    let mcpConnections: any[] = [];
+    try {
+      const connRes = await listInstagramConnections();
+      if (connRes && connRes.success && Array.isArray(connRes.connections)) {
+        mcpConnections = connRes.connections;
+      }
+    } catch (mcpErr) {
+      console.warn('EGDesk Instagram MCP connections query fallback:', mcpErr);
+    }
+
     // 설정 테이블 데이터 전체 조회
     const result = await queryTable('instagram_marketing_settings', { limit: 100 });
     
@@ -31,7 +48,7 @@ export async function GET() {
       const activeRows = result.rows.filter((r: any) => !r.deleted_at);
       const sorted = [...(activeRows.length > 0 ? activeRows : result.rows)].sort((a: any, b: any) => Number(b.id) - Number(a.id));
       const validSetting = sorted.find((r: any) => r.access_token || r.ig_user_id || r.instagram_username) || sorted[0];
-      return NextResponse.json({ success: true, settings: validSetting });
+      return NextResponse.json({ success: true, settings: validSetting, mcpConnections });
     }
 
     // 설정이 없을 경우 기본 설정값으로 생성 및 저장
@@ -42,7 +59,7 @@ export async function GET() {
       updated_by: 'system',
     };
     await insertRows('instagram_marketing_settings', [initialSettings]);
-    return NextResponse.json({ success: true, settings: initialSettings });
+    return NextResponse.json({ success: true, settings: initialSettings, mcpConnections });
   } catch (error: any) {
     console.error('인스타그램 설정 조회 에러:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -80,6 +97,20 @@ export async function POST(req: Request) {
       updated_at: nowStr,
       updated_by: 'admin',
     };
+
+    // MCP 인스타그램 계정 동시 저장 시도 (비밀번호 및 유저네임이 있는 경우)
+    if (data.instagram_username && data.password) {
+      try {
+        await saveInstagramConnection({
+          name: data.instagram_username,
+          username: data.instagram_username,
+          password: data.password,
+          handle: data.instagram_username.startsWith('@') ? data.instagram_username.substring(1) : data.instagram_username,
+        });
+      } catch (mcpSaveErr) {
+        console.warn('EGDesk MCP saveInstagramConnection warning:', mcpSaveErr);
+      }
+    }
 
     if (existingRows.length > 0) {
       // 해당 targetId 행을 업데이트

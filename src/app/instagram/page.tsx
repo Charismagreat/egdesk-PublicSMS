@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, AlertCircle, AlertTriangle } from "lucide-react";
 import { usePersistedState } from '@/hooks/usePersistedState';
 
-import { Product, InstagramPost, AutopilotSettings } from "./types";
+import { Product, InstagramPost, AutopilotSettings, McpInstagramConnection, McpInstagramHistoryEntry } from "./types";
 import InstagramHeader from "./components/InstagramHeader";
 import InstagramStats from "./components/InstagramStats";
 import AutopilotManager from "./components/AutopilotManager";
@@ -56,6 +56,11 @@ export default function InstagramMarketingPortal() {
     new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0]
   );
   const [scheduleTime, setScheduleTime] = usePersistedState<string>("ig_schedule_time", "10:00");
+
+  // MCP 연결 및 이력 상태
+  const [mcpConnections, setMcpConnections] = useState<McpInstagramConnection[]>([]);
+  const [mcpHistory, setMcpHistory] = useState<McpInstagramHistoryEntry[]>([]);
+  const [isSyncingStats, setIsSyncingStats] = useState(false);
 
   // 계정 연결 상태
   const [isSessionConnected, setIsSessionConnected] = useState(false);
@@ -114,11 +119,30 @@ export default function InstagramMarketingPortal() {
     showToast(`해시태그 [${hashtag}] 피드 에디터에 추가되었습니다!`, "info");
   };
 
+  // 1. 이지데스크 MCP 계정 목록 페칭
+  const fetchMcpConnections = async () => {
+    try {
+      const res = await apiFetch("/api/instagram/connections");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.connections)) {
+        setMcpConnections(data.connections);
+        if (data.connections.length > 0 && !settings.instagram_username) {
+          saveSettings({ instagram_username: data.connections[0].username });
+        }
+        setIsSessionConnected(data.connections.length > 0 || Boolean(settings.instagram_username));
+      }
+    } catch (err) {
+      console.error("EGDesk MCP 계정 페칭 에러:", err);
+    }
+  };
+
   // 초기 로딩
   useEffect(() => {
     fetchSettings();
+    fetchMcpConnections();
     fetchPosts();
     fetchProducts();
+    handleSyncStats();
   }, []);
 
   // 토스트 팝업 띄우기
@@ -130,6 +154,27 @@ export default function InstagramMarketingPortal() {
     }, 4500);
   };
 
+  // EGDesk MCP 실시간 지표 동기화
+  const handleSyncStats = async () => {
+    setIsSyncingStats(true);
+    try {
+      const res = await apiFetch("/api/instagram/sync-stats", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (Array.isArray(data.history)) {
+          setMcpHistory(data.history);
+        }
+        fetchPosts();
+      }
+    } catch (err: any) {
+      console.warn("지표 동기화 경고:", err.message);
+    } finally {
+      setIsSyncingStats(false);
+    }
+  };
+
   // API 데이터 페칭
   const fetchSettings = async () => {
     try {
@@ -137,8 +182,11 @@ export default function InstagramMarketingPortal() {
       const data = await res.json();
       if (data.success && data.settings) {
         setSettings(data.settings);
+        if (Array.isArray(data.mcpConnections)) {
+          setMcpConnections(data.mcpConnections);
+        }
         const hasConnection = Boolean(
-          data.settings.instagram_username || data.settings.access_token || data.settings.ig_user_id
+          data.settings.instagram_username || (data.mcpConnections && data.mcpConnections.length > 0)
         );
         setIsSessionConnected(hasConnection);
       }
@@ -187,24 +235,60 @@ export default function InstagramMarketingPortal() {
       const data = await res.json();
       if (data.success) {
         setSettings(data.settings);
-        showToast("인스타그램 마케팅 설정이 안전하게 업데이트되었습니다.", "success");
-      } else {
-        showToast("설정 저장 실패: " + data.error, "error");
       }
     } catch (err: any) {
-      showToast("설정 저장 중 오류: " + err.message, "error");
+      console.error("설정 저장 중 오류:", err.message);
     }
   };
 
-  // 세션 바인딩 연결 시뮬레이터
-  const handleConnectSession = async (loginName: string, pass: string) => {
-    // 계정 연결 상태 저장
-    await saveSettings({
-      instagram_username: loginName,
-      access_token: "session_bound_" + Math.random().toString(36).substring(7),
-    });
-    setIsSessionConnected(true);
-    showToast(`@${loginName} 계정 세션이 안전하게 바인딩 연동되었습니다!`, "success");
+  // 이지데스크 순정 MCP 계정 신규 추가 등록
+  const handleConnectSession = async (loginName: string, pass: string, handle?: string) => {
+    try {
+      const res = await apiFetch("/api/instagram/connections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: loginName,
+          username: loginName,
+          password: pass,
+          handle,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`@${loginName} 계정이 이지데스크 MCP 보안 공간에 신규 저장되었습니다!`, "success");
+        await saveSettings({ instagram_username: loginName });
+        fetchMcpConnections();
+      } else {
+        showToast("계정 등록 실패: " + data.error, "error");
+      }
+    } catch (err: any) {
+      showToast("계정 등록 중 오류: " + err.message, "error");
+    }
+  };
+
+  // 이지데스크 MCP 계정 선택
+  const handleSelectConnection = (conn: McpInstagramConnection) => {
+    saveSettings({ instagram_username: conn.username });
+    showToast(`포스팅 수행 계정으로 [@${conn.username}]이(가) 선택되었습니다.`, "info");
+  };
+
+  // 이지데스크 MCP 계정 삭제
+  const handleDeleteConnection = async (connId: string) => {
+    try {
+      const res = await apiFetch(`/api/instagram/connections?id=${connId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("계정이 이지데스크 MCP에서 삭제되었습니다.", "info");
+        fetchMcpConnections();
+      } else {
+        showToast("계정 삭제 실패: " + data.error, "error");
+      }
+    } catch (err: any) {
+      showToast("계정 삭제 중 오류: " + err.message, "error");
+    }
   };
 
   const handleDisconnectSession = async () => {
@@ -307,13 +391,19 @@ export default function InstagramMarketingPortal() {
       ? new Date().toISOString()
       : new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
 
+    showToast("이지데스크 MCP Playwright 브라우저 매크로가 포스팅을 시작합니다...", "info");
+
     try {
+      const selectedConn = mcpConnections.find((c) => c.username === settings.instagram_username) || mcpConnections[0];
+
       const res = await apiFetch("/api/instagram/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          connectionId: selectedConn?.id || null,
           product_id: selectedProduct?.id || null,
           status: targetStatus,
+          caption: postContent,
           content: postContent,
           image_url: finalImageUrl,
           scheduled_at: targetScheduledAt,
@@ -324,7 +414,7 @@ export default function InstagramMarketingPortal() {
       if (data.success) {
         showToast(
           isImmediate
-            ? "피드가 인스타그램에 즉시 업로드 완료되었습니다!"
+            ? "이지데스크 Playwright 브라우저 매크로가 피드 작성을 완료했습니다!"
             : "포스팅이 지정한 시간대에 성공적으로 예약되었습니다.",
           "success"
         );
@@ -405,11 +495,14 @@ export default function InstagramMarketingPortal() {
       {/* 헤더 영역 */}
       <InstagramHeader />
 
-      {/* 1. 상단 통계 영역 (실데이터 동적 연동 카드) */}
+      {/* 1. 실시간 데이터 스코어보드 */}
       <InstagramStats
         posts={posts}
         isSessionConnected={isSessionConnected}
         instagramUsername={settings.instagram_username}
+        mcpHistory={mcpHistory}
+        onSyncStats={handleSyncStats}
+        isSyncingStats={isSyncingStats}
       />
 
       {/* 메인 레이아웃: 대시보드 콘텐츠 */}
@@ -420,6 +513,9 @@ export default function InstagramMarketingPortal() {
           <AutopilotManager
             settings={settings}
             isSessionConnected={isSessionConnected}
+            mcpConnections={mcpConnections}
+            onSelectConnection={handleSelectConnection}
+            onDeleteConnection={handleDeleteConnection}
             onSaveSettings={saveSettings}
             onTriggerAutopilot={handleTriggerAutopilot}
             onConnectSession={handleConnectSession}

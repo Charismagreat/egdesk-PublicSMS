@@ -372,9 +372,11 @@ export async function renameTable(
 // ==========================================
 
 /**
- * Upload a file to a user data table row.
- * Data must be base64-encoded. Files <10KB are stored as uncompressed blobs,
- * 10-100KB as gzip-compressed blobs, >100KB on the filesystem via BucketManager.
+ * Upload a file attachment for a table row.
+ * Files are NOT table columns — they attach via a virtual columnName (e.g. "file").
+ * Workflow: insertRows(...) → uploadFile(tableName, rowId, 'file', filename, base64).
+ * Data must be base64 (raw or data URL). Files <10KB store as uncompressed blobs,
+ * 10-100KB as gzip blobs, >100KB on disk via BucketManager.
  */
 export async function uploadFile(
   tableName: string,
@@ -384,7 +386,7 @@ export async function uploadFile(
   data: string,
   options: {
     mimeType?: string;
-    forceStorageType?: 'blob' | 'file';
+    forceStorageType?: 'blob' | 'filesystem';
     compress?: boolean;
   } = {}
 ) {
@@ -2752,4 +2754,370 @@ export async function setGeminiApiKey(options: {
 /** List all Google/Gemini keys in AI Keys Manager */
 export async function listGeminiApiKeys() {
   return listApiKeys({ provider: 'google' });
+}
+
+// ==========================================
+// Phone / Google Messages (MCP)
+// ==========================================
+
+/**
+ * Call EGDesk Phone MCP tool (Messages Web devices, inbox, SMS queue, consent).
+ *
+ * - Server: `POST {apiUrl}/phone/tools/call`
+ * - Client: `POST /__phone_proxy` (see proxy.ts / middleware)
+ */
+export async function callPhoneTool(
+  toolName: string,
+  args: Record<string, any> = {}
+): Promise<any> {
+  const body = JSON.stringify({ tool: toolName, arguments: args });
+  const isServer = typeof window === 'undefined';
+
+  let response: Response;
+  if (isServer) {
+    const apiUrl =
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) ||
+      EGDESK_CONFIG.apiUrl;
+    response = await fetch(`${apiUrl}/phone/tools/call`, {
+      method: 'POST',
+      headers: buildServerEgdeskHeaders(),
+      body
+    });
+  } else {
+    response = await apiFetch('/__phone_proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+  }
+
+  return parseEgdeskMcpToolResponse(response);
+}
+
+export async function listPhoneDevices() {
+  return callPhoneTool('phone_list_devices', {});
+}
+
+export async function createPhoneDevice(options: {
+  label: string;
+  id?: string;
+  googleProfileName?: string;
+}) {
+  return callPhoneTool('phone_create_device', options);
+}
+
+export async function updatePhoneDevice(options: {
+  deviceId: string;
+  label?: string;
+  googleProfileName?: string | null;
+}) {
+  return callPhoneTool('phone_update_device', options);
+}
+
+export async function deletePhoneDevice(deviceId: string) {
+  return callPhoneTool('phone_delete_device', { deviceId });
+}
+
+export async function connectPhoneDevice(deviceId: string) {
+  return callPhoneTool('phone_connect', { deviceId });
+}
+
+export async function checkPhoneDevice(deviceId: string) {
+  return callPhoneTool('phone_check', { deviceId });
+}
+
+export async function listPhoneConversations(deviceId: string) {
+  return callPhoneTool('phone_list_conversations', { deviceId });
+}
+
+export async function syncPhoneConversations(deviceId: string) {
+  return callPhoneTool('phone_sync_conversations', { deviceId });
+}
+
+export async function listPhoneConversationMessages(options: {
+  deviceId: string;
+  convKey: string;
+}) {
+  return callPhoneTool('phone_list_conversation_messages', options);
+}
+
+export async function syncPhoneConversationThread(options: {
+  deviceId: string;
+  convKey: string;
+  title: string;
+}) {
+  return callPhoneTool('phone_sync_conversation_thread', options);
+}
+
+export async function listPhoneContacts(deviceId: string) {
+  return callPhoneTool('phone_list_contacts', { deviceId });
+}
+
+export async function syncPhoneContacts(deviceId: string) {
+  return callPhoneTool('phone_sync_contacts', { deviceId });
+}
+
+export async function sendPhoneSms(options: {
+  deviceId: string;
+  phoneNumber: string;
+  message: string;
+  snapshotId?: string;
+  scheduledAt?: number;
+  isMarketing?: boolean;
+  brandName?: string;
+}) {
+  return callPhoneTool('phone_send', options);
+}
+
+export async function listPhoneQueue(options: {
+  deviceId?: string;
+  snapshotId?: string;
+  limit?: number;
+} = {}) {
+  return callPhoneTool('phone_list_queue', options);
+}
+
+export async function cancelPhoneSend(jobId: string) {
+  return callPhoneTool('phone_cancel_send', { jobId });
+}
+
+export async function retryPhoneSend(jobId: string) {
+  return callPhoneTool('phone_retry_send', { jobId });
+}
+
+export async function listPhoneDevicesForSnapshot(snapshotId: string) {
+  return callPhoneTool('phone_list_for_snapshot', { snapshotId });
+}
+
+export async function linkPhoneSnapshot(options: {
+  snapshotId: string;
+  deviceId: string;
+}) {
+  return callPhoneTool('phone_link_snapshot', options);
+}
+
+export async function unlinkPhoneSnapshot(options: {
+  snapshotId: string;
+  deviceId: string;
+}) {
+  return callPhoneTool('phone_unlink_snapshot', options);
+}
+
+export async function getPhoneConsentLink(snapshotId: string) {
+  return callPhoneTool('phone_consent_link_get', { snapshotId });
+}
+
+export async function createPhoneConsentLink(options: {
+  snapshotId: string;
+  brandName?: string;
+  optOutPhone?: string;
+}) {
+  return callPhoneTool('phone_consent_link_create', options);
+}
+
+export async function syncPhoneConsentEvents(snapshotId: string) {
+  return callPhoneTool('phone_consent_events_sync', { snapshotId });
+}
+
+// ==========================================
+// INSTAGRAM (MCP)
+// ==========================================
+//
+// Login model: each connection stores a login id (email/username) + password
+// (or a shared googleProfileName), plus an optional public @handle used for
+// profile URLs. Posting and stats sync drive real Instagram via Playwright,
+// so they are slower (~seconds to ~1-2 min) than plain data reads.
+
+/**
+ * Call EGDesk Instagram MCP tool.
+ *
+ * - Server: `POST {apiUrl}/instagram/tools/call`
+ * - Client: `POST /__instagram_proxy` (see proxy.ts / middleware)
+ */
+export async function callInstagramTool(
+  toolName: string,
+  args: Record<string, any> = {}
+): Promise<any> {
+  const body = JSON.stringify({ tool: toolName, arguments: args });
+
+  const isServer = typeof window === 'undefined';
+
+  let response: Response;
+  if (isServer) {
+    const apiUrl =
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) ||
+      EGDESK_CONFIG.apiUrl;
+    response = await fetch(`${apiUrl}/instagram/tools/call`, {
+      method: 'POST',
+      headers: buildServerEgdeskHeaders(),
+      body
+    });
+  } else {
+    response = await apiFetch('/__instagram_proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+  }
+
+  return parseEgdeskMcpToolResponse(response);
+}
+
+export type InstagramConnection = {
+  id: string;
+  name: string;
+  username: string;
+  /** Public @handle (no leading @) used for profile URLs, or null. */
+  handle: string | null;
+  hasPassword: boolean;
+  hasAccessToken: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** List Instagram connections saved in EGDesk. Passwords are never returned. */
+export async function listInstagramConnections(): Promise<{
+  success: boolean;
+  connections: InstagramConnection[];
+}> {
+  return callInstagramTool('instagram_list_connections', {});
+}
+
+/** Save a new Instagram connection, or update an existing one by (username or id). */
+export async function saveInstagramConnection(options: {
+  name: string;
+  /** Login id (email, phone, or username) */
+  username: string;
+  password: string;
+  /** Public Instagram @handle (not email) */
+  handle?: string;
+  /** Optional existing connection id */
+  id?: string;
+}) {
+  return callInstagramTool('instagram_save_connection', options);
+}
+
+/** Update fields on an Instagram connection (name, login, password, handle). */
+export async function updateInstagramConnection(options: {
+  connectionId: string;
+  name?: string;
+  username?: string;
+  password?: string;
+  handle?: string;
+}) {
+  return callInstagramTool('instagram_update_connection', options);
+}
+
+/** Delete an Instagram connection by id. */
+export async function deleteInstagramConnection(connectionId: string) {
+  return callInstagramTool('instagram_delete_connection', { connectionId });
+}
+
+export type InstagramPublishHistorySource = 'schedule' | 'debug' | 'manual';
+
+export type InstagramPublishHistoryEntry = {
+  id: string;
+  source: InstagramPublishHistorySource;
+  status: 'success' | 'failure';
+  connectionId?: string | null;
+  connectionName?: string | null;
+  username?: string | null;
+  scheduleId?: string | null;
+  scheduleTitle?: string | null;
+  title?: string | null;
+  caption?: string | null;
+  imagePath?: string | null;
+  postUrl?: string | null;
+  shortcode?: string | null;
+  likes?: number | null;
+  comments?: number | null;
+  views?: number | null;
+  statsScrapedAt?: string | null;
+  errorMessage?: string | null;
+  startedAt: string;
+  completedAt: string;
+  durationMs?: number;
+};
+
+/** List Instagram publish history (scheduled runs + debug/manual posts) with likes/comments when synced. */
+export async function listInstagramHistory(options: {
+  connectionId?: string;
+  /** 'success' | 'failure' */
+  status?: string;
+  /** Max rows (default 100, max 500) */
+  limit?: number;
+} = {}): Promise<{ success: boolean; total: number; history: InstagramPublishHistoryEntry[] }> {
+  return callInstagramTool('instagram_list_history', options);
+}
+
+/**
+ * Login (headed, background window) and scrape recent posts for likes/comments;
+ * merge into publish history. Slow (~1-2 min).
+ */
+export async function syncInstagramPostStats(options: {
+  connectionId: string;
+  /** Max posts to open (default 12, max 24) */
+  limit?: number;
+  /** Parallel tabs (default 8, max 8) */
+  concurrency?: number;
+}) {
+  return callInstagramTool('instagram_sync_post_stats', options);
+}
+
+/** Alias of syncInstagramPostStats — scrape recent posts with engagement. */
+export async function fetchInstagramPosts(options: {
+  connectionId: string;
+  limit?: number;
+}) {
+  return callInstagramTool('instagram_fetch_posts', options);
+}
+
+/**
+ * Publish an Instagram post via Playwright (login + create). Requires a local
+ * imagePath (absolute path on the EGDesk machine) and caption. Records publish history.
+ */
+export async function createInstagramPost(options: {
+  connectionId: string;
+  caption: string;
+  /** Absolute path to an image on the EGDesk machine */
+  imagePath: string;
+  /** Ms to wait after Share (default 8000) */
+  waitAfterShare?: number;
+}) {
+  return callInstagramTool('instagram_create_post', options);
+}
+
+/** Debug publish: post fixed/default caption with ~/Downloads/cat.png (or imagePath). No Gemini. */
+export async function debugInstagramPost(options: {
+  connectionId: string;
+  caption?: string;
+  imagePath?: string;
+}) {
+  return callInstagramTool('instagram_debug_post', options);
+}
+
+export type InstagramSchedule = {
+  id: string;
+  title: string;
+  connectionId: string;
+  connectionName: string;
+  connectionType: string;
+  enabled: boolean;
+  frequencyType: string;
+  frequencyValue: unknown;
+  scheduledTime: string;
+  nextRun?: string | null;
+  lastRun?: string | null;
+  runCount?: number;
+  successCount?: number;
+  failureCount?: number;
+  topics?: unknown;
+};
+
+/** List Instagram scheduled posts for a connection, or all Instagram schedules when omitted. */
+export async function listInstagramSchedules(connectionId?: string): Promise<{
+  success: boolean;
+  schedules: InstagramSchedule[];
+}> {
+  return callInstagramTool('instagram_list_schedules', connectionId ? { connectionId } : {});
 }
