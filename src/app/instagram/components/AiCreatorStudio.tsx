@@ -446,11 +446,11 @@ export default function AiCreatorStudio({
           </div>
 
           <textarea
-            rows={14}
+            rows={18}
             value={generatedText}
             onChange={(e) => onGeneratedTextChange(e.target.value)}
             placeholder="생성 버튼을 누르면 AI가 상품 기반 피드를 만듭니다. 여기에 직접 멋진 글을 편집하거나 적을 수도 있습니다."
-            className="w-full flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm text-slate-800 focus:outline-none focus:border-pink-500 focus:bg-white leading-relaxed resize-none transition"
+            className="w-full flex-1 min-h-[440px] bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm text-slate-800 focus:outline-none focus:border-pink-500 focus:bg-white leading-relaxed resize-none transition shadow-inner-sm"
           />
         </div>
 
@@ -492,16 +492,16 @@ export default function AiCreatorStudio({
             </div>
           </div>
 
-          {/* 세부 3-Way 뷰포트 (좌측 문구 에디터 높이에 딱 맞춰 물리 렌더링) */}
-          <div className="flex-1 min-h-[260px] bg-white border border-slate-200 rounded-xl p-3 flex flex-col justify-between space-y-3">
+          {/* 세부 3-Way 뷰포트 (실제 인스타그램 피드 1:1 정사각형 aspect-square 비율로 수직 ↕ 대폭 확장) */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col justify-between space-y-3">
             {imageTab === "product" && (
-              <div className="flex flex-col h-full justify-between space-y-3">
-                <div className="flex-1 min-h-[200px] bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center relative">
+              <div className="flex flex-col space-y-3">
+                <div className="aspect-square min-h-[360px] md:min-h-[420px] bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center relative">
                   {selectedProduct?.main_image_url ? (
                     <img src={selectedProduct.main_image_url} alt="선택된 상품" className="w-full h-full object-cover" />
                   ) : (
                     <div className="text-center p-4">
-                      <ImageIcon className="w-8 h-8 text-slate-400 mx-auto mb-1" />
+                      <ImageIcon className="w-10 h-10 text-slate-400 mx-auto mb-2" />
                       <p className="text-xs text-slate-500 font-semibold">선택된 상품컷 이미지가 없습니다.</p>
                     </div>
                   )}
@@ -519,13 +519,13 @@ export default function AiCreatorStudio({
             )}
 
             {imageTab === "ai" && (
-              <div className="flex flex-col h-full justify-between">
-                <div className="flex-1 min-h-[220px] bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center relative">
+              <div className="flex flex-col">
+                <div className="aspect-square min-h-[360px] md:min-h-[420px] bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center relative">
                   {generatedImageUrl ? (
                     <img src={generatedImageUrl} alt="생성된 감성컷" className="w-full h-full object-cover" />
                   ) : (
                     <div className="text-center p-4">
-                      <Sparkles className="w-8 h-8 text-purple-400 mx-auto mb-1.5 animate-bounce" />
+                      <Sparkles className="w-10 h-10 text-purple-400 mx-auto mb-2 animate-bounce" />
                       <p className="text-xs font-bold text-slate-600">AI 감성컷 생성 대기 중</p>
                       <p className="text-[10px] text-slate-400 mt-1">
                         위 생성 버튼을 누르면 AI가 상품 맞춤 감성 라이프스타일 컷을 빌드합니다.
@@ -540,8 +540,8 @@ export default function AiCreatorStudio({
             )}
 
             {imageTab === "canvas" && (
-              <div className="flex flex-col h-full space-y-3">
-                <div className="flex-1 min-h-[160px] bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center relative">
+              <div className="flex flex-col space-y-3">
+                <div className="aspect-square min-h-[320px] md:min-h-[360px] bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center relative">
                   <canvas ref={canvasRef} className="w-full h-full object-contain" />
                   <div className="absolute bottom-2 left-2 bg-indigo-600 px-2 py-0.5 rounded text-[9px] text-white font-medium">
                     Canvas 카드뉴스 합성
