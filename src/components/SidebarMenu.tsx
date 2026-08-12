@@ -95,8 +95,9 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
 
       if (data.success && data.menuSettings) {
         const settings: MenuSettingItem[] = data.menuSettings;
+        const dbHrefs = new Set(settings.map(s => (s.menu_href || "").trim()));
 
-        // DB 설정을 토대로 활성화 및 순서 결합
+        // 1. DB 설정을 토대로 활성화 및 순서 결합
         const resolved = settings
           .filter(setting => {
             // (1) 비활성화된 메뉴 숨김
@@ -123,6 +124,19 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
               sort_order: setting.sort_order
             };
           });
+
+        // 2. 💡 [핵심 보정] DB 설정 테이블에 아직 추가되지 않은 MENU_STATIC_MAP 신규 메뉴(예: /instagram) 자동 보존
+        Object.entries(MENU_STATIC_MAP).forEach(([href, meta]) => {
+          if (!STATIC_EXCLUDED_HREFS.has(href) && !dbHrefs.has(href)) {
+            resolved.push({
+              href,
+              label: meta.label,
+              icon: meta.icon,
+              color: meta.color,
+              sort_order: 999
+            });
+          }
+        });
 
         // 중복 href 방어 가드 적용
         const seen = new Set<string>();
