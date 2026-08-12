@@ -57,19 +57,19 @@ async function ensureLocalImagePath(inputUrlOrData: string): Promise<string> {
 
 // crm_instagram_posts 테이블 보장 헬퍼
 async function ensurePostTable() {
-  await createTable('crm_instagram_posts', {
-    id: 'TEXT PRIMARY KEY',
-    connection_id: 'TEXT',
-    product_id: 'TEXT',
-    caption: 'TEXT',
-    content: 'TEXT',
-    image_url: 'TEXT',
-    image_path: 'TEXT',
-    status: 'TEXT',
-    scheduled_at: 'TEXT',
-    posted_at: 'TEXT',
-    error_message: 'TEXT',
-  }).catch(() => {});
+  await createTable('crm_instagram_posts', [
+    { name: 'id', type: 'TEXT' },
+    { name: 'connection_id', type: 'TEXT' },
+    { name: 'product_id', type: 'TEXT' },
+    { name: 'caption', type: 'TEXT' },
+    { name: 'content', type: 'TEXT' },
+    { name: 'image_url', type: 'TEXT' },
+    { name: 'image_path', type: 'TEXT' },
+    { name: 'status', type: 'TEXT' },
+    { name: 'scheduled_at', type: 'TEXT' },
+    { name: 'posted_at', type: 'TEXT' },
+    { name: 'error_message', type: 'TEXT' },
+  ]).catch(() => {});
 }
 
 // 1. 이지데스크 MCP 및 DB 통합 인스타그램 포스팅 이력 조회 (deleted_at IS NULL 필터링 무조건 적용)
@@ -113,7 +113,7 @@ export async function GET(req: Request) {
         limit: 100,
       });
       if (historyRes && historyRes.success) {
-        mcpPosts = historyRes.history || historyRes.posts || historyRes.items || [];
+        mcpPosts = (historyRes as any).history || (historyRes as any).posts || [];
       }
     } catch (e: any) {
       console.warn('listInstagramHistory MCP 이력 조회 폴백:', e.message);
@@ -256,9 +256,9 @@ export async function DELETE(req: Request) {
     }).catch(() => ({ rows: [] }));
 
     if (existCheck.rows && existCheck.rows.length > 0) {
+      const safeId = String(postId).replace(/'/g, "''");
       await executeSQL(
-        `UPDATE crm_instagram_posts SET deleted_at = ?, deleted_by = ? WHERE id = ?`,
-        [nowIso, 'user', String(postId)]
+        `UPDATE crm_instagram_posts SET deleted_at = '${nowIso}', deleted_by = 'user' WHERE id = '${safeId}'`
       );
     } else {
       await insertRows('crm_instagram_posts', [{
