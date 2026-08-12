@@ -2,8 +2,8 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, generateInstagramContent } from '../../../../../egdesk-helpers';
 
-// 30초 타임아웃 래퍼 함수
-function withTimeout<T>(promise: Promise<T>, ms: number = 30000): Promise<T> {
+// 60초 타임아웃 래퍼 함수
+function withTimeout<T>(promise: Promise<T>, ms: number = 60000): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`이지데스크 MCP 서버 응답 타임아웃 (${ms / 1000}초 대기 초과)`));
@@ -35,12 +35,12 @@ export async function POST(req: Request) {
       }
     }
 
-    console.log(`🚀 [EGDesk MCP] 순정 generateInstagramContent 도구 단일 호출 시도 (상품명: ${productName})`);
+    console.log(`🚀 [EGDesk MCP] 순정 generateInstagramContent 도구 단일 호출 시도 (상품명: ${productName}, 타임아웃 가드 60초)`);
 
     let mcpResult: any = null;
     let mcpErrorLog: string | null = null;
 
-    // 2. 이지데스크 순정 generateInstagramContent MCP 헬퍼 도구 호출 (30초 감시)
+    // 2. 이지데스크 순정 generateInstagramContent MCP 헬퍼 도구 호출 (60초 감시)
     try {
       mcpResult = await withTimeout(
         generateInstagramContent({
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
           generateImage: generate_image !== false,
           extraInstructions: prompt ? `사용자 강조사항: ${prompt}` : undefined
         }),
-        30000 // 30초 타임아웃 제한
+        60000 // 60초 타임아웃 제한
       );
     } catch (mcpErr: any) {
       mcpErrorLog = `[EGDesk MCP 도구 예외] ${mcpErr.message || String(mcpErr)}`;

@@ -308,9 +308,9 @@ export default function InstagramMarketingPortal() {
     setSelectedPostForPreview(null); // 신규 피드 빌드 모드로 전환
     setIsGenerating(true);
     
-    // 40초 클라이언트 타임아웃 방어막 (버튼 무한 멈춤 원천 차단)
+    // 75초 클라이언트 타임아웃 방어막 (백엔드 60초 감시)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 40000);
+    const timeoutId = setTimeout(() => controller.abort(), 75000);
 
     try {
       const res = await apiFetch("/api/instagram/generate", {
