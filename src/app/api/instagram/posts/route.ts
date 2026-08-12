@@ -57,7 +57,7 @@ async function ensureLocalImagePath(inputUrlOrData: string): Promise<string> {
 
 // crm_instagram_posts 테이블 보장 헬퍼
 async function ensurePostTable() {
-  await safeCreateTable('crm_instagram_posts', {
+  await createTable('crm_instagram_posts', {
     id: 'TEXT PRIMARY KEY',
     connection_id: 'TEXT',
     product_id: 'TEXT',
@@ -83,9 +83,7 @@ export async function GET(req: Request) {
     // 1) DB 대장 테이블(crm_instagram_posts)에서 소프트 삭제된 목록 ID 스캔
     let deletedPostIds = new Set<string>();
     try {
-      const deletedRes = await queryTable('crm_instagram_posts', {
-        filters: { deleted_at: { operator: 'IS NOT NULL' } }
-      });
+      const deletedRes = await executeSQL('SELECT id FROM crm_instagram_posts WHERE deleted_at IS NOT NULL');
       if (deletedRes.rows && deletedRes.rows.length > 0) {
         deletedRes.rows.forEach((r: any) => {
           if (r.id) deletedPostIds.add(String(r.id));
@@ -216,11 +214,9 @@ export async function DELETE(req: Request) {
     }).catch(() => ({ rows: [] }));
 
     if (existCheck.rows && existCheck.rows.length > 0) {
-      // 기존 레코드 소프트 삭제 업데이트 (deleted_at 주입)
-      await updateRows(
-        'crm_instagram_posts',
-        { deleted_at: nowIso, deleted_by: 'user' },
-        { id: String(postId) }
+      await executeSQL(
+        `UPDATE crm_instagram_posts SET deleted_at = ?, deleted_by = ? WHERE id = ?`,
+        [nowIso, 'user', String(postId)]
       );
     } else {
       // 신규 소프트 삭제 레코드 생성 (deleted_at 포함)
