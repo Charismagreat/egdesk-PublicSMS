@@ -24,11 +24,11 @@ interface TimelineCalendarProps {
   /**
    * 예약 포스트 즉시 발행 승인 핸들러
    */
-  onApproveImmediate: (postId: number) => Promise<void>;
+  onApproveImmediate: (postId: number | string) => Promise<void>;
   /**
    * 예약 포스트 삭제/취소 핸들러
    */
-  onDeletePost: (postId: number) => Promise<void>;
+  onDeletePost: (postId: number | string) => Promise<void>;
 }
 
 /**
