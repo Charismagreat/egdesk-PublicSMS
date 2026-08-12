@@ -25,7 +25,50 @@ function estimateTokens(text: string): number {
   return Math.ceil(tokens);
 }
 
-export async function fetchGeminiWithFallback(url: string, init?: RequestInit): Promise<Response> {
+/**
+ * 프롬프트 문맥 및 지시사항을 통해 수행 세부 목적(Purpose)을 정밀 추론하는 헬퍼
+ */
+function inferPurposeFromContext(prompt: string, systemPrompt?: string, url?: string, customPurpose?: string): string {
+  if (customPurpose) return customPurpose;
+
+  const combinedText = `${systemPrompt || ''} ${prompt} ${url || ''}`.toLowerCase();
+
+  if (combinedText.includes('imagen-3') || combinedImagePromptCheck(combinedText)) {
+    return 'INSTAGRAM_IMAGEN3_GEN';
+  }
+  if (combinedText.includes('인스타그램') || combinedText.includes('instagram')) {
+    if (combinedText.includes('해시태그') || combinedText.includes('hashtag')) {
+      return 'INSTAGRAM_HASHTAGS_GEN';
+    }
+    return 'INSTAGRAM_POST_GEN';
+  }
+  if (combinedText.includes('견적서') || combinedText.includes('발주서')) {
+    return 'ESTIMATE_OCR_PARSING';
+  }
+  if (combinedText.includes('영수증') || combinedText.includes('expense')) {
+    return 'EXPENSE_RECEIPT_OCR';
+  }
+  if (combinedText.includes('근로계약서') || combinedText.includes('contract')) {
+    return 'HR_CONTRACT_ANALYZE';
+  }
+  if (combinedText.includes('재무제표') || combinedText.includes('financial')) {
+    return 'FINANCIAL_STATEMENT_OCR';
+  }
+  if (combinedText.includes('이지봇') || combinedText.includes('easybot')) {
+    return 'EASYBOT_AGENT_ROUTING';
+  }
+  if (combinedText.includes('도움말') || combinedText.includes('contextual-help')) {
+    return 'HELP_AI_CONTEXTUAL';
+  }
+
+  return 'AI_FALLBACK_TASK';
+}
+
+function combinedImagePromptCheck(text: string): boolean {
+  return text.includes('photograph of product') || text.includes('photorealistic');
+}
+
+export async function fetchGeminiWithFallback(url: string, init?: RequestInit, customPurpose?: string): Promise<Response> {
   let prompt = '';
   let systemPrompt: string | undefined = undefined;
   let responseMimeType: 'application/json' | 'text/plain' | undefined = undefined;
@@ -70,7 +113,10 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
     }
   }
 
-  // 2. 모델명 및 연동 API 키 파싱
+  // 2. 세부 수행 목적 정밀 추론
+  const detailedPurpose = inferPurposeFromContext(prompt, systemPrompt, url, customPurpose);
+
+  // 3. 모델명 및 연동 API 키 파싱
   const modelMatch = url.match(/\/models\/([^?:]+)/);
   const initialModel = modelMatch ? modelMatch[1] : 'gemini-3.5-flash';
 
@@ -80,7 +126,7 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
     ? rawKey
     : undefined; // 기본 키를 타도록 빈값(undefined) 처리
 
-  // 3. 전사 AI 라우터(callAI)를 호출하여 로컬 AI 설정 및 공급자 분기 자동 적용
+  // 4. 전사 AI 라우터(callAI)를 호출하여 로컬 AI 설정 및 공급자 분기 자동 적용
   let finalModelUsed = initialModel;
   let text = '';
   let promptTokens = 0;
@@ -89,12 +135,12 @@ export async function fetchGeminiWithFallback(url: string, init?: RequestInit): 
   let isRouterSuccess = false;
 
   try {
-    console.log(`[AI Fallback Wrapper] callAI 라우터 호출 기동 (모델: ${initialModel}, 이미지존재: ${!!imageInput})`);
+    console.log(`🔍 [AI Auditor Log] 세부 업무 목적: [${detailedPurpose}] | 모델: ${initialModel} | 이미지: ${!!imageInput}`);
     
     const aiRes = await callAI({
       prompt,
       systemPrompt,
-      purpose: 'FALLBACK_WRAPPER_ROUTING', // 호출 목적 명시
+      purpose: detailedPurpose, // 정밀 추론된 세부 업무 목적 명시
       responseMimeType,
       temperature: temperature ?? 0.7,
       imageInput

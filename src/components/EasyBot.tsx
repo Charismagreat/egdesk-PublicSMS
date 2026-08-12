@@ -457,7 +457,7 @@ export default function EasyBot() {
       }
     };
     checkAiStatus();
-    const interval = setInterval(checkAiStatus, 30000); // 30초 주기 자동 감지
+    const interval = setInterval(checkAiStatus, 180000); // 3분 주기 자동 감지
     return () => clearInterval(interval);
   }, []);
 

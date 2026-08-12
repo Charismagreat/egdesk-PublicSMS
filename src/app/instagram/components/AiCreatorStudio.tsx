@@ -26,6 +26,14 @@ interface AiCreatorStudioProps {
    */
   onAiPromptChange: (val: string) => void;
   /**
+   * 수동 지정 커스텀 이미지 프롬프트
+   */
+  customImagePrompt?: string;
+  /**
+   * 수동 지정 커스텀 이미지 프롬프트 변경 핸들러
+   */
+  onCustomImagePromptChange?: (val: string) => void;
+  /**
    * AI 생성 어조
    */
   aiTone: string;
@@ -148,6 +156,8 @@ export default function AiCreatorStudio({
   onSelectProduct,
   aiPrompt,
   onAiPromptChange,
+  customImagePrompt = "",
+  onCustomImagePromptChange,
   aiTone,
   onAiToneChange,
   isGenerating,
@@ -178,6 +188,8 @@ export default function AiCreatorStudio({
   onSchedulePost,
 }: AiCreatorStudioProps) {
   const [productSearchQuery, setProductSearchQuery] = useState("");
+  // AI 프롬프트 상세 편집 아코디언 토글
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
 
   // 카드뉴스 캔버스 실시간 드로잉 렌더러 연동
   useEffect(() => {
@@ -476,6 +488,59 @@ export default function AiCreatorStudio({
                 <option value="유머형">재치 유머형 🤪</option>
               </select>
             </div>
+          </div>
+
+          {/* ⚙️ AI 프롬프트 세부 커스텀 (직접 수정) 아코디언 패널 */}
+          <div className="border border-purple-100 bg-purple-50/40 rounded-2xl p-4 transition-all">
+            <button
+              type="button"
+              onClick={() => setShowPromptEditor(!showPromptEditor)}
+              className="w-full flex items-center justify-between text-xs font-bold text-purple-700 bg-transparent border-0 cursor-pointer p-0"
+            >
+              <span className="flex items-center gap-1.5">
+                <span>⚙️ AI 이미지 생성 프롬프트 직접 수정 / 보기</span>
+                {customImagePrompt && (
+                  <span className="bg-purple-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-semibold">
+                    커스텀 설정됨
+                  </span>
+                )}
+              </span>
+              <span className="text-purple-400 text-sm font-black">
+                {showPromptEditor ? "▲ 접기" : "▼ 펼쳐서 프롬프트 수정하기"}
+              </span>
+            </button>
+
+            {showPromptEditor && (
+              <div className="mt-3.5 pt-3.5 border-t border-purple-100/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-slate-600">
+                    Google Imagen 3 / Flux-Real 영문 렌더링 프롬프트
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const autoPrompt = `High-end 8k commercial product photography of "${selectedProduct?.name || 'product'}", studio camera lighting, clean minimal background, realistic texture, crisp focus, photorealistic`;
+                      if (onCustomImagePromptChange) onCustomImagePromptChange(autoPrompt);
+                    }}
+                    className="text-[10px] font-bold text-purple-600 bg-white hover:bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-lg transition cursor-pointer"
+                  >
+                    ✨ 추천 프롬프트로 세팅
+                  </button>
+                </div>
+
+                <textarea
+                  rows={3}
+                  value={customImagePrompt}
+                  onChange={(e) => onCustomImagePromptChange && onCustomImagePromptChange(e.target.value)}
+                  placeholder={`예: High-end 8k commercial product photography of item "${selectedProduct?.name || '상품명'}", studio photography, clean minimal background, realistic photo (비워두시면 선택된 상품 정보로 자동 조립됩니다)`}
+                  className="w-full bg-white border border-purple-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:border-purple-500 leading-relaxed resize-none shadow-inner-sm"
+                />
+
+                <p className="text-[10px] text-purple-500 font-medium leading-normal">
+                  💡 팁: 원하시는 사진의 분위기, 카메라 각도, 구도, 조명이나 장소를 영어로 직접 적으시면 AI가 해당 프롬프트를 우선 적용하여 100% 맞춤형 이미지를 생성합니다.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* AI 글 & 사진 제작하기 버튼 */}

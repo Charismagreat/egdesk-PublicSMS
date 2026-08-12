@@ -300,6 +300,9 @@ export default function InstagramMarketingPortal() {
     showToast("연동된 인스타그램 계정이 해제되었습니다.", "info");
   };
 
+  // 커스텀 이미지 프롬프트 상태
+  const [customImagePrompt, setCustomImagePrompt] = useState<string>("");
+
   // AI 문구 및 이미지 동시 생성기 구동
   const handleGenerateAI = async () => {
     setSelectedPostForPreview(null); // 신규 피드 빌드 모드로 전환
@@ -312,6 +315,7 @@ export default function InstagramMarketingPortal() {
           product_id: selectedProduct?.id || null,
           prompt: aiPrompt,
           tone_style: aiTone,
+          custom_image_prompt: customImagePrompt,
           generate_image: true,
         }),
       });
@@ -319,7 +323,11 @@ export default function InstagramMarketingPortal() {
       if (data.success) {
         setGeneratedText(data.text);
         setGeneratedImageUrl(data.image_url);
-        showToast("AI가 매력적인 문구와 감성 이미지를 완성했습니다!", "success");
+        if (data.imagen_error) {
+          showToast(`⚠️ [Google Imagen 3 생성 실패] ${data.imagen_error}`, "error");
+        } else {
+          showToast("AI가 지정하신 프롬프트를 바탕으로 문구와 Imagen 3 감성 이미지를 완성했습니다!", "success");
+        }
         setImageTab("ai");
       } else {
         showToast("AI 생성 실패: " + data.error, "error");
@@ -533,6 +541,8 @@ export default function InstagramMarketingPortal() {
             }}
             aiPrompt={aiPrompt}
             onAiPromptChange={setAiPrompt}
+            customImagePrompt={customImagePrompt}
+            onCustomImagePromptChange={setCustomImagePrompt}
             aiTone={aiTone}
             onAiToneChange={setAiTone}
             isGenerating={isGenerating}

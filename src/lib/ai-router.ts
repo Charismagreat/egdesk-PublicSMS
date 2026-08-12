@@ -412,20 +412,22 @@ export async function callAI(options: CallAIOptions): Promise<AIResponse> {
     totalTokens = res.totalTokens;
   }
 
-  // 4. 실시간 대시보드 로깅 통합 (ai_token_usage_logs 적재)
-  try {
-    const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
-    await insertRows('ai_token_usage_logs', [{
-      id: `TKC-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      model: modelUsed,
-      purpose: purpose,
-      prompt_tokens: promptTokens,
-      completion_tokens: completionTokens,
-      total_tokens: totalTokens,
-      created_at: nowStr
-    }]);
-  } catch (logErr: any) {
-    console.error('⚠️ AI 토큰 소모 대시보드 로깅 실패:', logErr.message);
+  // 4. 실시간 대시보드 로깅 통합 (ai_token_usage_logs 적재, 헬스체크 핑은 DB 오염 방지용 스킵)
+  if (purpose !== 'HEALTH_CHECK_PING') {
+    try {
+      const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+      await insertRows('ai_token_usage_logs', [{
+        id: `TKC-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        model: modelUsed,
+        purpose: purpose,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: totalTokens,
+        created_at: nowStr
+      }]);
+    } catch (logErr: any) {
+      console.error('⚠️ AI 토큰 소모 대시보드 로깅 실패:', logErr.message);
+    }
   }
 
   return {

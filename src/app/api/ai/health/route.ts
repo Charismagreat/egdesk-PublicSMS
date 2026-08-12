@@ -30,7 +30,7 @@ export async function GET() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: pingBody
-      });
+      }, 'HEALTH_CHECK_PING');
 
       const resText = await res.text();
       if (resText.includes('depleted') || resText.includes('prepayment')) {
