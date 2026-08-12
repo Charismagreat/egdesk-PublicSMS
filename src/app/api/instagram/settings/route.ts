@@ -44,10 +44,10 @@ export async function GET() {
     const result = await queryTable('instagram_marketing_settings', { limit: 100 });
     
     if (result && result.rows && result.rows.length > 0) {
-      // deleted_at이 없는 유효 행 중 access_token / ig_user_id / instagram_username 이 존재하는 최신 행 탐색
+      // deleted_at이 없는 유효 행 중 가장 최신 행 선택
       const activeRows = result.rows.filter((r: any) => !r.deleted_at);
       const sorted = [...(activeRows.length > 0 ? activeRows : result.rows)].sort((a: any, b: any) => Number(b.id) - Number(a.id));
-      const validSetting = sorted.find((r: any) => r.access_token || r.ig_user_id || r.instagram_username) || sorted[0];
+      const validSetting = sorted[0];
       return NextResponse.json({ success: true, settings: validSetting, mcpConnections });
     }
 
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
     const existingRows = checkExist?.rows || [];
     const activeRows = existingRows.filter((r: any) => !r.deleted_at);
     const sorted = [...(activeRows.length > 0 ? activeRows : existingRows)].sort((a: any, b: any) => Number(b.id) - Number(a.id));
-    const current = sorted.find((r: any) => r.access_token || r.ig_user_id || r.instagram_username) || sorted[0] || DEFAULT_SETTINGS;
+    const current = sorted[0] || DEFAULT_SETTINGS;
     const targetId = current.id || 1;
 
     const updates = {
@@ -113,8 +113,10 @@ export async function POST(req: Request) {
     }
 
     if (existingRows.length > 0) {
-      // 해당 targetId 행을 업데이트
-      await updateRows('instagram_marketing_settings', updates, { filters: { id: String(targetId) } });
+      // 기존 전체 행에 대해 is_autopilot 업데이트 수행
+      for (const row of existingRows) {
+        await updateRows('instagram_marketing_settings', updates, { filters: { id: String(row.id) } });
+      }
     } else {
       // 존재하지 않으면 삽입
       await insertRows('instagram_marketing_settings', [{ id: 1, ...updates }]);

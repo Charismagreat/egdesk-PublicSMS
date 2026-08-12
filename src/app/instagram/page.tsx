@@ -18,7 +18,7 @@ import { HashtagResponse } from "@/app/api/instagram/generate-hashtags/route";
 
 export default function InstagramMarketingPortal() {
   // 상태 변수
-  const [settings, setSettings] = useState<AutopilotSettings>({
+  const [settings, setSettings] = usePersistedState<AutopilotSettings>("ig_autopilot_settings", {
     id: 1,
     is_autopilot: 0,
     autopilot_interval: "DAILY",
