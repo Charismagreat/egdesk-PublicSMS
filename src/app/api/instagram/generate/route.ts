@@ -26,16 +26,36 @@ export async function POST(req: Request) {
   try {
     const { product_id, prompt, tone_style, generate_image, custom_image_prompt } = await req.json();
 
-    // 1. 상품 정보 조회 (선택 사항)
+    // 1. 마스터 상품 정보 조회 (상세 설명, 가격, 스펙, 카테고리 포함)
     let productName = prompt || '추천 상품';
+    let productDesc = '';
+    let productPrice = '';
+    let productSpec = '';
+    let productCategory = '';
+
     if (product_id) {
       const prodRes = await queryTable('products', { filters: { id: String(product_id), deleted_at: null } });
       if (prodRes.rows && prodRes.rows.length > 0) {
-        productName = prodRes.rows[0].name;
+        const prod = prodRes.rows[0];
+        productName = prod.name || productName;
+        productDesc = prod.description || '';
+        productPrice = prod.price ? `${Number(prod.price).toLocaleString()}원` : '';
+        productSpec = prod.spec || '';
+        productCategory = prod.category || '';
       }
     }
 
-    console.log(`🚀 [EGDesk MCP] 순정 generateInstagramContent 도구 단일 호출 시도 (상품명: ${productName}, 타임아웃 가드 60초)`);
+    // AI에 주입할 풍부한 컨텍스트 빌드
+    const detailedProductContext = [
+      `상품명: ${productName}`,
+      productCategory ? `카테고리: ${productCategory}` : '',
+      productPrice ? `판매가격: ${productPrice}` : '',
+      productSpec ? `제품 규격/스펙: ${productSpec}` : '',
+      productDesc ? `상세 설명 및 특장점: ${productDesc}` : '',
+      prompt ? `사용자 특수 강조 요청사항: ${prompt}` : '',
+    ].filter(Boolean).join('\n');
+
+    console.log(`🚀 [EGDesk MCP] 순정 generateInstagramContent 도구 호출 시도 (상품명: ${productName}, 상세설명 포함 완료)`);
 
     let mcpResult: any = null;
     let mcpErrorLog: string | null = null;
@@ -46,10 +66,10 @@ export async function POST(req: Request) {
         generateInstagramContent({
           topic: prompt || productName,
           productName: productName,
-          contentGoal: `${tone_style || '인플루언서형'} 어조로 상품을 돋보이게 소개하는 인스타그램 마케팅`,
-          visualBrief: custom_image_prompt || `High-end 8k commercial product photography of "${productName}". Clean minimal background, studio camera lighting, photorealistic product shot.`,
+          contentGoal: `${tone_style || '인플루언서형'} 어조로 아래 상품 상세 특장점을 생생하고 매력적이게 소개해 주세요.\n${detailedProductContext}`,
+          visualBrief: custom_image_prompt || `High-end 8k commercial product photography of "${productName}". ${productDesc ? 'Key visual concept: ' + productDesc.slice(0, 100) : ''} Clean minimal studio background, photorealistic commercial product shot.`,
           generateImage: generate_image !== false,
-          extraInstructions: prompt ? `사용자 강조사항: ${prompt}` : undefined
+          extraInstructions: `[상품 상세 마케팅 컨텍스트]\n${detailedProductContext}\n\n위 상세 정보를 바탕으로 이 상품의 핵심 셀링 포인트와 매력을 인스타그램 피드 작성에 100% 녹여내어 카피를 작성하세요.`
         }),
         60000 // 60초 타임아웃 제한
       );
