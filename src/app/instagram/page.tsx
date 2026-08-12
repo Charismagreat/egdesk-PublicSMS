@@ -365,7 +365,7 @@ export default function InstagramMarketingPortal() {
   const handleTriggerAutopilot = async () => {
     showToast("오토파일럿 AI 마케터를 즉시 구동합니다...", "info");
     try {
-      const res = await apiFetch("/api/instagram/scheduler");
+      const res = await apiFetch("/api/cron/instagram-autopilot");
       const data = await res.json();
       if (data.success) {
         if (data.triggered) {
