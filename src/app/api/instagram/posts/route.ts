@@ -6,7 +6,11 @@ import os from 'os';
 import { 
   listInstagramHistory, 
   createInstagramPost, 
-  listInstagramConnections 
+  listInstagramConnections,
+  queryTable,
+  insertRows,
+  updateRows,
+  safeCreateTable
 } from '../../../../../egdesk-helpers';
 
 // 웹 URL 또는 Base64 이미지를 Playwright가 인식할 수 있는 로컬 파일 절대 경로로 변환하는 헬퍼
@@ -15,12 +19,10 @@ async function ensureLocalImagePath(inputUrlOrData: string): Promise<string> {
   const filename = `ig_upload_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
   const localFilePath = path.join(tmpDir, filename);
 
-  // 1. 이미 로컬 파일 시스템 경로인 경우
   if (fs.existsSync(inputUrlOrData)) {
     return inputUrlOrData;
   }
 
-  // 2. Base64 Data URL 인 경우
   if (inputUrlOrData.startsWith('data:image')) {
     const base64Data = inputUrlOrData.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
@@ -28,7 +30,6 @@ async function ensureLocalImagePath(inputUrlOrData: string): Promise<string> {
     return localFilePath;
   }
 
-  // 3. HTTP/HTTPS 웹 이미지 URL인 경우 (다운로드 후 로컬 보존)
   if (inputUrlOrData.startsWith('http://') || inputUrlOrData.startsWith('https://')) {
     try {
       const res = await fetch(inputUrlOrData);
@@ -43,7 +44,6 @@ async function ensureLocalImagePath(inputUrlOrData: string): Promise<string> {
     }
   }
 
-  // 기본 폴백 이미지 다운로드
   const fallbackUrl = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800';
   try {
     const res = await fetch(fallbackUrl);
@@ -55,12 +55,45 @@ async function ensureLocalImagePath(inputUrlOrData: string): Promise<string> {
   }
 }
 
-// 1. 이지데스크 MCP 인스타그램 포스팅 및 성과 이력 조회
+// crm_instagram_posts 테이블 보장 헬퍼
+async function ensurePostTable() {
+  await safeCreateTable('crm_instagram_posts', {
+    id: 'TEXT PRIMARY KEY',
+    connection_id: 'TEXT',
+    product_id: 'TEXT',
+    caption: 'TEXT',
+    content: 'TEXT',
+    image_url: 'TEXT',
+    image_path: 'TEXT',
+    status: 'TEXT',
+    scheduled_at: 'TEXT',
+    posted_at: 'TEXT',
+    error_message: 'TEXT',
+  }).catch(() => {});
+}
+
+// 1. 이지데스크 MCP 인스타그램 포스팅 및 성과 이력 조회 (소프트 삭제 deleted_at IS NULL 필터링 필수 적용)
 export async function GET(req: Request) {
   try {
+    await ensurePostTable();
     const { searchParams } = new URL(req.url);
     const connectionId = searchParams.get('connectionId') || undefined;
     const status = searchParams.get('status') || undefined;
+
+    // 1) DB 대장 테이블(crm_instagram_posts)에서 소프트 삭제된 목록 ID 스캔
+    let deletedPostIds = new Set<string>();
+    try {
+      const deletedRes = await queryTable('crm_instagram_posts', {
+        filters: { deleted_at: { operator: 'IS NOT NULL' } }
+      });
+      if (deletedRes.rows && deletedRes.rows.length > 0) {
+        deletedRes.rows.forEach((r: any) => {
+          if (r.id) deletedPostIds.add(String(r.id));
+        });
+      }
+    } catch (dbErr: any) {
+      console.warn('소프트 삭제 목록 스캔 경고:', dbErr.message);
+    }
 
     let history: any[] = [];
     try {
@@ -72,37 +105,44 @@ export async function GET(req: Request) {
       if (historyRes && historyRes.success) {
         const rawHistory = historyRes.history || [];
 
-        // 이력 데이터 규격 정규화 및 로컬 이미지 파일 Base64 변환
-        history = rawHistory.map((item: any) => {
-          const rawImagePath = item.image_url || item.imageUrl || item.imagePath || item.image_path || '';
-          let webImageUrl = rawImagePath;
-
-          // 로컬 디스크 파일 경로인 경우 Base64 Data URI로 자동 변환
-          if (rawImagePath && typeof window === 'undefined') {
-            try {
-              if (fs.existsSync(rawImagePath)) {
-                const fileBuffer = fs.readFileSync(rawImagePath);
-                const ext = path.extname(rawImagePath).toLowerCase().replace('.', '') || 'jpeg';
-                const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-                webImageUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
-              }
-            } catch (fErr: any) {
-              console.warn('이력 이미지 Base64 변환 경고:', fErr.message);
+        // 소프트 삭제(deleted_at IS NOT NULL) 항목 100% 제척 및 데이터 정규화
+        history = rawHistory
+          .filter((item: any) => {
+            const itemId = String(item.id || item.post_id || '');
+            if (item.deleted_at || deletedPostIds.has(itemId)) {
+              return false; // 삭제된 항목 제외 (deleted_at IS NULL 보장)
             }
-          }
+            return true;
+          })
+          .map((item: any) => {
+            const rawImagePath = item.image_url || item.imageUrl || item.imagePath || item.image_path || '';
+            let webImageUrl = rawImagePath;
 
-          return {
-            ...item,
-            id: item.id || `post_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-            content: item.content || item.caption || item.text || item.title || '등록된 포스팅 문구',
-            caption: item.caption || item.content || item.text || '등록된 포스팅 문구',
-            image_url: webImageUrl,
-            imageUrl: webImageUrl,
-            imagePath: rawImagePath,
-            status: item.status || 'PUBLISHED',
-            created_at: item.created_at || item.publishedAt || item.createdAt || new Date().toISOString()
-          };
-        });
+            if (rawImagePath && typeof window === 'undefined') {
+              try {
+                if (fs.existsSync(rawImagePath)) {
+                  const fileBuffer = fs.readFileSync(rawImagePath);
+                  const ext = path.extname(rawImagePath).toLowerCase().replace('.', '') || 'jpeg';
+                  const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+                  webImageUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+                }
+              } catch (fErr: any) {
+                console.warn('이력 이미지 Base64 변환 경고:', fErr.message);
+              }
+            }
+
+            return {
+              ...item,
+              id: item.id || `post_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+              content: item.content || item.caption || item.text || item.title || '등록된 포스팅 문구',
+              caption: item.caption || item.content || item.text || '등록된 포스팅 문구',
+              image_url: webImageUrl,
+              imageUrl: webImageUrl,
+              imagePath: rawImagePath,
+              status: item.status || 'PUBLISHED',
+              created_at: item.created_at || item.publishedAt || item.createdAt || new Date().toISOString()
+            };
+          });
       }
     } catch (e: any) {
       console.warn('listInstagramHistory fallback:', e.message);
@@ -118,18 +158,16 @@ export async function GET(req: Request) {
 // 2. 이지데스크 MCP 인스타그램 피드 포스팅 및 실행
 export async function POST(req: Request) {
   try {
+    await ensurePostTable();
     const data = await req.json();
     const { connectionId, caption, content, image_url, imagePath } = data;
 
     const finalCaption = caption || content || 'EGDesk AI 생성 포스트';
     const rawImage = imagePath || image_url || '';
 
-    // Playwright가 읽을 수 있는 로컬 파일 절대 경로 준비
     const localAbsolutePath = await ensureLocalImagePath(rawImage);
-
     let targetConnectionId = connectionId;
 
-    // connectionId가 생략된 경우 등록된 첫 번째 계정 자동 선택
     if (!targetConnectionId) {
       const connRes = await listInstagramConnections();
       if (connRes && connRes.success && connRes.connections.length > 0) {
@@ -146,7 +184,6 @@ export async function POST(req: Request) {
 
     console.log(`🚀 [EGDesk MCP] Playwright 인스타그램 포스팅 시작 (계정 ID: ${targetConnectionId}, 이미지: ${localAbsolutePath})`);
 
-    // 이지데스크 MCP Playwright 포스팅 매크로 구동
     const postRes = await createInstagramPost({
       connectionId: targetConnectionId,
       caption: finalCaption,
@@ -160,27 +197,42 @@ export async function POST(req: Request) {
   }
 }
 
-// 3. 인스타그램 포스팅 이력 및 예약 내역 소프트 삭제/취소
+// 3. 인스타그램 포스팅 이력 및 예약 내역 소프트 삭제 (deleted_at IS NULL 준수)
 export async function DELETE(req: Request) {
   try {
+    await ensurePostTable();
     const { searchParams } = new URL(req.url);
-    const postId = searchParams.get('postId');
+    const postId = searchParams.get('postId') || searchParams.get('id');
 
     if (!postId) {
       return NextResponse.json({ success: false, error: '삭제할 포스팅 ID가 지정되지 않았습니다.' }, { status: 400 });
     }
 
-    const { updateRows } = require('../../../../../egdesk-helpers');
     const nowIso = new Date().toISOString();
 
-    // 1) DB 대장 테이블(crm_instagram_posts) 소프트 삭제
-    await updateRows(
-      'crm_instagram_posts',
-      { deleted_at: nowIso, deleted_by: 'user' },
-      { id: String(postId) }
-    ).catch(() => {});
+    // 1) crm_instagram_posts DB 테이블에서 대상 레코드 존재 여부 확인
+    const existCheck = await queryTable('crm_instagram_posts', {
+      filters: { id: String(postId) }
+    }).catch(() => ({ rows: [] }));
 
-    console.log(`🗑️ [EGDesk Instagram] 포스팅 항목 소프트 삭제 완료 (ID: ${postId})`);
+    if (existCheck.rows && existCheck.rows.length > 0) {
+      // 기존 레코드 소프트 삭제 업데이트 (deleted_at 주입)
+      await updateRows(
+        'crm_instagram_posts',
+        { deleted_at: nowIso, deleted_by: 'user' },
+        { id: String(postId) }
+      );
+    } else {
+      // 신규 소프트 삭제 레코드 생성 (deleted_at 포함)
+      await insertRows('crm_instagram_posts', [{
+        id: String(postId),
+        status: 'DELETED',
+        deleted_at: nowIso,
+        deleted_by: 'user'
+      }]);
+    }
+
+    console.log(`🗑️ [EGDesk Instagram] 포스팅 항목 소프트 삭제(deleted_at IS NOT NULL) 완전 적용 완료 (ID: ${postId})`);
 
     return NextResponse.json({ success: true, message: '포스팅 항목이 성공적으로 삭제되었습니다.' });
   } catch (error: any) {
