@@ -157,20 +157,17 @@ export async function POST(req: Request) {
       likes_count: 0
     }]);
 
-    // 3. 인스타그램 포스팅 자동 예약 등록
-    const instaId = Date.now() + 200;
-    await insertRows('crm_instagram_posts', [{
-      id: instaId,
-      product_id: 'AI_CAMPAIGN',
-      status: 'SCHEDULED',
-      content: `${contentPack.instagram.caption}\n\n${contentPack.instagram.hashtags.map((h: string) => `#${h}`).join(' ')}`,
-      image_url: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=600&q=80', // 분위기 좋은 카페 감성
-      scheduled_at: nowStr,
-      posted_at: '',
-      error_message: '',
-      likes_count: 0,
-      comments_count: 0
-    }]);
+    // 3. 이지데스크 순정 MCP 인스타그램 포스팅 자동 예약 등록
+    try {
+      const { createInstagramPost } = require('@/../egdesk-helpers');
+      await createInstagramPost({
+        caption: `${contentPack.instagram.caption}\n\n${contentPack.instagram.hashtags.map((h: string) => `#${h}`).join(' ')}`,
+        mediaUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=600&q=80',
+        scheduledAt: nowStr
+      });
+    } catch (instaMcpErr) {
+      console.warn('AI 브리핑 인스타그램 MCP 포스팅 등록 경고:', instaMcpErr);
+    }
 
     return NextResponse.json({
       success: true,
