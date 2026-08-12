@@ -9,8 +9,8 @@ import {
   listInstagramConnections,
   queryTable,
   insertRows,
-  updateRows,
-  safeCreateTable
+  createTable,
+  executeSQL
 } from '../../../../../egdesk-helpers';
 
 // 웹 URL 또는 Base64 이미지를 Playwright가 인식할 수 있는 로컬 파일 절대 경로로 변환하는 헬퍼
@@ -72,7 +72,7 @@ async function ensurePostTable() {
   }).catch(() => {});
 }
 
-// 1. 이지데스크 MCP 인스타그램 포스팅 및 성과 이력 조회 (소프트 삭제 deleted_at IS NULL 필터링 필수 적용)
+// 1. 이지데스크 MCP 및 DB 통합 인스타그램 포스팅 이력 조회 (deleted_at IS NULL 필터링 무조건 적용)
 export async function GET(req: Request) {
   try {
     await ensurePostTable();
@@ -80,7 +80,7 @@ export async function GET(req: Request) {
     const connectionId = searchParams.get('connectionId') || undefined;
     const status = searchParams.get('status') || undefined;
 
-    // 1) DB 대장 테이블(crm_instagram_posts)에서 소프트 삭제된 목록 ID 스캔
+    // 1) DB 대장 테이블에서 소프트 삭제된 항목 ID 스캔
     let deletedPostIds = new Set<string>();
     try {
       const deletedRes = await executeSQL('SELECT id FROM crm_instagram_posts WHERE deleted_at IS NOT NULL');
@@ -93,7 +93,19 @@ export async function GET(req: Request) {
       console.warn('소프트 삭제 목록 스캔 경고:', dbErr.message);
     }
 
-    let history: any[] = [];
+    // 2) DB 대장 테이블(crm_instagram_posts)에서 정상 항목(deleted_at IS NULL) 조회
+    let dbPosts: any[] = [];
+    try {
+      const dbRes = await executeSQL('SELECT * FROM crm_instagram_posts WHERE deleted_at IS NULL ORDER BY created_at DESC');
+      if (dbRes.rows && dbRes.rows.length > 0) {
+        dbPosts = dbRes.rows;
+      }
+    } catch (dbErr: any) {
+      console.warn('DB 포스트 대장 조회 경고:', dbErr.message);
+    }
+
+    // 3) 이지데스크 MCP listInstagramHistory 도구에서 이력 조회
+    let mcpPosts: any[] = [];
     try {
       const historyRes = await listInstagramHistory({
         connectionId,
@@ -101,94 +113,125 @@ export async function GET(req: Request) {
         limit: 100,
       });
       if (historyRes && historyRes.success) {
-        const rawHistory = historyRes.history || [];
-
-        // 소프트 삭제(deleted_at IS NOT NULL) 항목 100% 제척 및 데이터 정규화
-        history = rawHistory
-          .filter((item: any) => {
-            const itemId = String(item.id || item.post_id || '');
-            if (item.deleted_at || deletedPostIds.has(itemId)) {
-              return false; // 삭제된 항목 제외 (deleted_at IS NULL 보장)
-            }
-            return true;
-          })
-          .map((item: any) => {
-            const rawImagePath = item.image_url || item.imageUrl || item.imagePath || item.image_path || '';
-            let webImageUrl = rawImagePath;
-
-            if (rawImagePath && typeof window === 'undefined') {
-              try {
-                if (fs.existsSync(rawImagePath)) {
-                  const fileBuffer = fs.readFileSync(rawImagePath);
-                  const ext = path.extname(rawImagePath).toLowerCase().replace('.', '') || 'jpeg';
-                  const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-                  webImageUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
-                }
-              } catch (fErr: any) {
-                console.warn('이력 이미지 Base64 변환 경고:', fErr.message);
-              }
-            }
-
-            return {
-              ...item,
-              id: item.id || `post_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-              content: item.content || item.caption || item.text || item.title || '등록된 포스팅 문구',
-              caption: item.caption || item.content || item.text || '등록된 포스팅 문구',
-              image_url: webImageUrl,
-              imageUrl: webImageUrl,
-              imagePath: rawImagePath,
-              status: item.status || 'PUBLISHED',
-              created_at: item.created_at || item.publishedAt || item.createdAt || new Date().toISOString()
-            };
-          });
+        mcpPosts = historyRes.history || historyRes.posts || historyRes.items || [];
       }
     } catch (e: any) {
-      console.warn('listInstagramHistory fallback:', e.message);
+      console.warn('listInstagramHistory MCP 이력 조회 폴백:', e.message);
     }
 
-    return NextResponse.json({ success: true, posts: history });
+    // 4) DB 대장과 MCP 이력 통합 결합 및 중복/삭제 제거
+    const combinedMap = new Map<string, any>();
+
+    // DB 항목 우선 삽입
+    dbPosts.forEach((item: any) => {
+      const itemId = String(item.id);
+      if (!deletedPostIds.has(itemId)) {
+        combinedMap.set(itemId, item);
+      }
+    });
+
+    // MCP 항목 병합
+    mcpPosts.forEach((item: any) => {
+      const itemId = String(item.id || item.post_id || '');
+      if (itemId && !deletedPostIds.has(itemId) && !item.deleted_at) {
+        if (!combinedMap.has(itemId)) {
+          combinedMap.set(itemId, item);
+        }
+      }
+    });
+
+    // 5) 이미지 Base64 변환 및 규격 정규화
+    const finalPosts = Array.from(combinedMap.values()).map((item: any) => {
+      const rawImagePath = item.image_url || item.imageUrl || item.imagePath || item.image_path || '';
+      let webImageUrl = rawImagePath;
+
+      if (rawImagePath && typeof window === 'undefined') {
+        try {
+          if (fs.existsSync(rawImagePath)) {
+            const fileBuffer = fs.readFileSync(rawImagePath);
+            const ext = path.extname(rawImagePath).toLowerCase().replace('.', '') || 'jpeg';
+            const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+            webImageUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+          }
+        } catch (fErr: any) {
+          console.warn('이미지 Base64 변환 경고:', fErr.message);
+        }
+      }
+
+      return {
+        ...item,
+        id: item.id || `post_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        content: item.content || item.caption || item.text || item.title || '등록된 포스팅 문구',
+        caption: item.caption || item.content || item.text || '등록된 포스팅 문구',
+        image_url: webImageUrl,
+        imageUrl: webImageUrl,
+        imagePath: rawImagePath,
+        status: item.status || 'PUBLISHED',
+        created_at: item.created_at || item.publishedAt || item.createdAt || new Date().toISOString()
+      };
+    });
+
+    return NextResponse.json({ success: true, posts: finalPosts });
   } catch (error: any) {
     console.error('인스타그램 MCP 이력 조회 에러:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
-// 2. 이지데스크 MCP 인스타그램 피드 포스팅 및 실행
+// 2. 이지데스크 MCP 인스타그램 피드 포스팅 및 DB 대장 등록
 export async function POST(req: Request) {
   try {
     await ensurePostTable();
     const data = await req.json();
-    const { connectionId, caption, content, image_url, imagePath } = data;
+    const { connectionId, caption, content, image_url, imagePath, product_id, status, scheduled_at } = data;
 
     const finalCaption = caption || content || 'EGDesk AI 생성 포스트';
     const rawImage = imagePath || image_url || '';
-
     const localAbsolutePath = await ensureLocalImagePath(rawImage);
-    let targetConnectionId = connectionId;
+    
+    const newPostId = `post_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const nowIso = new Date().toISOString();
+    const targetStatus = status || (scheduled_at ? 'SCHEDULED' : 'POSTED');
 
-    if (!targetConnectionId) {
-      const connRes = await listInstagramConnections();
-      if (connRes && connRes.success && connRes.connections.length > 0) {
-        targetConnectionId = connRes.connections[0].id;
+    // DB 대장에 포스팅 등록 (deleted_at: null)
+    await insertRows('crm_instagram_posts', [{
+      id: newPostId,
+      connection_id: connectionId || 'default',
+      product_id: product_id || null,
+      caption: finalCaption,
+      content: finalCaption,
+      image_url: rawImage,
+      image_path: localAbsolutePath,
+      status: targetStatus,
+      scheduled_at: scheduled_at || null,
+      created_at: nowIso,
+      updated_at: nowIso,
+      updated_by: 'system'
+    }]).catch(() => {});
+
+    let postRes: any = { success: true };
+
+    // 즉시 포스팅인 경우 이지데스크 MCP Playwright 포스팅 매크로 실행
+    if (targetStatus === 'POSTED') {
+      let targetConnectionId = connectionId;
+      if (!targetConnectionId) {
+        const connRes = await listInstagramConnections();
+        if (connRes && connRes.success && connRes.connections.length > 0) {
+          targetConnectionId = connRes.connections[0].id;
+        }
+      }
+
+      if (targetConnectionId) {
+        console.log(`🚀 [EGDesk MCP] Playwright 포스팅 구동 (계정: ${targetConnectionId})`);
+        postRes = await createInstagramPost({
+          connectionId: targetConnectionId,
+          caption: finalCaption,
+          imagePath: localAbsolutePath,
+        }).catch((e: any) => ({ success: false, error: e.message }));
       }
     }
 
-    if (!targetConnectionId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: '포스팅을 수행할 인스타그램 연동 계정이 존재하지 않습니다. 계정을 먼저 등록해 주세요.' 
-      }, { status: 400 });
-    }
-
-    console.log(`🚀 [EGDesk MCP] Playwright 인스타그램 포스팅 시작 (계정 ID: ${targetConnectionId}, 이미지: ${localAbsolutePath})`);
-
-    const postRes = await createInstagramPost({
-      connectionId: targetConnectionId,
-      caption: finalCaption,
-      imagePath: localAbsolutePath,
-    });
-
-    return NextResponse.json({ success: true, result: postRes });
+    return NextResponse.json({ success: true, result: postRes, postId: newPostId });
   } catch (error: any) {
     console.error('인스타그램 MCP 포스팅 진행 에러:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -208,7 +251,6 @@ export async function DELETE(req: Request) {
 
     const nowIso = new Date().toISOString();
 
-    // 1) crm_instagram_posts DB 테이블에서 대상 레코드 존재 여부 확인
     const existCheck = await queryTable('crm_instagram_posts', {
       filters: { id: String(postId) }
     }).catch(() => ({ rows: [] }));
@@ -219,7 +261,6 @@ export async function DELETE(req: Request) {
         [nowIso, 'user', String(postId)]
       );
     } else {
-      // 신규 소프트 삭제 레코드 생성 (deleted_at 포함)
       await insertRows('crm_instagram_posts', [{
         id: String(postId),
         status: 'DELETED',
@@ -228,7 +269,7 @@ export async function DELETE(req: Request) {
       }]);
     }
 
-    console.log(`🗑️ [EGDesk Instagram] 포스팅 항목 소프트 삭제(deleted_at IS NOT NULL) 완전 적용 완료 (ID: ${postId})`);
+    console.log(`🗑️ [EGDesk Instagram] 포스팅 소프트 삭제(deleted_at IS NOT NULL) 완전 적용 완료 (ID: ${postId})`);
 
     return NextResponse.json({ success: true, message: '포스팅 항목이 성공적으로 삭제되었습니다.' });
   } catch (error: any) {
