@@ -22,10 +22,10 @@ export default function InstagramStats({
   onSyncStats,
   isSyncingStats = false,
 }: InstagramStatsProps) {
-  // 실제 데이터베이스 및 MCP 이력 데이터 기반 실시간 통계 산출 (POSTED / PUBLISHED 대소문자 통합)
+  // 실제 데이터베이스 및 MCP 이력 데이터 기반 실시간 통계 산출 (POSTED / PUBLISHED / posted_at 존재 여부 포함)
   const postedPosts = posts.filter((p) => {
     const st = (p.status || "").toUpperCase();
-    return st === "POSTED" || st === "PUBLISHED";
+    return st === "POSTED" || st === "PUBLISHED" || !!p.posted_at;
   });
   const scheduledPosts = posts.filter((p) => (p.status || "").toUpperCase() === "SCHEDULED");
   const failedPosts = posts.filter((p) => (p.status || "").toUpperCase() === "FAILED" || (p.status || "").toUpperCase() === "ERROR");
@@ -45,7 +45,7 @@ export default function InstagramStats({
   const engagementSubtext =
     postedPosts.length > 0 ? `실제 발행 ${postedPosts.length}개 피드 종합 분석` : "분석 대상 피드 이력 없음";
 
-  // 3. 누적 업로드 건수
+  // 3. 누적 업로드 건수 (유효 데이터 100% 통일)
   const uploadedCount = postedPosts.length;
   const totalCount = posts.length;
   const uploadSubtext = `예약 대기 ${scheduledPosts.length}건 / 발행 실패 ${failedPosts.length}건`;
@@ -61,9 +61,9 @@ export default function InstagramStats({
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
           <span className="text-xs font-bold text-slate-700">EGDesk MCP 반응 성과 관제</span>
-          {mcpHistory.length > 0 && (
+          {posts.length > 0 && (
             <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-              실물 이력 {mcpHistory.length}건 수집됨
+              유효 이력 {posts.length}건 관제 중
             </span>
           )}
         </div>
