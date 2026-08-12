@@ -553,8 +553,8 @@ export default function InstagramMarketingPortal() {
         isSyncingStats={isSyncingStats}
       />
 
-      {/* 메인 레이아웃: 대시보드 콘텐츠 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-10 items-start">
+      {/* 메인 레이아웃: 대시보드 콘텐츠 (items-stretch로 좌우 수직 높이 100% 완벽 결합) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-10 items-stretch">
         {/* 왼쪽 & 중간 영역: 연동 설정 & AI 크리에이터 스튜디오 */}
         <div className="lg:col-span-2 space-y-8">
           {/* 2. 오토파일럿 설정 및 하이브리드 인스타그램 연동 */}
@@ -624,7 +624,7 @@ export default function InstagramMarketingPortal() {
         </div>
 
         {/* 우측 영역: 모바일 폰 렌더링 라이브 프리뷰 및 예약 캘린더 */}
-        <div className="space-y-8">
+        <div className="flex flex-col h-full space-y-8">
           {/* 모바일 폰 라이브 미리보기 */}
           <MobileFeedPreview
             selectedPostForPreview={selectedPostForPreview}
