@@ -166,10 +166,18 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     };
   }, [userRole]);
 
-  // 💡 메뉴 접근 시 최근 사용(Last Used) 타임스탬프 기록
+  // 💡 메뉴 접근 시 최근 사용(Last Used) 타임스탬프 기록 및 활성 메뉴 자동 스크롤(Auto ScrollIntoView)
   useEffect(() => {
     if (typeof window !== "undefined" && pathname) {
-      // 정확한 매칭 또는 서브경로 매칭 탐색
+      // 1. 활성화 메뉴 사이드바 자동 스크롤
+      const timer = setTimeout(() => {
+        const activeElement = document.querySelector('[data-active-menu="true"]');
+        if (activeElement) {
+          activeElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }, 100);
+
+      // 2. 정확한 매칭 또는 서브경로 매칭 탐색
       const matchingHref = Object.keys(MENU_STATIC_MAP).find(href => {
         if (href === "/") return pathname === "/";
         return pathname.startsWith(href);
@@ -180,9 +188,11 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
           lastUsedMap[matchingHref] = Date.now();
           localStorage.setItem("egdesk_menu_last_used", JSON.stringify(lastUsedMap));
         } catch (e) {
-          console.error("최근 사용 메뉴 기록 실패:", e);
+          console.error("최근 사용 메뉴 타임스탬프 기록 실패", e);
         }
       }
+
+      return () => clearTimeout(timer);
     }
   }, [pathname]);
 
@@ -391,6 +401,7 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
             <Link
               key={item.href}
               href={item.href}
+              data-active-menu={active ? "true" : undefined}
               onMouseDown={startPressTimer}
               onMouseUp={clearPressTimer}
               onMouseLeave={clearPressTimer}
