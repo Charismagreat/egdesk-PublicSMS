@@ -93,6 +93,19 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
       const res = await apiFetch("/api/settings/menu");
       const data = await res.json();
 
+  // 💡 현재 라우트(pathname) 활성화 판별 전사 공통 도우미
+  const isCurrentActiveRoute = (href: string) => {
+    if (!pathname || !href) return false;
+    if (href === "/") return pathname === "/";
+    return pathname === href || pathname.startsWith(href + "/");
+  };
+
+  // 2. 동적 메뉴 데이터 가져오기 및 권한별 필터링/정렬 수행 함수
+  const fetchAndApplyMenuSettings = async () => {
+    try {
+      const res = await apiFetch("/api/settings/menu");
+      const data = await res.json();
+
       if (data.success && data.menuSettings) {
         const settings: MenuSettingItem[] = data.menuSettings;
 
@@ -101,10 +114,10 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
           .filter(setting => {
             const cleanHref = (setting.menu_href || "").trim();
             
-            // 💡 [철통 가드 1] /instagram 메뉴이거나 현재 활성화된 페이지(pathname)는 DB의 is_enabled가 0이어도 무조건 활성화 보존!
-            const isMustShow = cleanHref === "/instagram" || (pathname && (pathname === cleanHref || pathname.startsWith(cleanHref + "/")));
+            // 💡 [전사 범용 법칙 1] 현재 사용자가 방문 중인 활성 라우트는 DB의 is_enabled 상태와 상관없이 100% 무조건 보존!
+            const isMustShow = isCurrentActiveRoute(cleanHref);
 
-            // (1) 비활성화된 메뉴 숨김 (필수 메뉴 예외 적용)
+            // (1) 비활성화된 메뉴 숨김 (현재 방문 라우트는 예외)
             if (!isMustShow && Number(setting.is_enabled) !== 1) return false;
             
             // (2) 정적 사이드바 4개 메뉴는 동적 목록에서 제거
@@ -127,18 +140,18 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
             };
           });
 
-        // 2. 💡 [철통 가드 2] DB 설정 테이블에서 누락되었거나 비활성화 처리된 MENU_STATIC_MAP 필수 메뉴(/instagram) 및 현재 활성 라우트 강제 포함
+        // 2. 💡 [전사 범용 법칙 2] MENU_STATIC_MAP에 정의된 모든 유효 메뉴 및 현재 방문 중인 활성 라우트가 DB 설정에서 누락되어 있다면 자동 보환·병합
         const activeResolvedHrefs = new Set(resolved.map(r => r.href));
         Object.entries(MENU_STATIC_MAP).forEach(([href, meta]) => {
-          const isMustShow = href === "/instagram" || (pathname && (pathname === href || pathname.startsWith(href + "/")));
-          if (!STATIC_EXCLUDED_HREFS.has(href) && (!activeResolvedHrefs.has(href) || isMustShow)) {
+          const isMustShow = isCurrentActiveRoute(href);
+          if (!STATIC_EXCLUDED_HREFS.has(href)) {
             if (!activeResolvedHrefs.has(href)) {
               resolved.push({
                 href,
                 label: meta.label,
                 icon: meta.icon,
                 color: meta.color,
-                sort_order: href === "/instagram" ? 15 : 999
+                sort_order: isMustShow ? 1 : 999
               });
             }
           }
@@ -166,14 +179,14 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
   useEffect(() => {
     fetchAndApplyMenuSettings();
 
-    // 로컬스토리지에서 숨긴 메뉴 목록 불러오기 (단, /instagram 메뉴는 숨김 대상에서 강제 제외 및 청소)
+    // 로컬스토리지에서 숨긴 메뉴 목록 불러오기 (단, 현재 방문 중인 라우트는 숨김 목록에서 자동 정돈)
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("egdesk_hidden_menus");
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
-            const cleaned = parsed.filter((h: string) => h !== "/instagram");
+            const cleaned = parsed.filter((h: string) => !isCurrentActiveRoute(h));
             setHiddenHrefs(cleaned);
             localStorage.setItem("egdesk_hidden_menus", JSON.stringify(cleaned));
           }
@@ -352,13 +365,12 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     }
   ];
 
-  // 현재 노출할 메뉴와 숨김 메뉴 분리 (최고관리자 권한만 숨김 필터링 적용, 단 현재 활성화된 라우트는 숨김에서 100% 제외하여 항상 노출)
+  // 현재 노출할 메뉴와 숨김 메뉴 분리 (현재 방문 중인 활성 라우트는 숨김 설정에서 100% 제외하여 전사 모든 페이지 상시 노출)
   const visibleItems = isSystemAdmin
     ? systemAdminMenuItems
     : isAdmin 
       ? displayMenuItems.filter((item) => {
-          const isActiveItem = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href + "/"));
-          if (isActiveItem || item.href === "/instagram") return true;
+          if (isCurrentActiveRoute(item.href)) return true;
           return !hiddenHrefs.includes(item.href);
         })
       : displayMenuItems;
@@ -367,8 +379,7 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     ? []
     : isAdmin
       ? displayMenuItems.filter((item) => {
-          const isActiveItem = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href + "/"));
-          if (isActiveItem || item.href === "/instagram") return false;
+          if (isCurrentActiveRoute(item.href)) return false;
           return hiddenHrefs.includes(item.href);
         })
       : [];
