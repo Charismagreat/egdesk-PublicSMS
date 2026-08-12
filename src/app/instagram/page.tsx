@@ -209,7 +209,7 @@ export default function InstagramMarketingPortal() {
 
   const fetchProducts = async () => {
     try {
-      const res = await apiFetch("/api/products");
+      const res = await apiFetch("/api/products?limit=1000");
       const data = await res.json();
       if (data.success && data.products) {
         setProducts(data.products);
