@@ -52,7 +52,7 @@ export default function AutopilotManager({
           <Settings className="w-5 h-5 text-indigo-600" />
           <h2 className="text-xl font-bold text-slate-800">EGDesk MCP 인스타그램 연동 관제</h2>
         </div>
-        {settings.is_autopilot === 1 && (
+        {Number(settings.is_autopilot) === 1 && (
           <button
             onClick={onTriggerAutopilot}
             className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 font-semibold hover:bg-indigo-100 hover:shadow-sm transition duration-200 cursor-pointer text-xs self-start sm:self-auto"
@@ -81,25 +81,25 @@ export default function AutopilotManager({
                   </button>
                   <span
                     className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border shadow-sm transition-all ${
-                      settings.is_autopilot === 1
+                      Number(settings.is_autopilot) === 1
                         ? "bg-indigo-50 text-indigo-700 border-indigo-200"
                         : "bg-slate-50 text-slate-600 border-slate-200"
                     }`}
                   >
-                    {settings.is_autopilot === 1 ? "● 오토 모드 작동 중" : "○ 수동 검토 모드"}
+                    {Number(settings.is_autopilot) === 1 ? "● 오토 모드 작동 중" : "○ 수동 검토 모드"}
                   </span>
                 </div>
                 <span className="text-xs text-slate-500 block">
-                  {settings.is_autopilot === 1
+                  {Number(settings.is_autopilot) === 1
                     ? "100% 무인 오토파일럿이 주기적으로 피드를 올립니다."
                     : "AI가 초안을 만들고 어드민 큐에 대기(수동 승인 필요)"}
                 </span>
               </div>
               <button
-                onClick={() => onSaveSettings({ is_autopilot: settings.is_autopilot === 1 ? 0 : 1 })}
+                onClick={() => onSaveSettings({ is_autopilot: Number(settings.is_autopilot) === 1 ? 0 : 1 })}
                 className="focus:outline-none cursor-pointer border-0 bg-transparent"
               >
-                {settings.is_autopilot === 1 ? (
+                {Number(settings.is_autopilot) === 1 ? (
                   <ToggleRight className="w-14 h-8 text-indigo-600" />
                 ) : (
                   <ToggleLeft className="w-14 h-8 text-slate-300" />
