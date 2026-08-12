@@ -136,13 +136,12 @@ export default function InstagramMarketingPortal() {
     }
   };
 
-  // 초기 로딩
+  // 초기 로딩 (무거운 인스타 실시간 반응 스크래핑 handleSyncStats는 수동 버튼 클릭 시에만 구동되도록 자동 호출 제거)
   useEffect(() => {
     fetchSettings();
     fetchMcpConnections();
     fetchPosts();
     fetchProducts();
-    handleSyncStats();
   }, []);
 
   // 토스트 팝업 띄우기
