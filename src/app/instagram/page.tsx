@@ -307,10 +307,16 @@ export default function InstagramMarketingPortal() {
   const handleGenerateAI = async () => {
     setSelectedPostForPreview(null); // 신규 피드 빌드 모드로 전환
     setIsGenerating(true);
+    
+    // 40초 클라이언트 타임아웃 방어막 (버튼 무한 멈춤 원천 차단)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 40000);
+
     try {
       const res = await apiFetch("/api/instagram/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           product_id: selectedProduct?.id || null,
           prompt: aiPrompt,
@@ -319,21 +325,29 @@ export default function InstagramMarketingPortal() {
           generate_image: true,
         }),
       });
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (data.success) {
         setGeneratedText(data.text);
         setGeneratedImageUrl(data.image_url);
-        if (data.imagen_error) {
+        if (data.isFallback) {
+          showToast(`⚡ ${data.message}`, "info");
+        } else if (data.imagen_error) {
           showToast(`⚠️ [Google Imagen 3 생성 실패] ${data.imagen_error}`, "error");
         } else {
-          showToast("AI가 지정하신 프롬프트를 바탕으로 문구와 Imagen 3 감성 이미지를 완성했습니다!", "success");
+          showToast("AI가 지정하신 프롬프트를 바탕으로 문구와 감성 이미지를 완성했습니다!", "success");
         }
         setImageTab("ai");
       } else {
         showToast("AI 생성 실패: " + data.error, "error");
       }
     } catch (err: any) {
-      showToast("AI 생성 중 오류: " + err.message, "error");
+      clearTimeout(timeoutId);
+      if (err.name === "AbortError") {
+        showToast("생성 시간이 초과되어 안전하게 중단되었습니다. 다시 시도해 주세요.", "error");
+      } else {
+        showToast("AI 생성 중 오류: " + err.message, "error");
+      }
     } finally {
       setIsGenerating(false);
     }
