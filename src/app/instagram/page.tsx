@@ -503,6 +503,11 @@ export default function InstagramMarketingPortal() {
       });
       const data = await res.json();
       if (data.success) {
+        // 화면에서 즉시 0.001초 만에 항목 지움
+        setPosts((prev) => prev.filter((p) => String(p.id) !== String(postId)));
+        if (selectedPostForPreview?.id === postId) {
+          setSelectedPostForPreview(null);
+        }
         if (isAlreadyPosted) {
           showToast("포스팅 시스템 이력이 삭제되었습니다. (실제 인스타 게시물은 앱에서 삭제 필요)", "info");
         } else {

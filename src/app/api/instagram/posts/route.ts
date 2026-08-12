@@ -9,6 +9,35 @@ import {
   listInstagramConnections
 } from '../../../../../egdesk-helpers';
 
+// 삭제 억제 블랙리스트 파일 경로 (이지데스크 MCP 이력 삭제 억제용)
+const DELETED_POSTS_FILE = path.join(os.tmpdir(), 'egdesk_deleted_instagram_posts.json');
+
+// 삭제된 ID 목록 읽기
+function getDeletedPostIds(): Set<string> {
+  try {
+    if (fs.existsSync(DELETED_POSTS_FILE)) {
+      const content = fs.readFileSync(DELETED_POSTS_FILE, 'utf-8');
+      const list = JSON.parse(content);
+      return new Set(Array.isArray(list) ? list.map(String) : []);
+    }
+  } catch (e) {
+    console.warn('삭제 블랙리스트 읽기 경고:', e);
+  }
+  return new Set();
+}
+
+// 삭제된 ID 추가 기록
+function addDeletedPostId(postId: string) {
+  try {
+    const currentSet = getDeletedPostIds();
+    currentSet.add(String(postId));
+    fs.writeFileSync(DELETED_POSTS_FILE, JSON.stringify(Array.from(currentSet)), 'utf-8');
+    console.log(`📌 [EGDesk MCP] 삭제 억제 블랙리스트에 포스트 추가 완료: ${postId}`);
+  } catch (e) {
+    console.warn('삭제 블랙리스트 쓰기 에러:', e);
+  }
+}
+
 // 웹 URL 또는 Base64 이미지를 Playwright가 인식할 수 있는 로컬 파일 절대 경로로 변환하는 헬퍼
 async function ensureLocalImagePath(inputUrlOrData: string): Promise<string> {
   const tmpDir = os.tmpdir();
@@ -51,13 +80,14 @@ async function ensureLocalImagePath(inputUrlOrData: string): Promise<string> {
   }
 }
 
-// 1. 100% 이지데스크 순정 MCP 인스타그램 포스팅 및 성과 이력 단일 조회
+// 1. 100% 이지데스크 순정 MCP 인스타그램 포스팅 및 성과 이력 단일 조회 (삭제 억제 블랙리스트 필터링)
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const connectionId = searchParams.get('connectionId') || undefined;
     const status = searchParams.get('status') || undefined;
 
+    const deletedSet = getDeletedPostIds();
     let history: any[] = [];
     try {
       const historyRes = await listInstagramHistory({
@@ -68,36 +98,44 @@ export async function GET(req: Request) {
       if (historyRes && historyRes.success) {
         const rawHistory = (historyRes as any).history || (historyRes as any).posts || [];
 
-        // 로컬 이미지 파일 Base64 변환 및 데이터 규격 정규화
-        history = rawHistory.map((item: any) => {
-          const rawImagePath = item.image_url || item.imageUrl || item.imagePath || item.image_path || '';
-          let webImageUrl = rawImagePath;
-
-          if (rawImagePath && typeof window === 'undefined') {
-            try {
-              if (fs.existsSync(rawImagePath)) {
-                const fileBuffer = fs.readFileSync(rawImagePath);
-                const ext = path.extname(rawImagePath).toLowerCase().replace('.', '') || 'jpeg';
-                const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-                webImageUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
-              }
-            } catch (fErr: any) {
-              console.warn('이력 이미지 Base64 변환 경고:', fErr.message);
+        // 삭제 처리된 ID 100% 억제 필터링 & 로컬 이미지 파일 Base64 변환
+        history = rawHistory
+          .filter((item: any) => {
+            const itemId = String(item.id || item.post_id || '');
+            if (deletedSet.has(itemId) || item.deleted_at) {
+              return false; // 삭제 항목 차단
             }
-          }
+            return true;
+          })
+          .map((item: any) => {
+            const rawImagePath = item.image_url || item.imageUrl || item.imagePath || item.image_path || '';
+            let webImageUrl = rawImagePath;
 
-          return {
-            ...item,
-            id: item.id || `post_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-            content: item.content || item.caption || item.text || item.title || '등록된 포스팅 문구',
-            caption: item.caption || item.content || item.text || '등록된 포스팅 문구',
-            image_url: webImageUrl,
-            imageUrl: webImageUrl,
-            imagePath: rawImagePath,
-            status: item.status || 'PUBLISHED',
-            created_at: item.created_at || item.publishedAt || item.createdAt || new Date().toISOString()
-          };
-        });
+            if (rawImagePath && typeof window === 'undefined') {
+              try {
+                if (fs.existsSync(rawImagePath)) {
+                  const fileBuffer = fs.readFileSync(rawImagePath);
+                  const ext = path.extname(rawImagePath).toLowerCase().replace('.', '') || 'jpeg';
+                  const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+                  webImageUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+                }
+              } catch (fErr: any) {
+                console.warn('이력 이미지 Base64 변환 경고:', fErr.message);
+              }
+            }
+
+            return {
+              ...item,
+              id: item.id || `post_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+              content: item.content || item.caption || item.text || item.title || '등록된 포스팅 문구',
+              caption: item.caption || item.content || item.text || '등록된 포스팅 문구',
+              image_url: webImageUrl,
+              imageUrl: webImageUrl,
+              imagePath: rawImagePath,
+              status: item.status || 'PUBLISHED',
+              created_at: item.created_at || item.publishedAt || item.createdAt || new Date().toISOString()
+            };
+          });
       }
     } catch (e: any) {
       console.warn('listInstagramHistory MCP 이력 조회 폴백:', e.message);
@@ -150,7 +188,7 @@ export async function POST(req: Request) {
   }
 }
 
-// 3. 인스타그램 포스팅 이력 항목 삭제
+// 3. 인스타그램 포스팅 이력 항목 삭제 (삭제 블랙리스트 파일 저장)
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -160,7 +198,10 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ success: false, error: '삭제할 포스팅 ID가 지정되지 않았습니다.' }, { status: 400 });
     }
 
-    console.log(`🗑️ [EGDesk Instagram] 포스팅 이력 삭제 처리 완료 (ID: ${postId})`);
+    // 이지데스크 MCP 삭제 억제 블랙리스트에 포스트 ID 추가
+    addDeletedPostId(postId);
+
+    console.log(`🗑️ [EGDesk Instagram] 포스팅 이력 블랙리스트 등록 삭제 조치 완료 (ID: ${postId})`);
 
     return NextResponse.json({ success: true, message: '포스팅 항목이 삭제 조치되었습니다.' });
   } catch (error: any) {
