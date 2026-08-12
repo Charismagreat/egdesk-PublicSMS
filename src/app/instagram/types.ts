@@ -17,11 +17,17 @@ export interface Product {
  * 인스타그램 게시물 포스팅 인터페이스
  */
 export interface InstagramPost {
-  id: number;
+  id: number | string;
   product_id: string | null;
-  status: "DRAFT" | "SCHEDULED" | "POSTED" | "FAILED";
+  status: "DRAFT" | "SCHEDULED" | "POSTED" | "FAILED" | string;
   content: string;
   image_url: string;
+  imageUrl?: string;
+  imagePath?: string;
+  caption?: string;
+  text?: string;
+  title?: string;
+  product_name?: string;
   scheduled_at: string;
   posted_at: string | null;
   error_message: string | null;

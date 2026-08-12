@@ -70,7 +70,39 @@ export async function GET(req: Request) {
         limit: 100,
       });
       if (historyRes && historyRes.success) {
-        history = historyRes.history || [];
+        const rawHistory = historyRes.history || [];
+
+        // 이력 데이터 규격 정규화 및 로컬 이미지 파일 Base64 변환
+        history = rawHistory.map((item: any) => {
+          const rawImagePath = item.image_url || item.imageUrl || item.imagePath || item.image_path || '';
+          let webImageUrl = rawImagePath;
+
+          // 로컬 디스크 파일 경로인 경우 Base64 Data URI로 자동 변환
+          if (rawImagePath && typeof window === 'undefined') {
+            try {
+              if (fs.existsSync(rawImagePath)) {
+                const fileBuffer = fs.readFileSync(rawImagePath);
+                const ext = path.extname(rawImagePath).toLowerCase().replace('.', '') || 'jpeg';
+                const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+                webImageUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+              }
+            } catch (fErr: any) {
+              console.warn('이력 이미지 Base64 변환 경고:', fErr.message);
+            }
+          }
+
+          return {
+            ...item,
+            id: item.id || `post_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            content: item.content || item.caption || item.text || item.title || '등록된 포스팅 문구',
+            caption: item.caption || item.content || item.text || '등록된 포스팅 문구',
+            image_url: webImageUrl,
+            imageUrl: webImageUrl,
+            imagePath: rawImagePath,
+            status: item.status || 'PUBLISHED',
+            created_at: item.created_at || item.publishedAt || item.createdAt || new Date().toISOString()
+          };
+        });
       }
     } catch (e: any) {
       console.warn('listInstagramHistory fallback:', e.message);

@@ -143,9 +143,9 @@ export default function TimelineCalendar({
                 </div>
 
                 <div className="flex gap-3">
-                  {post.image_url ? (
+                  {(post.image_url || post.imageUrl || post.imagePath) ? (
                     <img
-                      src={post.image_url}
+                      src={post.image_url || post.imageUrl || post.imagePath}
                       alt="예약피드"
                       className="w-14 h-14 object-cover rounded-lg border border-slate-200"
                     />
@@ -156,8 +156,12 @@ export default function TimelineCalendar({
                   )}
 
                   <div className="flex-1 overflow-hidden">
-                    {post.product && <p className="text-[10px] text-slate-500 font-bold truncate">📍 {post.product.name}</p>}
-                    <p className="text-xs text-slate-600 line-clamp-2 mt-0.5 leading-normal">{post.content}</p>
+                    {(post.product || post.product_name) && (
+                      <p className="text-[10px] text-slate-500 font-bold truncate">📍 {post.product?.name || post.product_name}</p>
+                    )}
+                    <p className="text-xs text-slate-600 line-clamp-2 mt-0.5 leading-normal">
+                      {post.caption || post.content || post.text || post.title || '등록된 피드 문구가 없습니다.'}
+                    </p>
                   </div>
                 </div>
 
