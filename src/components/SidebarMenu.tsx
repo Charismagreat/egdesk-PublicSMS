@@ -87,12 +87,6 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     return pathname === href || pathname.startsWith(href + "/");
   };
 
-  // 2. 동적 메뉴 데이터 가져오기 및 권한별 필터링/정렬 수행 함수
-  const fetchAndApplyMenuSettings = async () => {
-    try {
-      const res = await apiFetch("/api/settings/menu");
-      const data = await res.json();
-
   // 💡 현재 라우트(pathname) 활성화 판별 전사 공통 도우미
   const isCurrentActiveRoute = (href: string) => {
     if (!pathname || !href) return false;
