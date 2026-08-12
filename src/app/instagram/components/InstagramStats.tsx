@@ -22,13 +22,16 @@ export default function InstagramStats({
   onSyncStats,
   isSyncingStats = false,
 }: InstagramStatsProps) {
-  // 실제 데이터베이스 및 MCP 이력 데이터 기반 실시간 통계 산출 (POSTED / PUBLISHED / posted_at 존재 여부 포함)
+  // 실제 데이터베이스 및 MCP 이력 데이터 기반 실시간 통계 산출 (예약/실패 제외한 모든 유효 피드는 발행 완료 처리)
+  const scheduledPosts = posts.filter((p) => (p.status || "").toUpperCase() === "SCHEDULED");
+  const failedPosts = posts.filter((p) => {
+    const st = (p.status || "").toUpperCase();
+    return st === "FAILED" || st === "ERROR";
+  });
   const postedPosts = posts.filter((p) => {
     const st = (p.status || "").toUpperCase();
-    return st === "POSTED" || st === "PUBLISHED" || !!p.posted_at;
+    return st !== "SCHEDULED" && st !== "FAILED" && st !== "ERROR";
   });
-  const scheduledPosts = posts.filter((p) => (p.status || "").toUpperCase() === "SCHEDULED");
-  const failedPosts = posts.filter((p) => (p.status || "").toUpperCase() === "FAILED" || (p.status || "").toUpperCase() === "ERROR");
 
   // 1. 연동 계정 상태 데이터
   const displayFollowers = isSessionConnected ? "연동 완료" : "미연동";
