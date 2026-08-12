@@ -108,16 +108,10 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
           .filter(setting => {
             const cleanHref = (setting.menu_href || "").trim();
             
-            // 💡 [전사 범용 법칙 1] 현재 사용자가 방문 중인 활성 라우트는 DB의 is_enabled 상태와 상관없이 100% 무조건 보존!
-            const isMustShow = isCurrentActiveRoute(cleanHref);
-
-            // (1) 비활성화된 메뉴 숨김 (현재 방문 라우트는 예외)
-            if (!isMustShow && Number(setting.is_enabled) !== 1) return false;
-            
-            // (2) 정적 사이드바 4개 메뉴는 동적 목록에서 제거
+            // (1) 정적 사이드바 4개 메뉴(컨트롤타워, MY DB 등)는 동적 목록에서 제거
             if (STATIC_EXCLUDED_HREFS.has(cleanHref)) return false;
 
-            // (3) 정적 메뉴 맵(MENU_STATIC_MAP)에 없는 미구현/미개발 임시 경로는 완전히 제외
+            // (2) 정적 메뉴 맵(MENU_STATIC_MAP)에 정의된 유효한 메뉴만 노출
             if (!MENU_STATIC_MAP[cleanHref]) return false;
             
             return true;
@@ -134,20 +128,17 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
             };
           });
 
-        // 2. 💡 [전사 범용 법칙 2] MENU_STATIC_MAP에 정의된 모든 유효 메뉴 및 현재 방문 중인 활성 라우트가 DB 설정에서 누락되어 있다면 자동 보환·병합
+        // 2. 💡 [전사 범용 법칙 2] MENU_STATIC_MAP에 정의된 모든 유효 메뉴가 DB 설정에서 누락되어 있다면 100% 누락 없이 병합
         const activeResolvedHrefs = new Set(resolved.map(r => r.href));
         Object.entries(MENU_STATIC_MAP).forEach(([href, meta]) => {
-          const isMustShow = isCurrentActiveRoute(href);
-          if (!STATIC_EXCLUDED_HREFS.has(href)) {
-            if (!activeResolvedHrefs.has(href)) {
-              resolved.push({
-                href,
-                label: meta.label,
-                icon: meta.icon,
-                color: meta.color,
-                sort_order: isMustShow ? 1 : 999
-              });
-            }
+          if (!STATIC_EXCLUDED_HREFS.has(href) && !activeResolvedHrefs.has(href)) {
+            resolved.push({
+              href,
+              label: meta.label,
+              icon: meta.icon,
+              color: meta.color,
+              sort_order: 999
+            });
           }
         });
 

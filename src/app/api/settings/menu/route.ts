@@ -114,11 +114,10 @@ export async function GET() {
     });
 
     const sanitizedRows = uniqueRows.map((r: any) => {
-      const href = (r.menu_href || "").trim();
       return {
         ...r,
-        // /instagram 메뉴 등 핵심 라우트는 무조건 1(활성화)로 복원 보정
-        is_enabled: href === '/instagram' ? 1 : (Number(r.is_enabled) === 1 ? 1 : 0)
+        // 💡 전사 모든 정식 마스터 메뉴 항목은 무조건 1(활성화) 상태로 힐링 보정
+        is_enabled: 1
       };
     });
 
