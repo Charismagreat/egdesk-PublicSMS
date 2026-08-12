@@ -42,35 +42,55 @@ export default function TimelineCalendar({
   onApproveImmediate,
   onDeletePost,
 }: TimelineCalendarProps) {
-  // 예약 피드의 색상/상태 클래스 맵
+  // 예약/발행 피드의 색상/상태 클래스 맵
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "DRAFT":
-        return (
-          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-            임시 초안
-          </span>
-        );
-      case "SCHEDULED":
-        return (
-          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-sky-50 text-sky-700 border border-sky-200">
-            발행 예약
-          </span>
-        );
-      case "POSTED":
-        return (
-          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-            발행 완료
-          </span>
-        );
-      case "FAILED":
-        return (
-          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-            발행 실패
-          </span>
-        );
-      default:
-        return null;
+    const s = (status || "").toUpperCase();
+    if (s === "SCHEDULED" || s === "PENDING") {
+      return (
+        <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-sky-100 text-sky-700 border border-sky-300 flex items-center gap-1 shadow-sm">
+          <span>⏰</span> 발행 예정
+        </span>
+      );
+    } else if (s === "DRAFT") {
+      return (
+        <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-amber-100 text-amber-700 border border-amber-300 flex items-center gap-1 shadow-sm">
+          <span>📝</span> 임시 초안
+        </span>
+      );
+    } else if (s === "FAILED" || s === "ERROR") {
+      return (
+        <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-rose-100 text-rose-700 border border-rose-300 flex items-center gap-1 shadow-sm">
+          <span>❌</span> 발행 실패
+        </span>
+      );
+    } else {
+      // POSTED, PUBLISHED, COMPLETED, SUCCESS 등 기본값
+      return (
+        <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-sm">
+          <span>🟢</span> 발행 완료
+        </span>
+      );
+    }
+  };
+
+  // 날짜/시각 포맷터 (YYYY.MM.DD HH:mm)
+  const formatDateTime = (post: any) => {
+    const rawDate = post.posted_at || post.scheduled_at || post.created_at || post.publishedAt || post.createdAt;
+    if (!rawDate) return "일자 미상";
+    try {
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return String(rawDate).slice(0, 16);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      
+      const isScheduled = (post.status || "").toUpperCase() === "SCHEDULED";
+      const prefix = isScheduled ? "예정:" : "발행:";
+      return `${prefix} ${year}.${month}.${day} ${hours}:${minutes}`;
+    } catch (e) {
+      return String(rawDate);
     }
   };
 
@@ -130,15 +150,8 @@ export default function TimelineCalendar({
                       </span>
                     )}
                   </div>
-                  <span className="text-[9px] text-slate-500 font-semibold">
-                    {post.scheduled_at
-                      ? new Date(post.scheduled_at).toLocaleString("ko-KR", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : ""}
+                  <span className="text-xs text-slate-500 font-bold bg-white px-2 py-0.5 rounded-lg border border-slate-200/80 shadow-inner-sm">
+                    {formatDateTime(post)}
                   </span>
                 </div>
 
