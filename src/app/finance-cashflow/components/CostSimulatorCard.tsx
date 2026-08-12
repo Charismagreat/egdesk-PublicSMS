@@ -149,12 +149,12 @@ export default function CostSimulatorCard({
 
         {/* 제품별 원가 분석 목록 */}
         <div className={`space-y-4 max-h-[260px] overflow-y-auto pr-1 transition-opacity duration-200 ${isSimulating ? 'opacity-50' : 'opacity-100'}`}>
-          {margins.map((prod) => {
+          {margins.map((prod, idx) => {
             const isDanger = prod.marginRate < 10;
             const isNormal = prod.marginRate >= 10 && prod.marginRate < 25;
             
             return (
-              <div key={prod.productId} className="bg-slate-50 border border-slate-150 rounded-2xl p-3.5 space-y-2">
+              <div key={prod.productId ? `${prod.productId}-${idx}` : `cost-prod-${idx}`} className="bg-slate-50 border border-slate-150 rounded-2xl p-3.5 space-y-2">
                 <div className="flex justify-between items-start">
                   <div>
                     <h5 className="text-[10px] font-extrabold text-slate-800">
