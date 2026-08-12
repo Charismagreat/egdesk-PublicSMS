@@ -190,15 +190,16 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
   }, [userRole]);
 
   // 💡 메뉴 접근 시 최근 사용(Last Used) 타임스탬프 기록 및 활성 메뉴 자동 스크롤(Auto ScrollIntoView)
+  // [충돌 해결] 비동기 displayMenuItems 데이터 업데이트 후 DOM 안착 시점에 scrollIntoView가 안정적으로 실행되도록 조치
   useEffect(() => {
     if (typeof window !== "undefined" && pathname) {
-      // 1. 활성화 메뉴 사이드바 자동 스크롤
+      // 1. 활성화 메뉴 사이드바 자동 스크롤 (비동기 DOM 재렌더링 완료 후 안착 실행)
       const timer = setTimeout(() => {
         const activeElement = document.querySelector('[data-active-menu="true"]');
         if (activeElement) {
           activeElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
         }
-      }, 100);
+      }, 200);
 
       // 2. 정확한 매칭 또는 서브경로 매칭 탐색
       const matchingHref = Object.keys(MENU_STATIC_MAP).find(href => {
@@ -217,7 +218,7 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
 
       return () => clearTimeout(timer);
     }
-  }, [pathname]);
+  }, [pathname, displayMenuItems]);
 
   // ESC 키로 편집 모드 탈출
   useEffect(() => {
