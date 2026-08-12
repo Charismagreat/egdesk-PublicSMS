@@ -487,21 +487,33 @@ export default function InstagramMarketingPortal() {
     }
   };
 
-  const handleDeletePost = async (postId: number) => {
-    if (!confirm("정말 이 예약을 취소하고 삭제하시겠습니까?")) return;
+  const handleDeletePost = async (postId: number | string) => {
+    const targetPost = posts.find((p) => String(p.id) === String(postId));
+    const isAlreadyPosted = targetPost && (targetPost.status === "POSTED" || targetPost.status === "PUBLISHED");
+
+    const confirmMsg = isAlreadyPosted
+      ? "이 항목은 이미 인스타그램에 발행 완료된 피드입니다.\n관제 타임라인 시스템 이력에서 제거하시겠습니까?\n\n(참고: 실제 인스타그램에 올라간 게시물은 인스타그램 앱에서 직접 삭제하셔야 합니다.)"
+      : "정말 이 포스팅 예약/초안 항목을 취소하고 삭제하시겠습니까?";
+
+    if (!confirm(confirmMsg)) return;
+
     try {
-      const res = await apiFetch(`/api/instagram/posts?id=${postId}`, {
+      const res = await apiFetch(`/api/instagram/posts?postId=${postId}`, {
         method: "DELETE",
       });
       const data = await res.json();
       if (data.success) {
-        showToast("예약이 정상적으로 취소 및 삭제되었습니다.", "info");
+        if (isAlreadyPosted) {
+          showToast("포스팅 시스템 이력이 삭제되었습니다. (실제 인스타 게시물은 앱에서 삭제 필요)", "info");
+        } else {
+          showToast("포스팅 예약 항목이 정상적으로 취소 및 삭제되었습니다.", "success");
+        }
         fetchPosts();
       } else {
-        showToast("예약 취소 실패: " + data.error, "error");
+        showToast("삭제 실패: " + data.error, "error");
       }
     } catch (err: any) {
-      showToast("삭제 오류: " + err.message, "error");
+      showToast("삭제 중 오류: " + err.message, "error");
     }
   };
 
