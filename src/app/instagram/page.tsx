@@ -364,12 +364,12 @@ export default function InstagramMarketingPortal() {
   // 오토파일럿 강제 즉시 실행 프로그레스 상태
   const [isTriggeringAutopilot, setIsTriggeringAutopilot] = useState(false);
 
-  // 오토파일럿 데몬 강제 즉시 실행 트리거
+  // 오토파일럿 데몬 강제 즉시 실행 트리거 (실시간 실물 발행 immediate=true)
   const handleTriggerAutopilot = async () => {
     setIsTriggeringAutopilot(true);
-    showToast("AI 오토파일럿 마케터가 100% 무인으로 피드 카피 및 감성 이미지를 조립하고 있습니다...", "info");
+    showToast("AI 오토파일럿 마케터가 실시간 인스타그램 피드로 즉시 피드 카피 및 이미지를 조립 및 발행하고 있습니다...", "info");
     try {
-      const res = await apiFetch("/api/cron/instagram-autopilot");
+      const res = await apiFetch("/api/cron/instagram-autopilot?immediate=true");
       const data = await res.json();
       if (data.success) {
         if (data.triggered) {

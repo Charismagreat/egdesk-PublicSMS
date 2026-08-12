@@ -11,8 +11,11 @@ import {
  * 이지데스크 순정 MCP 기반 인스타그램 오토파일럿 백그라운드 크론 스케줄러 API
  * GET /api/cron/instagram-autopilot
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const isImmediate = searchParams.get('immediate') === 'true';
+
     // 1. 인스타그램 최신 설정 조회 (규칙: orderBy 'id' DESC 적용)
     const settingsRes = await queryTable('instagram_marketing_settings', { orderBy: 'id', orderDirection: 'DESC', limit: 100 });
     const activeSettings = (settingsRes.rows || []).filter((r: any) => !r.deleted_at);
@@ -22,7 +25,7 @@ export async function GET() {
       return NextResponse.json({ success: false, message: '인스타그램 마케팅 설정이 초기화되지 않았습니다.' }, { status: 400 });
     }
 
-    if (Number(settings.is_autopilot) !== 1) {
+    if (Number(settings.is_autopilot) !== 1 && !isImmediate) {
       return NextResponse.json({
         success: true,
         triggered: false,
@@ -87,33 +90,42 @@ export async function GET() {
     const finalCaption = mcpContentRes?.content?.caption || `✨ 사장님 강추 꿀템 등장! [${productName}] ✨\n\n특별 혜택가 ${priceText}로 지금 바로 프로필 링크에서 만나보세요! 💖\n\n#${productName} #인스타핫템 #강추 #득템찬스`;
     const finalImageUrl = mcpContentRes?.image?.filePath || targetProduct.main_image_url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80';
 
-    // 5. 스케줄링 일시 계산 (설정 시간 기준)
-    const today = new Date();
-    const timeParts = (settings.autopilot_time || "10:00").split(":");
-    const scheduledDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), Number(timeParts[0]), Number(timeParts[1] || 0));
+    // 5. 스케줄링 일시 계산 (즉시 가동 시 null/undefined 로 실시간 실물 포스팅)
+    let scheduledDateISO: string | undefined = undefined;
 
-    if (scheduledDate.getTime() < today.getTime()) {
-      scheduledDate.setDate(scheduledDate.getDate() + 1);
+    if (!isImmediate) {
+      const today = new Date();
+      const timeParts = (settings.autopilot_time || "10:00").split(":");
+      const targetDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), Number(timeParts[0]), Number(timeParts[1] || 0));
+
+      if (targetDate.getTime() < today.getTime()) {
+        targetDate.setDate(targetDate.getDate() + 1);
+      }
+      scheduledDateISO = targetDate.toISOString();
     }
 
-    // 6. 이지데스크 순정 createInstagramPost MCP 도구를 통한 오토파일럿 포스팅 자동 등록
+    // 6. 이지데스크 순정 createInstagramPost MCP 도구를 통한 실물/예약 오토파일럿 포스팅 등록
     let mcpPostResult: any = null;
     try {
       mcpPostResult = await createInstagramPost({
         caption: finalCaption,
         mediaUrl: finalImageUrl,
-        scheduledAt: scheduledDate.toISOString(),
+        scheduledAt: scheduledDateISO,
         username: settings.instagram_username || undefined
       });
     } catch (postErr: any) {
       console.error('EGDesk MCP createInstagramPost error in autopilot:', postErr);
     }
 
+    const msgText = isImmediate
+      ? `[EGDesk MCP 오토파일럿] 성공: 상품 [${productName}]의 피드가 인스타그램 실시간 실물 피드로 즉시 가동 등록되었습니다!`
+      : `[EGDesk MCP 오토파일럿] 성공: 상품 [${productName}]의 피드가 ${scheduledDateISO ? new Date(scheduledDateISO).toLocaleString() : '정해진 시각'} 예약 포스팅으로 설정되었습니다.`;
+
     return NextResponse.json({
       success: true,
       triggered: true,
-      message: `[EGDesk MCP 오토파일럿] 성공: 상품 [${productName}]의 피드가 ${scheduledDate.toLocaleString()} 예약 포스팅으로 자동 등록되었습니다.`,
-      post: mcpPostResult || { productName, scheduledAt: scheduledDate.toISOString() }
+      message: msgText,
+      post: mcpPostResult || { productName, isImmediate }
     });
 
   } catch (error: any) {
