@@ -121,8 +121,8 @@ export default function TimelineCalendar({
           </div>
         )}
 
-        {/* 타임라인 항목 (좌측 페르소나 연구소 하단 라인과 1:1 완벽 수평 정렬) */}
-        <div className="space-y-4 min-h-[380px] max-h-[540px] overflow-y-auto pr-1.5 custom-scrollbar">
+        {/* 타임라인 항목 (좌측 페르소나 연구소 최하단 라인과 1:1 완벽 바텀 정렬) */}
+        <div className="space-y-4 min-h-[580px] max-h-[720px] overflow-y-auto pr-1.5 custom-scrollbar">
         {posts.length === 0 ? (
           <div className="text-center py-12 text-slate-400 border border-dashed border-slate-200 rounded-2xl">
             <Calendar className="w-8 h-8 text-slate-300 mx-auto mb-2" />
