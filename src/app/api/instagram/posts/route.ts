@@ -159,3 +159,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+
+// 3. 인스타그램 포스팅 이력 및 예약 내역 소프트 삭제/취소
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const postId = searchParams.get('postId');
+
+    if (!postId) {
+      return NextResponse.json({ success: false, error: '삭제할 포스팅 ID가 지정되지 않았습니다.' }, { status: 400 });
+    }
+
+    const { updateRows } = require('../../../../../egdesk-helpers');
+    const nowIso = new Date().toISOString();
+
+    // 1) DB 대장 테이블(crm_instagram_posts) 소프트 삭제
+    await updateRows(
+      'crm_instagram_posts',
+      { deleted_at: nowIso, deleted_by: 'user' },
+      { id: String(postId) }
+    ).catch(() => {});
+
+    console.log(`🗑️ [EGDesk Instagram] 포스팅 항목 소프트 삭제 완료 (ID: ${postId})`);
+
+    return NextResponse.json({ success: true, message: '포스팅 항목이 성공적으로 삭제되었습니다.' });
+  } catch (error: any) {
+    console.error('인스타그램 포스팅 삭제 에러:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
