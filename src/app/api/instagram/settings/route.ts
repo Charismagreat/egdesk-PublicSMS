@@ -113,20 +113,10 @@ export async function POST(req: Request) {
     }
 
     if (existingRows.length > 0) {
-      // executeSQL로 DB의 모든 유효 행에 대해 is_autopilot 및 설정값 100% 영구 갱신
-      await executeSQL(`
-        UPDATE instagram_marketing_settings 
-        SET is_autopilot = ${updates.is_autopilot},
-            autopilot_interval = '${updates.autopilot_interval}',
-            autopilot_time = '${updates.autopilot_time}',
-            tone_style = '${updates.tone_style}',
-            instagram_username = '${updates.instagram_username}',
-            updated_at = '${nowStr}',
-            updated_by = 'admin'
-        WHERE deleted_at IS NULL OR deleted_at = '';
-      `);
+      for (const row of existingRows) {
+        await updateRows('instagram_marketing_settings', updates, { filters: { id: row.id } });
+      }
     } else {
-      // 존재하지 않으면 삽입
       await insertRows('instagram_marketing_settings', [{ id: 1, ...updates }]);
     }
 

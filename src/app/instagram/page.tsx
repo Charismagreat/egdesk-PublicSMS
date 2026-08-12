@@ -222,17 +222,20 @@ export default function InstagramMarketingPortal() {
     }
   };
 
-  // 설정 저장
+  // 설정 저장 (낙관적 UI 반응성 보장)
   const saveSettings = async (updatedSettings: Partial<AutopilotSettings>) => {
+    const newSettings = { ...settings, ...updatedSettings };
+    // 1. 클릭 즉시 즉각적인 UI 스위칭 반응 보장
+    setSettings(newSettings);
+
     try {
-      const newSettings = { ...settings, ...updatedSettings };
       const res = await apiFetch("/api/instagram/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newSettings),
       });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.settings) {
         setSettings(data.settings);
       }
     } catch (err: any) {
