@@ -95,15 +95,17 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
 
       if (data.success && data.menuSettings) {
         const settings: MenuSettingItem[] = data.menuSettings;
-        const dbHrefs = new Set(settings.map(s => (s.menu_href || "").trim()));
 
         // 1. DB 설정을 토대로 활성화 및 순서 결합
         const resolved = settings
           .filter(setting => {
-            // (1) 비활성화된 메뉴 숨김
-            if (Number(setting.is_enabled) !== 1) return false;
-            
             const cleanHref = (setting.menu_href || "").trim();
+            
+            // 💡 [철통 가드 1] /instagram 메뉴이거나 현재 활성화된 페이지(pathname)는 DB의 is_enabled가 0이어도 무조건 활성화 보존!
+            const isMustShow = cleanHref === "/instagram" || (pathname && (pathname === cleanHref || pathname.startsWith(cleanHref + "/")));
+
+            // (1) 비활성화된 메뉴 숨김 (필수 메뉴 예외 적용)
+            if (!isMustShow && Number(setting.is_enabled) !== 1) return false;
             
             // (2) 정적 사이드바 4개 메뉴는 동적 목록에서 제거
             if (STATIC_EXCLUDED_HREFS.has(cleanHref)) return false;
@@ -125,16 +127,20 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
             };
           });
 
-        // 2. 💡 [핵심 보정] DB 설정 테이블에 아직 추가되지 않은 MENU_STATIC_MAP 신규 메뉴(예: /instagram) 자동 보존
+        // 2. 💡 [철통 가드 2] DB 설정 테이블에서 누락되었거나 비활성화 처리된 MENU_STATIC_MAP 필수 메뉴(/instagram) 및 현재 활성 라우트 강제 포함
+        const activeResolvedHrefs = new Set(resolved.map(r => r.href));
         Object.entries(MENU_STATIC_MAP).forEach(([href, meta]) => {
-          if (!STATIC_EXCLUDED_HREFS.has(href) && !dbHrefs.has(href)) {
-            resolved.push({
-              href,
-              label: meta.label,
-              icon: meta.icon,
-              color: meta.color,
-              sort_order: 999
-            });
+          const isMustShow = href === "/instagram" || (pathname && (pathname === href || pathname.startsWith(href + "/")));
+          if (!STATIC_EXCLUDED_HREFS.has(href) && (!activeResolvedHrefs.has(href) || isMustShow)) {
+            if (!activeResolvedHrefs.has(href)) {
+              resolved.push({
+                href,
+                label: meta.label,
+                icon: meta.icon,
+                color: meta.color,
+                sort_order: href === "/instagram" ? 15 : 999
+              });
+            }
           }
         });
 
@@ -341,17 +347,25 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     }
   ];
 
-  // 현재 노출할 메뉴와 숨김 메뉴 분리 (최고관리자 권한만 숨김 필터링 적용)
+  // 현재 노출할 메뉴와 숨김 메뉴 분리 (최고관리자 권한만 숨김 필터링 적용, 단 현재 활성화된 라우트는 숨김에서 100% 제외하여 항상 노출)
   const visibleItems = isSystemAdmin
     ? systemAdminMenuItems
     : isAdmin 
-      ? displayMenuItems.filter((item) => !hiddenHrefs.includes(item.href))
+      ? displayMenuItems.filter((item) => {
+          const isActiveItem = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href + "/"));
+          if (isActiveItem || item.href === "/instagram") return true;
+          return !hiddenHrefs.includes(item.href);
+        })
       : displayMenuItems;
 
   const hiddenItems = isSystemAdmin
     ? []
     : isAdmin
-      ? displayMenuItems.filter((item) => hiddenHrefs.includes(item.href))
+      ? displayMenuItems.filter((item) => {
+          const isActiveItem = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href + "/"));
+          if (isActiveItem || item.href === "/instagram") return false;
+          return hiddenHrefs.includes(item.href);
+        })
       : [];
 
   return (
