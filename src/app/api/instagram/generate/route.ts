@@ -68,10 +68,28 @@ export async function POST(req: Request) {
       const finalCaption = mcpResult.content?.caption || `${mcpResult.content?.hook || ''}\n\n${mcpResult.content?.body || ''}\n\n${(mcpResult.content?.hashtags || []).join(' ')}`;
       const localImagePath = mcpResult.image?.filePath || '';
 
+      // 브라우저 보정을 위한 로컬 파일 -> base64 data URI 자동 변환
+      let webImageUrl = localImagePath;
+      if (localImagePath && typeof window === 'undefined') {
+        try {
+          const fs = require('fs');
+          const path = require('path');
+          if (fs.existsSync(localImagePath)) {
+            const fileBuffer = fs.readFileSync(localImagePath);
+            const ext = path.extname(localImagePath).toLowerCase().replace('.', '') || 'jpeg';
+            const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+            webImageUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+            console.log(`🖼️ [EGDesk MCP] 로컬 이미지(${localImagePath})를 웹 브라우저용 Base64 포맷으로 변환 완료!`);
+          }
+        } catch (fileErr: any) {
+          console.warn('⚠️ 로컬 이미지 Base64 변환 실패:', fileErr.message);
+        }
+      }
+
       return NextResponse.json({
         success: true,
         text: finalCaption.trim(),
-        image_url: localImagePath,
+        image_url: webImageUrl,
         imagePath: localImagePath,
         mcpResult: mcpResult
       });
