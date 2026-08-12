@@ -85,7 +85,7 @@ export async function POST(req: Request) {
     const targetId = current.id || 1;
 
     const updates = {
-      is_autopilot: data.is_autopilot !== undefined ? Number(data.is_autopilot) : (current.is_autopilot ?? 0),
+      is_autopilot: data.is_autopilot !== undefined && data.is_autopilot !== null ? Number(data.is_autopilot) : Number(current.is_autopilot ?? 0),
       autopilot_interval: data.autopilot_interval !== undefined ? data.autopilot_interval : (current.autopilot_interval || 'DAILY'),
       autopilot_time: data.autopilot_time !== undefined ? data.autopilot_time : (current.autopilot_time || '10:00'),
       tone_style: data.tone_style !== undefined ? data.tone_style : (current.tone_style || '인플루언서형'),

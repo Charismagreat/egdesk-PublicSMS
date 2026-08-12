@@ -126,9 +126,6 @@ export default function InstagramMarketingPortal() {
       const data = await res.json();
       if (data.success && Array.isArray(data.connections)) {
         setMcpConnections(data.connections);
-        if (data.connections.length > 0 && !settings.instagram_username) {
-          saveSettings({ instagram_username: data.connections[0].username });
-        }
         setIsSessionConnected(data.connections.length > 0 || Boolean(settings.instagram_username));
       }
     } catch (err) {
