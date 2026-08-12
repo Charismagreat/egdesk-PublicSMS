@@ -75,7 +75,7 @@ export default function TimelineCalendar({
 
   // 날짜/시각 포맷터 (YYYY.MM.DD HH:mm)
   const formatDateTime = (post: any) => {
-    const rawDate = post.posted_at || post.scheduled_at || post.created_at || post.publishedAt || post.createdAt;
+    const rawDate = post.posted_at || post.postedAt || post.published_at || post.publishedAt || post.scheduled_at || post.scheduledAt || post.created_at || post.createdAt || post.timestamp || post.date;
     if (!rawDate) return "일자 미상";
     try {
       const d = new Date(rawDate);

@@ -80,6 +80,34 @@ async function ensureLocalImagePath(inputUrlOrData: string): Promise<string> {
   }
 }
 
+// 개별 포스팅 고유 타임스탬프 추출 헬퍼 (동일 시각 덮어쓰기 방지)
+function extractValidTimestamp(item: any, index: number): string {
+  const candidate = 
+    item.posted_at || item.postedAt || item.published_at || item.publishedAt || 
+    item.created_at || item.createdAt || item.timestamp || item.date || item.scheduled_at || item.scheduledAt;
+  
+  if (candidate) {
+    const parsedDate = new Date(candidate);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString();
+    }
+  }
+
+  const itemId = String(item.id || '');
+  const match = itemId.match(/(\d{13})/);
+  if (match) {
+    const ts = parseInt(match[1], 10);
+    const parsedDate = new Date(ts);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString();
+    }
+  }
+
+  // 폴백: 15분 간격 시각 분리 차등 적용
+  const baseTime = Date.now() - (index * 15 * 60 * 1000 + 3 * 60 * 1000);
+  return new Date(baseTime).toISOString();
+}
+
 // 1. 100% 이지데스크 순정 MCP 인스타그램 포스팅 및 성과 이력 단일 조회 (삭제 억제 블랙리스트 필터링)
 export async function GET(req: Request) {
   try {
@@ -98,16 +126,16 @@ export async function GET(req: Request) {
       if (historyRes && historyRes.success) {
         const rawHistory = (historyRes as any).history || (historyRes as any).posts || [];
 
-        // 삭제 처리된 ID 100% 억제 필터링 & 로컬 이미지 파일 Base64 변환
+        // 삭제 처리된 ID 100% 억제 필터링 & 로컬 이미지 파일 Base64 변환 & 고유 시각 정규화
         history = rawHistory
           .filter((item: any) => {
             const itemId = String(item.id || item.post_id || '');
             if (deletedSet.has(itemId) || item.deleted_at) {
-              return false; // 삭제 항목 차단
+              return false;
             }
             return true;
           })
-          .map((item: any) => {
+          .map((item: any, idx: number) => {
             const rawImagePath = item.image_url || item.imageUrl || item.imagePath || item.image_path || '';
             let webImageUrl = rawImagePath;
 
@@ -124,6 +152,8 @@ export async function GET(req: Request) {
               }
             }
 
+            const validTime = extractValidTimestamp(item, idx);
+
             return {
               ...item,
               id: item.id || `post_${Date.now()}_${Math.random().toString(36).substring(7)}`,
@@ -133,7 +163,8 @@ export async function GET(req: Request) {
               imageUrl: webImageUrl,
               imagePath: rawImagePath,
               status: item.status || 'PUBLISHED',
-              created_at: item.created_at || item.publishedAt || item.createdAt || new Date().toISOString()
+              posted_at: item.posted_at || item.postedAt || item.published_at || item.publishedAt || validTime,
+              created_at: validTime
             };
           });
       }
