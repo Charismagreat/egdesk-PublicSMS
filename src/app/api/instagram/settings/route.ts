@@ -40,14 +40,13 @@ export async function GET() {
       console.warn('EGDesk Instagram MCP connections query fallback:', mcpErr);
     }
 
-    // 설정 테이블 데이터 전체 조회
-    const result = await queryTable('instagram_marketing_settings', { limit: 100 });
+    // 설정 테이블 데이터 전체 조회 (규격 규칙: orderBy 'id' DESC 최신 정렬 필수 주입)
+    const result = await queryTable('instagram_marketing_settings', { orderBy: 'id', orderDirection: 'DESC', limit: 100 });
     
     if (result && result.rows && result.rows.length > 0) {
-      // deleted_at이 없는 유효 행 중 가장 최신 행 선택
+      // deleted_at이 없는 최신 유효 행 선택
       const activeRows = result.rows.filter((r: any) => !r.deleted_at);
-      const sorted = [...(activeRows.length > 0 ? activeRows : result.rows)].sort((a: any, b: any) => Number(b.id) - Number(a.id));
-      const validSetting = sorted[0];
+      const validSetting = activeRows[0] || result.rows[0];
       return NextResponse.json({ success: true, settings: validSetting, mcpConnections });
     }
 
@@ -78,12 +77,11 @@ export async function POST(req: Request) {
     const data = await req.json();
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
     
-    // 기존 설정 전체 조회
-    const checkExist = await queryTable('instagram_marketing_settings', { limit: 100 });
+    // 기존 설정 전체 조회 (최신순 정렬 필수 적용)
+    const checkExist = await queryTable('instagram_marketing_settings', { orderBy: 'id', orderDirection: 'DESC', limit: 100 });
     const existingRows = checkExist?.rows || [];
     const activeRows = existingRows.filter((r: any) => !r.deleted_at);
-    const sorted = [...(activeRows.length > 0 ? activeRows : existingRows)].sort((a: any, b: any) => Number(b.id) - Number(a.id));
-    const current = sorted[0] || DEFAULT_SETTINGS;
+    const current = activeRows[0] || existingRows[0] || DEFAULT_SETTINGS;
     const targetId = current.id || 1;
 
     const updates = {
