@@ -113,10 +113,14 @@ export async function GET() {
       return true;
     });
 
-    const sanitizedRows = uniqueRows.map((r: any) => ({
-      ...r,
-      is_enabled: Number(r.is_enabled) === 1 ? 1 : 0
-    }));
+    const sanitizedRows = uniqueRows.map((r: any) => {
+      const href = (r.menu_href || "").trim();
+      return {
+        ...r,
+        // /instagram 메뉴 등 핵심 라우트는 무조건 1(활성화)로 복원 보정
+        is_enabled: href === '/instagram' ? 1 : (Number(r.is_enabled) === 1 ? 1 : 0)
+      };
+    });
 
     // 문자열 사전식 정렬 왜곡 방지를 위해 숫자 기준 정렬 강제 적용
     sanitizedRows.sort((a: any, b: any) => Number(a.sort_order || 0) - Number(b.sort_order || 0));

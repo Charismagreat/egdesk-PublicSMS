@@ -166,12 +166,17 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
   useEffect(() => {
     fetchAndApplyMenuSettings();
 
-    // 로컬스토리지에서 숨긴 메뉴 목록 불러오기
+    // 로컬스토리지에서 숨긴 메뉴 목록 불러오기 (단, /instagram 메뉴는 숨김 대상에서 강제 제외 및 청소)
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("egdesk_hidden_menus");
       if (saved) {
         try {
-          setHiddenHrefs(JSON.parse(saved));
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            const cleaned = parsed.filter((h: string) => h !== "/instagram");
+            setHiddenHrefs(cleaned);
+            localStorage.setItem("egdesk_hidden_menus", JSON.stringify(cleaned));
+          }
         } catch (e) {
           console.error("숨김 메뉴 정보 로드 실패", e);
         }
