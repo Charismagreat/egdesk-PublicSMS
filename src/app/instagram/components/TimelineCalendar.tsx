@@ -95,33 +95,34 @@ export default function TimelineCalendar({
   };
 
   return (
-    <div className="p-6 rounded-3xl border border-slate-100 bg-white shadow-sm relative overflow-hidden text-left">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
-        <div className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-cyan-600" />
-          <h2 className="text-base font-bold text-slate-800">포스팅 타임라인 & 예약 현황</h2>
-        </div>
-        <span className="text-[10px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100 font-semibold">
-          총 {posts.length}건
-        </span>
-      </div>
-
-      {/* 계정 미연동 시 로컬 시뮬레이션 모드 안내 배너 */}
-      {!isSessionConnected && (
-        <div className="mb-4 p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-2xl flex gap-2.5 items-start shadow-sm transition-all">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-xs font-bold text-amber-800">로컬 시뮬레이션 모드 작동 중</p>
-            <p className="text-[10px] text-amber-700/90 mt-0.5 leading-relaxed font-semibold">
-              현재 실제 인스타그램 계정이 연동되지 않았습니다. 아래 표시되는 발행 완료 및 예약 피드는 외부 인스타그램에 노출되지 않는{" "}
-              <strong>내부 가상 테스트 데이터</strong>입니다.
-            </p>
+    <div className="p-6 rounded-3xl border border-slate-100 bg-white shadow-sm relative overflow-hidden text-left h-full flex flex-col justify-between">
+      <div>
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-cyan-600" />
+            <h2 className="text-base font-bold text-slate-800">포스팅 타임라인 & 예약 현황</h2>
           </div>
+          <span className="text-[10px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100 font-semibold">
+            총 {posts.length}건
+          </span>
         </div>
-      )}
 
-      {/* 타임라인 항목 (좌측 페르소나 연구소 하단 라인과 1:1 완벽 수평 정렬) */}
-      <div className="space-y-4 min-h-[720px] max-h-[1050px] overflow-y-auto pr-1.5 custom-scrollbar">
+        {/* 계정 미연동 시 로컬 시뮬레이션 모드 안내 배너 */}
+        {!isSessionConnected && (
+          <div className="mb-4 p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-2xl flex gap-2.5 items-start shadow-sm transition-all">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-bold text-amber-800">로컬 시뮬레이션 모드 작동 중</p>
+              <p className="text-[10px] text-amber-700/90 mt-0.5 leading-relaxed font-semibold">
+                현재 실제 인스타그램 계정이 연동되지 않았습니다. 아래 표시되는 발행 완료 및 예약 피드는 외부 인스타그램에 노출되지 않는{" "}
+                <strong>내부 가상 테스트 데이터</strong>입니다.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* 타임라인 항목 (좌측 페르소나 연구소 하단 라인과 1:1 완벽 수평 정렬) */}
+        <div className="space-y-4 min-h-[380px] max-h-[540px] overflow-y-auto pr-1.5 custom-scrollbar">
         {posts.length === 0 ? (
           <div className="text-center py-12 text-slate-400 border border-dashed border-slate-200 rounded-2xl">
             <Calendar className="w-8 h-8 text-slate-300 mx-auto mb-2" />
@@ -218,5 +219,6 @@ export default function TimelineCalendar({
         )}
       </div>
     </div>
-  );
+  </div>
+);
 }
