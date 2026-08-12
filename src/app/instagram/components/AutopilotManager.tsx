@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Settings, RefreshCw, ToggleLeft, ToggleRight, Sparkles, Plus, Trash2, CheckCircle2, UserCheck } from "lucide-react";
+import { Settings, RefreshCw, ToggleLeft, ToggleRight, Sparkles, Plus, Trash2, CheckCircle2, UserCheck, HelpCircle, X, Shuffle, ShieldCheck, Layers } from "lucide-react";
 import { AutopilotSettings, McpInstagramConnection } from "../types";
 
 interface AutopilotManagerProps {
@@ -33,6 +33,7 @@ export default function AutopilotManager({
   const [sessionLoginName, setSessionLoginName] = useState("");
   const [sessionPassword, setSessionPassword] = useState("");
   const [sessionHandle, setSessionHandle] = useState("");
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   const handleSessionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +71,14 @@ export default function AutopilotManager({
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <label className="text-sm font-semibold text-slate-800">수동 / 오토 선택</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowHelpModal(true)}
+                    className="inline-flex items-center justify-center text-slate-400 hover:text-indigo-600 transition border-0 bg-transparent cursor-pointer p-0.5"
+                    title="오토 모드 상품 선택 순서 매커니즘 안내"
+                  >
+                    <HelpCircle className="w-4 h-4 text-indigo-500 hover:scale-110 transition-transform" />
+                  </button>
                   <span
                     className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border shadow-sm transition-all ${
                       settings.is_autopilot === 1
@@ -268,6 +277,86 @@ export default function AutopilotManager({
           </div>
         </div>
       </div>
+
+      {/* 🚀 오토 모드 상품 선택 순서 매커니즘 팝업 모달 */}
+      {showHelpModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl max-w-xl w-full p-6 space-y-5 text-left relative overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* 상단 닫기 단추 및 타이틀 */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-indigo-600 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">오토 모드 상품 선택 순서 매커니즘</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">AI 오토파일럿 무인 포스팅 시 상품이 순차로 로테이션되는 방식 안내</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHelpModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition cursor-pointer border-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* 3가지 스마트 로테이션 규칙 카드 */}
+            <div className="space-y-3.5">
+              {/* 1순위 */}
+              <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold bg-indigo-600 text-white px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <Shuffle className="w-3 h-3" /> 1순위
+                  </span>
+                  <h4 className="text-xs font-bold text-indigo-900">순차 라운드-로빈 (가장 오랫동안 홍보 안 된 상품 우선)</h4>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium pl-1">
+                  등록된 마스터 상품 리스트 중에서 <strong className="text-indigo-800">"가장 오랫동안 홍보 피드가 작성되지 않은 상품(Least Recently Posted)"</strong> 순서대로 차례차례 선택됩니다. 특정 한두 개 상품만 연속으로 피드에 도배되는 것을 방지합니다.
+                </p>
+              </div>
+
+              {/* 2순위 */}
+              <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold bg-emerald-600 text-white px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3" /> 2순위
+                  </span>
+                  <h4 className="text-xs font-bold text-emerald-900">비활성 / 재고 0개 상품 자동 스킵 (Self-Healing)</h4>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium pl-1">
+                  이미 품절되었거나 삭제/비활성화 처리된 상품은 AI가 자동으로 감지하여 건너뛰고(Skip), 그다음 정상 판매 중인 활성 상품을 선택합니다.
+                </p>
+              </div>
+
+              {/* 3순위 */}
+              <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold bg-purple-600 text-white px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <Layers className="w-3 h-3" /> 3순위
+                  </span>
+                  <h4 className="text-xs font-bold text-purple-900">카테고리 밸런싱 (다양한 상품군 피드 조합)</h4>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium pl-1">
+                  이전 포스팅에서 홍보한 카테고리와 중복되지 않도록, 다양한 카테고리의 상품컷과 문구를 균형 있게 교차 선택합니다.
+                </p>
+              </div>
+            </div>
+
+            {/* 하단 닫기 단추 */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowHelpModal(false)}
+                className="w-full py-3 bg-slate-800 hover:bg-slate-900 text-xs font-bold text-white rounded-xl shadow-sm transition cursor-pointer border-0"
+              >
+                확인 및 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
