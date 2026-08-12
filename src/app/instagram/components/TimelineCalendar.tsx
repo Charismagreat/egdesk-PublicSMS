@@ -95,8 +95,8 @@ export default function TimelineCalendar({
   };
 
   return (
-    <div className="p-6 rounded-3xl border border-slate-100 bg-white shadow-sm relative overflow-hidden text-left flex-1 h-full flex flex-col justify-between">
-      <div className="flex flex-col h-full">
+    <div className="p-6 rounded-3xl border border-slate-100 bg-white shadow-sm relative overflow-hidden text-left flex-1 h-full flex flex-col min-h-0 justify-between">
+      <div className="flex flex-col h-full min-h-0">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5 shrink-0">
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-cyan-600" />
@@ -121,8 +121,8 @@ export default function TimelineCalendar({
           </div>
         )}
 
-        {/* 타임라인 항목 (flex-1 h-full 지정으로 좌측 페르소나 연구소 최하단 라인과 1:1 칼같이 동적 물리 정렬) */}
-        <div className="space-y-4 flex-1 min-h-[300px] overflow-y-auto pr-1.5 custom-scrollbar">
+        {/* 타임라인 항목 (flex-1 min-h-0 지정으로 좌측 페르소나 연구소 최하단 라인과 1:1 칼같이 동적 물리 정렬) */}
+        <div className="space-y-4 flex-1 min-h-0 overflow-y-auto pr-1.5 custom-scrollbar">
         {posts.length === 0 ? (
           <div className="text-center py-12 text-slate-400 border border-dashed border-slate-200 rounded-2xl">
             <Calendar className="w-8 h-8 text-slate-300 mx-auto mb-2" />

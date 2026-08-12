@@ -624,26 +624,30 @@ export default function InstagramMarketingPortal() {
         </div>
 
         {/* 우측 영역: 모바일 폰 렌더링 라이브 프리뷰 및 예약 캘린더 */}
-        <div className="flex flex-col h-full space-y-8">
+        <div className="flex flex-col h-full min-h-0 space-y-8">
           {/* 모바일 폰 라이브 미리보기 */}
-          <MobileFeedPreview
-            selectedPostForPreview={selectedPostForPreview}
-            imageTab={imageTab}
-            selectedProduct={selectedProduct}
-            generatedImageUrl={generatedImageUrl}
-            generatedText={generatedText}
-            instagramUsername={settings.instagram_username}
-          />
+          <div className="shrink-0">
+            <MobileFeedPreview
+              selectedPostForPreview={selectedPostForPreview}
+              imageTab={imageTab}
+              selectedProduct={selectedProduct}
+              generatedImageUrl={generatedImageUrl}
+              generatedText={generatedText}
+              instagramUsername={settings.instagram_username}
+            />
+          </div>
 
           {/* 5. 예약/발행 이력 캘린더 타임라인 */}
-          <TimelineCalendar
-            posts={posts}
-            selectedPostForPreview={selectedPostForPreview}
-            onSelectPostForPreview={setSelectedPostForPreview}
-            isSessionConnected={isSessionConnected}
-            onApproveImmediate={handleApproveImmediate}
-            onDeletePost={handleDeletePost}
-          />
+          <div className="flex-1 flex flex-col min-h-0">
+            <TimelineCalendar
+              posts={posts}
+              selectedPostForPreview={selectedPostForPreview}
+              onSelectPostForPreview={setSelectedPostForPreview}
+              isSessionConnected={isSessionConnected}
+              onApproveImmediate={handleApproveImmediate}
+              onDeletePost={handleDeletePost}
+            />
+          </div>
         </div>
       </div>
 
