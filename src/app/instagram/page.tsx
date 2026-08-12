@@ -361,16 +361,20 @@ export default function InstagramMarketingPortal() {
     }
   };
 
+  // 오토파일럿 강제 즉시 실행 프로그레스 상태
+  const [isTriggeringAutopilot, setIsTriggeringAutopilot] = useState(false);
+
   // 오토파일럿 데몬 강제 즉시 실행 트리거
   const handleTriggerAutopilot = async () => {
-    showToast("오토파일럿 AI 마케터를 즉시 구동합니다...", "info");
+    setIsTriggeringAutopilot(true);
+    showToast("AI 오토파일럿 마케터가 100% 무인으로 피드 카피 및 감성 이미지를 조립하고 있습니다...", "info");
     try {
       const res = await apiFetch("/api/cron/instagram-autopilot");
       const data = await res.json();
       if (data.success) {
         if (data.triggered) {
           showToast(data.message, "success");
-          fetchPosts(); // 리스트 새로고침
+          await fetchPosts(); // 리스트 즉시 새로고침
         } else {
           showToast(data.message, "info");
         }
@@ -379,6 +383,8 @@ export default function InstagramMarketingPortal() {
       }
     } catch (err: any) {
       showToast("오토파일럿 구동 중 오류: " + err.message, "error");
+    } finally {
+      setIsTriggeringAutopilot(false);
     }
   };
 
@@ -565,6 +571,7 @@ export default function InstagramMarketingPortal() {
             onDeleteConnection={handleDeleteConnection}
             onSaveSettings={saveSettings}
             onTriggerAutopilot={handleTriggerAutopilot}
+            isTriggeringAutopilot={isTriggeringAutopilot}
             onConnectSession={handleConnectSession}
             onDisconnectSession={handleDisconnectSession}
           />

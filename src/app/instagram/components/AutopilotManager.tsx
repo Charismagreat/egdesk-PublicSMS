@@ -12,6 +12,7 @@ interface AutopilotManagerProps {
   onSelectConnection?: (conn: McpInstagramConnection) => void;
   onSaveSettings: (updates: Partial<AutopilotSettings>) => Promise<void>;
   onTriggerAutopilot: () => Promise<void>;
+  isTriggeringAutopilot?: boolean;
   onConnectSession: (loginName: string, pass: string, handle?: string) => Promise<void>;
   onDisconnectSession: () => Promise<void>;
   onDeleteConnection?: (connId: string) => Promise<void>;
@@ -25,6 +26,7 @@ export default function AutopilotManager({
   onSelectConnection,
   onSaveSettings,
   onTriggerAutopilot,
+  isTriggeringAutopilot = false,
   onConnectSession,
   onDisconnectSession,
   onDeleteConnection,
@@ -55,10 +57,11 @@ export default function AutopilotManager({
         {Number(settings.is_autopilot) === 1 && (
           <button
             onClick={onTriggerAutopilot}
-            className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 font-semibold hover:bg-indigo-100 hover:shadow-sm transition duration-200 cursor-pointer text-xs self-start sm:self-auto"
+            disabled={isTriggeringAutopilot}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 font-bold hover:bg-indigo-100 hover:shadow-md disabled:opacity-50 transition duration-200 cursor-pointer text-xs self-start sm:self-auto shadow-sm"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
-            오토파일럿 AI 즉시 가동
+            <RefreshCw className={`w-4 h-4 text-indigo-600 ${isTriggeringAutopilot ? 'animate-spin' : ''}`} />
+            {isTriggeringAutopilot ? "AI 오토파일럿 피드 조립 중..." : "오토파일럿 AI 즉시 가동"}
           </button>
         )}
       </div>
