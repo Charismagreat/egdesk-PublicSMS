@@ -7,6 +7,7 @@ import {
   listInstagramConnections, 
   saveInstagramConnection 
 } from '../../../../../egdesk-helpers';
+import { initInstagramAutopilotDaemon } from '@/lib/instagram-cron-daemon';
 
 // 기본 설정 값 정의
 const DEFAULT_SETTINGS = {
