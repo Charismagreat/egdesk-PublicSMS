@@ -121,7 +121,7 @@ export default function TimelineCalendar({
       )}
 
       {/* 타임라인 항목 */}
-      <div className="space-y-4 max-h-[360px] overflow-y-auto pr-1">
+      <div className="space-y-4 min-h-[480px] max-h-[680px] overflow-y-auto pr-1.5 custom-scrollbar">
         {posts.length === 0 ? (
           <div className="text-center py-12 text-slate-400 border border-dashed border-slate-200 rounded-2xl">
             <Calendar className="w-8 h-8 text-slate-300 mx-auto mb-2" />
