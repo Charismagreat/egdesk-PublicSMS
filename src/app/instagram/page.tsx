@@ -326,7 +326,16 @@ export default function InstagramMarketingPortal() {
         }),
       });
       clearTimeout(timeoutId);
-      const data = await res.json();
+
+      const rawText = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(rawText);
+      } catch (jsonErr) {
+        showToast(`서버 응답 형식 오류 (HTTP ${res.status}): ${rawText.slice(0, 80)}`, "error");
+        return;
+      }
+
       if (data.success) {
         setGeneratedText(data.text);
         setGeneratedImageUrl(data.image_url);
