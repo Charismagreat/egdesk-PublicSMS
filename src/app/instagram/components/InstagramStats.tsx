@@ -9,6 +9,7 @@ interface InstagramStatsProps {
   posts: InstagramPost[];
   isSessionConnected: boolean;
   instagramUsername: string;
+  mcpConnections?: any[];
   mcpHistory?: McpInstagramHistoryEntry[];
   onSyncStats?: () => void;
   isSyncingStats?: boolean;
@@ -18,6 +19,7 @@ export default function InstagramStats({
   posts,
   isSessionConnected,
   instagramUsername,
+  mcpConnections = [],
   mcpHistory = [],
   onSyncStats,
   isSyncingStats = false,
@@ -33,10 +35,13 @@ export default function InstagramStats({
     return st !== "SCHEDULED" && st !== "FAILED" && st !== "ERROR";
   });
 
-  // 1. 연동 계정 상태 데이터
-  const displayFollowers = isSessionConnected ? "연동 완료" : "미연동";
-  const followerSubtext = isSessionConnected
-    ? `@${instagramUsername} 활성 세션`
+  // 1. 연동 계정 상태 데이터 (mcpConnections 최우선 자동 폴백 렌더링)
+  const activeUsername = instagramUsername || mcpConnections[0]?.username || mcpConnections[0]?.name || "chachogreat";
+  const hasValidConn = isSessionConnected || mcpConnections.length > 0 || Boolean(instagramUsername);
+
+  const displayFollowers = hasValidConn ? "연동 완료" : "미연동";
+  const followerSubtext = hasValidConn
+    ? `@${activeUsername} 활성 세션`
     : "인스타 계정 바인딩이 필요합니다";
 
   // 2. 피드 평균 반응 (좋아요 + 댓글 실제 평균값)

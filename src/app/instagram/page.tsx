@@ -581,6 +581,7 @@ export default function InstagramMarketingPortal() {
         posts={posts}
         isSessionConnected={isSessionConnected}
         instagramUsername={settings.instagram_username}
+        mcpConnections={mcpConnections}
         mcpHistory={mcpHistory}
         onSyncStats={handleSyncStats}
         isSyncingStats={isSyncingStats}
