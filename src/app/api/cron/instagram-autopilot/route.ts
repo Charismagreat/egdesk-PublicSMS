@@ -105,15 +105,24 @@ export async function GET(req: Request) {
       scheduledDateISO = targetDate.toISOString();
     }
 
-    // 6. 이지데스크 순정 createInstagramPost MCP 도구를 통한 실물/예약 오토파일럿 포스팅 (결과 완수까지 await 대기)
+    // 6. 이지데스크 순정 createInstagramPost MCP 도구를 통한 실물/예약 오토파일럿 포스팅 (connectionId 필수 주입)
+    let targetConnectionId = '1786432604684';
+    try {
+      const connRes = await listInstagramConnections();
+      if (connRes && connRes.success && Array.isArray(connRes.connections) && connRes.connections.length > 0) {
+        const foundConn = connRes.connections.find((c: any) => c.username === settings.instagram_username) || connRes.connections[0];
+        targetConnectionId = foundConn.id;
+      }
+    } catch (cErr) {}
+
     let mcpPostResult: any = null;
     try {
       mcpPostResult = await createInstagramPost({
+        connectionId: targetConnectionId,
         caption: finalCaption,
-        mediaUrl: finalImageUrl,
-        scheduledAt: scheduledDateISO,
-        username: settings.instagram_username || undefined
-      });
+        imagePath: finalImageUrl,
+        scheduledAt: scheduledDateISO
+      } as any);
     } catch (postErr: any) {
       console.error('EGDesk MCP createInstagramPost error in autopilot:', postErr);
       return NextResponse.json({
