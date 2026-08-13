@@ -127,17 +127,20 @@ export async function GET(req: Request) {
       console.error('EGDesk MCP createInstagramPost error in autopilot:', postErr);
       return NextResponse.json({
         success: false,
-        error: `인스타그램 실물 포스팅 실패: ${postErr.message}`
+    if (mcpPostResult && mcpPostResult.success === false) {
+      const errDetail = mcpPostResult.error || mcpPostResult.message || mcpPostResult.result?.message || '인스타그램 MCP 포스팅 실행 실패';
+      return NextResponse.json({
+        success: false,
+        error: `인스타그램 실물 포스팅 실패: ${errDetail}`
       }, { status: 500 });
     }
 
-    const isSuccess = mcpPostResult?.success !== false;
     const msgText = isImmediate
       ? `[EGDesk MCP 오토파일럿] 실물 포스팅 완수! 계정: @${mcpPostResult?.result?.username || settings.instagram_username || '메인 계정'} (상품: ${productName})`
       : `[EGDesk MCP 오토파일럿] 예약 완료: 상품 [${productName}]의 피드가 ${scheduledDateISO ? new Date(scheduledDateISO).toLocaleString() : '정해진 시각'} 예약 포스팅으로 설정되었습니다.`;
 
     return NextResponse.json({
-      success: isSuccess,
+      success: true,
       triggered: true,
       message: msgText,
       result: mcpPostResult,

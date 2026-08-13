@@ -384,13 +384,14 @@ export default function InstagramMarketingPortal() {
       const data = await res.json();
       if (data.success) {
         if (data.triggered) {
-          showToast(data.message, "success");
+          showToast(data.message || "오토파일럿 포스팅이 성공적으로 등록되었습니다.", "success");
           await fetchPosts(); // 리스트 즉시 새로고침
         } else {
-          showToast(data.message, "info");
+          showToast(data.message || "오토파일럿 모드가 대기 상태입니다.", "info");
         }
       } else {
-        showToast("오토파일럿 구동 실패: " + data.error, "error");
+        const errorText = data.error || data.message || "인스타그램 포스팅 연동 실패";
+        showToast("오토파일럿 구동 실패: " + errorText, "error");
       }
     } catch (err: any) {
       showToast("오토파일럿 구동 중 오류: " + err.message, "error");
