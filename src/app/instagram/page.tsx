@@ -117,6 +117,8 @@ export default function InstagramMarketingPortal() {
       return prev ? `${prev} ${hashtag}` : hashtag;
     });
     showToast(`해시태그 [${hashtag}] 피드 에디터에 추가되었습니다!`, "info");
+  };
+
   // 안전한 JSON 파싱 헬퍼 (HTML 404/500 응답 시 SyntaxError 방어)
   const parseJsonResponse = async (res: Response) => {
     const text = await res.text();
