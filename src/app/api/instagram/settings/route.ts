@@ -117,7 +117,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 이지데스크 MCP 서버에 실물 오토파일럿 스케줄 객체 정식 동기화 등록 (connectionId 및 topics 필수 항목 보장)
+    // 이지데스크 MCP 서버에 실물 오토파일럿 스케줄 객체 정식 동기화 (기존 스케줄 존재 시 update, 없을 때만 create)
     try {
       let targetConnectionId: string | undefined = undefined;
       const connRes = await listInstagramConnections();
@@ -126,17 +126,36 @@ export async function POST(req: Request) {
         targetConnectionId = foundConn.id;
       }
 
-      await callInstagramTool('instagram_schedule_create', {
-        title: `EGDesk 인스타그램 오토파일럿 스케줄 (${updates.instagram_username || '메인 계정'})`,
-        connectionId: targetConnectionId || '1786432604684',
-        enabled: updates.is_autopilot === 1,
-        frequencyType: (updates.autopilot_interval || 'DAILY').toLowerCase(),
-        scheduledTime: updates.autopilot_time || '10:00',
-        topics: ['신상품 추천', '특가 제안', '인플루언서 큐레이션'],
-        toneStyle: updates.tone_style || '인플루언서형'
-      });
+      // 기존 등록된 스케줄 목록 조회
+      const existingSchedRes = await callInstagramTool('instagram_list_schedules', {});
+      const schedulesList = existingSchedRes?.schedules || existingSchedRes?.result?.schedules || [];
+      const existingAutopilotSched = Array.isArray(schedulesList)
+        ? schedulesList.find((s: any) => s.connectionId === targetConnectionId || s.title?.includes('오토파일럿') || s.title === 'test' || s.title === 'test2')
+        : null;
+
+      if (existingAutopilotSched && existingAutopilotSched.id) {
+        // 기존 스케줄 1개의 시각과 주기를 수정(UPDATE)
+        await callInstagramTool('instagram_schedule_update', {
+          scheduleId: existingAutopilotSched.id,
+          enabled: updates.is_autopilot === 1,
+          frequencyType: (updates.autopilot_interval || 'DAILY').toLowerCase(),
+          scheduledTime: updates.autopilot_time || '10:00',
+          topics: ['신상품 추천', '특가 제안', '인플루언서 큐레이션']
+        });
+      } else {
+        // 없을 경우에만 신규 생성(CREATE)
+        await callInstagramTool('instagram_schedule_create', {
+          title: `EGDesk 인스타그램 오토파일럿 스케줄 (${updates.instagram_username || '메인 계정'})`,
+          connectionId: targetConnectionId || '1786432604684',
+          enabled: updates.is_autopilot === 1,
+          frequencyType: (updates.autopilot_interval || 'DAILY').toLowerCase(),
+          scheduledTime: updates.autopilot_time || '10:00',
+          topics: ['신상품 추천', '특가 제안', '인플루언서 큐레이션'],
+          toneStyle: updates.tone_style || '인플루언서형'
+        });
+      }
     } catch (mcpSchedErr) {
-      console.warn('EGDesk MCP instagram_schedule_create sync warning:', mcpSchedErr);
+      console.warn('EGDesk MCP instagram_schedule sync warning:', mcpSchedErr);
     }
 
     if (existingRows.length > 0) {
