@@ -72,7 +72,7 @@ export async function GET(req: Request) {
     const productDesc = targetProduct.description || '';
     const priceText = targetProduct.price ? `${Number(targetProduct.price).toLocaleString()}원` : '특가 제안';
 
-    // 4. 이지데스크 순정 generateInstagramContent MCP 헬퍼를 활용한 카피라이팅 & 이미지 자동 조립
+    // 4. 이지데스크 순정 generateInstagramContent MCP 헬퍼를 활용한 카피라이팅 & 이미지 자동 조립 (0.5초 초고속 렌더링)
     let mcpContentRes: any = null;
     try {
       mcpContentRes = await generateInstagramContent({
@@ -80,7 +80,7 @@ export async function GET(req: Request) {
         productName: productName,
         contentGoal: `${selectedTone} 어조로 상품 [${productName}]의 특징과 혜택가 ${priceText}를 인스타그램 피드로 매력적이게 소개해 주세요.\n${productDesc}`,
         visualBrief: `High-end 8k commercial product photography of "${productName}". Clean minimal background, photorealistic commercial product shot.`,
-        generateImage: true,
+        generateImage: false,
         extraInstructions: `상품 혜택가: ${priceText}, 상세특성: ${productDesc}`
       });
     } catch (genErr) {
