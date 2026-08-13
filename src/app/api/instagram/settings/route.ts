@@ -112,13 +112,22 @@ export async function POST(req: Request) {
       }
     }
 
-    // 이지데스크 MCP 서버에 실물 오토파일럿 스케줄 객체 정식 동기화 등록
+    // 이지데스크 MCP 서버에 실물 오토파일럿 스케줄 객체 정식 동기화 등록 (connectionId 및 topics 필수 항목 보장)
     try {
+      let targetConnectionId: string | undefined = undefined;
+      const connRes = await listInstagramConnections();
+      if (connRes && connRes.success && Array.isArray(connRes.connections) && connRes.connections.length > 0) {
+        const foundConn = connRes.connections.find((c: any) => c.username === updates.instagram_username) || connRes.connections[0];
+        targetConnectionId = foundConn.id;
+      }
+
       await callInstagramTool('instagram_schedule_create', {
         title: `EGDesk 인스타그램 오토파일럿 스케줄 (${updates.instagram_username || '메인 계정'})`,
+        connectionId: targetConnectionId || '1786432604684',
         enabled: updates.is_autopilot === 1,
-        frequencyType: updates.autopilot_interval || 'DAILY',
+        frequencyType: (updates.autopilot_interval || 'DAILY').toLowerCase(),
         scheduledTime: updates.autopilot_time || '10:00',
+        topics: ['신상품 추천', '특가 제안', '인플루언서 큐레이션'],
         toneStyle: updates.tone_style || '인플루언서형'
       });
     } catch (mcpSchedErr) {
