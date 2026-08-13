@@ -127,6 +127,10 @@ export async function GET(req: Request) {
       console.error('EGDesk MCP createInstagramPost error in autopilot:', postErr);
       return NextResponse.json({
         success: false,
+        error: `인스타그램 실물 포스팅 실패: ${postErr.message}`
+      }, { status: 500 });
+    }
+
     if (mcpPostResult && mcpPostResult.success === false) {
       const errDetail = mcpPostResult.error || mcpPostResult.message || mcpPostResult.result?.message || '인스타그램 MCP 포스팅 실행 실패';
       return NextResponse.json({
