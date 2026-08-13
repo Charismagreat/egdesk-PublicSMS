@@ -117,13 +117,22 @@ export default function InstagramMarketingPortal() {
       return prev ? `${prev} ${hashtag}` : hashtag;
     });
     showToast(`해시태그 [${hashtag}] 피드 에디터에 추가되었습니다!`, "info");
+  // 안전한 JSON 파싱 헬퍼 (HTML 404/500 응답 시 SyntaxError 방어)
+  const parseJsonResponse = async (res: Response) => {
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.warn("API Non-JSON Response (HTML/Error):", text.slice(0, 100));
+      return { success: false, error: `서버 응답 오류 (${res.status}): 올바른 JSON 포맷이 아닙니다.` };
+    }
   };
 
   // 1. 이지데스크 MCP 계정 목록 페칭
   const fetchMcpConnections = async () => {
     try {
       const res = await apiFetch("/api/instagram/connections");
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (data.success && Array.isArray(data.connections)) {
         setMcpConnections(data.connections);
         setIsSessionConnected(data.connections.length > 0 || Boolean(settings.instagram_username));
@@ -157,7 +166,7 @@ export default function InstagramMarketingPortal() {
       const res = await apiFetch("/api/instagram/sync-stats", {
         method: "POST",
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (data.success) {
         if (Array.isArray(data.history)) {
           setMcpHistory(data.history);
@@ -175,7 +184,7 @@ export default function InstagramMarketingPortal() {
   const fetchSettings = async () => {
     try {
       const res = await apiFetch("/api/instagram/settings");
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (data.success && data.settings) {
         setSettings(data.settings);
         if (Array.isArray(data.mcpConnections)) {
@@ -194,7 +203,7 @@ export default function InstagramMarketingPortal() {
   const fetchPosts = async () => {
     try {
       const res = await apiFetch("/api/instagram/posts");
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (data.success && data.posts) {
         setPosts(data.posts);
       }
@@ -206,7 +215,7 @@ export default function InstagramMarketingPortal() {
   const fetchProducts = async () => {
     try {
       const res = await apiFetch("/api/products?limit=1000");
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (data.success && data.products) {
         setProducts(data.products);
         if (data.products.length > 0) {
