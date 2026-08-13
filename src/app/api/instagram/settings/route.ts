@@ -48,7 +48,12 @@ export async function GET() {
     if (result && result.rows && result.rows.length > 0) {
       // deleted_at이 없는 최신 유효 행 선택
       const activeRows = result.rows.filter((r: any) => !r.deleted_at);
-      const validSetting = activeRows[0] || result.rows[0];
+      const validSetting = { ...(activeRows[0] || result.rows[0]) };
+
+      if ((!validSetting.instagram_username || validSetting.instagram_username.trim() === '') && mcpConnections.length > 0) {
+        validSetting.instagram_username = mcpConnections[0].username || mcpConnections[0].name || 'chachogreat';
+      }
+
       return NextResponse.json({ success: true, settings: validSetting, mcpConnections });
     }
 
