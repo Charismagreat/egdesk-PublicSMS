@@ -6,7 +6,7 @@ import {
   executeSQL, 
   listInstagramConnections, 
   saveInstagramConnection,
-  createInstagramSchedule
+  callInstagramTool
 } from '../../../../../egdesk-helpers';
 import { initInstagramAutopilotDaemon } from '@/lib/instagram-cron-daemon';
 
@@ -114,7 +114,7 @@ export async function POST(req: Request) {
 
     // 이지데스크 MCP 서버에 실물 오토파일럿 스케줄 객체 정식 동기화 등록
     try {
-      await createInstagramSchedule({
+      await callInstagramTool('instagram_schedule_create', {
         title: `EGDesk 인스타그램 오토파일럿 스케줄 (${updates.instagram_username || '메인 계정'})`,
         enabled: updates.is_autopilot === 1,
         frequencyType: updates.autopilot_interval || 'DAILY',
@@ -122,7 +122,7 @@ export async function POST(req: Request) {
         toneStyle: updates.tone_style || '인플루언서형'
       });
     } catch (mcpSchedErr) {
-      console.warn('EGDesk MCP createInstagramSchedule sync warning:', mcpSchedErr);
+      console.warn('EGDesk MCP instagram_schedule_create sync warning:', mcpSchedErr);
     }
 
     if (existingRows.length > 0) {

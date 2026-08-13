@@ -3234,23 +3234,6 @@ export async function listInstagramSchedules(connectionId?: string): Promise<{
   return callInstagramTool('instagram_list_schedules', connectionId ? { connectionId } : {});
 }
 
-/** Create or update an Instagram autopilot schedule in EGDesk MCP server. */
-export async function createInstagramSchedule(options: {
-  connectionId?: string;
-  title?: string;
-  enabled?: boolean;
-  frequencyType?: string;
-  scheduledTime?: string;
-  toneStyle?: string;
-}) {
-  return callInstagramTool('instagram_schedule_create', options);
-}
-
-/** Delete an Instagram schedule in EGDesk MCP server by schedule id. */
-export async function deleteInstagramSchedule(scheduleId: string) {
-  return callInstagramTool('instagram_schedule_delete', { scheduleId });
-}
-
 // ==========================================
 // BLOG (MCP) — WordPress / Naver
 // ==========================================
