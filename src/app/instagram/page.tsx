@@ -182,7 +182,22 @@ export default function InstagramMarketingPortal() {
     }
   };
 
-  // API 데이터 페칭
+  // API 데이터 페칭 (이지데스크 MCP 라이브 서버 직통 쿼리)
+  const fetchConnections = async () => {
+    try {
+      const res = await apiFetch("/api/instagram/connections");
+      const data = await parseJsonResponse(res);
+      if (data.success && Array.isArray(data.connections)) {
+        setMcpConnections(data.connections);
+        if (data.connections.length > 0) {
+          setIsSessionConnected(true);
+        }
+      }
+    } catch (cErr) {
+      console.error("계정 직통 로딩 에러:", cErr);
+    }
+  };
+
   const fetchSettings = async () => {
     try {
       const res = await apiFetch("/api/instagram/settings");
@@ -197,6 +212,7 @@ export default function InstagramMarketingPortal() {
         );
         setIsSessionConnected(hasConnection);
       }
+      await fetchConnections();
     } catch (err) {
       console.error("설정 로딩 에러:", err);
     }
