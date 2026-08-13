@@ -138,7 +138,10 @@ export default function AutopilotManager({
               <label className="text-xs font-semibold text-slate-500 block mb-2">자동 마케팅 주기</label>
               <select
                 value={tempInterval}
-                onChange={(e) => setTempInterval(e.target.value)}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  setTempInterval(e.target.value);
+                }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
               >
                 <option value="DAILY">매일 (Daily)</option>
@@ -152,7 +155,10 @@ export default function AutopilotManager({
               <input
                 type="time"
                 value={tempTime}
-                onChange={(e) => setTempTime(e.target.value)}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  setTempTime(e.target.value);
+                }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
               />
             </div>
@@ -165,7 +171,10 @@ export default function AutopilotManager({
                 <button
                   key={tone}
                   type="button"
-                  onClick={() => setTempTone(tone)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTempTone(tone);
+                  }}
                   className={`text-xs font-semibold py-2 px-1 rounded-lg border transition cursor-pointer ${
                     tempTone === tone
                       ? "border-indigo-300 bg-indigo-50 text-indigo-700 font-extrabold"
