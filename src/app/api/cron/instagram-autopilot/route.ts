@@ -104,18 +104,17 @@ export async function GET(req: Request) {
       scheduledDateISO = targetDate.toISOString();
     }
 
-    // 6. 이지데스크 순정 createInstagramPost MCP 도구를 통한 실물/예약 오토파일럿 포스팅 등록
-    let mcpPostResult: any = null;
-    try {
-      mcpPostResult = await createInstagramPost({
-        caption: finalCaption,
-        mediaUrl: finalImageUrl,
-        scheduledAt: scheduledDateISO,
-        username: settings.instagram_username || undefined
-      });
-    } catch (postErr: any) {
+    // 6. 이지데스크 순정 createInstagramPost MCP 도구를 통한 실물/예약 오토파일럿 포스팅 백그라운드 가동
+    createInstagramPost({
+      caption: finalCaption,
+      mediaUrl: finalImageUrl,
+      scheduledAt: scheduledDateISO,
+      username: settings.instagram_username || undefined
+    }).then((res) => {
+      console.log(`✅ [EGDesk Autopilot] 포스팅 비동기 완료: ${productName}`, res);
+    }).catch((postErr) => {
       console.error('EGDesk MCP createInstagramPost error in autopilot:', postErr);
-    }
+    });
 
     const msgText = isImmediate
       ? `[EGDesk MCP 오토파일럿] 성공: 상품 [${productName}]의 피드가 인스타그램 실시간 실물 피드로 즉시 가동 등록되었습니다!`
@@ -125,7 +124,7 @@ export async function GET(req: Request) {
       success: true,
       triggered: true,
       message: msgText,
-      post: mcpPostResult || { productName, isImmediate }
+      post: { productName, isImmediate }
     });
 
   } catch (error: any) {
