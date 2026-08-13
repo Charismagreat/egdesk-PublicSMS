@@ -3234,6 +3234,67 @@ export async function listInstagramSchedules(connectionId?: string): Promise<{
   return callInstagramTool('instagram_list_schedules', connectionId ? { connectionId } : {});
 }
 
+export type CreateInstagramScheduleOptions = {
+  title: string;
+  connectionId: string;
+  /** manual topics or rotate BI products */
+  topicSource?: 'manual' | 'bi_products';
+  /** Required when topicSource is bi_products */
+  biSnapshotId?: string;
+  /** Manual topics or product names when using bi_products */
+  topics?: string[];
+  /** HH:MM (24h). Default 09:00. NOTE: this is a RECURRING daily/weekly/monthly
+   * cron time, not a one-off timer — if it already passed "today" when the
+   * schedule registers, it won't fire until tomorrow. Use runNow for an
+   * immediate/one-time post instead of a near-term scheduledTime. */
+  scheduledTime?: string;
+  frequencyType?: 'daily' | 'weekly' | 'monthly' | 'custom';
+  frequencyValue?: number;
+  /** 0=Sunday … 6=Saturday (weekly) */
+  weeklyDay?: number;
+  /** 1-31 (monthly) */
+  monthlyDay?: number;
+  aiKeyId?: string;
+  /** Caption generation model (Gemini text model) */
+  textModel?: string;
+  /** Image generation model (Gemini image model) */
+  imageModel?: string;
+  /** Default true */
+  enabled?: boolean;
+  /** Default true — immediately generate + post to Instagram after creating the schedule. Pass false to only register the recurring schedule. */
+  runNow?: boolean;
+};
+
+/**
+ * Create a recurring Instagram post schedule. Use topicSource='bi_products' with
+ * biSnapshotId + product name topics for product-grounded captions/images using
+ * BI product photos as reference. The response includes an actualNextRun field
+ * (the real cron-computed next fire time) so you can confirm it isn't deferred
+ * to tomorrow — for immediate/one-time testing, pass runNow=true instead.
+ */
+export async function createInstagramSchedule(options: CreateInstagramScheduleOptions) {
+  return callInstagramTool('instagram_schedule_create', options);
+}
+
+/** Enable or disable an Instagram schedule. */
+export async function toggleInstagramSchedule(scheduleId: string, enabled: boolean) {
+  return callInstagramTool('instagram_schedule_toggle', { scheduleId, enabled });
+}
+
+/** Permanently delete an Instagram schedule. */
+export async function deleteInstagramSchedule(scheduleId: string) {
+  return callInstagramTool('instagram_schedule_delete', { scheduleId });
+}
+
+/**
+ * Immediately generate caption + image and post to Instagram for a schedule
+ * (full auto path). May take a minute or more, and may pause for CAPTCHA on
+ * first-time logins.
+ */
+export async function runInstagramScheduleNow(scheduleId: string) {
+  return callInstagramTool('instagram_schedule_run_now', { scheduleId });
+}
+
 // ==========================================
 // BLOG (MCP) — WordPress / Naver
 // ==========================================
@@ -3331,7 +3392,7 @@ export type CreateBlogScheduleOptions = {
   imageModel?: string;
   /** Default true */
   enabled?: boolean;
-  /** If true, immediately generate + publish after creating the schedule. May take several minutes. */
+  /** Default true — immediately generate + publish after creating the schedule (may take several minutes). Pass false to only register the recurring schedule. */
   runNow?: boolean;
 };
 
@@ -3643,7 +3704,7 @@ export type CreateYouTubeScheduleOptions = {
   videoModel?: string;
   /** Default true */
   enabled?: boolean;
-  /** If true, immediately generate + upload Shorts after creating the schedule. May take several minutes. */
+  /** Default true — immediately generate + upload Shorts after creating the schedule (may take several minutes). Pass false to only register the recurring schedule. */
   runNow?: boolean;
 };
 

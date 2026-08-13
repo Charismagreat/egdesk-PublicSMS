@@ -37,6 +37,28 @@ export default function AutopilotManager({
   const [sessionHandle, setSessionHandle] = useState("");
   const [showHelpModal, setShowHelpModal] = useState(false);
 
+  // 로컬 임시 설정 상태 (확인 버튼 클릭 시에만 저장/스케줄 생성 수행)
+  const [tempInterval, setTempInterval] = useState(settings.autopilot_interval || "DAILY");
+  const [tempTime, setTempTime] = useState(settings.autopilot_time || "10:00");
+  const [tempTone, setTempTone] = useState(settings.tone_style || "인플루언서형");
+  const [isSaving, setIsSaving] = useState(false);
+
+  React.useEffect(() => {
+    if (settings.autopilot_interval) setTempInterval(settings.autopilot_interval);
+    if (settings.autopilot_time) setTempTime(settings.autopilot_time);
+    if (settings.tone_style) setTempTone(settings.tone_style);
+  }, [settings.autopilot_interval, settings.autopilot_time, settings.tone_style]);
+
+  const handleApplySettings = async () => {
+    setIsSaving(true);
+    await onSaveSettings({
+      autopilot_interval: tempInterval,
+      autopilot_time: tempTime,
+      tone_style: tempTone,
+    });
+    setIsSaving(false);
+  };
+
   const handleSessionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionLoginName.trim() || !sessionPassword.trim()) return;
@@ -115,8 +137,8 @@ export default function AutopilotManager({
             <div>
               <label className="text-xs font-semibold text-slate-500 block mb-2">자동 마케팅 주기</label>
               <select
-                value={settings.autopilot_interval}
-                onChange={(e) => onSaveSettings({ autopilot_interval: e.target.value })}
+                value={tempInterval}
+                onChange={(e) => setTempInterval(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
               >
                 <option value="DAILY">매일 (Daily)</option>
@@ -129,8 +151,8 @@ export default function AutopilotManager({
               <label className="text-xs font-semibold text-slate-500 block mb-2">발행 시간대</label>
               <input
                 type="time"
-                value={settings.autopilot_time}
-                onChange={(e) => onSaveSettings({ autopilot_time: e.target.value })}
+                value={tempTime}
+                onChange={(e) => setTempTime(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
               />
             </div>
@@ -142,9 +164,10 @@ export default function AutopilotManager({
               {["인플루언서형", "세련된형", "전문가형", "유머형"].map((tone) => (
                 <button
                   key={tone}
-                  onClick={() => onSaveSettings({ tone_style: tone })}
+                  type="button"
+                  onClick={() => setTempTone(tone)}
                   className={`text-xs font-semibold py-2 px-1 rounded-lg border transition cursor-pointer ${
-                    settings.tone_style === tone
+                    tempTone === tone
                       ? "border-indigo-300 bg-indigo-50 text-indigo-700 font-extrabold"
                       : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
                   }`}
@@ -153,6 +176,19 @@ export default function AutopilotManager({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* 명시적 [설정 변경 적용 / 확인] 버튼 */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleApplySettings}
+              disabled={isSaving}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs shadow-sm hover:shadow transition border-0 cursor-pointer disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              {isSaving ? "설정 저장 및 스케줄 반영 중..." : "오토파일럿 설정 저장 및 스케줄 적용"}
+            </button>
           </div>
         </div>
 
