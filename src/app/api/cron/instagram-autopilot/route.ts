@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120; // 120초 타임아웃 확장
 import { NextResponse } from 'next/server';
 import { 
   queryTable, 
@@ -104,26 +105,33 @@ export async function GET(req: Request) {
       scheduledDateISO = targetDate.toISOString();
     }
 
-    // 6. 이지데스크 순정 createInstagramPost MCP 도구를 통한 실물/예약 오토파일럿 포스팅 백그라운드 가동
-    createInstagramPost({
-      caption: finalCaption,
-      mediaUrl: finalImageUrl,
-      scheduledAt: scheduledDateISO,
-      username: settings.instagram_username || undefined
-    }).then((res) => {
-      console.log(`✅ [EGDesk Autopilot] 포스팅 비동기 완료: ${productName}`, res);
-    }).catch((postErr) => {
+    // 6. 이지데스크 순정 createInstagramPost MCP 도구를 통한 실물/예약 오토파일럿 포스팅 (결과 완수까지 await 대기)
+    let mcpPostResult: any = null;
+    try {
+      mcpPostResult = await createInstagramPost({
+        caption: finalCaption,
+        mediaUrl: finalImageUrl,
+        scheduledAt: scheduledDateISO,
+        username: settings.instagram_username || undefined
+      });
+    } catch (postErr: any) {
       console.error('EGDesk MCP createInstagramPost error in autopilot:', postErr);
-    });
+      return NextResponse.json({
+        success: false,
+        error: `인스타그램 실물 포스팅 실패: ${postErr.message}`
+      }, { status: 500 });
+    }
 
+    const isSuccess = mcpPostResult?.success !== false;
     const msgText = isImmediate
-      ? `[EGDesk MCP 오토파일럿] 성공: 상품 [${productName}]의 피드가 인스타그램 실시간 실물 피드로 즉시 가동 등록되었습니다!`
-      : `[EGDesk MCP 오토파일럿] 성공: 상품 [${productName}]의 피드가 ${scheduledDateISO ? new Date(scheduledDateISO).toLocaleString() : '정해진 시각'} 예약 포스팅으로 설정되었습니다.`;
+      ? `[EGDesk MCP 오토파일럿] 실물 포스팅 완수! 계정: @${mcpPostResult?.result?.username || settings.instagram_username || '메인 계정'} (상품: ${productName})`
+      : `[EGDesk MCP 오토파일럿] 예약 완료: 상품 [${productName}]의 피드가 ${scheduledDateISO ? new Date(scheduledDateISO).toLocaleString() : '정해진 시각'} 예약 포스팅으로 설정되었습니다.`;
 
     return NextResponse.json({
-      success: true,
+      success: isSuccess,
       triggered: true,
       message: msgText,
+      result: mcpPostResult,
       post: { productName, isImmediate }
     });
 
