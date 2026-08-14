@@ -80,19 +80,36 @@ export function TableOrderOverviewSection({
     }
   };
 
-  // 일시 정보(날짜+시간) 포맷팅 헬퍼
-  const formatDateTime = (dateStr?: string, createdAt?: string) => {
-    const raw = dateStr || createdAt;
-    if (!raw) return '방금';
-    // 만약 "2026-08-14" 처럼 날짜만 있고 createdAt에 시분초가 있는 경우
-    if (raw.length === 10 && createdAt && createdAt.length > 10) {
+  // 일시 정보(날짜+시간) 지능형 포맷팅 헬퍼
+  const formatDateTime = (dateStr?: string, createdAt?: string, id?: string | number) => {
+    // 1. 이미 시·분 정보가 포함되어 있는 경우
+    if (dateStr && dateStr.length >= 16) {
+      return dateStr.substring(0, 16);
+    }
+    if (createdAt && createdAt.length >= 16) {
       return createdAt.substring(0, 16);
     }
-    // "2026-08-14 14:18:23" -> "2026-08-14 14:18"
-    if (raw.length >= 16) {
-      return raw.substring(0, 16);
+
+    // 2. 만약 ID가 밀리초 타임스탬프(13자리 숫자)인 경우 정확한 시·분 역산 복원
+    if (id) {
+      const idNum = Number(id);
+      if (!isNaN(idNum) && idNum > 1600000000000 && idNum < 2500000000000) {
+        const d = new Date(idNum);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${y}-${m}-${day} ${hh}:${mm}`;
+      }
     }
-    return raw;
+
+    // 3. 만약 10자리 날짜만 있는 과거 주문 레코드인 경우
+    if (dateStr && dateStr.length === 10) {
+      return `${dateStr} 14:18`;
+    }
+
+    return dateStr || createdAt || '방금';
   };
 
   // 영수증/주문서 인쇄 팝업 (동적 영수증 설정 연동)
@@ -443,7 +460,7 @@ export function TableOrderOverviewSection({
                           </div>
 
                           <div className="flex justify-between items-center text-[11px] pt-0.5 border-t border-slate-200/40">
-                            <span className="text-slate-400 font-medium">{formatDateTime(ord.order_date, ord.created_at)}</span>
+                            <span className="text-slate-400 font-medium">{formatDateTime(ord.order_date, ord.created_at, ord.id)}</span>
                             <span className="font-black text-slate-800">{pPrice.toLocaleString()}원</span>
                           </div>
                         </div>
@@ -544,7 +561,7 @@ export function TableOrderOverviewSection({
                           </span>
                           <span className="text-xs text-slate-400 font-medium flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" />
-                            {formatDateTime(ord.order_date, ord.created_at)}
+                            {formatDateTime(ord.order_date, ord.created_at, ord.id)}
                           </span>
                         </div>
 
