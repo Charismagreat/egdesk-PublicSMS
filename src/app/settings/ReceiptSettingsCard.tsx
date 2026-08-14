@@ -17,7 +17,7 @@ export interface ReceiptSettings {
 export default function ReceiptSettingsCard() {
   const [settings, setSettings] = useState<ReceiptSettings>({
     paperWidth: "80mm",
-    customMessage: "방문해 주셔서 진심으로 감사합니다. 늘 최선을 다하겠습니다.",
+    customMessage: "방문해 주셔서 진심으로 감사합니다.\n늘 최선을 다하겠습니다.",
     noticeText: "★ 네이버 영수증 리뷰 작성 시 음료수 1캔 무료 증정! ★\nWi-Fi: EGDESK_GUEST / Pass: egdesk1234\n주차 등록은 카운터 문의 (2시간 무료)",
     showCompanyProfile: true,
     qrType: "REVIEW",
