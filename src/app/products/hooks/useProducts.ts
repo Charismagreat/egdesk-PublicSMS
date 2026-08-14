@@ -29,7 +29,7 @@ export function useProducts() {
   const [currentPage, setCurrentPage, isPageRestored] = usePersistedState('products_currentPage', 1);
   const [itemsPerPage, setItemsPerPage, isLimitRestored] = usePersistedState('products_itemsPerPage', 10);
   const [isUploadingExcel, setIsUploadingExcel] = useState(false);
-  const [statusFilter, setStatusFilter, isFilterRestored] = usePersistedState<'ACTIVE' | 'DRAFT'>('products_statusFilter', 'ACTIVE');
+  const [statusFilter, setStatusFilter, isFilterRestored] = usePersistedState<'ACTIVE' | 'DRAFT' | 'TABLE_QR'>('products_statusFilter', 'ACTIVE');
   const [sourceFilter, setSourceFilter] = useState<'ALL' | 'INVENTORY' | 'MANUAL'>('ALL');
   const [totalCount, setTotalCount] = useState(0);
   const [activeCount, setActiveCount] = useState(0);

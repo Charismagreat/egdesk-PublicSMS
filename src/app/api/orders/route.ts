@@ -8,10 +8,8 @@ import { gmAutomation } from '@/lib/google-messages';
 
 export async function GET() {
   try {
-    const tenantId = await getTenantId();
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: '인증이 필요합니다.' }, { status: 401 });
-    }
+    const rawTenantId = await getTenantId();
+    const tenantId = rawTenantId || 'default';
 
     const result = await queryTable('crm_orders', {
       filters: { tenant_id: tenantId },

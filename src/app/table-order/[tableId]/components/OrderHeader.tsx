@@ -11,6 +11,7 @@ interface OrderHeaderProps {
   activeCategory: string;
   setActiveCategory: (val: string) => void;
   onBack: () => void;
+  onOpenHistory?: () => void;
 }
 
 export function OrderHeader({
@@ -20,7 +21,8 @@ export function OrderHeader({
   categories,
   activeCategory,
   setActiveCategory,
-  onBack
+  onBack,
+  onOpenHistory
 }: OrderHeaderProps) {
   return (
     <header className="bg-white sticky top-0 z-40 shadow-sm border-b border-slate-200 w-full">
@@ -29,7 +31,17 @@ export function OrderHeader({
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-xl font-black text-slate-800">테이블 {tableId}번</h1>
-        <div className="w-10"></div>
+        {onOpenHistory ? (
+          <button
+            onClick={onOpenHistory}
+            className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-650 rounded-xl text-xs font-black transition-all border border-orange-200/80 cursor-pointer flex items-center gap-1 shadow-xs"
+            title="테이블 1차/2차 누적 주문 내역 확인"
+          >
+            <span>📋 주문 내역</span>
+          </button>
+        ) : (
+          <div className="w-10"></div>
+        )}
       </div>
       
       {/* 실시간 메뉴 검색창 */}

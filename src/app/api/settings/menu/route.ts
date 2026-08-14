@@ -116,8 +116,7 @@ export async function GET() {
     const sanitizedRows = uniqueRows.map((r: any) => {
       return {
         ...r,
-        // 💡 전사 모든 정식 마스터 메뉴 항목은 무조건 1(활성화) 상태로 힐링 보정
-        is_enabled: 1
+        is_enabled: r.is_enabled !== undefined && r.is_enabled !== null ? Number(r.is_enabled) : 1
       };
     });
 

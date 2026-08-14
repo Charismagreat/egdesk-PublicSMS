@@ -27,7 +27,7 @@ export function useOrders() {
   const [trackingEdits, setTrackingEdits] = useState<Record<string, string>>({});
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
 
-  const TABS = ['전체', '접수완료', '견적요청', '결제대기', '결제완료', '상품준비중', '배송시작', '배송중', '배송완료', '수령완료', '주문취소'];
+  const TABS = ['전체', '🍽️ 테이블별 현황', '접수완료', '견적요청', '결제대기', '결제완료', '상품준비중', '배송시작', '배송중', '배송완료', '수령완료', '주문취소'];
 
   // 모든 세션 상태 복원이 완료되었는지 감시하는 플래그
   const isRestored = isActiveOrderIdRestored && isFormRestored && isActiveTabRestored && isSearchQueryRestored && isCurrentPageRestored && isItemsPerPageRestored;

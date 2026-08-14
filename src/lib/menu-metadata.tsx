@@ -94,7 +94,6 @@ export const MENU_METADATA_LIST: MenuMetadata[] = [
   { href: "/safety-management", label: "안전 관리 AI", icon: Shield, color: "text-red-655", category: 3 },
   { href: "/safety-detection", label: "위험 감지 AI", icon: ShieldAlert, color: "text-red-655", category: 3 },
   { href: "/quality-control", label: "품질 관리 AI", icon: CheckSquare, color: "text-indigo-600", category: 3 },
-  { href: "/scm-management", label: "공급망 관리 AI", icon: Globe, color: "text-indigo-555", category: 3 },
   { href: "/grant-management", label: "지원금 신청 AI", icon: Award, color: "text-amber-555", category: 3 },
   { href: "/knowledge-ai", label: "지식 관리 AI", icon: Compass, color: "text-indigo-550", category: 3 },
   { href: "/ecount-erp-ai", label: "이카운트 ERP AI", icon: ArrowRightLeft, color: "text-sky-550", category: 3 },

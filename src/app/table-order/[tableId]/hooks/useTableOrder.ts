@@ -25,7 +25,7 @@ export function useTableOrder() {
   const [couponError, setCouponError] = useState('');
 
   // 포인트 적립/사용 관련 상태
-  const [phoneForPoints, setPhoneForPoints] = useState('');
+  const [phoneForPoints, setPhoneForPoints] = useState('010-');
   const [pointBalance, setPointBalance] = useState<number | null>(null);
   const [pointCustomerId, setPointCustomerId] = useState<number | null>(null);
   const [usePointsInput, setUsePointsInput] = useState('');
@@ -95,6 +95,36 @@ export function useTableOrder() {
     });
   };
 
+  const clearCart = () => {
+    setCart({});
+    setCouponCode('');
+    setAppliedCoupon(null);
+    setCouponError('');
+    setPhoneForPoints('010-');
+    setPointBalance(null);
+    setPointCustomerId(null);
+    setUsePointsInput('');
+    setAppliedPoints(0);
+    setOtpCode('');
+    setIsOtpSent(false);
+    setIsOtpVerified(false);
+    setPointError('');
+    setPointInfo('');
+  };
+
+  const resetPointState = () => {
+    setPhoneForPoints('010-');
+    setPointBalance(null);
+    setPointCustomerId(null);
+    setUsePointsInput('');
+    setAppliedPoints(0);
+    setOtpCode('');
+    setIsOtpSent(false);
+    setIsOtpVerified(false);
+    setPointError('');
+    setPointInfo('');
+  };
+
   const categories = ['전체', ...Array.from(new Set(products.map(p => p.menu_category).filter((x): x is string => !!x)))];
 
   const filteredProducts = (activeCategory === "전체" 
@@ -159,23 +189,37 @@ export function useTableOrder() {
 
   // 포인트 적용 및 OTP 발송
   const handleRequestOtp = async () => {
-    if (!phoneForPoints || !usePointsInput) return;
+    if (!phoneForPoints) {
+      alert('휴대전화번호를 입력해 주세요.');
+      return;
+    }
+    if (!usePointsInput) {
+      alert('사용할 포인트를 입력해 주세요.');
+      return;
+    }
+    
     setPointError('');
     setPointInfo('');
     
     const pointsToUse = Number(usePointsInput);
     if (isNaN(pointsToUse) || pointsToUse <= 0) {
-      setPointError('올바른 포인트를 입력하세요.');
+      const errMsg = '올바른 포인트를 입력하세요.';
+      setPointError(errMsg);
+      alert(errMsg);
       return;
     }
 
     if (pointBalance === null || pointsToUse > pointBalance) {
-      setPointError(`잔액이 부족합니다. (보유: ${pointBalance || 0}p)`);
+      const errMsg = `사용 가능한 포인트 잔액이 부족합니다. (현재 보유: ${pointBalance || 0}p)`;
+      setPointError(errMsg);
+      alert(errMsg);
       return;
     }
 
     if (pointsToUse < 1000) {
-      setPointError('적립금은 최소 1,000p 이상부터 사용 가능합니다.');
+      const errMsg = '적립금은 최소 1,000p 이상부터 사용 가능합니다.';
+      setPointError(errMsg);
+      alert(errMsg);
       return;
     }
 
@@ -189,12 +233,21 @@ export function useTableOrder() {
       const json = await res.json();
       if (json.success) {
         setIsOtpSent(true);
-        setPointInfo('인증번호(4자리)가 SMS로 정상 발급되었습니다.');
+        if (json.testCode) {
+          setPointInfo(`인증번호(4자리)가 발급되었습니다. (테스트 번호: ${json.testCode})`);
+          alert(`[인증번호 발송 완료]\n\n테스트용 인증번호는 [${json.testCode}] 입니다.\n아래 인증번호 입력 칸에 입력 후 승인해 주세요.`);
+        } else {
+          setPointInfo('인증번호(4자리)가 SMS로 정상 발급되었습니다.');
+          alert('인증번호(4자리)가 문자로 발송되었습니다.\n아래 입력 칸에 수신된 번호를 입력하세요.');
+        }
       } else {
-        setPointError(json.error);
+        const errMsg = json.error || '인증번호 발송에 실패했습니다.';
+        setPointError(errMsg);
+        alert(errMsg);
       }
     } catch (e) {
       setPointError('OTP 전송 중 오류가 발생했습니다.');
+      alert('OTP 전송 중 네트워크 오류가 발생했습니다.');
     } finally {
       setIsOtpSending(false);
     }
@@ -335,7 +388,7 @@ export function useTableOrder() {
         setCouponCode('');
         setAppliedCoupon(null);
         setCouponError('');
-        setPhoneForPoints('');
+        setPhoneForPoints('010-');
         setPointBalance(null);
         setPointCustomerId(null);
         setUsePointsInput('');
@@ -367,6 +420,8 @@ export function useTableOrder() {
     searchTerm, setSearchTerm,
     cart,
     updateCart,
+    clearCart,
+    resetPointState,
     categories,
     filteredProducts,
     cartItemsCount,

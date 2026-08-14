@@ -9,6 +9,7 @@ import { OrderToolbar } from "./components/OrderToolbar";
 import { OrderTable } from "./components/OrderTable";
 import { OrderPagination } from "./components/OrderPagination";
 import { OrderAttachmentViewer } from "./components/OrderAttachmentViewer";
+import { TableOrderOverviewSection } from "./components/TableOrderOverviewSection";
 
 export default function OrdersPage() {
   const {
@@ -32,6 +33,7 @@ export default function OrdersPage() {
     viewerUrl,
     setViewerUrl,
     TABS,
+    fetchData,
     addData,
     deleteData,
     updateOrder,
@@ -49,17 +51,19 @@ export default function OrdersPage() {
   return (
     <div className="space-y-6 pb-20" data-easybot-hint="주문 관리 AI: 주문 접수 대기, 결제 검토 및 주문 상세 명세 조회를 수행하는 통합 수주창입니다.">
       {/* 헤더 */}
-      <OrderHeader />
+      <OrderHeader activeTab={activeTab} setActiveTab={setActiveTab} />
       
-      {/* 새 주문 등록 폼 */}
-      <OrderForm 
-        form={form}
-        setForm={setForm}
-        onSubmit={addData}
-      />
+      {/* 새 주문 등록 폼 (테이블별 현황 탭이 아닌 경우에만 렌더링) */}
+      {activeTab !== '🍽️ 테이블별 현황' && (
+        <OrderForm 
+          form={form}
+          setForm={setForm}
+          onSubmit={addData}
+        />
+      )}
 
       {/* 관리 테이블 및 컨트롤 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden p-4 sm:p-6">
         {/* 상단 검색 및 탭 필터 툴바 */}
         <OrderToolbar
           tabs={TABS}
@@ -69,36 +73,50 @@ export default function OrdersPage() {
           setSearchQuery={setSearchQuery}
         />
         
-        {/* 메인 리스트 테이블 */}
-        <OrderTable
-          paginatedData={paginatedData}
-          selectedIds={selectedIds}
-          isUpdating={isUpdating}
-          tabs={TABS}
-          trackingEdits={trackingEdits}
-          setTrackingEdits={setTrackingEdits}
-          toggleSelectAll={toggleSelectAll}
-          toggleSelect={toggleSelect}
-          setActiveOrderId={setActiveOrderId}
-          setViewerUrl={setViewerUrl}
-          updateOrder={updateOrder}
-          bulkUpdateStatus={bulkUpdateStatus}
-          saveTrackingNumber={saveTrackingNumber}
-          onDelete={deleteData}
-          allDataCount={data.length}
-        />
+        {/* 🍽️ 테이블별 현황 탭 뷰 분기 */}
+        {activeTab === '🍽️ 테이블별 현황' ? (
+          <div className="mt-6">
+            <TableOrderOverviewSection
+              orders={data}
+              onUpdateOrder={updateOrder}
+              onBulkUpdateStatus={bulkUpdateStatus}
+              onFetchData={fetchData}
+            />
+          </div>
+        ) : (
+          <>
+            {/* 메인 리스트 테이블 */}
+            <OrderTable
+              paginatedData={paginatedData}
+              selectedIds={selectedIds}
+              isUpdating={isUpdating}
+              tabs={TABS}
+              trackingEdits={trackingEdits}
+              setTrackingEdits={setTrackingEdits}
+              toggleSelectAll={toggleSelectAll}
+              toggleSelect={toggleSelect}
+              setActiveOrderId={setActiveOrderId}
+              setViewerUrl={setViewerUrl}
+              updateOrder={updateOrder}
+              bulkUpdateStatus={bulkUpdateStatus}
+              saveTrackingNumber={saveTrackingNumber}
+              onDelete={deleteData}
+              allDataCount={data.length}
+            />
 
-        {/* 하단 페이지네이션 바 */}
-        <OrderPagination
-          itemsPerPage={itemsPerPage}
-          setItemsPerPage={setItemsPerPage}
-          filteredCount={filteredData.length}
-          startIndex={startIndex}
-          endIndex={endIndex}
-          currentPage={currentPage}
-          setCurrentPage={setCurrentPage}
-          totalPages={totalPages}
-        />
+            {/* 하단 페이지네이션 바 */}
+            <OrderPagination
+              itemsPerPage={itemsPerPage}
+              setItemsPerPage={setItemsPerPage}
+              filteredCount={filteredData.length}
+              startIndex={startIndex}
+              endIndex={endIndex}
+              currentPage={currentPage}
+              setCurrentPage={setCurrentPage}
+              totalPages={totalPages}
+            />
+          </>
+        )}
       </div>
 
       {/* 첨부 이미지 오버레이 모달 */}

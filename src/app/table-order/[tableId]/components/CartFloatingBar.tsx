@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ShoppingCart, Coins, X } from "lucide-react";
+import { ShoppingCart, Coins, X, Trash2 } from "lucide-react";
 import { AppliedCoupon } from "../types";
 
 interface CartFloatingBarProps {
@@ -35,6 +35,7 @@ interface CartFloatingBarProps {
   onResetPoints: () => void;
   setShowPointGuide: (val: boolean) => void;
   onSubmitOrder: () => void;
+  onClearCart?: () => void;
   isSubmitting: boolean;
 }
 
@@ -69,14 +70,30 @@ export function CartFloatingBar({
   onResetPoints,
   setShowPointGuide,
   onSubmitOrder,
+  onClearCart,
   isSubmitting
 }: CartFloatingBarProps) {
   return (
     <div className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-auto sm:w-[400px] sm:mx-auto z-50">
       
       {/* 할인 & 적립금 적용 래퍼 패널 */}
-      <div className="bg-white rounded-2xl shadow-2xl p-4 mb-2 border border-slate-100 flex flex-col gap-3">
+      <div className="bg-white rounded-2xl shadow-2xl p-4 mb-2 border border-slate-100 flex flex-col gap-3 relative">
         
+        {/* 전체 취소 / 비우기 버튼 (패널 상단 우측) */}
+        {onClearCart && (
+          <div className="flex justify-end border-b border-slate-100 pb-1.5">
+            <button
+              type="button"
+              onClick={onClearCart}
+              className="text-[11px] font-bold text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all border-none cursor-pointer"
+              title="장바구니 전체 담기 취소"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+              <span>주문 전체 취소</span>
+            </button>
+          </div>
+        )}
+
         {/* 1. 쿠폰 영역 */}
         <div className="border-b border-slate-100 pb-2">
           <p className="text-[10px] font-bold text-slate-400 mb-1">사용 가능한 쿠폰 코드</p>
@@ -161,9 +178,9 @@ export function CartFloatingBar({
                         type="button" 
                         onClick={onRequestOtp} 
                         disabled={isOtpSending}
-                        className="px-4 py-2 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-850 whitespace-nowrap text-xs border-0 cursor-pointer"
+                        className="px-4 py-2 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 whitespace-nowrap text-xs border-0 cursor-pointer shadow-sm transition-all"
                       >
-                        {isOtpSending ? '발송 중..' : '인증번호 발송'}
+                        {isOtpSending ? '본인 확인 중..' : '포인트 사용하기'}
                       </button>
                     ) : (
                       <button 
@@ -178,22 +195,27 @@ export function CartFloatingBar({
                   
                   {/* OTP 입력 및 검증 */}
                   {isOtpSent && (
-                    <div className="flex gap-2 animate-scale-up">
-                      <input 
-                        type="text" 
-                        value={otpCode}
-                        onChange={e => setOtpCode(e.target.value)}
-                        placeholder="문자로 수신된 4자리 입력" 
-                        className="flex-1 border-2 border-orange-400 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-500 font-mono text-center text-xs font-black text-slate-800"
-                      />
-                      <button 
-                        type="button" 
-                        onClick={onVerifyOtp} 
-                        disabled={isOtpVerifying}
-                        className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold rounded-xl hover:opacity-95 whitespace-nowrap text-xs border-0 cursor-pointer"
-                      >
-                        {isOtpVerifying ? '확인 중..' : '인증 승인'}
-                      </button>
+                    <div className="space-y-1 pt-1 animate-fade-in">
+                      <p className="text-[10px] font-bold text-orange-600 flex items-center">
+                        <span>🔒 보안을 위해 수신된 4자리 인증번호를 입력하세요</span>
+                      </p>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          value={otpCode}
+                          onChange={e => setOtpCode(e.target.value)}
+                          placeholder="인증번호 4자리" 
+                          className="flex-1 border-2 border-orange-400 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-500 font-mono text-center text-xs font-black text-slate-800"
+                        />
+                        <button 
+                          type="button" 
+                          onClick={onVerifyOtp} 
+                          disabled={isOtpVerifying}
+                          className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold rounded-xl hover:opacity-95 whitespace-nowrap text-xs border-0 cursor-pointer shadow-sm"
+                        >
+                          {isOtpVerifying ? '확인 중..' : '할인 적용 승인'}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

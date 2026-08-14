@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Building, Mail, Cpu, LayoutGrid, Coins } from "lucide-react";
+import { Building, Mail, Cpu, LayoutGrid, SlidersHorizontal } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import DatabaseInitCard from "../DatabaseInitCard";
@@ -19,6 +19,8 @@ import EmployeeManagementTabContent from "./EmployeeManagementTabContent";
 import { useAiSettings } from "@/app/ai-settings/hooks/useAiSettings";
 import { AiSettingsForm } from "@/app/ai-settings/components/AiSettingsForm";
 import { AiSettingsMonitor } from "@/app/ai-settings/components/AiSettingsMonitor";
+
+import ReceiptSettingsCard from "../ReceiptSettingsCard";
 
 type TabType = "basic" | "communication" | "ai" | "point" | "ui";
 
@@ -106,7 +108,7 @@ export function SettingsContainer() {
     { id: "basic", label: "본사 & 플랫폼 설정", icon: Building },
     { id: "communication", label: "메일 & 팩스 연동", icon: Mail },
     { id: "ai", label: "AI 라우팅 설정", icon: Cpu },
-    { id: "point", label: "포인트 정책 설정", icon: Coins },
+    { id: "point", label: "기타 설정", icon: SlidersHorizontal },
     { id: "ui", label: "메뉴 & 피드백 관리", icon: LayoutGrid },
   ];
 
@@ -161,6 +163,7 @@ export function SettingsContainer() {
         {activeTab === "point" && (
           <>
             <PointSettingsCard />
+            <ReceiptSettingsCard />
           </>
         )}
 

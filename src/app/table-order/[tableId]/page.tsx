@@ -10,9 +10,12 @@ import { OrderHeader } from "./components/OrderHeader";
 import { MenuCatalog } from "./components/MenuCatalog";
 import { CartFloatingBar } from "./components/CartFloatingBar";
 import { PointGuideModal } from "./components/PointGuideModal";
+import { TableOrderHistoryModal } from "./components/TableOrderHistoryModal";
 
 export default function TableOrderMenuPage() {
   const router = useRouter();
+  const [showHistoryModal, setShowHistoryModal] = React.useState(false);
+
   const {
     tableId,
     loading,
@@ -20,6 +23,8 @@ export default function TableOrderMenuPage() {
     searchTerm, setSearchTerm,
     cart,
     updateCart,
+    clearCart,
+    resetPointState,
     categories,
     filteredProducts,
     cartItemsCount,
@@ -75,6 +80,7 @@ export default function TableOrderMenuPage() {
         activeCategory={activeCategory}
         setActiveCategory={setActiveCategory}
         onBack={() => router.push('/table-order')}
+        onOpenHistory={() => setShowHistoryModal(true)}
       />
 
       {/* 메뉴 카탈로그 리스트 본문 영역 */}
@@ -119,15 +125,10 @@ export default function TableOrderMenuPage() {
           onLookupPoints={handleLookupPoints}
           onRequestOtp={handleRequestOtp}
           onVerifyOtp={handleVerifyOtp}
-          onResetPoints={() => {
-            setPhoneForPoints('');
-            setCouponCode(''); // 쿠폰은 초기화하지 않으나 적립금 입력창을 초기화할 때 적립금 상태를 리셋
-            setUsePointsInput('');
-            setOtpCode('');
-            setIsOtpSent(false);
-          }}
+          onResetPoints={resetPointState}
           setShowPointGuide={setShowPointGuide}
           onSubmitOrder={submitOrder}
+          onClearCart={clearCart}
           isSubmitting={isSubmitting}
         />
       )}
@@ -137,6 +138,14 @@ export default function TableOrderMenuPage() {
         <PointGuideModal
           pointEarningRate={pointEarningRate}
           onClose={() => setShowPointGuide(false)}
+        />
+      )}
+
+      {/* 테이블 1차/2차 누적 주문 내역 모달 */}
+      {showHistoryModal && (
+        <TableOrderHistoryModal
+          tableId={tableId}
+          onClose={() => setShowHistoryModal(false)}
         />
       )}
 

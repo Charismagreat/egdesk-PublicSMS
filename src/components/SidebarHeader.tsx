@@ -152,9 +152,17 @@ export default function SidebarHeader({
     });
 
     const merged = [...staticItems, ...dynamicItems];
+    // 중복 href 방어 가드 적용
+    const seen = new Set<string>();
+    const uniqueMerged = merged.filter((item) => {
+      if (seen.has(item.href)) return false;
+      seen.add(item.href);
+      return true;
+    });
+
     // 💡 한국어 가나다 오름차순 사전 정렬 적용
-    merged.sort((a, b) => a.label.localeCompare(b.label, "ko"));
-    return merged;
+    uniqueMerged.sort((a, b) => a.label.localeCompare(b.label, "ko"));
+    return uniqueMerged;
   };
 
   // 초성 매칭 도우미

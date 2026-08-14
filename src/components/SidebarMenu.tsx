@@ -114,6 +114,9 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
             // (2) 정적 메뉴 맵(MENU_STATIC_MAP)에 정의된 유효한 메뉴만 노출
             if (!MENU_STATIC_MAP[cleanHref]) return false;
             
+            // (3) 비활성화(is_enabled가 0) 처리된 메뉴는 노출 목록에서 엄격 제외
+            if (Number(setting.is_enabled) === 0) return false;
+
             return true;
           })
           .map(setting => {
@@ -128,10 +131,10 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
             };
           });
 
-        // 2. 💡 [전사 범용 법칙 2] MENU_STATIC_MAP에 정의된 모든 유효 메뉴가 DB 설정에서 누락되어 있다면 100% 누락 없이 병합
-        const activeResolvedHrefs = new Set(resolved.map(r => r.href));
+        // 2. 💡 DB 설정 레코드에서 아예 누락된 새 정적 메뉴가 있는 경우만 백필 추가
+        const allSettingHrefs = new Set(settings.map(s => (s.menu_href || "").trim()));
         Object.entries(MENU_STATIC_MAP).forEach(([href, meta]) => {
-          if (!STATIC_EXCLUDED_HREFS.has(href) && !activeResolvedHrefs.has(href)) {
+          if (!STATIC_EXCLUDED_HREFS.has(href) && !allSettingHrefs.has(href)) {
             resolved.push({
               href,
               label: meta.label,

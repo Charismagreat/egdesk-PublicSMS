@@ -9,6 +9,7 @@ import { ProductFormSection } from "./components/ProductFormSection";
 import { ProductTable } from "./components/ProductTable";
 import { PaginationBar } from "./components/PaginationBar";
 import { ImagePreview } from "./components/ImagePreview";
+import { TableQrSection } from "./components/TableQrSection";
 
 export default function ProductsPage() {
   const {
@@ -56,10 +57,10 @@ export default function ProductsPage() {
       />
 
       {/* 탭 네비게이션 */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 overflow-x-auto no-scrollbar">
         <button
           onClick={() => setStatusFilter('ACTIVE')}
-          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
             statusFilter === 'ACTIVE'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -74,7 +75,7 @@ export default function ProductsPage() {
         </button>
         <button
           onClick={() => setStatusFilter('DRAFT')}
-          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
             statusFilter === 'DRAFT'
               ? 'border-amber-500 text-amber-600'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -87,53 +88,70 @@ export default function ProductsPage() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setStatusFilter('TABLE_QR')}
+          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+            statusFilter === 'TABLE_QR'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          📱 테이블 오더 QR 관리
+        </button>
       </div>
       
-      {/* 신규 상품 등록 및 정보 수정 입력 폼 영역 (판매 중 탭에서만 활성화) */}
-      {statusFilter === 'ACTIVE' && (
-        <ProductFormSection
-          form={form}
-          setForm={setForm}
-          editTargetId={editTargetId}
-          isUploading={isUploading}
-          existingCategories={existingCategories}
-          onCancelEdit={cancelEdit}
-          onSaveProduct={addData}
-          onFileUpload={handleFileUpload}
-        />
+      {/* 📱 테이블 오더 QR 관리 탭 뷰 */}
+      {statusFilter === 'TABLE_QR' ? (
+        <TableQrSection />
+      ) : (
+        <>
+          {/* 신규 상품 등록 및 정보 수정 입력 폼 영역 (판매 중 탭에서만 활성화) */}
+          {statusFilter === 'ACTIVE' && (
+            <ProductFormSection
+              form={form}
+              setForm={setForm}
+              editTargetId={editTargetId}
+              isUploading={isUploading}
+              existingCategories={existingCategories}
+              onCancelEdit={cancelEdit}
+              onSaveProduct={addData}
+              onFileUpload={handleFileUpload}
+            />
+          )}
+
+          {/* 실시간 필터링이 적용된 등록된 상품 목록 그리드 테이블 영역 */}
+          <ProductTable
+            statusFilter={statusFilter}
+            sourceFilter={sourceFilter}
+            setSourceFilter={setSourceFilter}
+            onApprove={approveProduct}
+            onUnapprove={unapproveProduct}
+            onBatchToggleCoupon={handleBatchToggleCoupon}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            filteredDataCount={totalCount}
+            paginatedData={paginatedData}
+            totalDataLength={totalCount}
+            onHoverImage={setHoverImage}
+            onToggleCouponExclude={toggleCouponExclude}
+            onEditClick={handleEditClick}
+            onDeleteClick={deleteData}
+          />
+
+          {/* 페이지네이션 하단 이동 컨트롤러 바 */}
+          <PaginationBar
+            itemsPerPage={itemsPerPage}
+            setItemsPerPage={setItemsPerPage}
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            totalPages={totalPages}
+            filteredDataLength={filteredData.length}
+            startIndex={startIndex}
+            endIndex={endIndex}
+          />
+        </>
       )}
 
-      {/* 실시간 필터링이 적용된 등록된 상품 목록 그리드 테이블 영역 */}
-      <ProductTable
-        statusFilter={statusFilter}
-        sourceFilter={sourceFilter}
-        setSourceFilter={setSourceFilter}
-        onApprove={approveProduct}
-        onUnapprove={unapproveProduct}
-        onBatchToggleCoupon={handleBatchToggleCoupon}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        filteredDataCount={totalCount}
-        paginatedData={paginatedData}
-        totalDataLength={totalCount}
-        onHoverImage={setHoverImage}
-        onToggleCouponExclude={toggleCouponExclude}
-        onEditClick={handleEditClick}
-        onDeleteClick={deleteData}
-      />
-
-      {/* 페이지네이션 하단 이동 컨트롤러 바 */}
-      <PaginationBar
-        itemsPerPage={itemsPerPage}
-        setItemsPerPage={setItemsPerPage}
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-        totalPages={totalPages}
-        filteredDataLength={filteredData.length}
-        startIndex={startIndex}
-        endIndex={endIndex}
-      />
-      
       {/* 썸네일 이미지 마우스 호버 트래킹 프리뷰 포털 */}
       <ImagePreview hoverImage={hoverImage} />
 
