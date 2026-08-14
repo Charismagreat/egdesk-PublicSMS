@@ -126,11 +126,15 @@ export async function GET(req: Request) {
       if (historyRes && historyRes.success) {
         const rawHistory = (historyRes as any).history || (historyRes as any).posts || [];
 
-        // 삭제 처리된 ID 100% 억제 필터링 & 로컬 이미지 파일 Base64 변환 & 고유 시각 정규화
+        // 삭제 처리된 ID 100% 억제 필터링 & 실패(FAILURE/FAILED/ERROR) 항목 원천 배제 & 로컬 이미지 파일 Base64 변환
         history = rawHistory
           .filter((item: any) => {
             const itemId = String(item.id || item.post_id || '');
             if (deletedSet.has(itemId) || item.deleted_at) {
+              return false;
+            }
+            const itemStatus = String(item.status || '').toUpperCase();
+            if (itemStatus === 'FAILURE' || itemStatus === 'FAILED' || itemStatus === 'ERROR') {
               return false;
             }
             return true;
