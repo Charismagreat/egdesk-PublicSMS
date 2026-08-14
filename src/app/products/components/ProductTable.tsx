@@ -322,24 +322,30 @@ export function ProductTable({
                     <div className="flex items-center gap-2">
                       <span>쿠폰 적용</span>
                       {onBatchToggleCoupon && (
-                        <div className="flex items-center gap-1 bg-slate-100 border border-slate-200/80 p-0.5 rounded-lg text-[10px] font-bold shadow-3xs">
-                          <button
-                            type="button"
-                            onClick={() => onBatchToggleCoupon(0)}
-                            className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all cursor-pointer shadow-3xs"
-                            title="목록 내 모든 상품 쿠폰 적용 허용 🟢"
-                          >
-                            전체 허용 🟢
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onBatchToggleCoupon(1)}
-                            className="px-1.5 py-0.5 rounded bg-white text-slate-500 hover:bg-slate-700 hover:text-white transition-all cursor-pointer shadow-3xs border border-slate-200"
-                            title="목록 내 모든 상품 쿠폰 적용 제외 ⚪"
-                          >
-                            전체 제외 ⚪
-                          </button>
-                        </div>
+                        (() => {
+                          const isAllAllowed = paginatedData.length > 0 && paginatedData.every(p => Number(p.is_coupon_excludable ?? 1) === 0);
+                          return (
+                            <div className="inline-flex items-center gap-1.5 bg-slate-100/90 border border-slate-200/80 px-2 py-1 rounded-xl text-[11px] font-bold shadow-3xs">
+                              <button
+                                type="button"
+                                onClick={() => onBatchToggleCoupon(isAllAllowed ? 1 : 0)}
+                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
+                                  isAllAllowed ? 'bg-green-500 shadow-xs shadow-green-500/20' : 'bg-slate-300'
+                                }`}
+                                title={isAllAllowed ? '목록 내 전체 상품 쿠폰 허용 중 (클릭 시 전체 제외)' : '목록 내 일부/전체 쿠폰 제외 중 (클릭 시 전체 허용)'}
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                    isAllAllowed ? 'translate-x-4' : 'translate-x-0'
+                                  }`}
+                                />
+                              </button>
+                              <span className={`text-[10px] font-extrabold ${isAllAllowed ? 'text-green-700' : 'text-slate-500'}`}>
+                                {isAllAllowed ? '전체 허용 🟢' : '전체 제외 ⚪'}
+                              </span>
+                            </div>
+                          );
+                        })()
                       )}
                     </div>
                   </th>
