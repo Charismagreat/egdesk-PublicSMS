@@ -147,6 +147,11 @@ export function TableOrderOverviewSection({
     const formattedCustomMsg = String(receiptSettings.customMessage || "").replace(/\r\n/g, "<br/>").replace(/\n/g, "<br/>");
     const formattedNoticeText = String(receiptSettings.noticeText || "").replace(/\r\n/g, "<br/>").replace(/\n/g, "<br/>");
 
+    // QR 이미지 URL 생성
+    const qrImgUrl = receiptSettings.showQr && receiptSettings.qrUrl
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(receiptSettings.qrUrl)}`
+      : "";
+
     const htmlContent = `
       <!DOCTYPE html>
       <html>

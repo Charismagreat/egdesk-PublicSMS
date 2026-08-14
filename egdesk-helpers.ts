@@ -3084,6 +3084,8 @@ export type InstagramPublishHistoryEntry = {
   title?: string | null;
   caption?: string | null;
   imagePath?: string | null;
+  /** Remote Instagram CDN thumbnail when scraped via Sync Stats */
+  imageUrl?: string | null;
   postUrl?: string | null;
   shortcode?: string | null;
   likes?: number | null;
@@ -3237,11 +3239,19 @@ export async function listInstagramSchedules(connectionId?: string): Promise<{
 export type CreateInstagramScheduleOptions = {
   title: string;
   connectionId: string;
-  /** manual topics or rotate BI products */
+  /**
+   * `bi_products` rotates BI catalog products and uses their registered photos
+   * as image references. Products + photos must already exist via
+   * bi_register_product(filePaths=...) — this API does NOT accept productImages.
+   * Use `manual` for free-text topics with no product photo.
+   */
   topicSource?: 'manual' | 'bi_products';
   /** Required when topicSource is bi_products */
   biSnapshotId?: string;
-  /** Manual topics or product names when using bi_products */
+  /**
+   * For bi_products: exact product names from bi_list_products (imageCount > 0).
+   * For manual: free-text topics.
+   */
   topics?: string[];
   /** HH:MM (24h). Default 09:00. NOTE: this is a RECURRING daily/weekly/monthly
    * cron time, not a one-off timer — if it already passed "today" when the
@@ -3266,11 +3276,18 @@ export type CreateInstagramScheduleOptions = {
 };
 
 /**
- * Create a recurring Instagram post schedule. Use topicSource='bi_products' with
- * biSnapshotId + product name topics for product-grounded captions/images using
- * BI product photos as reference. The response includes an actualNextRun field
- * (the real cron-computed next fire time) so you can confirm it isn't deferred
- * to tomorrow — for immediate/one-time testing, pass runNow=true instead.
+ * Create a recurring Instagram post schedule.
+ *
+ * Product-grounded posts (topicSource='bi_products') require BI catalog photos
+ * first:
+ *   1. bi_list_snapshots → snapshotId
+ *   2. bi_register_product({ snapshotId, name, filePaths: [local photo paths] })
+ *   3. bi_list_products → confirm imageCount > 0
+ *   4. createInstagramSchedule({ topicSource: 'bi_products', biSnapshotId, topics: [product names] })
+ *
+ * The schedule create call rejects bi_products when no catalog photos exist.
+ * Response includes actualNextRun (cron next fire). runNow defaults true for an
+ * immediate post plus the recurring schedule.
  */
 export async function createInstagramSchedule(options: CreateInstagramScheduleOptions) {
   return callInstagramTool('instagram_schedule_create', options);
