@@ -85,6 +85,7 @@ export function useTableOrder() {
     } catch (e) {
       console.error("테이블오더 상품 목록 로드 실패:", e);
     } finally {
+      // ⚡ 로딩 완료 가드 해제
       setLoading(false);
     }
   };
