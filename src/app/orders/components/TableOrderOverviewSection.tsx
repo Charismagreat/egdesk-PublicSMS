@@ -104,8 +104,15 @@ export function TableOrderOverviewSection({
   // ⚡ 테이블 주문들을 '손님 이용 단위(결제 세션)' 기준으로 1회차, 2회차(회전수)로 지능형 그룹화
   const getTableSessions = (tableNum: string): TableSession[] => {
     const tableOrders = getOrdersForTable(tableNum);
+    const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // 💡 당일(오늘) 발생한 주문만 엄격히 필터링하여 일일 회전수 산출
     const valid = tableOrders
-      .filter(o => o.status !== '주문취소')
+      .filter(o => {
+        if (o.status === '주문취소') return false;
+        const d = (o.order_date || o.created_at || '').substring(0, 10);
+        return !d || d === todayStr;
+      })
       .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
 
     if (valid.length === 0) return [];
@@ -485,14 +492,16 @@ export function TableOrderOverviewSection({
           </div>
 
           {/* 2. 총 회전수 */}
-          <div className="flex-1 min-w-[110px] bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl p-2.5 px-3.5 flex flex-col justify-center transition-all shadow-xs">
+          <div className="flex-1 min-w-[115px] bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl p-2.5 px-3.5 flex flex-col justify-center transition-all shadow-xs">
             <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1">
               <History className="w-3 h-3 text-amber-200" />
-              오늘 총 회전수
+              오늘 총 이용 (회전)
             </span>
             <div className="flex items-baseline gap-1 mt-0.5">
               <span className="text-base font-black text-white">{totalTurnoverCount}</span>
-              <span className="text-[11px] font-bold text-orange-200">회전</span>
+              <span className="text-[11px] font-bold text-orange-200">
+                팀 (평균 {(totalTurnoverCount / Math.max(1, totalTableCount)).toFixed(1)}회전)
+              </span>
             </div>
           </div>
 
