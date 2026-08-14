@@ -335,7 +335,7 @@ export function TableOrderOverviewSection({
                   {isOccupied ? (
                     <span className="bg-orange-600 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
                       <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
-                      이용중({activeOrders.length}건)
+                      이용중 ({activeOrders.length}건)
                     </span>
                   ) : (
                     <span className="bg-slate-200 text-slate-500 font-bold text-[10px] px-2 py-0.5 rounded-full">
