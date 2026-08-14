@@ -44,6 +44,8 @@ export async function GET(req: Request) {
       console.warn('[Self-Healing Warning] Failed to run tenant migration in products:', patchErr.message);
     }
 
+    const { searchParams } = new URL(req.url);
+    const status = searchParams.get('status') || 'ACTIVE';
     const isAllMode = searchParams.get('all') === 'true' || searchParams.get('limit') === 'all';
     const page = Number(searchParams.get('page')) || 1;
     const limitParam = searchParams.get('limit');
