@@ -200,7 +200,7 @@ export async function POST(req: Request) {
       tracking_number: '',
       attachment_url: resolvedAttachmentUrl,
       customer_memo: customerMemo || '',
-      order_date: data.orderDate || new Date().toISOString().split('T')[0],
+      order_date: data.orderDate || new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
       status: isNewPartner ? '승인대기' : (status || '결제대기') // 💡 신규 B2B 주문 시 '승인대기' 처리
     }]);
 

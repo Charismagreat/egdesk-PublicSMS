@@ -78,6 +78,19 @@ export function TableOrderOverviewSection({
     } finally {
       setLoadingAction(null);
     }
+  // 일시 정보(날짜+시간) 포맷팅 헬퍼
+  const formatDateTime = (dateStr?: string, createdAt?: string) => {
+    const raw = dateStr || createdAt;
+    if (!raw) return '방금';
+    // 만약 "2026-08-14" 처럼 날짜만 있고 createdAt에 시분초가 있는 경우
+    if (raw.length === 10 && createdAt && createdAt.length > 10) {
+      return createdAt.substring(0, 16);
+    }
+    // "2026-08-14 14:18:23" -> "2026-08-14 14:18"
+    if (raw.length >= 16) {
+      return raw.substring(0, 16);
+    }
+    return raw;
   };
 
   // 영수증/주문서 인쇄 팝업 (동적 영수증 설정 연동)
@@ -428,7 +441,7 @@ export function TableOrderOverviewSection({
                           </div>
 
                           <div className="flex justify-between items-center text-[11px] pt-0.5 border-t border-slate-200/40">
-                            <span className="text-slate-400 font-medium">{ord.order_date || '방금'}</span>
+                            <span className="text-slate-400 font-medium">{formatDateTime(ord.order_date, ord.created_at)}</span>
                             <span className="font-black text-slate-800">{pPrice.toLocaleString()}원</span>
                           </div>
                         </div>
@@ -529,7 +542,7 @@ export function TableOrderOverviewSection({
                           </span>
                           <span className="text-xs text-slate-400 font-medium flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" />
-                            {ord.order_date || '일시 정보 없음'}
+                            {formatDateTime(ord.order_date, ord.created_at)}
                           </span>
                         </div>
 
