@@ -409,33 +409,126 @@ export function TableOrderOverviewSection({
     return sum + (isNaN(p) ? 0 : p);
   }, 0);
 
+  // 📊 전사 테이블 실시간 종합 통계 계산
+  const totalTableCount = allTableIds.length;
+  const occupiedTableCount = allTableIds.filter(id => {
+    const tOrders = getOrdersForTable(id);
+    return tOrders.some(o => o.status !== '주문취소' && o.status !== '결제완료');
+  }).length;
+  const occupancyRate = totalTableCount > 0 ? Math.round((occupiedTableCount / totalTableCount) * 100) : 0;
+
+  // 오늘 전체 테이블 누적 회전수
+  const totalTurnoverCount = allTableIds.reduce((sum, id) => sum + getTableSessions(id).length, 0);
+
+  // 미결제(식사 중) 주문 및 총액
+  const allUnpaidOrders = orders.filter(o => {
+    const name = o.customer_name || o.customerName || "";
+    return name.includes('테이블') && o.status !== '주문취소' && o.status !== '결제완료';
+  });
+  const totalUnpaidAmount = allUnpaidOrders.reduce((sum, o) => {
+    const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
+    return sum + (isNaN(p) ? 0 : p);
+  }, 0);
+
+  // 오늘 테이블 결제 완료 매출 총액
+  const allPaidOrders = orders.filter(o => {
+    const name = o.customer_name || o.customerName || "";
+    return name.includes('테이블') && o.status === '결제완료';
+  });
+  const totalPaidAmount = allPaidOrders.reduce((sum, o) => {
+    const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
+    return sum + (isNaN(p) ? 0 : p);
+  }, 0);
+
   return (
     <div className="space-y-6">
       
-      {/* 탭 안내 헤더 바 */}
-      <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-3xl p-6 shadow-md flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0">
-            <Utensils className="w-6 h-6 text-white" />
+      {/* 탭 안내 헤더 바 + 실시간 종합 요약 위젯 */}
+      <div className="bg-gradient-to-r from-orange-500 via-orange-500 to-amber-500 text-white rounded-3xl p-5 sm:p-6 shadow-md flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0 shadow-inner">
+              <Utensils className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black flex items-center gap-2">
+                실시간 테이블 주문 통합 모니터링
+                <Sparkles className="w-5 h-5 text-amber-200" />
+              </h2>
+              <p className="text-orange-100 text-xs mt-0.5 font-medium">
+                각 테이블 카드를 클릭하시면 전체 1차, 2차 세부 주문 내역을 팝업창에서 시원하게 조망하실 수 있습니다.
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-black flex items-center gap-2">
-              실시간 테이블 주문 통합 모니터링
-              <Sparkles className="w-5 h-5 text-amber-200" />
-            </h2>
-            <p className="text-orange-100 text-xs mt-0.5 font-medium">
-              각 테이블 카드를 클릭하시면 전체 1차, 2차 세부 주문 내역을 팝업창에서 시원하게 조망하실 수 있습니다.
-            </p>
-          </div>
+
+          <button
+            onClick={onFetchData}
+            className="xl:hidden bg-white/15 hover:bg-white/25 text-white font-bold px-3 py-2 rounded-xl backdrop-blur-md transition-all text-xs flex items-center gap-1 border border-white/20 cursor-pointer shrink-0"
+            title="새로고침"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        <button
-          onClick={onFetchData}
-          className="bg-white/10 hover:bg-white/20 text-white font-bold px-4 py-2.5 rounded-2xl backdrop-blur-md transition-all text-xs flex items-center gap-1.5 border border-white/20 cursor-pointer"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>새로고침</span>
-        </button>
+        {/* 📊 우측 4대 핵심 요약 카드 위젯 */}
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+          {/* 1. 이용중 테이블 */}
+          <div className="flex-1 min-w-[110px] bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl p-2.5 px-3.5 flex flex-col justify-center transition-all shadow-xs">
+            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              실시간 이용중
+            </span>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="text-base font-black text-white">{occupiedTableCount}</span>
+              <span className="text-[11px] font-bold text-orange-200">/ {totalTableCount}석 ({occupancyRate}%)</span>
+            </div>
+          </div>
+
+          {/* 2. 총 회전수 */}
+          <div className="flex-1 min-w-[110px] bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl p-2.5 px-3.5 flex flex-col justify-center transition-all shadow-xs">
+            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1">
+              <History className="w-3 h-3 text-amber-200" />
+              오늘 총 회전수
+            </span>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="text-base font-black text-white">{totalTurnoverCount}</span>
+              <span className="text-[11px] font-bold text-orange-200">회전</span>
+            </div>
+          </div>
+
+          {/* 3. 결제 대기 (미결제 총액) */}
+          <div className="flex-1 min-w-[125px] bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl p-2.5 px-3.5 flex flex-col justify-center transition-all shadow-xs">
+            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1">
+              <Clock className="w-3 h-3 text-amber-200" />
+              결제 대기 ({allUnpaidOrders.length}건)
+            </span>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="text-base font-black text-white">{totalUnpaidAmount.toLocaleString()}</span>
+              <span className="text-[11px] font-bold text-orange-200">원</span>
+            </div>
+          </div>
+
+          {/* 4. 오늘 테이블 완료 매출 */}
+          <div className="flex-1 min-w-[125px] bg-white/20 hover:bg-white/25 border border-white/30 backdrop-blur-md rounded-2xl p-2.5 px-3.5 flex flex-col justify-center transition-all shadow-xs">
+            <span className="text-[10px] font-bold text-amber-200 flex items-center gap-1">
+              <CreditCard className="w-3 h-3 text-amber-200" />
+              오늘 테이블 매출
+            </span>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="text-base font-black text-white">{totalPaidAmount.toLocaleString()}</span>
+              <span className="text-[11px] font-bold text-orange-200">원</span>
+            </div>
+          </div>
+
+          <button
+            onClick={onFetchData}
+            className="hidden xl:flex bg-white/15 hover:bg-white/25 text-white font-bold px-3.5 py-3 rounded-2xl backdrop-blur-md transition-all text-xs items-center gap-1.5 border border-white/20 cursor-pointer shrink-0 shadow-xs"
+            title="새로고침"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>새로고침</span>
+          </button>
+        </div>
       </div>
 
       {/* 테이블 그리드 리스트 (4열 반응형) */}
