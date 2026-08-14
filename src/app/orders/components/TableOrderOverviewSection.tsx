@@ -22,7 +22,9 @@ import {
   Phone,
   UserCheck,
   UserX,
-  Plus
+  Plus,
+  Copy,
+  Check
 } from "lucide-react";
 
 interface TableOrderOverviewSectionProps {
@@ -60,6 +62,28 @@ export function TableOrderOverviewSection({
   const [isWaitingQrModalOpen, setIsWaitingQrModalOpen] = useState<boolean>(false);
   const [waitingActionLoading, setWaitingActionLoading] = useState<string | null>(null);
   const [seatingTableSelection, setSeatingTableSelection] = useState<{ waitingId: string; waitingNo: number } | null>(null);
+  const [copiedWaitingUrl, setCopiedWaitingUrl] = useState<boolean>(false);
+
+  // 대기 접수 URL 클립보드 복사
+  const handleCopyWaitingUrl = async () => {
+    const url = typeof window !== 'undefined' ? `${window.location.origin}/waiting` : 'http://localhost:4005/waiting';
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedWaitingUrl(true);
+      setTimeout(() => setCopiedWaitingUrl(false), 2000);
+    } catch (e) {
+      alert('주소 복사에 실패했습니다: ' + url);
+    }
+  };
 
   // 대기자 목록 페칭
   const fetchWaitings = async () => {
@@ -1330,7 +1354,30 @@ export function TableOrderOverviewSection({
               <p className="text-xs font-black text-slate-700 mt-3">스마트폰 카메라로 스캔해 주세요</p>
             </div>
 
-            <div className="flex items-center gap-2 justify-center">
+            <div className="flex items-center gap-2 justify-center flex-wrap">
+              {/* 📋 주소(URL) 복사 버튼 */}
+              <button
+                type="button"
+                onClick={handleCopyWaitingUrl}
+                className={`px-4 py-2.5 font-bold text-xs rounded-xl flex items-center gap-1.5 border transition-all cursor-pointer shadow-xs ${
+                  copiedWaitingUrl
+                    ? 'bg-emerald-600 text-white border-emerald-600 scale-105'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+                }`}
+              >
+                {copiedWaitingUrl ? (
+                  <>
+                    <Check className="w-4 h-4 text-white" />
+                    <span>주소 복사 완료!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 text-slate-500" />
+                    <span>주소 복사</span>
+                  </>
+                )}
+              </button>
+
               <a
                 href="/waiting"
                 target="_blank"
