@@ -104,6 +104,41 @@ export function TableOrderOverviewSection({
   const [changingTableSelection, setChangingTableSelection] = useState<{ waitingId: string; waitingNo: number; currentTable: string } | null>(null);
   const [copiedWaitingUrl, setCopiedWaitingUrl] = useState<boolean>(false);
 
+  // 💳 원터치 부분 결제(개별 선택 결제 / 더치페이) 상태
+  const [selectedPartialOrderIds, setSelectedPartialOrderIds] = useState<string[]>([]);
+
+  // 원터치 부분 결제 실행 핸들러
+  const handlePartialCompletePayment = async (tableNum: string, targetOrders: Order[]) => {
+    const selectedOrders = targetOrders.filter(o => selectedPartialOrderIds.includes(o.id));
+    if (selectedOrders.length === 0) {
+      alert('결제할 주문 항목을 1개 이상 선택해 주세요.');
+      return;
+    }
+
+    const selectedTotal = selectedOrders.reduce((sum, o) => {
+      const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
+      return sum + (isNaN(p) ? 0 : p);
+    }, 0);
+
+    if (!confirm(`선택하신 ${selectedOrders.length}개 주문 항목(총 ${selectedTotal.toLocaleString()}원)을 [결제 완료] 처리하시겠습니까?`)) {
+      return;
+    }
+
+    setLoadingAction(`partial_pay_${tableNum}`);
+    try {
+      for (const ord of selectedOrders) {
+        await onUpdateOrder(ord.id, { status: '결제완료' });
+      }
+      alert(`선택한 ${selectedOrders.length}건(${selectedTotal.toLocaleString()}원)의 결제가 완료되었습니다.`);
+      setSelectedPartialOrderIds([]);
+      await onFetchData();
+    } catch (e) {
+      alert('부분 결제 처리 중 오류가 발생했습니다.');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
   // 대기 접수 URL 클립보드 복사
   const handleCopyWaitingUrl = async () => {
     const url = typeof window !== 'undefined' ? `${window.location.origin}/waiting` : 'http://localhost:4005/waiting';
@@ -1176,8 +1211,58 @@ export function TableOrderOverviewSection({
                 </button>
               </div>
 
+              {/* 💡 상단 원터치 부분 결제 및 1/N 더치페이 도우미 바 */}
+              {targetOrders.some(o => o.status !== '결제완료') && (() => {
+                const unpaidList = targetOrders.filter(o => o.status !== '결제완료');
+                const unpaidTotal = unpaidList.reduce((sum, o) => {
+                  const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
+                  return sum + (isNaN(p) ? 0 : p);
+                }, 0);
+
+                const isAllSelected = unpaidList.length > 0 && unpaidList.every(o => selectedPartialOrderIds.includes(o.id));
+
+                return (
+                  <div className="bg-orange-50/80 border border-orange-200/80 rounded-2xl p-3.5 space-y-2.5 shrink-0 animate-fade-in">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isAllSelected) {
+                              setSelectedPartialOrderIds([]);
+                            } else {
+                              setSelectedPartialOrderIds(unpaidList.map(o => o.id));
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-white hover:bg-orange-100 text-orange-700 border border-orange-300 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                          <span className={`w-4 h-4 rounded-md border flex items-center justify-center ${isAllSelected ? 'bg-orange-600 text-white border-orange-600' : 'bg-white border-slate-300'}`}>
+                            {isAllSelected && <Check className="w-3 h-3" />}
+                          </span>
+                          <span>{isAllSelected ? '선택 해제' : '미결제 전체 선택'}</span>
+                        </button>
+                        <span className="text-xs text-slate-600 font-medium">
+                          선택: <span className="font-black text-orange-650">{selectedPartialOrderIds.length}</span> / {unpaidList.length}건
+                        </span>
+                      </div>
+
+                      {/* 👥 1/N 더치페이 간편 계산기 */}
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 bg-white/90 px-2.5 py-1 rounded-xl border border-orange-200">
+                        <Users className="w-3.5 h-3.5 text-orange-600" />
+                        <span>더치페이(1/N):</span>
+                        <span className="text-orange-700">2인 {Math.round(unpaidTotal / 2).toLocaleString()}원</span>
+                        <span className="text-slate-300">|</span>
+                        <span className="text-orange-700">3인 {Math.round(unpaidTotal / 3).toLocaleString()}원</span>
+                        <span className="text-slate-300">|</span>
+                        <span className="text-orange-700">4인 {Math.round(unpaidTotal / 4).toLocaleString()}원</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* 모달 본문 리스트 */}
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin">
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
                 {targetOrders.length === 0 ? (
                   <div className="py-16 text-center text-slate-400 text-sm font-bold">
                     접수된 주문 항목이 없습니다.
@@ -1189,14 +1274,41 @@ export function TableOrderOverviewSection({
                     const qty = ord.quantity || '1';
                     const memo = ord.customer_memo || ord.customerMemo || '';
                     const isPaid = ord.status === '결제완료';
+                    const isSelected = selectedPartialOrderIds.includes(ord.id);
 
                     return (
                       <div
                         key={ord.id || idx}
-                        className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs"
+                        className={`border rounded-2xl p-4 sm:p-5 space-y-3 transition-all ${
+                          isSelected
+                            ? 'bg-orange-50/40 border-orange-300 ring-2 ring-orange-500/20 shadow-xs'
+                            : isPaid
+                            ? 'bg-slate-50 border-slate-200 opacity-70'
+                            : 'bg-white border-slate-200 shadow-xs hover:border-slate-300'
+                        }`}
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 pb-3">
-                          <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                          <div className="flex items-center gap-2.5">
+                            {/* ☑️ 부분 결제 개별 체크박스 (미결제 상태일 때만 노출) */}
+                            {!isPaid && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPartialOrderIds(prev => 
+                                    prev.includes(ord.id) ? prev.filter(id => id !== ord.id) : [...prev, ord.id]
+                                  );
+                                }}
+                                className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-orange-600 text-white border-orange-600 shadow-xs scale-105'
+                                    : 'bg-white text-transparent border-slate-300 hover:border-orange-400'
+                                }`}
+                                title="이 항목을 부분 결제에 포함"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
                             <span className="font-black text-orange-600 bg-orange-100 px-3 py-1 rounded-xl text-xs">
                               {targetOrders.length - idx}차 주문
                             </span>
@@ -1229,20 +1341,20 @@ export function TableOrderOverviewSection({
                         <div className="space-y-1.5">
                           <div className="flex justify-between items-start">
                             <h4 className="text-base font-black text-slate-900 leading-snug">{pName}</h4>
-                            <span className="text-sm font-extrabold text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                            <span className="text-sm font-extrabold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
                               {qty}개
                             </span>
                           </div>
 
                           {memo && (
-                            <div className="bg-white p-3 rounded-xl border border-slate-200/80 text-xs text-slate-700 font-normal leading-relaxed whitespace-pre-line">
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-xs text-slate-700 font-normal leading-relaxed whitespace-pre-line">
                               <span className="font-bold text-slate-400 block text-[10px] mb-0.5">손님 메모:</span>
                               {memo}
                             </div>
                           )}
                         </div>
 
-                        <div className="flex justify-between items-center pt-2 border-t border-slate-200/60 font-black">
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-100 font-black">
                           <span className="text-slate-500 text-xs font-bold">주문 금액</span>
                           <span className="text-base text-orange-650">{pPrice.toLocaleString()}원</span>
                         </div>
@@ -1263,23 +1375,44 @@ export function TableOrderOverviewSection({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap justify-end">
                   <button
                     onClick={() => handlePrintTableReceipt(activeTableNum, targetOrders)}
-                    className="flex-1 sm:flex-none px-4 py-3 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 border border-slate-200 cursor-pointer shadow-xs transition-colors"
+                    className="px-4 py-3 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 border border-slate-200 cursor-pointer shadow-xs transition-colors shrink-0"
                   >
                     <Printer className="w-4 h-4 text-slate-600" />
                     <span>영수증 인쇄</span>
                   </button>
 
-                  {hasUnpaidInModal && (
+                  {/* 💳 1. 원터치 부분 결제 버튼 (체크된 항목이 1개 이상 있을 때) */}
+                  {selectedPartialOrderIds.length > 0 && (() => {
+                    const selectedOrders = targetOrders.filter(o => selectedPartialOrderIds.includes(o.id));
+                    const selectedAmount = selectedOrders.reduce((sum, o) => {
+                      const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
+                      return sum + (isNaN(p) ? 0 : p);
+                    }, 0);
+
+                    return (
+                      <button
+                        onClick={() => handlePartialCompletePayment(activeTableNum, targetOrders)}
+                        disabled={loadingAction === `partial_pay_${activeTableNum}`}
+                        className="px-5 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-1.5 border-0 cursor-pointer shadow-lg shadow-orange-600/30 transition-all shrink-0 animate-fade-in"
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        <span>선택 {selectedOrders.length}건 부분 결제 ({selectedAmount.toLocaleString()}원)</span>
+                      </button>
+                    );
+                  })()}
+
+                  {/* 💳 2. 전체 결제 완료 버튼 */}
+                  {hasUnpaidInModal && selectedPartialOrderIds.length === 0 && (
                     <button
                       onClick={() => {
                         handleBulkCompletePayment(activeTableNum, targetOrders);
                         setSelectedTableForModal(null);
                         setSelectedSessionData(null);
                       }}
-                      className="flex-1 sm:flex-none px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 border-0 cursor-pointer shadow-md transition-colors"
+                      className="px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 border-0 cursor-pointer shadow-md transition-colors shrink-0"
                     >
                       <CreditCard className="w-4 h-4" />
                       <span>전체 결제 완료</span>
@@ -1290,8 +1423,9 @@ export function TableOrderOverviewSection({
                     onClick={() => {
                       setSelectedTableForModal(null);
                       setSelectedSessionData(null);
+                      setSelectedPartialOrderIds([]);
                     }}
-                    className="px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-2xl text-xs border-0 cursor-pointer transition-colors"
+                    className="px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-2xl text-xs border-0 cursor-pointer transition-colors shrink-0"
                   >
                     닫기
                   </button>
