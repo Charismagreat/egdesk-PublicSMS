@@ -1152,7 +1152,7 @@ export function TableOrderOverviewSection({
       {/* ⏳ 1. 실시간 대기자(웨이팅) 관리 모달 */}
       {isWaitingModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-2xl p-6 sm:p-8 shadow-2xl space-y-6 relative max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-3xl w-full max-w-3xl p-6 sm:p-8 shadow-2xl space-y-6 relative max-h-[90vh] flex flex-col">
             
             {/* 모달 헤더 */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
@@ -1233,7 +1233,7 @@ export function TableOrderOverviewSection({
                   return (
                     <div
                       key={wait.id}
-                      className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs ${
+                      className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs ${
                         isCalled
                           ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-400'
                           : isWaiting
@@ -1241,7 +1241,7 @@ export function TableOrderOverviewSection({
                           : 'bg-slate-50 border-slate-200 opacity-60'
                       }`}
                     >
-                      <div className="flex items-center gap-3.5">
+                      <div className="flex items-center gap-3.5 flex-1 min-w-0">
                         <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black shrink-0 ${
                           isCalled
                             ? 'bg-emerald-600 text-white shadow-sm'
@@ -1253,13 +1253,13 @@ export function TableOrderOverviewSection({
                           <span className="text-lg leading-tight">{wait.waiting_no}</span>
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="text-sm font-black text-slate-900">{wait.customer_name}</h4>
-                            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md shrink-0">
                               {wait.party_size}명
                             </span>
-                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md shrink-0 ${
                               isCalled
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : isWaiting
@@ -1273,7 +1273,7 @@ export function TableOrderOverviewSection({
 
                             {/* 🍽️ 사전 주문 뱃지 */}
                             {waitPreOrders.length > 0 && (
-                              <span className="text-[10px] font-extrabold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-md flex items-center gap-1 border border-orange-200">
+                              <span className="text-[10px] font-extrabold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-md flex items-center gap-1 border border-orange-200 shrink-0">
                                 <ShoppingBag className="w-3 h-3 text-orange-600" />
                                 <span>사전주문 {waitPreOrders.length}건 ({Number(wait.pre_order_total || 0).toLocaleString()}원)</span>
                               </span>
@@ -1282,7 +1282,7 @@ export function TableOrderOverviewSection({
 
                           {/* 사전 주문 품목 요약 툴팁/텍스트 */}
                           {waitPreOrders.length > 0 && (
-                            <div className="text-[11px] font-bold text-slate-600 bg-orange-50/60 px-2 py-1 rounded-lg border border-orange-100">
+                            <div className="text-[11px] font-bold text-slate-600 bg-orange-50/60 px-2.5 py-1 rounded-lg border border-orange-100 inline-block max-w-full truncate">
                               메뉴: {waitPreOrders.map((it: any) => `${it.name} × ${it.quantity}`).join(', ')}
                             </div>
                           )}
@@ -1300,15 +1300,15 @@ export function TableOrderOverviewSection({
                         </div>
                       </div>
 
-                      {/* 액션 버튼 그룹 */}
-                      <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                      {/* 액션 버튼 그룹 (줄바꿈 원천 방지 및 shrink-0) */}
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 shrink-0 whitespace-nowrap">
                         {(isWaiting || isCalled) && (
                           <>
                             {/* 1. 입장 호출 / 재호출 버튼 */}
                             <button
                               onClick={() => handleCallWaiting(wait.id, wait.waiting_no, wait.customer_name)}
                               disabled={waitingActionLoading === `call_${wait.id}`}
-                              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center gap-1 border-0 cursor-pointer shadow-xs transition-colors"
+                              className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center gap-1.5 border-0 cursor-pointer shadow-xs transition-all shrink-0 whitespace-nowrap"
                               title="고객님께 입장 안내 SMS 즉시 발송"
                             >
                               <BellRing className="w-3.5 h-3.5" />
@@ -1320,7 +1320,7 @@ export function TableOrderOverviewSection({
                               <button
                                 onClick={() => handleRemindWaiting(wait.id, wait.waiting_no, wait.customer_name)}
                                 disabled={waitingActionLoading === `remind_${wait.id}`}
-                                className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl flex items-center gap-1 border-0 cursor-pointer shadow-xs transition-colors"
+                                className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl flex items-center gap-1.5 border-0 cursor-pointer shadow-xs transition-all shrink-0 whitespace-nowrap"
                                 title="입장 지연 고객에게 2차 마지막 호출 SMS 발송"
                               >
                                 <span>2차 리마인드</span>
@@ -1330,7 +1330,7 @@ export function TableOrderOverviewSection({
                             {/* 3. 착석 완료 버튼 */}
                             <button
                               onClick={() => setSeatingTableSelection({ waitingId: wait.id, waitingNo: wait.waiting_no })}
-                              className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-1 border-0 cursor-pointer shadow-xs transition-colors"
+                              className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 border-0 cursor-pointer shadow-xs transition-all shrink-0 whitespace-nowrap"
                             >
                               <UserCheck className="w-3.5 h-3.5" />
                               <span>착석 배정</span>
@@ -1340,7 +1340,7 @@ export function TableOrderOverviewSection({
                             <button
                               onClick={() => handleCancelWaiting(wait.id, wait.waiting_no)}
                               disabled={waitingActionLoading === `cancel_${wait.id}`}
-                              className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition-colors border-0 bg-transparent cursor-pointer"
+                              className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition-colors border-0 bg-transparent cursor-pointer shrink-0"
                               title="대기 취소"
                             >
                               <UserX className="w-4 h-4" />
