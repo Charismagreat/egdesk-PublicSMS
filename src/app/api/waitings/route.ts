@@ -200,7 +200,7 @@ export async function PATCH(req: Request) {
       updates.status = 'CANCELLED';
     }
 
-    await updateRows('crm_waitings', { id }, updates);
+    await updateRows('crm_waitings', updates, { filters: { id } });
 
     return NextResponse.json({ success: true, action, updates });
   } catch (error: any) {
