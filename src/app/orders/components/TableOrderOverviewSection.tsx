@@ -15,7 +15,14 @@ import {
   X, 
   Maximize2,
   ChevronDown,
-  History
+  History,
+  Users,
+  BellRing,
+  QrCode,
+  Phone,
+  UserCheck,
+  UserX,
+  Plus
 } from "lucide-react";
 
 interface TableOrderOverviewSectionProps {
@@ -45,6 +52,99 @@ export function TableOrderOverviewSection({
   const [selectedTableForModal, setSelectedTableForModal] = useState<string | null>(null);
   const [selectedSessionData, setSelectedSessionData] = useState<{ tableNum: string; session: TableSession } | null>(null);
   const [openTurnoverMenuTable, setOpenTurnoverMenuTable] = useState<string | null>(null);
+
+  // ⏳ 실시간 대기자(웨이팅) 관리 상태
+  const [waitingsList, setWaitingsList] = useState<any[]>([]);
+  const [activeWaitingCount, setActiveWaitingCount] = useState<number>(0);
+  const [isWaitingModalOpen, setIsWaitingModalOpen] = useState<boolean>(false);
+  const [isWaitingQrModalOpen, setIsWaitingQrModalOpen] = useState<boolean>(false);
+  const [waitingActionLoading, setWaitingActionLoading] = useState<string | null>(null);
+  const [seatingTableSelection, setSeatingTableSelection] = useState<{ waitingId: string; waitingNo: number } | null>(null);
+
+  // 대기자 목록 페칭
+  const fetchWaitings = async () => {
+    try {
+      const res = await fetch('/api/waitings');
+      const data = await res.json();
+      if (data.success) {
+        setWaitingsList(data.waitings || []);
+        setActiveWaitingCount(data.activeCount || 0);
+      }
+    } catch (e) {
+      console.error('Failed to load waitings:', e);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchWaitings();
+    const interval = setInterval(fetchWaitings, 8000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 대기 손님 호출
+  const handleCallWaiting = async (id: string, waitingNo: number, name: string) => {
+    if (!confirm(`대기 ${waitingNo}번 (${name}) 고객님께 [입장 안내 문자]를 즉시 발송하시겠습니까?`)) {
+      return;
+    }
+    setWaitingActionLoading(`call_${id}`);
+    try {
+      const res = await fetch('/api/waitings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'call' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`대기 ${waitingNo}번 고객님께 입장 안내 문자가 발송되었습니다.`);
+        fetchWaitings();
+      }
+    } catch (e) {
+      alert('호출 처리 중 오류가 발생했습니다.');
+    } finally {
+      setWaitingActionLoading(null);
+    }
+  };
+
+  // 대기 손님 착석 (테이블 배정)
+  const handleSeatWaiting = async (id: string, waitingNo: number, targetTable: string) => {
+    setWaitingActionLoading(`seat_${id}`);
+    try {
+      const res = await fetch('/api/waitings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'seat', assignedTable: targetTable })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`대기 ${waitingNo}번 손님이 테이블 ${targetTable}번에 착석 처리되었습니다.`);
+        setSeatingTableSelection(null);
+        fetchWaitings();
+        onFetchData();
+      }
+    } catch (e) {
+      alert('착석 처리 중 오류가 발생했습니다.');
+    } finally {
+      setWaitingActionLoading(null);
+    }
+  };
+
+  // 대기 취소
+  const handleCancelWaiting = async (id: string, waitingNo: number) => {
+    if (!confirm(`대기 ${waitingNo}번 고객의 대기를 취소하시겠습니까?`)) return;
+    setWaitingActionLoading(`cancel_${id}`);
+    try {
+      await fetch('/api/waitings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'cancel' })
+      });
+      fetchWaitings();
+    } catch (e) {
+      alert('취소 처리 중 오류가 발생했습니다.');
+    } finally {
+      setWaitingActionLoading(null);
+    }
+  };
 
   // 테이블 번호 목록 (기본 1~12번 + DB에 새로 발견되는 테이블 번호 포함)
   const defaultTableIds = Array.from({ length: 12 }, (_, i) => String(i + 1));
@@ -177,6 +277,15 @@ export function TableOrderOverviewSection({
       }
       await onFetchData();
       alert(`테이블 ${tableNum}번의 주문이 [결제완료] 처리되었습니다.`);
+
+      // 💡 만약 현재 대기 중인 손님이 있다면 빈 테이블로 즉시 호출 여부 확인
+      const currentWaiting = waitingsList.filter(w => w.status === 'WAITING');
+      if (currentWaiting.length > 0) {
+        const nextGuest = currentWaiting[0];
+        if (confirm(`테이블 ${tableNum}번이 비었습니다!\n대기 1번 [${nextGuest.customer_name} (${nextGuest.party_size}명)] 손님을 즉시 입장 호출하시겠습니까?`)) {
+          await handleCallWaiting(nextGuest.id, nextGuest.waiting_no, nextGuest.customer_name);
+        }
+      }
     } catch (e) {
       alert('결제 처리 중 오류가 발생했습니다.');
     } finally {
@@ -474,11 +583,35 @@ export function TableOrderOverviewSection({
           </button>
         </div>
 
-        {/* 📊 우측 4대 핵심 요약 카드 위젯 (줄바꿈 없이 시원하게 표출) */}
-        <div className="flex items-center gap-3 overflow-x-auto pb-1 xl:pb-0 scrollbar-none shrink-0">
+        {/* 📊 우측 5대 핵심 요약 카드 위젯 */}
+        <div className="flex items-center gap-2.5 overflow-x-auto pb-1 xl:pb-0 scrollbar-none shrink-0">
+          {/* 0. ⏳ 실시간 대기 현황 (클릭 시 관리 모달 오픈) */}
+          <button
+            type="button"
+            onClick={() => setIsWaitingModalOpen(true)}
+            className={`border backdrop-blur-md rounded-2xl py-2 px-3.5 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap cursor-pointer text-left ${
+              activeWaitingCount > 0
+                ? 'bg-rose-500/85 hover:bg-rose-600 border-rose-300 ring-2 ring-white/50 animate-pulse'
+                : 'bg-white/15 hover:bg-white/20 border-white/25'
+            }`}
+            title="실시간 대기자 관리 열기"
+          >
+            <span className="text-[10px] font-bold text-orange-100 flex items-center justify-between gap-1.5 whitespace-nowrap">
+              <span className="flex items-center gap-1">
+                <Users className="w-3 h-3 text-amber-200" />
+                실시간 대기
+              </span>
+              <ChevronDown className="w-2.5 h-2.5 opacity-70" />
+            </span>
+            <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
+              <span className="text-base font-black text-white">{activeWaitingCount}</span>
+              <span className="text-xs font-bold text-orange-200">팀 대기중</span>
+            </div>
+          </button>
+
           {/* 1. 이용중 테이블 */}
-          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
-            <span className="text-[11px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
+          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2 px-3.5 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
               실시간 이용
             </span>
@@ -489,21 +622,21 @@ export function TableOrderOverviewSection({
           </div>
 
           {/* 2. 총 이용 (회전) */}
-          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
-            <span className="text-[11px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
-              <History className="w-3.5 h-3.5 text-amber-200" />
+          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2 px-3.5 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
+              <History className="w-3 h-3 text-amber-200" />
               오늘 총 이용
             </span>
-            <div className="flex items-baseline gap-1.5 mt-0.5 whitespace-nowrap">
+            <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
               <span className="text-base font-black text-white">{totalTurnoverCount}팀</span>
-              <span className="text-xs font-bold text-orange-200">(평균 {(totalTurnoverCount / Math.max(1, totalTableCount)).toFixed(1)}회전)</span>
+              <span className="text-xs font-bold text-orange-200">({(totalTurnoverCount / Math.max(1, totalTableCount)).toFixed(1)}회전)</span>
             </div>
           </div>
 
           {/* 3. 결제 대기 (미결제 총액) */}
-          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
-            <span className="text-[11px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
-              <Clock className="w-3.5 h-3.5 text-amber-200" />
+          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2 px-3.5 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
+              <Clock className="w-3 h-3 text-amber-200" />
               결제 대기 ({allUnpaidOrders.length}건)
             </span>
             <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
@@ -513,9 +646,9 @@ export function TableOrderOverviewSection({
           </div>
 
           {/* 4. 오늘 테이블 완료 매출 */}
-          <div className="bg-white/20 hover:bg-white/25 border border-white/30 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
-            <span className="text-[11px] font-bold text-amber-200 flex items-center gap-1.5 whitespace-nowrap">
-              <CreditCard className="w-3.5 h-3.5 text-amber-200" />
+          <div className="bg-white/20 hover:bg-white/25 border border-white/30 backdrop-blur-md rounded-2xl py-2 px-3.5 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[10px] font-bold text-amber-200 flex items-center gap-1.5 whitespace-nowrap">
+              <CreditCard className="w-3 h-3 text-amber-200" />
               오늘 완료 매출
             </span>
             <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
@@ -524,12 +657,25 @@ export function TableOrderOverviewSection({
             </div>
           </div>
 
+          {/* 📱 대기 QR 열기 버튼 */}
           <button
-            onClick={onFetchData}
-            className="hidden xl:flex bg-white/15 hover:bg-white/25 text-white font-bold px-3.5 py-3 rounded-2xl backdrop-blur-md transition-all text-xs items-center gap-1.5 border border-white/20 cursor-pointer shrink-0 shadow-xs whitespace-nowrap"
+            onClick={() => setIsWaitingQrModalOpen(true)}
+            className="bg-white/20 hover:bg-white/30 text-white font-bold px-3 py-2.5 rounded-2xl backdrop-blur-md transition-all text-xs flex items-center gap-1.5 border border-white/30 cursor-pointer shrink-0 shadow-xs whitespace-nowrap"
+            title="입구 비치용 대기 등록 QR 열기"
+          >
+            <QrCode className="w-4 h-4 text-amber-200" />
+            <span>대기 QR</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onFetchData();
+              fetchWaitings();
+            }}
+            className="hidden xl:flex bg-white/15 hover:bg-white/25 text-white font-bold px-3 py-2.5 rounded-2xl backdrop-blur-md transition-all text-xs items-center gap-1 border border-white/20 cursor-pointer shrink-0 shadow-xs whitespace-nowrap"
             title="새로고침"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5" />
             <span>새로고침</span>
           </button>
         </div>
@@ -957,6 +1103,257 @@ export function TableOrderOverviewSection({
           </div>
         );
       })()}
+
+      {/* ⏳ 1. 실시간 대기자(웨이팅) 관리 모달 */}
+      {isWaitingModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-2xl p-6 sm:p-8 shadow-2xl space-y-6 relative max-h-[90vh] flex flex-col">
+            
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    실시간 대기자(웨이팅) 관리
+                    <span className="text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full font-bold">
+                      총 {waitingsList.filter(w => w.status === 'WAITING').length}팀 대기중
+                    </span>
+                  </h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsWaitingModalOpen(false);
+                  setSeatingTableSelection(null);
+                }}
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors border-0 bg-transparent cursor-pointer"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* 본문 대기자 리스트 */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
+              {waitingsList.length === 0 ? (
+                <div className="py-16 text-center text-slate-400 text-sm font-bold">
+                  오늘 등록된 대기자가 없습니다.
+                </div>
+              ) : (
+                waitingsList.map((wait) => {
+                  const isWaiting = wait.status === 'WAITING';
+                  const isCalled = wait.status === 'CALLED';
+                  const isSeated = wait.status === 'SEATED';
+
+                  return (
+                    <div
+                      key={wait.id}
+                      className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs ${
+                        isCalled
+                          ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-400'
+                          : isWaiting
+                          ? 'bg-white border-orange-200 ring-1 ring-orange-400/20'
+                          : 'bg-slate-50 border-slate-200 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black shrink-0 ${
+                          isCalled
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : isWaiting
+                            ? 'bg-orange-600 text-white shadow-sm'
+                            : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          <span className="text-[10px] font-medium leading-none">대기</span>
+                          <span className="text-lg leading-tight">{wait.waiting_no}</span>
+                        </div>
+
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-black text-slate-900">{wait.customer_name}</h4>
+                            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                              {wait.party_size}명
+                            </span>
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${
+                              isCalled
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : isWaiting
+                                ? 'bg-amber-100 text-amber-900'
+                                : isSeated
+                                ? 'bg-slate-200 text-slate-700'
+                                : 'bg-red-100 text-red-700'
+                            }`}>
+                              {isCalled ? '입장 호출완료' : isWaiting ? '대기중' : isSeated ? `착석(테이블 ${wait.assigned_table || '배정'})` : '취소됨'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-400 flex items-center gap-3 font-medium">
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              {wait.customer_phone}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              {wait.created_at?.substring(11, 16) || '방금'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 액션 버튼 그룹 */}
+                      <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                        {(isWaiting || isCalled) && (
+                          <>
+                            {/* 1. 입장 호출 버튼 (문자 발송) */}
+                            <button
+                              onClick={() => handleCallWaiting(wait.id, wait.waiting_no, wait.customer_name)}
+                              disabled={waitingActionLoading === `call_${wait.id}`}
+                              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center gap-1 border-0 cursor-pointer shadow-xs transition-colors"
+                              title="고객님께 입장 안내 SMS 즉시 발송"
+                            >
+                              <BellRing className="w-3.5 h-3.5" />
+                              <span>{isCalled ? '재호출' : '입장 호출'}</span>
+                            </button>
+
+                            {/* 2. 착석 완료 버튼 */}
+                            <button
+                              onClick={() => setSeatingTableSelection({ waitingId: wait.id, waitingNo: wait.waiting_no })}
+                              className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-1 border-0 cursor-pointer shadow-xs transition-colors"
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                              <span>착석 배정</span>
+                            </button>
+
+                            {/* 3. 취소 버튼 */}
+                            <button
+                              onClick={() => handleCancelWaiting(wait.id, wait.waiting_no)}
+                              disabled={waitingActionLoading === `cancel_${wait.id}`}
+                              className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition-colors border-0 bg-transparent cursor-pointer"
+                              title="대기 취소"
+                            >
+                              <UserX className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* 착석 테이블 배정 서브 선택 패널 */}
+            {seatingTableSelection && (
+              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-2 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-orange-900">
+                    대기 {seatingTableSelection.waitingNo}번 손님을 배정할 테이블을 선택해 주세요:
+                  </span>
+                  <button
+                    onClick={() => setSeatingTableSelection(null)}
+                    className="text-xs text-slate-400 hover:text-slate-600 border-0 bg-transparent cursor-pointer"
+                  >
+                    취소
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {allTableIds.map((tId) => {
+                    const isOccupied = getOrdersForTable(tId).some(o => o.status !== '주문취소' && o.status !== '결제완료');
+                    return (
+                      <button
+                        key={tId}
+                        onClick={() => handleSeatWaiting(seatingTableSelection.waitingId, seatingTableSelection.waitingNo, tId)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all border cursor-pointer ${
+                          isOccupied
+                            ? 'bg-slate-100 text-slate-400 border-slate-200'
+                            : 'bg-white hover:bg-orange-600 hover:text-white text-slate-800 border-orange-300 shadow-xs scale-105'
+                        }`}
+                      >
+                        테이블 {tId}번 {isOccupied ? '(이용중)' : '(빈자리)'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 모달 푸터 */}
+            <div className="border-t border-slate-100 pt-4 shrink-0 flex items-center justify-between">
+              <button
+                onClick={() => {
+                  setIsWaitingQrModalOpen(true);
+                  setIsWaitingModalOpen(false);
+                }}
+                className="px-4 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-xs rounded-xl flex items-center gap-1.5 border border-orange-200 cursor-pointer transition-colors"
+              >
+                <QrCode className="w-4 h-4 text-orange-600" />
+                <span>입구 비치용 대기 QR 보기</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsWaitingModalOpen(false);
+                  setSeatingTableSelection(null);
+                }}
+                className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs border-0 cursor-pointer transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 📱 2. 입구 비치용 대기 등록 QR 모달 */}
+      {isWaitingQrModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 shadow-2xl space-y-6 text-center relative">
+            <div className="space-y-1">
+              <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600 mx-auto mb-2">
+                <QrCode className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">매장 입장 대기 등록 QR</h3>
+              <p className="text-xs text-slate-500">
+                매장 입구에 비치해 두시면 손님이 폰으로 직접 대기표를 발급받을 수 있습니다.
+              </p>
+            </div>
+
+            {/* QR 이미지 카드 */}
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200/80 inline-block mx-auto shadow-inner">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
+                  typeof window !== 'undefined' ? `${window.location.origin}/waiting` : 'http://localhost:4005/waiting'
+                )}`}
+                alt="Waiting QR Code"
+                className="w-56 h-56 rounded-2xl mx-auto block shadow-xs"
+              />
+              <p className="text-xs font-black text-slate-700 mt-3">스마트폰 카메라로 스캔해 주세요</p>
+            </div>
+
+            <div className="flex items-center gap-2 justify-center">
+              <a
+                href="/waiting"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 no-underline shadow-xs"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>대기 접수창 새 탭 열기</span>
+              </a>
+
+              <button
+                onClick={() => setIsWaitingQrModalOpen(false)}
+                className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs border-0 cursor-pointer"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

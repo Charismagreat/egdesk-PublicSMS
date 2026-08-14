@@ -759,6 +759,26 @@ export async function setupDatabase() {
     console.error('⚠️ 임직원 마스터 컬럼 보정 에러:', err.message);
   }
 
+  // ⏳ 실시간 스마트 웨이팅(대기자) 관리 테이블 생성 (7종 감사 컬럼 주입)
+  try {
+    await safeCreateTable('대기자 관리', [
+      { name: 'id', type: 'TEXT', notNull: true },
+      { name: 'waiting_no', type: 'INTEGER', notNull: true },
+      { name: 'customer_name', type: 'TEXT' },
+      { name: 'customer_phone', type: 'TEXT', notNull: true },
+      { name: 'party_size', type: 'INTEGER', notNull: true },
+      { name: 'status', type: 'TEXT', notNull: true }, // WAITING, CALLED, SEATED, CANCELLED
+      { name: 'waiting_date', type: 'TEXT' },
+      { name: 'called_at', type: 'TEXT' },
+      { name: 'seated_at', type: 'TEXT' },
+      { name: 'assigned_table', type: 'TEXT' },
+      { name: 'created_at', type: 'TEXT' }
+    ], { tableName: 'crm_waitings', uniqueKeyColumns: ['id'] });
+    console.log('✓ 실시간 대기자 관리(crm_waitings) 테이블 신설 완료.');
+  } catch (err: any) {
+    console.error('⚠️ 실시간 대기자 관리 테이블 생성 에러:', err.message);
+  }
+
   console.log('Database setup complete.');
 }
 

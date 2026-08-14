@@ -1,0 +1,209 @@
+export const dynamic = 'force-dynamic';
+import { NextResponse } from 'next/server';
+import { queryTable, insertRows, updateRows } from '../../../../egdesk-helpers';
+import { getTenantId } from '@/lib/tenant';
+import { gmAutomation } from '@/lib/google-messages';
+import { setupDatabase } from '@/lib/setup-db';
+
+// ⏳ 당일 활성 대기자 목록 및 단건 상태 조회
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const waitingId = searchParams.get('id');
+    const tenantId = (await getTenantId()) || 'default';
+    const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    let result;
+    try {
+      result = await queryTable('crm_waitings', {
+        filters: { waiting_date: todayStr },
+        orderBy: 'waiting_no',
+        orderDirection: 'ASC'
+      });
+    } catch (tblErr: any) {
+      if (tblErr.message?.includes('Table not found')) {
+        await setupDatabase();
+        result = await queryTable('crm_waitings', {
+          filters: { waiting_date: todayStr },
+          orderBy: 'waiting_no',
+          orderDirection: 'ASC'
+        });
+      } else {
+        throw tblErr;
+      }
+    }
+
+    // 1. 단건 상세 조회 (손님 대기표 실시간 현황 화면)
+    if (waitingId) {
+      const singleRes = await queryTable('crm_waitings', {
+        filters: { id: waitingId }
+      });
+      const waiting = (singleRes.rows || []).find((w: any) => !w.deleted_at);
+      if (!waiting) {
+        return NextResponse.json({ success: false, error: '대기 정보를 찾을 수 없습니다.' }, { status: 404 });
+      }
+
+      // 내 앞 대기 팀 수 계산 (나보다 먼저 등록되었고 아직 WAITING 상태인 팀 수)
+      const allActiveRes = await queryTable('crm_waitings', {
+        filters: { waiting_date: waiting.waiting_date || todayStr },
+        orderBy: 'waiting_no',
+        orderDirection: 'ASC'
+      });
+      const activeList = (allActiveRes.rows || []).filter((w: any) => !w.deleted_at && w.status === 'WAITING');
+      const aheadCount = activeList.filter((w: any) => Number(w.waiting_no) < Number(waiting.waiting_no)).length;
+
+      return NextResponse.json({
+        success: true,
+        waiting,
+        aheadCount,
+        totalWaitingCount: activeList.length
+      });
+    }
+
+    // 2. 전체 대기자 목록 조회 (관리자 화면)
+    const waitings = (result.rows || []).filter((w: any) => !w.deleted_at);
+    const activeWaitings = waitings.filter((w: any) => w.status === 'WAITING' || w.status === 'CALLED');
+
+    return NextResponse.json({
+      success: true,
+      waitings,
+      activeWaitings,
+      activeCount: activeWaitings.filter((w: any) => w.status === 'WAITING').length,
+      calledCount: activeWaitings.filter((w: any) => w.status === 'CALLED').length
+    });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+// ⏳ 신규 대기표 발급 (고객 모바일 접수)
+export async function POST(req: Request) {
+  try {
+    const rawTenantId = await getTenantId();
+    const tenantId = rawTenantId || 'default';
+    const data = await req.json();
+    const { customerName, customerPhone, partySize } = data;
+
+    if (!customerPhone) {
+      return NextResponse.json({ success: false, error: '연락처를 입력해 주세요.' }, { status: 400 });
+    }
+
+    const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+    const id = `WAIT-${Date.now()}`;
+
+    // 오늘 등록된 대기자 조회하여 대기번호(waiting_no) 자동 채번
+    let todayRes;
+    try {
+      todayRes = await queryTable('crm_waitings', {
+        filters: { waiting_date: todayStr }
+      });
+    } catch (tblErr: any) {
+      if (tblErr.message?.includes('Table not found')) {
+        await setupDatabase();
+        todayRes = await queryTable('crm_waitings', {
+          filters: { waiting_date: todayStr }
+        });
+      } else {
+        throw tblErr;
+      }
+    }
+    const todayRows = (todayRes.rows || []).filter((w: any) => !w.deleted_at);
+    const maxNo = todayRows.reduce((max: number, w: any) => Math.max(max, Number(w.waiting_no) || 0), 0);
+    const waitingNo = maxNo + 1;
+
+    // 내 앞 대기 팀 수 계산
+    const currentActiveWaitings = todayRows.filter((w: any) => w.status === 'WAITING');
+    const aheadCount = currentActiveWaitings.length;
+
+    // crm_waitings 테이블에 저장
+    await insertRows('crm_waitings', [{
+      id,
+      waiting_no: waitingNo,
+      customer_name: customerName || `손님(${customerPhone.slice(-4)})`,
+      customer_phone: customerPhone,
+      party_size: Number(partySize) || 2,
+      status: 'WAITING',
+      waiting_date: todayStr,
+      called_at: '',
+      seated_at: '',
+      assigned_table: '',
+      created_at: nowStr,
+      tenant_id: tenantId
+    }]);
+
+    // 📱 손님에게 대기표 접수 확인 문자(SMS) 자동 발송
+    try {
+      const cleanPhone = customerPhone.replace(/[^0-9]/g, '');
+      if (cleanPhone) {
+        const smsMsg = `[EGDESK 웨이팅 접수 완료]\n고객님, 대기 등록이 완료되었습니다.\n- 대기번호: ${waitingNo}번\n- 이용 인원: ${partySize || 2}명\n- 현재 내 앞 대기: ${aheadCount}팀\n차례가 되면 문자로 안내해 드리겠습니다.`;
+        await gmAutomation.sendSMS(cleanPhone, smsMsg);
+      }
+    } catch (smsErr: any) {
+      console.error('[Waiting SMS Send Failed]:', smsErr.message);
+    }
+
+    return NextResponse.json({
+      success: true,
+      waitingId: id,
+      waitingNo,
+      aheadCount
+    });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+// ⏳ 대기 상태 변경 (입장 호출 / 착석 배정 / 취소)
+export async function PATCH(req: Request) {
+  try {
+    const data = await req.json();
+    const { id, action, assignedTable } = data;
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: '대기 ID가 누락되었습니다.' }, { status: 400 });
+    }
+
+    const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+
+    // 대상 대기 정보 조회
+    const targetRes = await queryTable('crm_waitings', { filters: { id } });
+    const target = (targetRes.rows || [])[0];
+    if (!target) {
+      return NextResponse.json({ success: false, error: '대기 정보를 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    const updates: any = { updated_at: nowStr };
+
+    if (action === 'call') {
+      // 📢 1. 입장 호출
+      updates.status = 'CALLED';
+      updates.called_at = nowStr;
+
+      // 손님에게 입장 안내 SMS 발송
+      try {
+        const cleanPhone = (target.customer_phone || '').replace(/[^0-9]/g, '');
+        if (cleanPhone) {
+          const smsMsg = `[EGDESK 입장 안내]\n고객님(대기 ${target.waiting_no}번), 테이블이 준비되었습니다!\n지금 매장 카운터로 입장해 주시기 바랍니다.\n(5분 내 미입장 시 대기가 자동 취소될 수 있습니다)`;
+          await gmAutomation.sendSMS(cleanPhone, smsMsg);
+        }
+      } catch (smsErr: any) {
+        console.error('[Entry Call SMS Send Failed]:', smsErr.message);
+      }
+    } else if (action === 'seat') {
+      // 🪑 2. 착석 완료 (테이블 배정)
+      updates.status = 'SEATED';
+      updates.seated_at = nowStr;
+      updates.assigned_table = assignedTable || '';
+    } else if (action === 'cancel') {
+      // ❌ 3. 대기 취소
+      updates.status = 'CANCELLED';
+    }
+
+    await updateRows('crm_waitings', { id }, updates);
+
+    return NextResponse.json({ success: true, action, updates });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
