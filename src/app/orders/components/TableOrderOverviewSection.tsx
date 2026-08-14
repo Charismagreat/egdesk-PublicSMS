@@ -773,6 +773,9 @@ export function TableOrderOverviewSection({
             <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
               <span className="text-base font-black text-white">{occupiedTableCount}</span>
               <span className="text-xs font-bold text-orange-200">/ {totalTableCount}석 ({occupancyRate}%)</span>
+            </div>
+          </div>
+
           {/* 2. 총 이용 (회전) */}
           <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
             <span className="text-[11px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
