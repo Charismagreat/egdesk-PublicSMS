@@ -62,41 +62,25 @@ export function useTableOrder() {
 
   const fetchProducts = async () => {
     try {
-      let page = 1;
-      const limit = 100;
-      let allProducts: Product[] = [];
-      let hasMore = true;
-
-      // ⚡ DB 내의 모든 상품을 누락 없이 전량 가져오기 위한 자동 페이지네이션 순회 루프
-      while (hasMore) {
-        const res = await apiFetch(`/api/products?page=${page}&limit=${limit}`);
-        const json = await res.json();
-        if (json.success && Array.isArray(json.products)) {
-          allProducts = [...allProducts, ...json.products];
-          const fetchedBatchCount = json.products.length;
-          const totalFilteredCount = json.filteredCount || 0;
-
-          if (fetchedBatchCount < limit || allProducts.length >= totalFilteredCount || fetchedBatchCount === 0) {
-            hasMore = false;
-          } else {
-            page += 1;
-          }
-        } else {
-          hasMore = false;
-        }
-      }
-
-      // 1차: '테이블용' 카테고리가 지정된 상품만 필터링
-      const tableOrderProducts = allProducts.filter((p: any) => 
-        p.category === '테이블용'
-      );
+      // ⚡ 백엔드 API 라우트 자체에서 전체 전량 수집(all=true)을 처리하여 1회 DB 통신으로 수집
+      const res = await apiFetch('/api/products?all=true');
+      const json = await res.json();
       
-      // 2차 스마트 폴백: '테이블용'으로 지정된 메뉴가 1개 이상이면 전용 메뉴판 노출,
-      // 지정된 '테이블용' 메뉴가 0개라면 사장님이 등록하신 전체 활성 상품 목록을 자동 노출
-      if (tableOrderProducts.length > 0) {
-        setProducts(tableOrderProducts);
-      } else {
-        setProducts(allProducts);
+      if (json.success && Array.isArray(json.products)) {
+        const allProducts: Product[] = json.products;
+
+        // 1차: '테이블용' 카테고리가 지정된 상품만 필터링
+        const tableOrderProducts = allProducts.filter((p: any) => 
+          p.category === '테이블용'
+        );
+        
+        // 2차 스마트 폴백: '테이블용'으로 지정된 메뉴가 1개 이상이면 전용 메뉴판 노출,
+        // 지정된 '테이블용' 메뉴가 0개라면 사장님이 등록하신 전체 활성 상품 목록을 자동 노출
+        if (tableOrderProducts.length > 0) {
+          setProducts(tableOrderProducts);
+        } else {
+          setProducts(allProducts);
+        }
       }
     } catch (e) {
       console.error("테이블오더 상품 목록 로드 실패:", e);

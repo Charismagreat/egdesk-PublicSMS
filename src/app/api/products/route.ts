@@ -44,11 +44,11 @@ export async function GET(req: Request) {
       console.warn('[Self-Healing Warning] Failed to run tenant migration in products:', patchErr.message);
     }
 
-    const { searchParams } = new URL(req.url);
-    const status = searchParams.get('status') || 'ACTIVE';
+    const isAllMode = searchParams.get('all') === 'true' || searchParams.get('limit') === 'all';
     const page = Number(searchParams.get('page')) || 1;
-    const limit = Number(searchParams.get('limit')) || 10;
-    const offset = (page - 1) * limit;
+    const limitParam = searchParams.get('limit');
+    const limit = isAllMode ? 100000 : (Number(limitParam) || 10);
+    const offset = isAllMode ? 0 : (page - 1) * limit;
     const search = searchParams.get('search')?.trim() || '';
 
     // 1. 전체 조건 카운트 및 데이터 페칭 쿼리 (SQL 방화벽 에러 감지 시 queryTable로 폴백)
@@ -79,7 +79,11 @@ export async function GET(req: Request) {
         dataQuery += searchCond;
       }
 
-      dataQuery += ` GROUP BY p.id ORDER BY p.id DESC LIMIT ${limit} OFFSET ${offset}`;
+      if (isAllMode) {
+        dataQuery += ` GROUP BY p.id ORDER BY p.id DESC`;
+      } else {
+        dataQuery += ` GROUP BY p.id ORDER BY p.id DESC LIMIT ${limit} OFFSET ${offset}`;
+      }
 
       const countRes = await executeSQL(countQuery);
       filteredCount = countRes.rows?.[0]?.count || 0;
