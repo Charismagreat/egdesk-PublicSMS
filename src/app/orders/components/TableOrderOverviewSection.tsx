@@ -462,9 +462,6 @@ export function TableOrderOverviewSection({
                 실시간 테이블 주문 통합 모니터링
                 <Sparkles className="w-5 h-5 text-amber-200" />
               </h2>
-              <p className="text-orange-100 text-xs mt-0.5 font-medium">
-                각 테이블 카드를 클릭하시면 전체 1차, 2차 세부 주문 내역을 팝업창에서 시원하게 조망하실 수 있습니다.
-              </p>
             </div>
           </div>
 
