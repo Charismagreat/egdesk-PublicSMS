@@ -1339,7 +1339,7 @@ export function TableOrderOverviewSection({
               <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600 mx-auto mb-2">
                 <QrCode className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-black text-slate-900">매장 입장 대기 등록 QR</h3>
+              <h3 className="text-xl font-black text-slate-900">대기 등록 QR</h3>
             </div>
 
             {/* QR 이미지 카드 */}
