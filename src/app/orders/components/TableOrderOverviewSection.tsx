@@ -143,9 +143,18 @@ export function TableOrderOverviewSection({
     const is58mm = receiptSettings.paperWidth === "58mm";
     const paperWidthPx = is58mm ? "220px" : "300px";
 
-    // 텍스트 줄바꿈(\n)을 HTML <br/>로 치환하는 안전 헬퍼
-    const formattedCustomMsg = String(receiptSettings.customMessage || "").replace(/\r\n/g, "<br/>").replace(/\n/g, "<br/>");
-    const formattedNoticeText = String(receiptSettings.noticeText || "").replace(/\r\n/g, "<br/>").replace(/\n/g, "<br/>");
+    // 텍스트 줄바꿈(\n, \\n, \r\n)을 완벽하게 HTML <br/>로 치환하는 만능 포맷터
+    const formatLineBreaks = (text: any) => {
+      if (!text) return "";
+      return String(text)
+        .replace(/\\r\\n/g, "<br/>")
+        .replace(/\\n/g, "<br/>")
+        .replace(/\r\n/g, "<br/>")
+        .replace(/\n/g, "<br/>");
+    };
+
+    const formattedCustomMsg = formatLineBreaks(receiptSettings.customMessage);
+    const formattedNoticeText = formatLineBreaks(receiptSettings.noticeText);
 
     // QR 이미지 URL 생성
     const qrImgUrl = receiptSettings.showQr && receiptSettings.qrUrl
@@ -170,7 +179,7 @@ export function TableOrderOverviewSection({
           }
           .receipt-box { 
             width: ${paperWidthPx}; 
-            box-sizing: border-box;
+            box-sizing: border-box; 
             font-size: ${is58mm ? '11px' : '12px'};
           }
           .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 12px; }
@@ -178,13 +187,13 @@ export function TableOrderOverviewSection({
           .header p { margin: 0; font-size: 10px; color: #64748b; }
           .item { border-bottom: 1px dashed #cbd5e1; padding: 8px 0; }
           .item-title { font-weight: bold; font-size: ${is58mm ? '12px' : '13px'}; margin-bottom: 3px; }
-          .item-memo { font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px 6px; border-radius: 4px; margin-top: 4px; line-height: 1.4; }
+          .item-memo { font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px 6px; border-radius: 4px; margin-top: 4px; line-height: 1.4; white-space: pre-line; word-break: break-word; }
           .item-flex { display: flex; justify-content: space-between; margin-top: 4px; font-weight: bold; }
           .total { border-top: 2px solid #000; margin-top: 12px; padding-top: 10px; display: flex; justify-content: space-between; font-size: ${is58mm ? '14px' : '15px'}; font-weight: 900; }
           
           .footer-section { text-align: center; margin-top: 15px; border-top: 1px dashed #94a3b8; padding-top: 12px; }
-          .custom-msg { font-weight: bold; margin-bottom: 8px; font-size: ${is58mm ? '11px' : '12px'}; line-height: 1.5; }
-          .notice-box { text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; font-size: 10px; line-height: 1.5; color: #334155; margin-bottom: 10px; }
+          .custom-msg { font-weight: bold; margin-bottom: 8px; font-size: ${is58mm ? '11px' : '12px'}; line-height: 1.6; white-space: pre-line; word-break: break-word; }
+          .notice-box { text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; font-size: 10px; line-height: 1.6; color: #334155; margin-bottom: 10px; white-space: pre-line; word-break: break-word; }
           .company-info { font-size: 9px; color: #64748b; margin-top: 8px; line-height: 1.4; border-top: 1px dotted #cbd5e1; padding-top: 6px; }
           .qr-section { margin-top: 12px; padding-top: 8px; border-top: 1px dashed #cbd5e1; text-align: center; }
           .qr-img { width: 90px; height: 90px; margin: 0 auto; display: block; }
