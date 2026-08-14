@@ -608,24 +608,20 @@ export function TableOrderOverviewSection({
         </div>
 
         {/* 📊 우측 5대 핵심 요약 카드 위젯 */}
-        <div className="flex items-center gap-2.5 overflow-x-auto pb-1 xl:pb-0 scrollbar-none shrink-0">
+        <div className="flex items-center gap-3 overflow-x-auto pb-1 xl:pb-0 scrollbar-none shrink-0">
           {/* 0. ⏳ 실시간 대기 현황 (클릭 시 관리 모달 오픈) */}
           <button
             type="button"
             onClick={() => setIsWaitingModalOpen(true)}
-            className={`border backdrop-blur-md rounded-2xl py-2 px-3.5 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap cursor-pointer text-left ${
-              activeWaitingCount > 0
-                ? 'bg-rose-500/85 hover:bg-rose-600 border-rose-300 ring-2 ring-white/50 animate-pulse'
-                : 'bg-white/15 hover:bg-white/20 border-white/25'
-            }`}
+            className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap cursor-pointer text-left"
             title="실시간 대기자 관리 열기"
           >
-            <span className="text-[10px] font-bold text-orange-100 flex items-center justify-between gap-1.5 whitespace-nowrap">
-              <span className="flex items-center gap-1">
-                <Users className="w-3 h-3 text-amber-200" />
+            <span className="text-[11px] font-bold text-orange-100 flex items-center justify-between gap-2 whitespace-nowrap">
+              <span className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-amber-200" />
                 실시간 대기
               </span>
-              <ChevronDown className="w-2.5 h-2.5 opacity-70" />
+              <ChevronDown className="w-3 h-3 text-orange-200" />
             </span>
             <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
               <span className="text-base font-black text-white">{activeWaitingCount}</span>
@@ -634,8 +630,8 @@ export function TableOrderOverviewSection({
           </button>
 
           {/* 1. 이용중 테이블 */}
-          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2 px-3.5 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
-            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
+          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[11px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
               실시간 이용
             </span>
@@ -646,21 +642,21 @@ export function TableOrderOverviewSection({
           </div>
 
           {/* 2. 총 이용 (회전) */}
-          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2 px-3.5 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
-            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
-              <History className="w-3 h-3 text-amber-200" />
+          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[11px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
+              <History className="w-3.5 h-3.5 text-amber-200" />
               오늘 총 이용
             </span>
-            <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
+            <div className="flex items-baseline gap-1.5 mt-0.5 whitespace-nowrap">
               <span className="text-base font-black text-white">{totalTurnoverCount}팀</span>
               <span className="text-xs font-bold text-orange-200">({(totalTurnoverCount / Math.max(1, totalTableCount)).toFixed(1)}회전)</span>
             </div>
           </div>
 
           {/* 3. 결제 대기 (미결제 총액) */}
-          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2 px-3.5 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
-            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
-              <Clock className="w-3 h-3 text-amber-200" />
+          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[11px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
+              <Clock className="w-3.5 h-3.5 text-amber-200" />
               결제 대기 ({allUnpaidOrders.length}건)
             </span>
             <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
@@ -670,9 +666,9 @@ export function TableOrderOverviewSection({
           </div>
 
           {/* 4. 오늘 테이블 완료 매출 */}
-          <div className="bg-white/20 hover:bg-white/25 border border-white/30 backdrop-blur-md rounded-2xl py-2 px-3.5 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
-            <span className="text-[10px] font-bold text-amber-200 flex items-center gap-1.5 whitespace-nowrap">
-              <CreditCard className="w-3 h-3 text-amber-200" />
+          <div className="bg-white/20 hover:bg-white/25 border border-white/30 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[11px] font-bold text-amber-200 flex items-center gap-1.5 whitespace-nowrap">
+              <CreditCard className="w-3.5 h-3.5 text-amber-200" />
               오늘 완료 매출
             </span>
             <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
@@ -684,7 +680,7 @@ export function TableOrderOverviewSection({
           {/* 📱 대기 QR 열기 버튼 */}
           <button
             onClick={() => setIsWaitingQrModalOpen(true)}
-            className="bg-white/20 hover:bg-white/30 text-white font-bold px-3 py-2.5 rounded-2xl backdrop-blur-md transition-all text-xs flex items-center gap-1.5 border border-white/30 cursor-pointer shrink-0 shadow-xs whitespace-nowrap"
+            className="bg-white/15 hover:bg-white/25 text-white font-bold px-3.5 py-3 rounded-2xl backdrop-blur-md transition-all text-xs flex items-center gap-1.5 border border-white/20 cursor-pointer shrink-0 shadow-xs whitespace-nowrap"
             title="입구 비치용 대기 등록 QR 열기"
           >
             <QrCode className="w-4 h-4 text-amber-200" />
@@ -696,10 +692,10 @@ export function TableOrderOverviewSection({
               onFetchData();
               fetchWaitings();
             }}
-            className="hidden xl:flex bg-white/15 hover:bg-white/25 text-white font-bold px-3 py-2.5 rounded-2xl backdrop-blur-md transition-all text-xs items-center gap-1 border border-white/20 cursor-pointer shrink-0 shadow-xs whitespace-nowrap"
+            className="hidden xl:flex bg-white/15 hover:bg-white/25 text-white font-bold px-3.5 py-3 rounded-2xl backdrop-blur-md transition-all text-xs items-center gap-1.5 border border-white/20 cursor-pointer shrink-0 shadow-xs whitespace-nowrap"
             title="새로고침"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw className="w-4 h-4" />
             <span>새로고침</span>
           </button>
         </div>
