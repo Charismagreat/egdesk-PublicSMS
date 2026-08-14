@@ -25,7 +25,9 @@ import {
   Plus,
   Copy,
   Check,
-  ShoppingBag
+  ShoppingBag,
+  ArrowLeftRight,
+  Undo2
 } from "lucide-react";
 
 interface TableOrderOverviewSectionProps {
@@ -63,6 +65,7 @@ export function TableOrderOverviewSection({
   const [isWaitingQrModalOpen, setIsWaitingQrModalOpen] = useState<boolean>(false);
   const [waitingActionLoading, setWaitingActionLoading] = useState<string | null>(null);
   const [seatingTableSelection, setSeatingTableSelection] = useState<{ waitingId: string; waitingNo: number } | null>(null);
+  const [changingTableSelection, setChangingTableSelection] = useState<{ waitingId: string; waitingNo: number; currentTable: string } | null>(null);
   const [copiedWaitingUrl, setCopiedWaitingUrl] = useState<boolean>(false);
 
   // 대기 접수 URL 클립보드 복사
@@ -172,6 +175,57 @@ export function TableOrderOverviewSection({
       }
     } catch (e) {
       alert('착석 처리 중 오류가 발생했습니다.');
+    } finally {
+      setWaitingActionLoading(null);
+    }
+  };
+
+  // 🔀 자리 이동 (테이블 변경 및 주문 자동 이관)
+  const handleChangeTableWaiting = async (id: string, waitingNo: number, newTable: string) => {
+    setWaitingActionLoading(`change_table_${id}`);
+    try {
+      const res = await fetch('/api/waitings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'change_table', assignedTable: newTable })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`대기 ${waitingNo}번 손님이 테이블 ${newTable}번으로 이동되었습니다. (주문 내역 자동 이관)`);
+        setChangingTableSelection(null);
+        fetchWaitings();
+        onFetchData();
+      }
+    } catch (e) {
+      alert('테이블 변경 중 오류가 발생했습니다.');
+    } finally {
+      setWaitingActionLoading(null);
+    }
+  };
+
+  // ↩️ 착석 취소 / 퇴장 처리
+  const handleRevertSeatWaiting = async (id: string, waitingNo: number, name: string) => {
+    const choice = window.prompt(
+      `대기 ${waitingNo}번 (${name}) 착석 취소 / 퇴장 처리\n\n1: 실수로 착석 누름 (다시 '대기중'으로 복원)\n2: 손님이 주문 전 매장을 퇴장함 ('퇴장/취소' 처리)\n\n번호(1 또는 2)를 입력해 주세요:`
+    );
+    if (choice !== '1' && choice !== '2') return;
+
+    const revertType = choice === '1' ? 'wait' : 'exit';
+    setWaitingActionLoading(`revert_${id}`);
+    try {
+      const res = await fetch('/api/waitings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'revert_seat', revertType })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(revertType === 'wait' ? `대기 ${waitingNo}번이 다시 '대기중' 상태로 복원되었습니다.` : `대기 ${waitingNo}번이 퇴장/취소 처리되었습니다.`);
+        fetchWaitings();
+        onFetchData();
+      }
+    } catch (e) {
+      alert('착석 취소 처리 중 오류가 발생했습니다.');
     } finally {
       setWaitingActionLoading(null);
     }
@@ -1347,6 +1401,37 @@ export function TableOrderOverviewSection({
                             </button>
                           </>
                         )}
+
+                        {/* 🪑 착석 완료(SEATED) 상태의 액션 버튼 (자리 이동 / 착석 취소 및 퇴장) */}
+                        {isSeated && (
+                          <>
+                            {/* 🔀 자리 이동 (테이블 변경) */}
+                            <button
+                              onClick={() => setChangingTableSelection({
+                                waitingId: wait.id,
+                                waitingNo: wait.waiting_no,
+                                currentTable: wait.assigned_table || ''
+                              })}
+                              disabled={waitingActionLoading === `change_table_${wait.id}`}
+                              className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shrink-0 whitespace-nowrap shadow-2xs"
+                              title="다른 테이블로 자리 이동 및 주문 내역 자동 이관"
+                            >
+                              <ArrowLeftRight className="w-3.5 h-3.5" />
+                              <span>자리 이동</span>
+                            </button>
+
+                            {/* ↩️ 착석 취소 / 퇴장 */}
+                            <button
+                              onClick={() => handleRevertSeatWaiting(wait.id, wait.waiting_no, wait.customer_name)}
+                              disabled={waitingActionLoading === `revert_${wait.id}`}
+                              className="px-3 py-2 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shrink-0 whitespace-nowrap shadow-2xs"
+                              title="착석 취소 (대기 복원 또는 퇴장 처리)"
+                            >
+                              <Undo2 className="w-3.5 h-3.5" />
+                              <span>착석 취소/퇴장</span>
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -1382,6 +1467,48 @@ export function TableOrderOverviewSection({
                         }`}
                       >
                         테이블 {tId}번 {isOccupied ? '(이용중)' : '(빈자리)'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 🔀 자리 이동(테이블 변경) 서브 선택 패널 */}
+            {changingTableSelection && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 space-y-2 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-indigo-950">
+                    대기 {changingTableSelection.waitingNo}번 (현재 테이블 {changingTableSelection.currentTable}번) 손님이 이동할 새 테이블을 선택해 주세요:
+                  </span>
+                  <button
+                    onClick={() => setChangingTableSelection(null)}
+                    className="text-xs text-slate-400 hover:text-slate-600 border-0 bg-transparent cursor-pointer"
+                  >
+                    취소
+                  </button>
+                </div>
+                <p className="text-[11px] text-indigo-700">
+                  ✓ 이동 시 기존 테이블의 미결제 주문 내역이 선택한 새 테이블로 자동 이관됩니다.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {allTableIds.map((tId) => {
+                    const isCurrent = tId === changingTableSelection.currentTable;
+                    const isOccupied = getOrdersForTable(tId).some(o => o.status !== '주문취소' && o.status !== '결제완료');
+                    return (
+                      <button
+                        key={tId}
+                        disabled={isCurrent}
+                        onClick={() => handleChangeTableWaiting(changingTableSelection.waitingId, changingTableSelection.waitingNo, tId)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all border cursor-pointer ${
+                          isCurrent
+                            ? 'bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed opacity-50'
+                            : isOccupied
+                            ? 'bg-slate-100 text-slate-400 border-slate-200'
+                            : 'bg-white hover:bg-indigo-600 hover:text-white text-indigo-900 border-indigo-300 shadow-xs scale-105'
+                        }`}
+                      >
+                        테이블 {tId}번 {isCurrent ? '(현재자리)' : isOccupied ? '(이용중)' : '(빈자리)'}
                       </button>
                     );
                   })}

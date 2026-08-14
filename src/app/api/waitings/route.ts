@@ -160,7 +160,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const data = await req.json();
-    const { id, action, assignedTable, preOrders, preOrderTotal } = data;
+    const { id, action, assignedTable, preOrders, preOrderTotal, revertType } = data;
 
     if (!id) {
       return NextResponse.json({ success: false, error: '대기 ID가 누락되었습니다.' }, { status: 400 });
@@ -242,8 +242,69 @@ export async function PATCH(req: Request) {
           console.error('[Pre-order to crm_orders failed]:', orderErr.message);
         }
       }
+    } else if (action === 'change_table') {
+      // 🔀 4. 자리 이동 (테이블 변경)
+      const oldTable = target.assigned_table;
+      const newTable = assignedTable || '1';
+      updates.assigned_table = newTable;
+
+      // 이전 테이블의 미결제 주문들을 새 테이블로 자동 이관
+      if (oldTable && oldTable !== newTable) {
+        try {
+          const oldTableOrdersRes = await queryTable('crm_orders', {
+            filters: { customer_name: `테이블 ${oldTable}` }
+          });
+          const activeOrders = (oldTableOrdersRes.rows || []).filter((o: any) => 
+            o.status !== '결제완료' && o.status !== '주문취소' && !o.deleted_at
+          );
+
+          for (const ord of activeOrders) {
+            await updateRows('crm_orders', {
+              customer_name: `테이블 ${newTable}`,
+              customer_memo: ord.customer_memo ? `${ord.customer_memo} (테이블 ${oldTable}➔${newTable} 이동)` : `[테이블 ${oldTable}➔${newTable} 이동]`
+            }, { filters: { id: ord.id } });
+          }
+          console.log(`✓ [Table Changed] 대기 ${target.waiting_no}번 손님이 테이블 ${oldTable}번 ➔ ${newTable}번으로 이동 (주문 ${activeOrders.length}건 이관 완료)`);
+        } catch (moveErr: any) {
+          console.error('[Table Change Order Migration Failed]:', moveErr.message);
+        }
+      }
+    } else if (action === 'revert_seat') {
+      // ↩️ 5. 착석 취소 (오배정 대기 복원 또는 손님 퇴장 처리)
+      const isRevertToWait = revertType === 'wait'; // 'wait' = 대기복원, 'exit' = 손님퇴장
+      const assignedTableNum = target.assigned_table;
+
+      if (isRevertToWait) {
+        updates.status = 'WAITING';
+        updates.assigned_table = '';
+        updates.seated_at = '';
+      } else {
+        updates.status = 'CANCELLED';
+      }
+
+      // 배정되었던 테이블의 미결제 주문(사전주문 등) 자동 취소 처리
+      if (assignedTableNum) {
+        try {
+          const tableOrdersRes = await queryTable('crm_orders', {
+            filters: { customer_name: `테이블 ${assignedTableNum}` }
+          });
+          const activeOrders = (tableOrdersRes.rows || []).filter((o: any) => 
+            o.status !== '결제완료' && o.status !== '주문취소' && !o.deleted_at
+          );
+
+          for (const ord of activeOrders) {
+            await updateRows('crm_orders', {
+              status: '주문취소',
+              customer_memo: ord.customer_memo ? `${ord.customer_memo} [착석취소/퇴장]` : `[착석취소/퇴장]`
+            }, { filters: { id: ord.id } });
+          }
+          console.log(`✓ [Seat Reverted] 대기 ${target.waiting_no}번 착석 취소 처리 완료 (테이블 ${assignedTableNum}번 미결제 주문 ${activeOrders.length}건 정리)`);
+        } catch (revertErr: any) {
+          console.error('[Revert Seat Order Cleanup Failed]:', revertErr.message);
+        }
+      }
     } else if (action === 'cancel') {
-      // ❌ 4. 대기 취소
+      // ❌ 6. 대기 취소
       updates.status = 'CANCELLED';
     }
 
