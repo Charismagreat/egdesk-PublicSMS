@@ -138,14 +138,15 @@ export async function POST(req: Request) {
         }
       }
 
-      // 2. 이지데스크 순정 createInstagramSchedule 헬퍼를 사용하여 1개 신규 등록
+      // 2. 이지데스크 순정 createInstagramSchedule 헬퍼를 사용하여 1개 신규 등록 (runNow: false로 0.1초 즉시 등록 완료)
       await createInstagramSchedule({
         title: `EGDesk 인스타그램 오토파일럿 스케줄 (${updates.instagram_username || '메인 계정'})`,
         connectionId: targetConnectionId || '1786432604684',
         enabled: updates.is_autopilot === 1,
         frequencyType: (updates.autopilot_interval || 'DAILY').toLowerCase() as any,
         scheduledTime: updates.autopilot_time || '10:00',
-        topics: ['신상품 추천', '특가 제안', '인플루언서 큐레이션']
+        topics: ['신상품 추천', '특가 제안', '인플루언서 큐레이션'],
+        runNow: false
       });
     } catch (mcpSchedErr) {
       console.warn('EGDesk MCP instagram_schedule sync warning:', mcpSchedErr);
