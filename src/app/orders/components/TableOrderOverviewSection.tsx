@@ -9,11 +9,13 @@ import {
   Printer, 
   Clock, 
   CreditCard, 
-  RefreshCw,
-  Sparkles,
-  Receipt,
-  X,
-  Maximize2
+  RefreshCw, 
+  Sparkles, 
+  Receipt, 
+  X, 
+  Maximize2,
+  ChevronDown,
+  History
 } from "lucide-react";
 
 interface TableOrderOverviewSectionProps {
@@ -23,6 +25,17 @@ interface TableOrderOverviewSectionProps {
   onFetchData: () => Promise<void>;
 }
 
+export interface TableSession {
+  sessionIndex: number;
+  orders: Order[];
+  isCurrent: boolean;
+  status: '이용중' | '결제완료';
+  startTime: string;
+  endTime: string;
+  totalAmount: number;
+  itemSummary: string;
+}
+
 export function TableOrderOverviewSection({
   orders,
   onUpdateOrder,
@@ -30,6 +43,8 @@ export function TableOrderOverviewSection({
 }: TableOrderOverviewSectionProps) {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [selectedTableForModal, setSelectedTableForModal] = useState<string | null>(null);
+  const [selectedSessionData, setSelectedSessionData] = useState<{ tableNum: string; session: TableSession } | null>(null);
+  const [openTurnoverMenuTable, setOpenTurnoverMenuTable] = useState<string | null>(null);
 
   // 테이블 번호 목록 (기본 1~12번 + DB에 새로 발견되는 테이블 번호 포함)
   const defaultTableIds = Array.from({ length: 12 }, (_, i) => String(i + 1));
@@ -52,6 +67,69 @@ export function TableOrderOverviewSection({
       const name = o.customer_name || o.customerName || "";
       return name.includes(`테이블 ${tableNum}`) || name.includes(`테이블${tableNum}`);
     });
+  };
+
+  // ⚡ 테이블 주문들을 '결제완료' 시점 기준으로 1회차, 2회차, 3회차(회전수) 세션으로 지능형 그룹화
+  const getTableSessions = (tableNum: string): TableSession[] => {
+    const tableOrders = getOrdersForTable(tableNum);
+    const valid = tableOrders
+      .filter(o => o.status !== '주문취소')
+      .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+
+    if (valid.length === 0) return [];
+
+    const sessions: TableSession[] = [];
+    let currentBucket: Order[] = [];
+
+    valid.forEach((ord) => {
+      currentBucket.push(ord);
+      if (ord.status === '결제완료') {
+        const total = currentBucket.reduce((sum, o) => {
+          const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
+          return sum + (isNaN(p) ? 0 : p);
+        }, 0);
+        const first = currentBucket[0];
+        const last = currentBucket[currentBucket.length - 1];
+        const fName = first.product_name || first.productName || '주문';
+        const summary = currentBucket.length > 1 ? `${fName} 외 ${currentBucket.length - 1}건` : fName;
+
+        sessions.push({
+          sessionIndex: sessions.length + 1,
+          orders: [...currentBucket],
+          isCurrent: false,
+          status: '결제완료',
+          startTime: formatDateTime(first.order_date, first.created_at, first.id),
+          endTime: formatDateTime(last.order_date, last.created_at, last.id),
+          totalAmount: total,
+          itemSummary: summary
+        });
+        currentBucket = [];
+      }
+    });
+
+    if (currentBucket.length > 0) {
+      const total = currentBucket.reduce((sum, o) => {
+        const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
+        return sum + (isNaN(p) ? 0 : p);
+      }, 0);
+      const first = currentBucket[0];
+      const last = currentBucket[currentBucket.length - 1];
+      const fName = first.product_name || first.productName || '주문';
+      const summary = currentBucket.length > 1 ? `${fName} 외 ${currentBucket.length - 1}건` : fName;
+
+      sessions.push({
+        sessionIndex: sessions.length + 1,
+        orders: [...currentBucket],
+        isCurrent: true,
+        status: '이용중',
+        startTime: formatDateTime(first.order_date, first.created_at, first.id),
+        endTime: formatDateTime(last.order_date, last.created_at, last.id),
+        totalAmount: total,
+        itemSummary: summary
+      });
+    }
+
+    return sessions;
   };
 
   // 해당 테이블 결제완료 처리
@@ -349,6 +427,7 @@ export function TableOrderOverviewSection({
           const activeOrders = tableOrders.filter(o => o.status !== '주문취소' && o.status !== '결제완료');
           const hasOrders = activeOrders.length > 0;
           const isOccupied = hasOrders;
+          const sessions = getTableSessions(tableNum);
 
           // 누적 금액 계산
           const totalAmount = activeOrders.reduce((sum, o) => {
@@ -362,7 +441,7 @@ export function TableOrderOverviewSection({
           return (
             <div 
               key={tableNum}
-              className={`rounded-3xl border transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-xs hover:shadow-lg ${
+              className={`rounded-3xl border transition-all duration-200 flex flex-col justify-between overflow-visible shadow-xs hover:shadow-lg relative ${
                 isOccupied 
                   ? 'bg-white border-orange-200 ring-2 ring-orange-500/10 cursor-pointer hover:-translate-y-1' 
                   : 'bg-slate-50/70 border-slate-200 opacity-90'
@@ -372,10 +451,10 @@ export function TableOrderOverviewSection({
               }}
             >
               {/* 카드 헤더 */}
-              <div className={`p-4 border-b flex items-center justify-between ${
+              <div className={`p-4 border-b flex items-center justify-between rounded-t-3xl ${
                 isOccupied ? 'bg-orange-50/70 border-orange-100' : 'bg-slate-100/60 border-slate-200'
               }`}>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-black text-slate-800 text-base">
                     테이블 {tableNum}번
                   </span>
@@ -388,6 +467,83 @@ export function TableOrderOverviewSection({
                     <span className="bg-slate-200 text-slate-500 font-bold text-[10px] px-2 py-0.5 rounded-full">
                       빈 테이블
                     </span>
+                  )}
+
+                  {/* ⚡ 회전수(회차) 뱃지 버튼 */}
+                  {sessions.length > 0 && (
+                    <div className="relative inline-block">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenTurnoverMenuTable(openTurnoverMenuTable === tableNum ? null : tableNum);
+                        }}
+                        className={`text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 border transition-all cursor-pointer ${
+                          openTurnoverMenuTable === tableNum
+                            ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                        }`}
+                        title="오늘의 회차별 이용 히스토리 보기"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        <span>{sessions.length}회전</span>
+                        <ChevronDown className="w-2.5 h-2.5" />
+                      </button>
+
+                      {/* 회차 히스토리 드롭다운 팝오버 */}
+                      {openTurnoverMenuTable === tableNum && (
+                        <div 
+                          className="absolute left-0 top-full mt-1.5 w-64 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-2.5 space-y-1.5 animate-fade-in"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 px-1">
+                            <span className="text-[11px] font-black text-slate-800 flex items-center gap-1">
+                              <History className="w-3.5 h-3.5 text-indigo-600" />
+                              테이블 {tableNum}번 회차별 내역
+                            </span>
+                            <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full">
+                              총 {sessions.length}회전
+                            </span>
+                          </div>
+
+                          <div className="max-h-52 overflow-y-auto space-y-1.5 pr-0.5 scrollbar-thin">
+                            {sessions.slice().reverse().map((sess) => (
+                              <button
+                                key={sess.sessionIndex}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSessionData({ tableNum, session: sess });
+                                  setOpenTurnoverMenuTable(null);
+                                }}
+                                className={`w-full text-left p-2 rounded-xl border transition-all flex flex-col gap-0.5 cursor-pointer ${
+                                  sess.isCurrent
+                                    ? 'bg-orange-50/90 hover:bg-orange-100 border-orange-300'
+                                    : 'bg-slate-50/90 hover:bg-slate-100 border-slate-200'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-black text-slate-900 flex items-center gap-1">
+                                    {sess.isCurrent ? '🟢' : '⚪'} {sess.sessionIndex}회차
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                                      sess.isCurrent ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600'
+                                    }`}>
+                                      {sess.status}
+                                    </span>
+                                  </span>
+                                  <span className="text-[11px] font-black text-orange-650">
+                                    {sess.totalAmount.toLocaleString()}원
+                                  </span>
+                                </div>
+                                <div className="text-[9px] text-slate-500 flex justify-between items-center mt-0.5">
+                                  <span className="truncate max-w-[130px] font-medium">{sess.itemSummary}</span>
+                                  <span className="text-slate-400 shrink-0">{sess.startTime}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -509,151 +665,182 @@ export function TableOrderOverviewSection({
         })}
       </div>
 
-      {/* 테이블 상세 전체 내용 팝업 모달 */}
-      {selectedTableForModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-2xl p-6 sm:p-8 shadow-2xl space-y-6 relative max-h-[90vh] flex flex-col">
-            
-            {/* 모달 헤더 */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-orange-100 rounded-2xl flex items-center justify-center">
-                  <Utensils className="w-5 h-5 text-orange-600" />
+      {/* 테이블 상세 전체 내용 팝업 모달 (현재 이용 내역 또는 선택한 회차별 히스토리) */}
+      {(selectedTableForModal || selectedSessionData) && (() => {
+        const activeTableNum = selectedSessionData ? selectedSessionData.tableNum : selectedTableForModal!;
+        const sessionInfo = selectedSessionData ? selectedSessionData.session : null;
+        const targetOrders = sessionInfo 
+          ? sessionInfo.orders 
+          : getOrdersForTable(activeTableNum).filter(o => o.status !== '주문취소' && o.status !== '결제완료');
+        
+        const targetGrandTotal = targetOrders.reduce((sum, o) => {
+          const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
+          return sum + (isNaN(p) ? 0 : p);
+        }, 0);
+
+        const hasUnpaidInModal = targetOrders.some(o => o.status !== '결제완료');
+
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white rounded-3xl w-full max-w-2xl p-6 sm:p-8 shadow-2xl space-y-6 relative max-h-[90vh] flex flex-col">
+              
+              {/* 모달 헤더 */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-100 rounded-2xl flex items-center justify-center">
+                    <Utensils className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900 flex items-center gap-2 flex-wrap">
+                      <span>테이블 {activeTableNum}번 주문 상세 내역</span>
+                      {sessionInfo && (
+                        <span className={`text-xs font-black px-2.5 py-0.5 rounded-full ${
+                          sessionInfo.isCurrent ? 'bg-orange-600 text-white' : 'bg-slate-800 text-white'
+                        }`}>
+                          {sessionInfo.sessionIndex}회차 ({sessionInfo.status})
+                        </span>
+                      )}
+                    </h2>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                    테이블 {selectedTableForModal}번 주문 상세 내역
-                  </h2>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedTableForModal(null)}
-                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors border-0 bg-transparent cursor-pointer"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* 모달 본문 리스트 */}
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin">
-              {selectedActiveOrders.length === 0 ? (
-                <div className="py-16 text-center text-slate-400 text-sm font-bold">
-                  접수된 주문 항목이 없습니다.
-                </div>
-              ) : (
-                selectedActiveOrders.map((ord, idx) => {
-                  const pName = ord.product_name || ord.productName || '상품명 없음';
-                  const pPrice = Number(String(ord.total_price || ord.totalPrice || '0').replace(/[^0-9]/g, ''));
-                  const qty = ord.quantity || '1';
-                  const memo = ord.customer_memo || ord.customerMemo || '';
-                  const isPaid = ord.status === '결제완료';
-
-                  return (
-                    <div
-                      key={ord.id || idx}
-                      className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 pb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-black text-orange-600 bg-orange-100 px-3 py-1 rounded-xl text-xs">
-                            {selectedActiveOrders.length - idx}차 주문
-                          </span>
-                          <span className="text-xs text-slate-400 font-medium flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            {formatDateTime(ord.order_date, ord.created_at, ord.id)}
-                          </span>
-                        </div>
-
-                        {/* 개별 주문 상태 개별 조절 selector */}
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={ord.status || '결제대기'}
-                            onChange={e => onUpdateOrder(ord.id, { status: e.target.value })}
-                            className={`text-xs font-black px-3 py-1.5 rounded-xl border outline-none cursor-pointer ${
-                              isPaid 
-                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
-                                : 'bg-amber-100 text-amber-900 border-amber-300'
-                            }`}
-                          >
-                            <option value="접수완료">접수완료</option>
-                            <option value="결제대기">결제대기</option>
-                            <option value="결제완료">결제완료</option>
-                            <option value="상품준비중">조리중/준비중</option>
-                            <option value="주문취소">주문취소</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between items-start">
-                          <h4 className="text-base font-black text-slate-900 leading-snug">{pName}</h4>
-                          <span className="text-sm font-extrabold text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
-                            {qty}개
-                          </span>
-                        </div>
-
-                        {memo && (
-                          <div className="bg-white p-3 rounded-xl border border-slate-200/80 text-xs text-slate-700 font-normal leading-relaxed whitespace-pre-line">
-                            <span className="font-bold text-slate-400 block text-[10px] mb-0.5">손님 메모:</span>
-                            {memo}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-200/60 font-black">
-                        <span className="text-slate-500 text-xs font-bold">주문 금액</span>
-                        <span className="text-base text-orange-650">{pPrice.toLocaleString()}원</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* 모달 푸터 액션 바 */}
-            <div className="border-t border-slate-200 pt-4 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/80 -mx-6 sm:-mx-8 -mb-6 sm:-mb-8 p-4 sm:p-6 rounded-b-3xl">
-              <div>
-                <span className="text-xs font-bold text-slate-500 block">테이블 전체 누적 결제액</span>
-                <span className="text-2xl font-black text-orange-650">
-                  {selectedGrandTotal.toLocaleString()}원
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
-                  onClick={() => handlePrintTableReceipt(selectedTableForModal, selectedOrders)}
-                  className="flex-1 sm:flex-none px-4 py-3 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 border border-slate-200 cursor-pointer shadow-xs transition-colors"
+                  type="button"
+                  onClick={() => {
+                    setSelectedTableForModal(null);
+                    setSelectedSessionData(null);
+                  }}
+                  className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors border-0 bg-transparent cursor-pointer"
                 >
-                  <Printer className="w-4 h-4 text-slate-600" />
-                  <span>영수증 인쇄</span>
+                  <X className="w-6 h-6" />
                 </button>
+              </div>
 
-                {selectedActiveOrders.some(o => o.status !== '결제완료') && (
+              {/* 모달 본문 리스트 */}
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin">
+                {targetOrders.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 text-sm font-bold">
+                    접수된 주문 항목이 없습니다.
+                  </div>
+                ) : (
+                  targetOrders.map((ord, idx) => {
+                    const pName = ord.product_name || ord.productName || '상품명 없음';
+                    const pPrice = Number(String(ord.total_price || ord.totalPrice || '0').replace(/[^0-9]/g, ''));
+                    const qty = ord.quantity || '1';
+                    const memo = ord.customer_memo || ord.customerMemo || '';
+                    const isPaid = ord.status === '결제완료';
+
+                    return (
+                      <div
+                        key={ord.id || idx}
+                        className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 pb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-orange-600 bg-orange-100 px-3 py-1 rounded-xl text-xs">
+                              {targetOrders.length - idx}차 주문
+                            </span>
+                            <span className="text-xs text-slate-400 font-medium flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              {formatDateTime(ord.order_date, ord.created_at, ord.id)}
+                            </span>
+                          </div>
+
+                          {/* 개별 주문 상태 개별 조절 selector */}
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={ord.status || '결제대기'}
+                              onChange={e => onUpdateOrder(ord.id, { status: e.target.value })}
+                              className={`text-xs font-black px-3 py-1.5 rounded-xl border outline-none cursor-pointer ${
+                                isPaid 
+                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                                  : 'bg-amber-100 text-amber-900 border-amber-300'
+                              }`}
+                            >
+                              <option value="접수완료">접수완료</option>
+                              <option value="결제대기">결제대기</option>
+                              <option value="결제완료">결제완료</option>
+                              <option value="상품준비중">조리중/준비중</option>
+                              <option value="주문취소">주문취소</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-start">
+                            <h4 className="text-base font-black text-slate-900 leading-snug">{pName}</h4>
+                            <span className="text-sm font-extrabold text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                              {qty}개
+                            </span>
+                          </div>
+
+                          {memo && (
+                            <div className="bg-white p-3 rounded-xl border border-slate-200/80 text-xs text-slate-700 font-normal leading-relaxed whitespace-pre-line">
+                              <span className="font-bold text-slate-400 block text-[10px] mb-0.5">손님 메모:</span>
+                              {memo}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-200/60 font-black">
+                          <span className="text-slate-500 text-xs font-bold">주문 금액</span>
+                          <span className="text-base text-orange-650">{pPrice.toLocaleString()}원</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* 모달 푸터 액션 바 */}
+              <div className="border-t border-slate-200 pt-4 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/80 -mx-6 sm:-mx-8 -mb-6 sm:-mb-8 p-4 sm:p-6 rounded-b-3xl">
+                <div>
+                  <span className="text-xs font-bold text-slate-500 block">
+                    {sessionInfo ? `${sessionInfo.sessionIndex}회차 총 결제액` : '테이블 전체 누적 결제액'}
+                  </span>
+                  <span className="text-2xl font-black text-orange-650">
+                    {targetGrandTotal.toLocaleString()}원
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    onClick={() => handlePrintTableReceipt(activeTableNum, targetOrders)}
+                    className="flex-1 sm:flex-none px-4 py-3 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 border border-slate-200 cursor-pointer shadow-xs transition-colors"
+                  >
+                    <Printer className="w-4 h-4 text-slate-600" />
+                    <span>영수증 인쇄</span>
+                  </button>
+
+                  {hasUnpaidInModal && (
+                    <button
+                      onClick={() => {
+                        handleBulkCompletePayment(activeTableNum, targetOrders);
+                        setSelectedTableForModal(null);
+                        setSelectedSessionData(null);
+                      }}
+                      className="flex-1 sm:flex-none px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 border-0 cursor-pointer shadow-md transition-colors"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span>전체 결제 완료</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
-                      handleBulkCompletePayment(selectedTableForModal, selectedOrders);
                       setSelectedTableForModal(null);
+                      setSelectedSessionData(null);
                     }}
-                    className="flex-1 sm:flex-none px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 border-0 cursor-pointer shadow-md transition-colors"
+                    className="px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-2xl text-xs border-0 cursor-pointer transition-colors"
                   >
-                    <CreditCard className="w-4 h-4" />
-                    <span>전체 결제 완료</span>
+                    닫기
                   </button>
-                )}
-
-                <button
-                  onClick={() => setSelectedTableForModal(null)}
-                  className="px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-2xl text-xs border-0 cursor-pointer transition-colors"
-                >
-                  닫기
-                </button>
+                </div>
               </div>
-            </div>
 
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );
