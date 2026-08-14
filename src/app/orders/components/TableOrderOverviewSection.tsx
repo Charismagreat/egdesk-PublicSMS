@@ -477,61 +477,59 @@ export function TableOrderOverviewSection({
           </button>
         </div>
 
-        {/* 📊 우측 4대 핵심 요약 카드 위젯 */}
-        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+        {/* 📊 우측 4대 핵심 요약 카드 위젯 (줄바꿈 없이 시원하게 표출) */}
+        <div className="flex items-center gap-3 overflow-x-auto pb-1 xl:pb-0 scrollbar-none shrink-0">
           {/* 1. 이용중 테이블 */}
-          <div className="flex-1 min-w-[110px] bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl p-2.5 px-3.5 flex flex-col justify-center transition-all shadow-xs">
-            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1">
+          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[11px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-              실시간 이용중
+              실시간 이용
             </span>
-            <div className="flex items-baseline gap-1 mt-0.5">
+            <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
               <span className="text-base font-black text-white">{occupiedTableCount}</span>
-              <span className="text-[11px] font-bold text-orange-200">/ {totalTableCount}석 ({occupancyRate}%)</span>
+              <span className="text-xs font-bold text-orange-200">/ {totalTableCount}석 ({occupancyRate}%)</span>
             </div>
           </div>
 
-          {/* 2. 총 회전수 */}
-          <div className="flex-1 min-w-[115px] bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl p-2.5 px-3.5 flex flex-col justify-center transition-all shadow-xs">
-            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1">
-              <History className="w-3 h-3 text-amber-200" />
-              오늘 총 이용 (회전)
+          {/* 2. 총 이용 (회전) */}
+          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[11px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
+              <History className="w-3.5 h-3.5 text-amber-200" />
+              오늘 총 이용
             </span>
-            <div className="flex items-baseline gap-1 mt-0.5">
-              <span className="text-base font-black text-white">{totalTurnoverCount}</span>
-              <span className="text-[11px] font-bold text-orange-200">
-                팀 (평균 {(totalTurnoverCount / Math.max(1, totalTableCount)).toFixed(1)}회전)
-              </span>
+            <div className="flex items-baseline gap-1.5 mt-0.5 whitespace-nowrap">
+              <span className="text-base font-black text-white">{totalTurnoverCount}팀</span>
+              <span className="text-xs font-bold text-orange-200">(평균 {(totalTurnoverCount / Math.max(1, totalTableCount)).toFixed(1)}회전)</span>
             </div>
           </div>
 
           {/* 3. 결제 대기 (미결제 총액) */}
-          <div className="flex-1 min-w-[125px] bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl p-2.5 px-3.5 flex flex-col justify-center transition-all shadow-xs">
-            <span className="text-[10px] font-bold text-orange-100 flex items-center gap-1">
-              <Clock className="w-3 h-3 text-amber-200" />
+          <div className="bg-white/15 hover:bg-white/20 border border-white/25 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[11px] font-bold text-orange-100 flex items-center gap-1.5 whitespace-nowrap">
+              <Clock className="w-3.5 h-3.5 text-amber-200" />
               결제 대기 ({allUnpaidOrders.length}건)
             </span>
-            <div className="flex items-baseline gap-1 mt-0.5">
+            <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
               <span className="text-base font-black text-white">{totalUnpaidAmount.toLocaleString()}</span>
-              <span className="text-[11px] font-bold text-orange-200">원</span>
+              <span className="text-xs font-bold text-orange-200">원</span>
             </div>
           </div>
 
           {/* 4. 오늘 테이블 완료 매출 */}
-          <div className="flex-1 min-w-[125px] bg-white/20 hover:bg-white/25 border border-white/30 backdrop-blur-md rounded-2xl p-2.5 px-3.5 flex flex-col justify-center transition-all shadow-xs">
-            <span className="text-[10px] font-bold text-amber-200 flex items-center gap-1">
-              <CreditCard className="w-3 h-3 text-amber-200" />
-              오늘 테이블 매출
+          <div className="bg-white/20 hover:bg-white/25 border border-white/30 backdrop-blur-md rounded-2xl py-2.5 px-4 flex flex-col justify-center transition-all shadow-xs shrink-0 whitespace-nowrap">
+            <span className="text-[11px] font-bold text-amber-200 flex items-center gap-1.5 whitespace-nowrap">
+              <CreditCard className="w-3.5 h-3.5 text-amber-200" />
+              오늘 완료 매출
             </span>
-            <div className="flex items-baseline gap-1 mt-0.5">
+            <div className="flex items-baseline gap-1 mt-0.5 whitespace-nowrap">
               <span className="text-base font-black text-white">{totalPaidAmount.toLocaleString()}</span>
-              <span className="text-[11px] font-bold text-orange-200">원</span>
+              <span className="text-xs font-bold text-orange-200">원</span>
             </div>
           </div>
 
           <button
             onClick={onFetchData}
-            className="hidden xl:flex bg-white/15 hover:bg-white/25 text-white font-bold px-3.5 py-3 rounded-2xl backdrop-blur-md transition-all text-xs items-center gap-1.5 border border-white/20 cursor-pointer shrink-0 shadow-xs"
+            className="hidden xl:flex bg-white/15 hover:bg-white/25 text-white font-bold px-3.5 py-3 rounded-2xl backdrop-blur-md transition-all text-xs items-center gap-1.5 border border-white/20 cursor-pointer shrink-0 shadow-xs whitespace-nowrap"
             title="새로고침"
           >
             <RefreshCw className="w-4 h-4" />
