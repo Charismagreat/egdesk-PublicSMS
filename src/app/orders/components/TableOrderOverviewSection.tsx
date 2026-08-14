@@ -219,7 +219,7 @@ export function TableOrderOverviewSection({
             <span>${grandTotal.toLocaleString()}원</span>
           </div>
 
-          {/* 영수증 하단 커스텀 영역 동적 인쇄 */}
+          <!-- 영수증 하단 커스텀 영역 동적 인쇄 -->
           <div class="footer-section">
             ${receiptSettings.customMessage ? `<div class="custom-msg">${receiptSettings.customMessage}</div>` : ''}
             
