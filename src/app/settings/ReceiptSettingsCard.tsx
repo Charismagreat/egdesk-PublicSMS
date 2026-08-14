@@ -170,15 +170,18 @@ export default function ReceiptSettingsCard() {
             </div>
           </div>
 
-          {/* 2. 감사 인사 문구 */}
+          {/* 2. 감사 인사 문구 (줄바꿈 가능) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700">감사 인사 문구</label>
-            <input
-              type="text"
+            <label className="text-xs font-bold text-slate-700 flex justify-between">
+              <span>감사 인사 문구 (줄바꿈 가능)</span>
+              <span className="text-[10px] font-normal text-slate-400">영수증 하단 중앙 강조 문구</span>
+            </label>
+            <textarea
+              rows={2}
               value={settings.customMessage}
               onChange={e => setSettings(s => ({ ...s, customMessage: e.target.value }))}
-              placeholder="예: 방문해 주셔서 진심으로 감사합니다."
-              className="w-full border border-slate-200 rounded-2xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-500 text-xs font-bold text-slate-800"
+              placeholder="예: 방문해 주셔서 진심으로 감사합니다.&#10;늘 최선을 다하겠습니다."
+              className="w-full border border-slate-200 rounded-2xl p-3 outline-none focus:ring-2 focus:ring-orange-500 text-xs font-bold text-slate-800 leading-relaxed"
             />
           </div>
 
@@ -322,7 +325,7 @@ export default function ReceiptSettingsCard() {
                 
                 {/* 커스텀 인사말 */}
                 {settings.customMessage && (
-                  <p className="font-bold text-slate-800 leading-snug">{settings.customMessage}</p>
+                  <p className="font-bold text-slate-800 leading-snug whitespace-pre-line">{settings.customMessage}</p>
                 )}
 
                 {/* 매장 안내 문구 (줄바꿈) */}

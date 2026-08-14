@@ -178,7 +178,7 @@ export function TableOrderOverviewSection({
           .total { border-top: 2px solid #000; margin-top: 12px; padding-top: 10px; display: flex; justify-content: space-between; font-size: ${is58mm ? '14px' : '15px'}; font-weight: 900; }
           
           .footer-section { text-align: center; margin-top: 15px; border-top: 1px dashed #94a3b8; padding-top: 12px; }
-          .custom-msg { font-weight: bold; margin-bottom: 8px; font-size: ${is58mm ? '11px' : '12px'}; }
+          .custom-msg { font-weight: bold; margin-bottom: 8px; font-size: ${is58mm ? '11px' : '12px'}; white-space: pre-line; }
           .notice-box { text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; font-size: 10px; line-height: 1.5; white-space: pre-line; color: #334155; margin-bottom: 10px; }
           .company-info { font-size: 9px; color: #64748b; margin-top: 8px; line-height: 1.4; border-top: 1px dotted #cbd5e1; padding-top: 6px; }
           .qr-section { margin-top: 12px; padding-top: 8px; border-top: 1px dashed #cbd5e1; text-align: center; }
