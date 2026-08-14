@@ -24,7 +24,8 @@ import {
   UserX,
   Plus,
   Copy,
-  Check
+  Check,
+  ShoppingBag
 } from "lucide-react";
 
 interface TableOrderOverviewSectionProps {
@@ -124,6 +125,30 @@ export function TableOrderOverviewSection({
       }
     } catch (e) {
       alert('호출 처리 중 오류가 발생했습니다.');
+    } finally {
+      setWaitingActionLoading(null);
+    }
+  };
+
+  // 🔔 2차 리마인드 재호출 발송 (노쇼 방지)
+  const handleRemindWaiting = async (id: string, waitingNo: number, name: string) => {
+    if (!confirm(`대기 ${waitingNo}번 (${name}) 고객님께 [2차 입장 재안내(마지막 호출) 문자]를 발송하시겠습니까?`)) {
+      return;
+    }
+    setWaitingActionLoading(`remind_${id}`);
+    try {
+      const res = await fetch('/api/waitings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'remind' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`대기 ${waitingNo}번 고객님께 2차 리마인드 문자가 발송되었습니다.`);
+        fetchWaitings();
+      }
+    } catch (e) {
+      alert('리마인드 문자 발송 중 오류가 발생했습니다.');
     } finally {
       setWaitingActionLoading(null);
     }
@@ -1156,6 +1181,35 @@ export function TableOrderOverviewSection({
               </button>
             </div>
 
+            {/* 📊 오늘의 웨이팅 통계 요약 바 */}
+            <div className="grid grid-cols-4 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200/80 text-center shrink-0">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 block">오늘 총 대기</span>
+                <span className="text-sm font-black text-slate-800">{waitingsList.length}팀</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-emerald-600 block">착석 완료</span>
+                <span className="text-sm font-black text-emerald-700">
+                  {waitingsList.filter(w => w.status === 'SEATED').length}팀
+                  <span className="text-[10px] font-normal text-emerald-500 ml-1">
+                    ({waitingsList.length > 0 ? Math.round((waitingsList.filter(w => w.status === 'SEATED').length / waitingsList.length) * 100) : 0}%)
+                  </span>
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-rose-500 block">취소/이탈</span>
+                <span className="text-sm font-black text-rose-600">
+                  {waitingsList.filter(w => w.status === 'CANCELLED').length}팀
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-orange-600 block">사전 주문</span>
+                <span className="text-sm font-black text-orange-700">
+                  {waitingsList.filter(w => w.pre_orders && w.pre_orders !== '[]').length}팀
+                </span>
+              </div>
+            </div>
+
             {/* 본문 대기자 리스트 */}
             <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
               {waitingsList.length === 0 ? (
@@ -1167,6 +1221,14 @@ export function TableOrderOverviewSection({
                   const isWaiting = wait.status === 'WAITING';
                   const isCalled = wait.status === 'CALLED';
                   const isSeated = wait.status === 'SEATED';
+
+                  // 사전 주문 내역 파싱
+                  let waitPreOrders: any[] = [];
+                  if (wait.pre_orders) {
+                    try {
+                      waitPreOrders = typeof wait.pre_orders === 'string' ? JSON.parse(wait.pre_orders) : wait.pre_orders;
+                    } catch (e) {}
+                  }
 
                   return (
                     <div
@@ -1191,8 +1253,8 @@ export function TableOrderOverviewSection({
                           <span className="text-lg leading-tight">{wait.waiting_no}</span>
                         </div>
 
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="text-sm font-black text-slate-900">{wait.customer_name}</h4>
                             <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
                               {wait.party_size}명
@@ -1208,7 +1270,23 @@ export function TableOrderOverviewSection({
                             }`}>
                               {isCalled ? '입장 호출완료' : isWaiting ? '대기중' : isSeated ? `착석(테이블 ${wait.assigned_table || '배정'})` : '취소됨'}
                             </span>
+
+                            {/* 🍽️ 사전 주문 뱃지 */}
+                            {waitPreOrders.length > 0 && (
+                              <span className="text-[10px] font-extrabold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-md flex items-center gap-1 border border-orange-200">
+                                <ShoppingBag className="w-3 h-3 text-orange-600" />
+                                <span>사전주문 {waitPreOrders.length}건 ({Number(wait.pre_order_total || 0).toLocaleString()}원)</span>
+                              </span>
+                            )}
                           </div>
+
+                          {/* 사전 주문 품목 요약 툴팁/텍스트 */}
+                          {waitPreOrders.length > 0 && (
+                            <div className="text-[11px] font-bold text-slate-600 bg-orange-50/60 px-2 py-1 rounded-lg border border-orange-100">
+                              메뉴: {waitPreOrders.map((it: any) => `${it.name} × ${it.quantity}`).join(', ')}
+                            </div>
+                          )}
+
                           <div className="text-xs text-slate-400 flex items-center gap-3 font-medium">
                             <span className="flex items-center gap-1">
                               <Phone className="w-3 h-3 text-slate-400" />
@@ -1226,7 +1304,7 @@ export function TableOrderOverviewSection({
                       <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                         {(isWaiting || isCalled) && (
                           <>
-                            {/* 1. 입장 호출 버튼 (문자 발송) */}
+                            {/* 1. 입장 호출 / 재호출 버튼 */}
                             <button
                               onClick={() => handleCallWaiting(wait.id, wait.waiting_no, wait.customer_name)}
                               disabled={waitingActionLoading === `call_${wait.id}`}
@@ -1237,7 +1315,19 @@ export function TableOrderOverviewSection({
                               <span>{isCalled ? '재호출' : '입장 호출'}</span>
                             </button>
 
-                            {/* 2. 착석 완료 버튼 */}
+                            {/* 2. 🔔 2차 리마인드 재안내 버튼 (호출된 상태일 때 노출) */}
+                            {isCalled && (
+                              <button
+                                onClick={() => handleRemindWaiting(wait.id, wait.waiting_no, wait.customer_name)}
+                                disabled={waitingActionLoading === `remind_${wait.id}`}
+                                className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl flex items-center gap-1 border-0 cursor-pointer shadow-xs transition-colors"
+                                title="입장 지연 고객에게 2차 마지막 호출 SMS 발송"
+                              >
+                                <span>2차 리마인드</span>
+                              </button>
+                            )}
+
+                            {/* 3. 착석 완료 버튼 */}
                             <button
                               onClick={() => setSeatingTableSelection({ waitingId: wait.id, waitingNo: wait.waiting_no })}
                               className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-1 border-0 cursor-pointer shadow-xs transition-colors"
@@ -1246,7 +1336,7 @@ export function TableOrderOverviewSection({
                               <span>착석 배정</span>
                             </button>
 
-                            {/* 3. 취소 버튼 */}
+                            {/* 4. 취소 버튼 */}
                             <button
                               onClick={() => handleCancelWaiting(wait.id, wait.waiting_no)}
                               disabled={waitingActionLoading === `cancel_${wait.id}`}

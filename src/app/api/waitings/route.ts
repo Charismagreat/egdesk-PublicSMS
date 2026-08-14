@@ -128,6 +128,8 @@ export async function POST(req: Request) {
       called_at: '',
       seated_at: '',
       assigned_table: '',
+      pre_orders: '',
+      pre_order_total: 0,
       created_at: nowStr,
       tenant_id: tenantId
     }]);
@@ -158,7 +160,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const data = await req.json();
-    const { id, action, assignedTable } = data;
+    const { id, action, assignedTable, preOrders, preOrderTotal } = data;
 
     if (!id) {
       return NextResponse.json({ success: false, error: '대기 ID가 누락되었습니다.' }, { status: 400 });
@@ -175,7 +177,11 @@ export async function PATCH(req: Request) {
 
     const updates: any = { updated_at: nowStr };
 
-    if (action === 'call') {
+    if (action === 'pre_order') {
+      // 🍽️ 0. 사전 메뉴 주문 접수 (고객 모바일)
+      updates.pre_orders = typeof preOrders === 'string' ? preOrders : JSON.stringify(preOrders || []);
+      updates.pre_order_total = Number(preOrderTotal) || 0;
+    } else if (action === 'call') {
       // 📢 1. 입장 호출
       updates.status = 'CALLED';
       updates.called_at = nowStr;
@@ -190,13 +196,54 @@ export async function PATCH(req: Request) {
       } catch (smsErr: any) {
         console.error('[Entry Call SMS Send Failed]:', smsErr.message);
       }
+    } else if (action === 'remind') {
+      // 🔔 2. 2차 리마인드 재호출 (노쇼 방지)
+      try {
+        const cleanPhone = (target.customer_phone || '').replace(/[^0-9]/g, '');
+        if (cleanPhone) {
+          const smsMsg = `[EGDESK 입장 재안내 (마지막 호출)]\n고객님(대기 ${target.waiting_no}번), 현재 입장이 지연되고 있습니다.\n2분 내 카운터로 입장하지 않으실 경우 다음 대기팀으로 순서가 변경되오니 서둘러 입장해 주세요.`;
+          await gmAutomation.sendSMS(cleanPhone, smsMsg);
+        }
+      } catch (smsErr: any) {
+        console.error('[Remind SMS Send Failed]:', smsErr.message);
+      }
     } else if (action === 'seat') {
-      // 🪑 2. 착석 완료 (테이블 배정)
+      // 🪑 3. 착석 완료 (테이블 배정)
       updates.status = 'SEATED';
       updates.seated_at = nowStr;
       updates.assigned_table = assignedTable || '';
+
+      // 💡 사전 주문(Pre-orders)이 있는 경우 crm_orders 테이블에 해당 테이블의 정식 주문으로 자동 승격/생성!
+      const rawPreOrders = target.pre_orders;
+      if (rawPreOrders) {
+        try {
+          const items = typeof rawPreOrders === 'string' ? JSON.parse(rawPreOrders) : rawPreOrders;
+          if (Array.isArray(items) && items.length > 0) {
+            const tableNum = assignedTable || '1';
+            const orderRows = items.map((item: any, idx: number) => ({
+              id: `ORD-${Date.now()}-${idx + 1}`,
+              tenant_id: target.tenant_id || 'default',
+              customer_name: `테이블 ${tableNum}`,
+              customer_phone: target.customer_phone || '',
+              product_name: item.name || item.product_name,
+              quantity: String(item.quantity || 1),
+              total_price: String((Number(item.price) || 0) * (Number(item.quantity) || 1)),
+              delivery_method: '테이블오더',
+              shipping_address: '',
+              tracking_number: '',
+              customer_memo: item.memo ? `[사전주문] ${item.memo}` : `[대기 ${target.waiting_no}번 사전주문]`,
+              order_date: nowStr,
+              status: '접수'
+            }));
+            await insertRows('crm_orders', orderRows);
+            console.log(`✓ [Pre-order Converted] 대기 ${target.waiting_no}번 사전주문 ${orderRows.length}건이 테이블 ${tableNum}번에 자동 등록되었습니다.`);
+          }
+        } catch (orderErr: any) {
+          console.error('[Pre-order to crm_orders failed]:', orderErr.message);
+        }
+      }
     } else if (action === 'cancel') {
-      // ❌ 3. 대기 취소
+      // ❌ 4. 대기 취소
       updates.status = 'CANCELLED';
     }
 
