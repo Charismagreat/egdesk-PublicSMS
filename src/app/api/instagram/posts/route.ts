@@ -156,13 +156,13 @@ export async function GET(req: Request) {
 
             return {
               ...item,
-              id: item.id || `post_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-              content: item.content || item.caption || item.text || item.title || '등록된 포스팅 문구',
-              caption: item.caption || item.content || item.text || '등록된 포스팅 문구',
+              id: item.id || `post_${Date.now()}_${idx}`,
+              content: item.caption || item.content || item.text || item.title || '',
+              caption: item.caption || item.content || item.text || item.title || '',
               image_url: webImageUrl,
               imageUrl: webImageUrl,
               imagePath: rawImagePath,
-              status: item.status || 'PUBLISHED',
+              status: (item.status || 'POSTED').toUpperCase(),
               posted_at: item.posted_at || item.postedAt || item.published_at || item.publishedAt || validTime,
               created_at: validTime
             };
