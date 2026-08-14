@@ -11,6 +11,7 @@ export default function MainContentWrapper({ children }: { children: React.React
     pathname.startsWith('/shared/view') || 
     pathname.startsWith('/store') || 
     pathname.startsWith('/table-order') || 
+    pathname.startsWith('/waiting') || 
     pathname.startsWith('/booking') || 
     pathname === '/m' || 
     pathname.startsWith('/m/') || 

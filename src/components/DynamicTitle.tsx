@@ -79,7 +79,8 @@ function DynamicTitleHandler() {
       "/m/estimate-request": "모바일 스마트 견적 요청",
       "/m/recruitment": "구직자 모바일 접수",
       "/m/daily-report": "일일 업무 보고서 작성",
-      "/waiting": "매장 입장 대기 등록"
+      "/waiting": "매장 입장 대기 등록",
+      "/waiting/board": "실시간 대기 현황판 (DID)"
     };
 
     // 동적 경로 및 특수 조건 분기

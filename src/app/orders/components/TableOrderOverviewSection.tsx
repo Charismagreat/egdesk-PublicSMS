@@ -29,7 +29,10 @@ import {
   ArrowLeftRight,
   Undo2,
   Ban,
-  Play
+  Play,
+  Tv,
+  Volume2,
+  VolumeX
 } from "lucide-react";
 
 interface TableOrderOverviewSectionProps {
@@ -106,6 +109,29 @@ export function TableOrderOverviewSection({
 
   // 💳 원터치 부분 결제(개별 선택 결제 / 더치페이) 상태
   const [selectedPartialOrderIds, setSelectedPartialOrderIds] = useState<string[]>([]);
+
+  // 🗣️ 카운터 음성 TTS 호출 방송 상태 (기본 ON)
+  const [isTtsEnabled, setIsTtsEnabled] = useState<boolean>(true);
+
+  // 음성 호출 TTS 발성 함수
+  const speakCounterCalling = (waitingNo: number, isRemind: boolean = false) => {
+    if (!isTtsEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const text = isRemind
+        ? `대기 ${waitingNo}번 고객님, 입장이 지연되고 있습니다. 서둘러 카운터로 입장해 주시기 바랍니다.`
+        : `대기 ${waitingNo}번 고객님, 카운터로 입장해 주시기 바랍니다.`;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ko-KR';
+      utterance.rate = 0.95;
+      const voices = window.speechSynthesis.getVoices();
+      const koVoice = voices.find(v => v.lang.includes('ko') || v.lang.includes('KR'));
+      if (koVoice) utterance.voice = koVoice;
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.error('Speech synthesis error:', e);
+    }
+  };
 
   // 원터치 부분 결제 실행 핸들러
   const handlePartialCompletePayment = async (tableNum: string, targetOrders: Order[]) => {
@@ -194,6 +220,7 @@ export function TableOrderOverviewSection({
       });
       const data = await res.json();
       if (data.success) {
+        speakCounterCalling(waitingNo, false);
         alert(`대기 ${waitingNo}번 고객님께 입장 안내 문자가 발송되었습니다.`);
         fetchWaitings();
       }
@@ -218,6 +245,7 @@ export function TableOrderOverviewSection({
       });
       const data = await res.json();
       if (data.success) {
+        speakCounterCalling(waitingNo, true);
         alert(`대기 ${waitingNo}번 고객님께 2차 리마인드 문자가 발송되었습니다.`);
         fetchWaitings();
       }
@@ -847,6 +875,18 @@ export function TableOrderOverviewSection({
             </div>
           </div>
 
+          {/* 📺 대형 대기 전광판(DID) 열기 버튼 */}
+          <a
+            href="/waiting/board"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white/15 hover:bg-white/25 text-white font-bold px-3.5 py-3 rounded-2xl backdrop-blur-md transition-all text-xs flex items-center gap-1.5 border border-white/20 cursor-pointer shrink-0 shadow-xs whitespace-nowrap"
+            title="매장 입구/벽걸이 TV용 실시간 대기 전광판(DID) 새 창 열기"
+          >
+            <Tv className="w-4 h-4 text-indigo-200" />
+            <span>대기 전광판</span>
+          </a>
+
           {/* 📱 대기 QR 열기 버튼 */}
           <button
             onClick={() => setIsWaitingQrModalOpen(true)}
@@ -1457,16 +1497,45 @@ export function TableOrderOverviewSection({
                   </h2>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsWaitingModalOpen(false);
-                  setSeatingTableSelection(null);
-                }}
-                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors border-0 bg-transparent cursor-pointer"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              <div className="flex items-center gap-2">
+                {/* 🗣️ 음성 호출 방송 토글 스위치 */}
+                <button
+                  type="button"
+                  onClick={() => setIsTtsEnabled(!isTtsEnabled)}
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isTtsEnabled 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100' 
+                      : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
+                  }`}
+                  title="호출 시 카운터 스피커로 한국어 안내 방송 자동 출력"
+                >
+                  {isTtsEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-600" /> : <VolumeX className="w-3.5 h-3.5" />}
+                  <span>{isTtsEnabled ? '음성 방송 ON' : '음성 OFF'}</span>
+                </button>
+
+                {/* 📺 대기 전광판 열기 */}
+                <a
+                  href="/waiting/board"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                  title="대형 전광판(DID) 새 창 열기"
+                >
+                  <Tv className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">전광판(DID)</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsWaitingModalOpen(false);
+                    setSeatingTableSelection(null);
+                  }}
+                  className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors border-0 bg-transparent cursor-pointer"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
             </div>
 
             {/* 📊 오늘의 웨이팅 통계 요약 바 */}

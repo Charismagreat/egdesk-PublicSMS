@@ -242,6 +242,34 @@ export async function PATCH(req: Request) {
           console.error('[Pre-order to crm_orders failed]:', orderErr.message);
         }
       }
+
+      // 🚨 3-1. 입장 임박(내 앞 1~2팀) 자동 사전 알림 (Auto Ahead Alert)
+      try {
+        const remainingWaitingsRes = await queryTable('crm_waitings', {
+          filters: { status: 'WAITING' },
+          orderBy: 'id',
+          orderDirection: 'ASC'
+        });
+        const remainingList = (remainingWaitingsRes.rows || []).filter((w: any) => !w.deleted_at && w.id !== id);
+        
+        // 내 앞 1팀, 2팀 손님에게 사전 준비 알림 발송 (중복 방지: ahead_alerted !== 1)
+        const aheadTargets = remainingList.slice(0, 2);
+        for (let i = 0; i < aheadTargets.length; i++) {
+          const aheadWait = aheadTargets[i];
+          if (!aheadWait.ahead_alerted) {
+            const cleanPhone = (aheadWait.customer_phone || '').replace(/[^0-9]/g, '');
+            if (cleanPhone) {
+              const aheadCount = i; // 0이면 바로 다음 순서(앞 0팀), 1이면 앞 1팀
+              const aheadMsg = `[EGDESK 웨이팅 입장 임박 안내]\n고객님(대기 ${aheadWait.waiting_no}번), 현재 고객님 앞 대기 ${aheadCount === 0 ? '0팀(다음 입장 순서)' : '1팀'}입니다!\n곧 입장이 시작되오니 매장 입구 근처로 이동해 주시기 바랍니다.`;
+              await gmAutomation.sendSMS(cleanPhone, aheadMsg);
+              await updateRows('crm_waitings', { ahead_alerted: 1 }, { filters: { id: aheadWait.id } });
+              console.log(`✓ [Ahead Alert Sent] 대기 ${aheadWait.waiting_no}번 손님에게 입장 임박 SMS 발송 완료.`);
+            }
+          }
+        }
+      } catch (aheadErr: any) {
+        console.error('[Auto Ahead Alert Failed]:', aheadErr.message);
+      }
     } else if (action === 'change_table') {
       // 🔀 4. 자리 이동 (테이블 변경)
       const oldTable = target.assigned_table;

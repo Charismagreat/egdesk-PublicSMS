@@ -774,6 +774,7 @@ export async function setupDatabase() {
       { name: 'assigned_table', type: 'TEXT' },
       { name: 'pre_orders', type: 'TEXT' }, // 사전 주문 품목 JSON
       { name: 'pre_order_total', type: 'INTEGER' }, // 사전 주문 총액
+      { name: 'ahead_alerted', type: 'INTEGER' }, // 1~2팀 임박 알림 발송 여부 (1: 발송됨)
       { name: 'created_at', type: 'TEXT' }
     ], { tableName: 'crm_waitings', uniqueKeyColumns: ['id'] });
     console.log('✓ 실시간 대기자 관리(crm_waitings) 테이블 신설 완료.');
