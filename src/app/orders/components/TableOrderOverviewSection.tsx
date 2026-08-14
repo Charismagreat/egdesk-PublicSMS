@@ -78,6 +78,8 @@ export function TableOrderOverviewSection({
     } finally {
       setLoadingAction(null);
     }
+  };
+
   // 일시 정보(날짜+시간) 포맷팅 헬퍼
   const formatDateTime = (dateStr?: string, createdAt?: string) => {
     const raw = dateStr || createdAt;
