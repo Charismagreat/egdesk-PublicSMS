@@ -166,7 +166,7 @@ export function TableOrderOverviewSection({
       <html>
       <head>
         <meta charset="utf-8">
-        <title>테이블 ${tableNum}번 주문 영수증</title>
+        <title>영수증 (테이블 ${tableNum}번)</title>
         <style>
           body { 
             font-family: 'Malgun Gothic', sans-serif; 
@@ -208,7 +208,7 @@ export function TableOrderOverviewSection({
       <body>
         <div class="receipt-box">
           <div class="header">
-            <h2>테이블 ${tableNum}번 수주 영수증</h2>
+            <h2>영수증 (테이블 ${tableNum}번)</h2>
             <p>출력일시: ${nowStr}</p>
           </div>
           

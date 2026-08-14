@@ -299,7 +299,7 @@ export default function ReceiptSettingsCard() {
             >
               {/* 영수증 상단 샘플 */}
               <div className="text-center border-b-2 border-black pb-3 mb-3">
-                <p className="font-black text-base tracking-tight">테이블 1번 수주 영수증</p>
+                <p className="font-black text-base tracking-tight">영수증 (테이블 1번)</p>
                 <p className="text-[9px] text-slate-500">2026. 08. 14. 오후 02:30</p>
               </div>
 
