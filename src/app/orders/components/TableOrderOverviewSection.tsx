@@ -371,7 +371,7 @@ export function TableOrderOverviewSection({
                       title="전체 주문 내역 팝업 열기"
                     >
                       <Maximize2 className="w-3.5 h-3.5" />
-                      <span className="text-[10px]">전체보기</span>
+                      <span className="text-[10px]">상세보기</span>
                     </button>
                   )}
                   <a
