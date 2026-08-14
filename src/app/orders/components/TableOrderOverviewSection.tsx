@@ -159,6 +159,14 @@ export function TableOrderOverviewSection({
 
   // 대기 손님 착석 (테이블 배정)
   const handleSeatWaiting = async (id: string, waitingNo: number, targetTable: string) => {
+    // 💡 이용중 테이블 선택 방지 가드
+    const isWaitingOccupied = waitingsList.some(w => w.status === 'SEATED' && String(w.assigned_table) === String(targetTable));
+    const isOrderOccupied = getOrdersForTable(targetTable).some(o => o.status !== '주문취소' && o.status !== '결제완료');
+    if (isWaitingOccupied || isOrderOccupied) {
+      alert(`테이블 ${targetTable}번은 이미 다른 손님이 이용 중입니다. 빈자리를 선택해 주세요.`);
+      return;
+    }
+
     setWaitingActionLoading(`seat_${id}`);
     try {
       const res = await fetch('/api/waitings', {
@@ -182,6 +190,14 @@ export function TableOrderOverviewSection({
 
   // 🔀 자리 이동 (테이블 변경 및 주문 자동 이관)
   const handleChangeTableWaiting = async (id: string, waitingNo: number, newTable: string) => {
+    // 💡 이용중 테이블 선택 방지 가드
+    const isWaitingOccupied = waitingsList.some(w => w.status === 'SEATED' && String(w.assigned_table) === String(newTable) && w.id !== id);
+    const isOrderOccupied = getOrdersForTable(newTable).some(o => o.status !== '주문취소' && o.status !== '결제완료');
+    if (isWaitingOccupied || isOrderOccupied) {
+      alert(`테이블 ${newTable}번은 이미 다른 손님이 이용 중입니다. 빈자리를 선택해 주세요.`);
+      return;
+    }
+
     setWaitingActionLoading(`change_table_${id}`);
     try {
       const res = await fetch('/api/waitings', {
@@ -1455,18 +1471,22 @@ export function TableOrderOverviewSection({
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {allTableIds.map((tId) => {
-                    const isOccupied = getOrdersForTable(tId).some(o => o.status !== '주문취소' && o.status !== '결제완료');
+                    const isWaitingOccupied = waitingsList.some(w => w.status === 'SEATED' && String(w.assigned_table) === String(tId));
+                    const isOrderOccupied = getOrdersForTable(tId).some(o => o.status !== '주문취소' && o.status !== '결제완료');
+                    const isOccupied = isWaitingOccupied || isOrderOccupied;
+
                     return (
                       <button
                         key={tId}
+                        disabled={isOccupied}
                         onClick={() => handleSeatWaiting(seatingTableSelection.waitingId, seatingTableSelection.waitingNo, tId)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all border cursor-pointer ${
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all border ${
                           isOccupied
-                            ? 'bg-slate-100 text-slate-400 border-slate-200'
-                            : 'bg-white hover:bg-orange-600 hover:text-white text-slate-800 border-orange-300 shadow-xs scale-105'
+                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50'
+                            : 'bg-white hover:bg-orange-600 hover:text-white text-slate-800 border-orange-300 shadow-xs scale-105 cursor-pointer'
                         }`}
                       >
-                        테이블 {tId}번 {isOccupied ? '(이용중)' : '(빈자리)'}
+                        테이블 {tId}번 {isOccupied ? '(이용중-선택불가)' : '(빈자리)'}
                       </button>
                     );
                   })}
@@ -1493,22 +1513,26 @@ export function TableOrderOverviewSection({
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {allTableIds.map((tId) => {
-                    const isCurrent = tId === changingTableSelection.currentTable;
-                    const isOccupied = getOrdersForTable(tId).some(o => o.status !== '주문취소' && o.status !== '결제완료');
+                    const isCurrent = String(tId) === String(changingTableSelection.currentTable);
+                    const isWaitingOccupied = waitingsList.some(w => w.status === 'SEATED' && String(w.assigned_table) === String(tId) && w.id !== changingTableSelection.waitingId);
+                    const isOrderOccupied = getOrdersForTable(tId).some(o => o.status !== '주문취소' && o.status !== '결제완료');
+                    const isOccupied = isWaitingOccupied || isOrderOccupied;
+                    const isDisabled = isCurrent || isOccupied;
+
                     return (
                       <button
                         key={tId}
-                        disabled={isCurrent}
+                        disabled={isDisabled}
                         onClick={() => handleChangeTableWaiting(changingTableSelection.waitingId, changingTableSelection.waitingNo, tId)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all border cursor-pointer ${
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all border ${
                           isCurrent
-                            ? 'bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed opacity-50'
+                            ? 'bg-slate-200 text-slate-500 border-slate-300 cursor-not-allowed opacity-60'
                             : isOccupied
-                            ? 'bg-slate-100 text-slate-400 border-slate-200'
-                            : 'bg-white hover:bg-indigo-600 hover:text-white text-indigo-900 border-indigo-300 shadow-xs scale-105'
+                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50'
+                            : 'bg-white hover:bg-indigo-600 hover:text-white text-indigo-900 border-indigo-300 shadow-xs scale-105 cursor-pointer'
                         }`}
                       >
-                        테이블 {tId}번 {isCurrent ? '(현재자리)' : isOccupied ? '(이용중)' : '(빈자리)'}
+                        테이블 {tId}번 {isCurrent ? '(현재자리)' : isOccupied ? '(이용중-선택불가)' : '(빈자리)'}
                       </button>
                     );
                   })}
