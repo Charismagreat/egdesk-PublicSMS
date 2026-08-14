@@ -62,17 +62,25 @@ export function useTableOrder() {
 
   const fetchProducts = async () => {
     try {
-      const res = await apiFetch('/api/products');
+      // ⚡ 전체 메뉴 조회를 위해 limit=1000 전달 및 폴백 보정
+      const res = await apiFetch('/api/products?limit=1000');
       const json = await res.json();
-      if (json.success) {
-        // 테이블용 카테고리만 필터링
+      if (json.success && Array.isArray(json.products)) {
+        // 1차: '테이블용' 카테고리가 지정된 상품만 필터링
         const tableOrderProducts = json.products.filter((p: any) => 
           p.category === '테이블용'
         );
-        setProducts(tableOrderProducts);
+        
+        // 2차 스마트 폴백: '테이블용'으로 지정된 메뉴가 1개 이상이면 전용 메뉴판 노출,
+        // 지정된 '테이블용' 메뉴가 0개라면 사장님이 등록하신 전체 활성 상품 목록을 자동 노출
+        if (tableOrderProducts.length > 0) {
+          setProducts(tableOrderProducts);
+        } else {
+          setProducts(json.products);
+        }
       }
     } catch (e) {
-      console.error(e);
+      console.error("테이블오더 상품 목록 로드 실패:", e);
     } finally {
       setLoading(false);
     }
