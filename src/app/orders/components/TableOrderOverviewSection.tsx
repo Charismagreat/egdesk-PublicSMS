@@ -157,14 +157,16 @@ export function TableOrderOverviewSection({
     }
   };
 
-  // 대기 손님 착석 (테이블 배정)
+  // 대기 손님 착석 (테이블 배정 및 합석 지원)
   const handleSeatWaiting = async (id: string, waitingNo: number, targetTable: string) => {
-    // 💡 이용중 테이블 선택 방지 가드
     const isWaitingOccupied = waitingsList.some(w => w.status === 'SEATED' && String(w.assigned_table) === String(targetTable));
     const isOrderOccupied = getOrdersForTable(targetTable).some(o => o.status !== '주문취소' && o.status !== '결제완료');
-    if (isWaitingOccupied || isOrderOccupied) {
-      alert(`테이블 ${targetTable}번은 이미 다른 손님이 이용 중입니다. 빈자리를 선택해 주세요.`);
-      return;
+    const isOccupied = isWaitingOccupied || isOrderOccupied;
+
+    if (isOccupied) {
+      if (!confirm(`⚠️ 테이블 ${targetTable}번은 현재 이용 중인 테이블입니다.\n해당 테이블의 일행으로 [합석(주문 합치기)] 배정하시겠습니까?`)) {
+        return;
+      }
     }
 
     setWaitingActionLoading(`seat_${id}`);
@@ -176,7 +178,7 @@ export function TableOrderOverviewSection({
       });
       const data = await res.json();
       if (data.success) {
-        alert(`대기 ${waitingNo}번 손님이 테이블 ${targetTable}번에 착석 처리되었습니다.`);
+        alert(`대기 ${waitingNo}번 손님이 테이블 ${targetTable}번에 착석(${isOccupied ? '합석' : '배정'}) 처리되었습니다.`);
         setSeatingTableSelection(null);
         fetchWaitings();
         onFetchData();
@@ -188,14 +190,16 @@ export function TableOrderOverviewSection({
     }
   };
 
-  // 🔀 자리 이동 (테이블 변경 및 주문 자동 이관)
+  // 🔀 자리 이동 (테이블 변경 및 합석/주문 병합 지원)
   const handleChangeTableWaiting = async (id: string, waitingNo: number, newTable: string) => {
-    // 💡 이용중 테이블 선택 방지 가드
     const isWaitingOccupied = waitingsList.some(w => w.status === 'SEATED' && String(w.assigned_table) === String(newTable) && w.id !== id);
     const isOrderOccupied = getOrdersForTable(newTable).some(o => o.status !== '주문취소' && o.status !== '결제완료');
-    if (isWaitingOccupied || isOrderOccupied) {
-      alert(`테이블 ${newTable}번은 이미 다른 손님이 이용 중입니다. 빈자리를 선택해 주세요.`);
-      return;
+    const isOccupied = isWaitingOccupied || isOrderOccupied;
+
+    if (isOccupied) {
+      if (!confirm(`⚠️ 테이블 ${newTable}번은 이미 다른 손님이 이용 중입니다.\n대기 ${waitingNo}번 손님의 주문을 테이블 ${newTable}번으로 [합석(주문 병합)] 이동하시겠습니까?`)) {
+        return;
+      }
     }
 
     setWaitingActionLoading(`change_table_${id}`);
@@ -207,7 +211,7 @@ export function TableOrderOverviewSection({
       });
       const data = await res.json();
       if (data.success) {
-        alert(`대기 ${waitingNo}번 손님이 테이블 ${newTable}번으로 이동되었습니다. (주문 내역 자동 이관)`);
+        alert(`대기 ${waitingNo}번 손님이 테이블 ${newTable}번으로 이동(주문 ${isOccupied ? '병합' : '이관'})되었습니다.`);
         setChangingTableSelection(null);
         fetchWaitings();
         onFetchData();
@@ -1478,15 +1482,14 @@ export function TableOrderOverviewSection({
                     return (
                       <button
                         key={tId}
-                        disabled={isOccupied}
                         onClick={() => handleSeatWaiting(seatingTableSelection.waitingId, seatingTableSelection.waitingNo, tId)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all border ${
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all border cursor-pointer ${
                           isOccupied
-                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50'
-                            : 'bg-white hover:bg-orange-600 hover:text-white text-slate-800 border-orange-300 shadow-xs scale-105 cursor-pointer'
+                            ? 'bg-amber-50 hover:bg-amber-600 hover:text-white text-amber-900 border-amber-300 shadow-2xs'
+                            : 'bg-white hover:bg-orange-600 hover:text-white text-slate-800 border-orange-300 shadow-xs scale-105'
                         }`}
                       >
-                        테이블 {tId}번 {isOccupied ? '(이용중-선택불가)' : '(빈자리)'}
+                        테이블 {tId}번 {isOccupied ? '(이용중-합석)' : '(빈자리)'}
                       </button>
                     );
                   })}
@@ -1494,7 +1497,7 @@ export function TableOrderOverviewSection({
               </div>
             )}
 
-            {/* 🔀 자리 이동(테이블 변경) 서브 선택 패널 */}
+            {/* 🔀 자리 이동(테이블 변경 및 합석) 서브 선택 패널 */}
             {changingTableSelection && (
               <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 space-y-2 animate-fade-in">
                 <div className="flex items-center justify-between">
@@ -1509,7 +1512,7 @@ export function TableOrderOverviewSection({
                   </button>
                 </div>
                 <p className="text-[11px] text-indigo-700">
-                  ✓ 이동 시 기존 테이블의 미결제 주문 내역이 선택한 새 테이블로 자동 이관됩니다.
+                  ✓ 빈자리 이동 시 주문이 자동 이관되며, 이용 중인 테이블 선택 시 일행 [합석(주문 병합)]이 가능합니다.
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {allTableIds.map((tId) => {
@@ -1517,22 +1520,21 @@ export function TableOrderOverviewSection({
                     const isWaitingOccupied = waitingsList.some(w => w.status === 'SEATED' && String(w.assigned_table) === String(tId) && w.id !== changingTableSelection.waitingId);
                     const isOrderOccupied = getOrdersForTable(tId).some(o => o.status !== '주문취소' && o.status !== '결제완료');
                     const isOccupied = isWaitingOccupied || isOrderOccupied;
-                    const isDisabled = isCurrent || isOccupied;
 
                     return (
                       <button
                         key={tId}
-                        disabled={isDisabled}
+                        disabled={isCurrent}
                         onClick={() => handleChangeTableWaiting(changingTableSelection.waitingId, changingTableSelection.waitingNo, tId)}
                         className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all border ${
                           isCurrent
                             ? 'bg-slate-200 text-slate-500 border-slate-300 cursor-not-allowed opacity-60'
                             : isOccupied
-                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50'
+                            ? 'bg-amber-50 hover:bg-amber-600 hover:text-white text-amber-900 border-amber-300 cursor-pointer shadow-2xs'
                             : 'bg-white hover:bg-indigo-600 hover:text-white text-indigo-900 border-indigo-300 shadow-xs scale-105 cursor-pointer'
                         }`}
                       >
-                        테이블 {tId}번 {isCurrent ? '(현재자리)' : isOccupied ? '(이용중-선택불가)' : '(빈자리)'}
+                        테이블 {tId}번 {isCurrent ? '(현재자리)' : isOccupied ? '(이용중-합석)' : '(빈자리)'}
                       </button>
                     );
                   })}
