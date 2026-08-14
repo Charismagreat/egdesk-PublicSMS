@@ -3,7 +3,7 @@
 import { apiFetch } from '@/lib/api';
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { Product, CartState, AppliedCoupon } from "../types";
+import { verifyTableToken } from "@/lib/table-token-helper";
 
 export function useTableOrder() {
   const { tableId } = useParams();
@@ -19,6 +19,10 @@ export function useTableOrder() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   
+  // 보안 토큰 유효성 상태
+  const [isTokenValid, setIsTokenValid] = useState<boolean>(true);
+  const [tokenError, setTokenError] = useState<string>('');
+
   // 쿠폰 상태
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
@@ -39,6 +43,33 @@ export function useTableOrder() {
   const [isOtpVerifying, setIsOtpVerifying] = useState(false);
   const [showPointGuide, setShowPointGuide] = useState(false); // 포인트 안내 팝업 상태
   const [pointEarningRate, setPointEarningRate] = useState<number>(1); // 포인트 적립 비율 (기본값 1%)
+
+  // 보안 토큰 및 주소창 마스킹 검증
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenParam = urlParams.get('token');
+    const tableStr = String(tableId || '');
+
+    const sessionTokenKey = `table_token_${tableStr}`;
+    const savedToken = sessionStorage.getItem(sessionTokenKey);
+    const activeToken = tokenParam || savedToken;
+
+    if (activeToken && verifyTableToken(tableStr, activeToken)) {
+      setIsTokenValid(true);
+      setTokenError('');
+      sessionStorage.setItem(sessionTokenKey, activeToken);
+      
+      // 🎨 주소창 URL 마스킹 (History API State Masking - token 파라미터를 숨김)
+      if (tokenParam) {
+        const cleanUrl = `${window.location.pathname}`;
+        window.history.replaceState({}, '', cleanUrl);
+      }
+    } else {
+      setIsTokenValid(false);
+      setTokenError(`⚠️ 유효하지 않은 접근이거나 보안 토큰이 일치하지 않습니다. 올바른 테이블 ${tableStr}번 QR 코드를 다시 스캔해 주세요.`);
+    }
+  }, [tableId]);
 
   useEffect(() => {
     fetchProducts();
@@ -331,6 +362,11 @@ export function useTableOrder() {
   const submitOrder = async () => {
     if (cartItemsCount === 0) return;
     
+    if (!isTokenValid) {
+      alert("⚠️ 보안 토큰이 불일치하거나 거부된 접근입니다. 올바른 테이블 QR 코드를 새로 스캔해 주세요.");
+      return;
+    }
+
     // 포인트 사용 금액이 적용되었으나 인증되지 않은 상태 차단
     if (Number(usePointsInput) > 0 && !isOtpVerified) {
       alert("포인트 차감 결제를 위해 SMS OTP 인증을 먼저 진행해 주세요.");
@@ -428,6 +464,8 @@ export function useTableOrder() {
     tableId,
     products,
     loading,
+    isTokenValid,
+    tokenError,
     activeCategory, setActiveCategory,
     searchTerm, setSearchTerm,
     cart,

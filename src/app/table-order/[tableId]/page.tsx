@@ -19,6 +19,8 @@ export default function TableOrderMenuPage() {
   const {
     tableId,
     loading,
+    isTokenValid,
+    tokenError,
     activeCategory, setActiveCategory,
     searchTerm, setSearchTerm,
     cart,
@@ -57,6 +59,27 @@ export default function TableOrderMenuPage() {
     orderSuccess, setOrderSuccess,
     getNumericPrice
   } = useTableOrder();
+
+  // 보안 토큰 불일치 (어뷰징 무단 접근 차단 스크린)
+  if (!loading && !isTokenValid) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-white text-center font-sans">
+        <div className="bg-slate-800/90 border border-slate-700/80 p-8 rounded-3xl max-w-md space-y-4 shadow-2xl backdrop-blur-md">
+          <div className="w-16 h-16 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto text-3xl font-black">
+            🔒
+          </div>
+          <h2 className="text-xl font-black text-white">보안 접근 차단 (어뷰징 방지)</h2>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            주소창의 테이블 번호가 무단 변경되었거나 보안 토큰이 불일치합니다.<br />
+            타 테이블 결제 보호를 위해 주문 접근이 원천 차단되었습니다.
+          </p>
+          <div className="bg-red-950/60 border border-red-800/80 p-3.5 rounded-2xl text-[11px] text-red-300 font-mono leading-snug">
+            {tokenError}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // 주문 성공 화면 분기 처리
   if (orderSuccess) {

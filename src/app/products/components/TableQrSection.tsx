@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Printer, Download, ExternalLink, QrCode, RefreshCw } from "lucide-react";
+import { generateTableToken } from "@/lib/table-token-helper";
 
 export function TableQrSection() {
   const [tableCount, setTableCount] = useState<number>(12);
@@ -15,8 +16,9 @@ export function TableQrSection() {
   }, []);
 
   const getTableUrl = (tableNum: number) => {
-    const base = origin || "http://localhost:4000";
-    return `${base}/table-order/${tableNum}`;
+    const base = origin || "http://localhost:4005";
+    const token = generateTableToken(tableNum.toString());
+    return `${base}/table-order/${tableNum}?token=${token}`;
   };
 
   const getQrImageUrl = (url: string) => {
