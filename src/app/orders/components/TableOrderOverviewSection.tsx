@@ -298,7 +298,8 @@ export function TableOrderOverviewSection({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
         {allTableIds.map(tableNum => {
           const tableOrders = getOrdersForTable(tableNum);
-          const activeOrders = tableOrders.filter(o => o.status !== '주문취소');
+          // 현재 식사 중인 미결제 활성 주문 목록 (결제완료/주문취소 제외)
+          const activeOrders = tableOrders.filter(o => o.status !== '주문취소' && o.status !== '결제완료');
           const hasOrders = activeOrders.length > 0;
           const isOccupied = hasOrders;
 
