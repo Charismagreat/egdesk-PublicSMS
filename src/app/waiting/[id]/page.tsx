@@ -70,14 +70,18 @@ export default function CustomerWaitingStatusPage() {
     return () => clearInterval(interval);
   }, [waitingId]);
 
-  // 메뉴(상품) 목록 로드
+  // 메뉴(상품) 목록 로드 - 테이블용 메뉴만 엄격 필터링
   useEffect(() => {
     const loadProducts = async () => {
       try {
         const res = await fetch('/api/products?all=true');
         const json = await res.json();
         if (json.success && Array.isArray(json.products)) {
-          setProductList(json.products);
+          // 💡 테이블오더 전용 상품('테이블용')만 필터링
+          const tableOnly = json.products.filter((p: any) => 
+            p.category === '테이블용' || (p.category && p.category.includes('테이블'))
+          );
+          setProductList(tableOnly);
         }
       } catch (err) {
         console.error('Failed to load products for pre-order:', err);
@@ -238,11 +242,14 @@ export default function CustomerWaitingStatusPage() {
     } catch (e) {}
   }
 
-  // 메뉴 카테고리 추출
-  const categories = ["전체", ...Array.from(new Set(productList.map(p => p.category || "기타"))).filter(Boolean)];
-  const filteredProducts = activeCategory === "전체" 
+  // 메뉴 서브 카테고리 추출
+  const menuCategories = Array.from(new Set(
+    productList.map(p => p.menu_category || p.menuGroup || p.sub_category || "").filter(Boolean)
+  ));
+  const categories = menuCategories.length > 0 ? ["전체", ...menuCategories] : [];
+  const filteredProducts = activeCategory === "전체" || categories.length === 0
     ? productList 
-    : productList.filter(p => p.category === activeCategory);
+    : productList.filter(p => (p.menu_category || p.menuGroup || p.sub_category) === activeCategory);
 
   // 타이머 분:초 포맷
   const timerMinutes = remainingSeconds !== null ? Math.floor(remainingSeconds / 60) : 0;
@@ -461,23 +468,25 @@ export default function CustomerWaitingStatusPage() {
               </button>
             </div>
 
-            {/* 카테고리 탭 */}
-            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none shrink-0">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setActiveCategory(cat)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border cursor-pointer ${
-                    activeCategory === cat
-                      ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+            {/* 카테고리 탭 (2개 이상 있을 때만 노출) */}
+            {categories.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none shrink-0">
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setActiveCategory(cat)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border cursor-pointer ${
+                      activeCategory === cat
+                        ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* 메뉴 리스트 */}
             <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 scrollbar-thin">
