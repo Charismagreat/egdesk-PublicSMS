@@ -44,14 +44,12 @@ export default function InstagramStats({
     ? `@${activeUsername} 활성 세션`
     : "인스타 계정 바인딩이 필요합니다";
 
-  // 2. 피드 평균 반응 (좋아요 + 댓글 실제 평균값)
-  const totalEngagement = postedPosts.reduce(
-    (acc, cur) => acc + Number(cur.likes ?? cur.likes_count ?? 0) + Number(cur.comments ?? cur.comments_count ?? 0),
-    0
-  );
-  const avgEngagement = postedPosts.length > 0 ? (totalEngagement / postedPosts.length).toFixed(1) : "0";
+  // 2. 누적 반응 수 (좋아요 수 / 댓글 수 직관적 1:1 표출)
+  const totalLikes = postedPosts.reduce((acc, cur) => acc + Number(cur.likes ?? cur.likes_count ?? 0), 0);
+  const totalComments = postedPosts.reduce((acc, cur) => acc + Number(cur.comments ?? cur.comments_count ?? 0), 0);
+  const totalEngagement = totalLikes + totalComments;
   const engagementSubtext =
-    postedPosts.length > 0 ? `실제 발행 ${postedPosts.length}개 피드 종합 분석 (총 반응 ${totalEngagement}건)` : "분석 대상 피드 이력 없음";
+    postedPosts.length > 0 ? `총 반응 ${totalEngagement}건 (실제 발행 ${postedPosts.length}개 피드)` : "분석 대상 피드 이력 없음";
 
   // 3. 누적 업로드 건수 (유효 데이터 100% 통일)
   const uploadedCount = postedPosts.length;
@@ -114,9 +112,11 @@ export default function InstagramStats({
         <div className="absolute top-0 right-0 w-24 h-24 bg-purple-50/30 rounded-bl-full pointer-events-none" />
         <div className="flex justify-between items-start">
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">평균 피드 반응 (Eng.)</p>
-            <h3 className="text-2xl font-bold mt-2 text-slate-800">
-              {avgEngagement} <span className="text-xs text-slate-400 font-semibold ml-1">건/피드</span>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">누적 피드 반응 수</p>
+            <h3 className="text-xl font-bold mt-2 text-slate-800 flex items-center gap-2">
+              <span className="text-pink-600">좋아요 {totalLikes}</span>
+              <span className="text-slate-300">·</span>
+              <span className="text-purple-600">댓글 {totalComments}</span>
             </h3>
           </div>
           <div className="p-3 bg-purple-50 text-purple-600 rounded-xl border border-purple-100">
