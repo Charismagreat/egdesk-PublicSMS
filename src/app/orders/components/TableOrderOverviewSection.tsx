@@ -143,9 +143,9 @@ export function TableOrderOverviewSection({
     const is58mm = receiptSettings.paperWidth === "58mm";
     const paperWidthPx = is58mm ? "220px" : "300px";
 
-    const qrImgUrl = receiptSettings.qrType !== "NONE" && receiptSettings.qrUrl
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(receiptSettings.qrUrl)}`
-      : "";
+    // 텍스트 줄바꿈(\n)을 HTML <br/>로 치환하는 안전 헬퍼
+    const formattedCustomMsg = String(receiptSettings.customMessage || "").replace(/\r\n/g, "<br/>").replace(/\n/g, "<br/>");
+    const formattedNoticeText = String(receiptSettings.noticeText || "").replace(/\r\n/g, "<br/>").replace(/\n/g, "<br/>");
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -173,13 +173,13 @@ export function TableOrderOverviewSection({
           .header p { margin: 0; font-size: 10px; color: #64748b; }
           .item { border-bottom: 1px dashed #cbd5e1; padding: 8px 0; }
           .item-title { font-weight: bold; font-size: ${is58mm ? '12px' : '13px'}; margin-bottom: 3px; }
-          .item-memo { font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px 6px; border-radius: 4px; margin-top: 4px; white-space: pre-line; }
+          .item-memo { font-size: 10px; color: #475569; background: #f1f5f9; padding: 4px 6px; border-radius: 4px; margin-top: 4px; line-height: 1.4; }
           .item-flex { display: flex; justify-content: space-between; margin-top: 4px; font-weight: bold; }
           .total { border-top: 2px solid #000; margin-top: 12px; padding-top: 10px; display: flex; justify-content: space-between; font-size: ${is58mm ? '14px' : '15px'}; font-weight: 900; }
           
           .footer-section { text-align: center; margin-top: 15px; border-top: 1px dashed #94a3b8; padding-top: 12px; }
-          .custom-msg { font-weight: bold; margin-bottom: 8px; font-size: ${is58mm ? '11px' : '12px'}; white-space: pre-line; }
-          .notice-box { text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; font-size: 10px; line-height: 1.5; white-space: pre-line; color: #334155; margin-bottom: 10px; }
+          .custom-msg { font-weight: bold; margin-bottom: 8px; font-size: ${is58mm ? '11px' : '12px'}; line-height: 1.5; }
+          .notice-box { text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; font-size: 10px; line-height: 1.5; color: #334155; margin-bottom: 10px; }
           .company-info { font-size: 9px; color: #64748b; margin-top: 8px; line-height: 1.4; border-top: 1px dotted #cbd5e1; padding-top: 6px; }
           .qr-section { margin-top: 12px; padding-top: 8px; border-top: 1px dashed #cbd5e1; text-align: center; }
           .qr-img { width: 90px; height: 90px; margin: 0 auto; display: block; }
@@ -202,10 +202,11 @@ export function TableOrderOverviewSection({
             const pName = o.product_name || o.productName || '상품명 없음';
             const pPrice = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, '')).toLocaleString();
             const memo = o.customer_memo || o.customerMemo || '';
+            const formattedMemo = memo ? memo.replace(/\r\n/g, "<br/>").replace(/\n/g, "<br/>") : '';
             return `
               <div class="item">
                 <div class="item-title">${validOrders.length - idx}차 주문 - ${pName}</div>
-                ${memo ? `<div class="item-memo">메모: ${memo}</div>` : ''}
+                ${formattedMemo ? `<div class="item-memo">메모: ${formattedMemo}</div>` : ''}
                 <div class="item-flex">
                   <span>상태: ${o.status || '접수'}</span>
                   <span>${pPrice}원</span>
@@ -221,9 +222,9 @@ export function TableOrderOverviewSection({
 
           <!-- 영수증 하단 커스텀 영역 동적 인쇄 -->
           <div class="footer-section">
-            ${receiptSettings.customMessage ? `<div class="custom-msg">${receiptSettings.customMessage}</div>` : ''}
+            ${formattedCustomMsg ? `<div class="custom-msg">${formattedCustomMsg}</div>` : ''}
             
-            ${receiptSettings.noticeText ? `<div class="notice-box">${receiptSettings.noticeText}</div>` : ''}
+            ${formattedNoticeText ? `<div class="notice-box">${formattedNoticeText}</div>` : ''}
 
             ${receiptSettings.showCompanyProfile ? `
               <div class="company-info">
