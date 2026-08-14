@@ -1385,7 +1385,7 @@ export function TableOrderOverviewSection({
                 className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 no-underline shadow-xs"
               >
                 <ExternalLink className="w-4 h-4" />
-                <span>대기 접수창 새 탭 열기</span>
+                <span>대기 접수창 열기</span>
               </a>
 
               <button
