@@ -273,7 +273,8 @@ export function TableOrderOverviewSection({
   };
 
   const selectedOrders = selectedTableForModal ? getOrdersForTable(selectedTableForModal) : [];
-  const selectedActiveOrders = selectedOrders.filter(o => o.status !== '주문취소');
+  // ⚡ 현재 이용 중인 미결제 활성 주문만 정밀 필터링 (이전 손님의 결제완료 주문 배제)
+  const selectedActiveOrders = selectedOrders.filter(o => o.status !== '주문취소' && o.status !== '결제완료');
   const selectedGrandTotal = selectedActiveOrders.reduce((sum, o) => {
     const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
     return sum + (isNaN(p) ? 0 : p);
