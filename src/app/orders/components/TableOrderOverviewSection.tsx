@@ -61,15 +61,47 @@ export function TableOrderOverviewSection({
 
   const allTableIds = [...defaultTableIds, ...dbTableIds].sort((a, b) => Number(a) - Number(b));
 
-  // 테이블별 주문 그룹핑 함수
+  // 테이블별 주문 그룹핑 함수 (정규식 정밀 매칭: 테이블 10번, 11번이 1번에 잘못 엮이는 문제 방지)
   const getOrdersForTable = (tableNum: string) => {
     return orders.filter(o => {
       const name = o.customer_name || o.customerName || "";
-      return name.includes(`테이블 ${tableNum}`) || name.includes(`테이블${tableNum}`);
+      const match = name.match(/테이블\s*(\d+)번?/);
+      if (match && match[1]) {
+        return match[1] === tableNum;
+      }
+      return name === `테이블 ${tableNum}` || name === `테이블${tableNum}` || name === `테이블 ${tableNum}번`;
     });
   };
 
-  // ⚡ 테이블 주문들을 '결제완료' 시점 기준으로 1회차, 2회차, 3회차(회전수) 세션으로 지능형 그룹화
+  // 세션 객체 생성 헬퍼
+  const createSessionObj = (
+    index: number, 
+    bucket: Order[], 
+    isCurrent: boolean, 
+    status: '이용중' | '결제완료'
+  ): TableSession => {
+    const total = bucket.reduce((sum, o) => {
+      const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
+      return sum + (isNaN(p) ? 0 : p);
+    }, 0);
+    const first = bucket[0];
+    const last = bucket[bucket.length - 1];
+    const fName = first.product_name || first.productName || '주문';
+    const summary = bucket.length > 1 ? `${fName} 외 ${bucket.length - 1}건` : fName;
+
+    return {
+      sessionIndex: index,
+      orders: [...bucket],
+      isCurrent,
+      status,
+      startTime: formatDateTime(first.order_date, first.created_at, first.id),
+      endTime: formatDateTime(last.order_date, last.created_at, last.id),
+      totalAmount: total,
+      itemSummary: summary
+    };
+  };
+
+  // ⚡ 테이블 주문들을 '손님 이용 단위(결제 세션)' 기준으로 1회차, 2회차(회전수)로 지능형 그룹화
   const getTableSessions = (tableNum: string): TableSession[] => {
     const tableOrders = getOrdersForTable(tableNum);
     const valid = tableOrders
@@ -78,55 +110,42 @@ export function TableOrderOverviewSection({
 
     if (valid.length === 0) return [];
 
+    const unpaidOrders = valid.filter(o => o.status !== '결제완료');
+    const paidOrders = valid.filter(o => o.status === '결제완료');
+
     const sessions: TableSession[] = [];
-    let currentBucket: Order[] = [];
 
-    valid.forEach((ord) => {
-      currentBucket.push(ord);
-      if (ord.status === '결제완료') {
-        const total = currentBucket.reduce((sum, o) => {
-          const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
-          return sum + (isNaN(p) ? 0 : p);
-        }, 0);
-        const first = currentBucket[0];
-        const last = currentBucket[currentBucket.length - 1];
-        const fName = first.product_name || first.productName || '주문';
-        const summary = currentBucket.length > 1 ? `${fName} 외 ${currentBucket.length - 1}건` : fName;
+    // 1. 과거 결제완료된 주문들을 세션별(30분 내 추가 주문 및 일괄 결제)로 묶음
+    if (paidOrders.length > 0) {
+      let bucket: Order[] = [];
 
-        sessions.push({
-          sessionIndex: sessions.length + 1,
-          orders: [...currentBucket],
-          isCurrent: false,
-          status: '결제완료',
-          startTime: formatDateTime(first.order_date, first.created_at, first.id),
-          endTime: formatDateTime(last.order_date, last.created_at, last.id),
-          totalAmount: total,
-          itemSummary: summary
-        });
-        currentBucket = [];
-      }
-    });
+      paidOrders.forEach((ord) => {
+        if (bucket.length === 0) {
+          bucket.push(ord);
+        } else {
+          const lastOrd = bucket[bucket.length - 1];
+          const lastTime = Number(lastOrd.id) || 0;
+          const currTime = Number(ord.id) || 0;
+          // 주문 생성 시간 차이가 30분(1800000ms) 이내이거나 일괄 처리된 경우 동일 세션으로 병합
+          const isSameSession = Math.abs(currTime - lastTime) < 1800000;
 
-    if (currentBucket.length > 0) {
-      const total = currentBucket.reduce((sum, o) => {
-        const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
-        return sum + (isNaN(p) ? 0 : p);
-      }, 0);
-      const first = currentBucket[0];
-      const last = currentBucket[currentBucket.length - 1];
-      const fName = first.product_name || first.productName || '주문';
-      const summary = currentBucket.length > 1 ? `${fName} 외 ${currentBucket.length - 1}건` : fName;
-
-      sessions.push({
-        sessionIndex: sessions.length + 1,
-        orders: [...currentBucket],
-        isCurrent: true,
-        status: '이용중',
-        startTime: formatDateTime(first.order_date, first.created_at, first.id),
-        endTime: formatDateTime(last.order_date, last.created_at, last.id),
-        totalAmount: total,
-        itemSummary: summary
+          if (isSameSession) {
+            bucket.push(ord);
+          } else {
+            sessions.push(createSessionObj(sessions.length + 1, bucket, false, '결제완료'));
+            bucket = [ord];
+          }
+        }
       });
+
+      if (bucket.length > 0) {
+        sessions.push(createSessionObj(sessions.length + 1, bucket, false, '결제완료'));
+      }
+    }
+
+    // 2. 현재 이용 중인 미결제 주문 세션 추가
+    if (unpaidOrders.length > 0) {
+      sessions.push(createSessionObj(sessions.length + 1, unpaidOrders, true, '이용중'));
     }
 
     return sessions;
