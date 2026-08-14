@@ -9,6 +9,8 @@ interface ProductTableProps {
   statusFilter?: 'ACTIVE' | 'DRAFT';
   sourceFilter?: 'ALL' | 'INVENTORY' | 'MANUAL';
   setSourceFilter?: (v: 'ALL' | 'INVENTORY' | 'MANUAL') => void;
+  categoryFilter?: 'ALL' | '테이블용' | '스토어용' | '예약용';
+  setCategoryFilter?: (v: 'ALL' | '테이블용' | '스토어용' | '예약용') => void;
   onApprove?: (id: string, price: string, mainImageUrl: string) => Promise<void>;
   onUnapprove?: (id: string) => Promise<void>;
   onBatchToggleCoupon?: (targetValue: number) => Promise<void>;
@@ -182,6 +184,8 @@ export function ProductTable({
   statusFilter = 'ACTIVE',
   sourceFilter = 'ALL',
   setSourceFilter,
+  categoryFilter = 'ALL',
+  setCategoryFilter,
   onApprove,
   onUnapprove,
   onBatchToggleCoupon,
@@ -204,6 +208,45 @@ export function ProductTable({
           <h2 className="font-bold text-slate-800 shrink-0">
             {isDraftTab ? '승인 대기 완제품 목록' : '등록된 상품 목록'} ({filteredDataCount}건)
           </h2>
+
+          {/* 🍽️ 대분류 카테고리 필터 칩 (테이블오더 전용 강조 뱃지 포함) */}
+          {!isDraftTab && setCategoryFilter && (
+            <div className="flex items-center p-0.5 rounded-xl bg-orange-100/60 border border-orange-200/80 text-xs font-bold shrink-0">
+              <button
+                type="button"
+                onClick={() => setCategoryFilter('ALL')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  categoryFilter === 'ALL'
+                    ? 'bg-white text-slate-800 shadow-2xs font-extrabold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                전체 분류
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryFilter('테이블용')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  categoryFilter === '테이블용'
+                    ? 'bg-orange-600 text-white shadow-2xs font-extrabold ring-1 ring-orange-300'
+                    : 'text-orange-700 hover:bg-orange-200/50'
+                }`}
+              >
+                <span>🍽️ 테이블오더 전용</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryFilter('스토어용')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  categoryFilter === '스토어용'
+                    ? 'bg-blue-600 text-white shadow-2xs font-extrabold'
+                    : 'text-blue-700 hover:bg-blue-100/50'
+                }`}
+              >
+                <span>🛍️ 일반 스토어용</span>
+              </button>
+            </div>
+          )}
 
           {/* 🏷️ 출처별 세부 필터 버튼 탭 (판매 중 탭일 때 노출) */}
           {!isDraftTab && setSourceFilter && (

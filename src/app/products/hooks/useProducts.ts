@@ -31,6 +31,7 @@ export function useProducts() {
   const [isUploadingExcel, setIsUploadingExcel] = useState(false);
   const [statusFilter, setStatusFilter, isFilterRestored] = usePersistedState<'ACTIVE' | 'DRAFT' | 'TABLE_QR'>('products_statusFilter', 'ACTIVE');
   const [sourceFilter, setSourceFilter] = useState<'ALL' | 'INVENTORY' | 'MANUAL'>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<'ALL' | '테이블용' | '스토어용' | '예약용'>('ALL');
   const [totalCount, setTotalCount] = useState(0);
   const [activeCount, setActiveCount] = useState(0);
   const [draftCount, setDraftCount] = useState(0);
@@ -39,7 +40,7 @@ export function useProducts() {
   useEffect(() => {
     if (!isSearchRestored || !isFilterRestored) return;
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, sourceFilter, isSearchRestored, isFilterRestored]);
+  }, [searchQuery, statusFilter, sourceFilter, categoryFilter, isSearchRestored, isFilterRestored]);
 
   // 페이지, 필터, 검색어가 최종 결정되면 데이터 요청
   useEffect(() => {
@@ -187,14 +188,15 @@ export function useProducts() {
     }
   };
 
-  // ⚡ 이미 서버 사이드에서 필터링 및 페이징이 완료되었으므로 바로 바인딩
+  // ⚡ 출처 및 대분류 카테고리(테이블용 등) 필터링 바인딩
   const filteredData = data.filter(p => {
-    if (sourceFilter === 'INVENTORY') return !!p.inventory_item_id;
-    if (sourceFilter === 'MANUAL') return !p.inventory_item_id;
+    if (sourceFilter === 'INVENTORY' && !p.inventory_item_id) return false;
+    if (sourceFilter === 'MANUAL' && !!p.inventory_item_id) return false;
+    if (categoryFilter !== 'ALL' && (p.category || '스토어용') !== categoryFilter) return false;
     return true;
   });
 
-  const displayTotalCount = sourceFilter === 'ALL' ? totalCount : filteredData.length;
+  const displayTotalCount = (sourceFilter === 'ALL' && categoryFilter === 'ALL') ? totalCount : filteredData.length;
   const totalPages = Math.ceil(displayTotalCount / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + filteredData.length;
@@ -434,6 +436,7 @@ export function useProducts() {
     isUploadingExcel,
     statusFilter, setStatusFilter,
     sourceFilter, setSourceFilter,
+    categoryFilter, setCategoryFilter,
     approveProduct,
     unapproveProduct,
     activeCount,

@@ -24,6 +24,7 @@ export default function ProductsPage() {
     isUploadingExcel,
     statusFilter, setStatusFilter,
     sourceFilter, setSourceFilter,
+    categoryFilter, setCategoryFilter,
     approveProduct,
     unapproveProduct,
     activeCount,
@@ -124,6 +125,8 @@ export default function ProductsPage() {
             statusFilter={statusFilter}
             sourceFilter={sourceFilter}
             setSourceFilter={setSourceFilter}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
             onApprove={approveProduct}
             onUnapprove={unapproveProduct}
             onBatchToggleCoupon={handleBatchToggleCoupon}
