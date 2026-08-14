@@ -157,6 +157,8 @@ export async function GET(req: Request) {
             }
 
             const validTime = extractValidTimestamp(item, idx);
+            const likesCount = Number(item.likes ?? item.likes_count ?? 0);
+            const commentsCount = Number(item.comments ?? item.comments_count ?? 0);
 
             return {
               ...item,
@@ -166,6 +168,10 @@ export async function GET(req: Request) {
               image_url: webImageUrl,
               imageUrl: webImageUrl,
               imagePath: rawImagePath,
+              likes_count: likesCount,
+              comments_count: commentsCount,
+              likes: likesCount,
+              comments: commentsCount,
               status: (item.status || 'POSTED').toUpperCase(),
               posted_at: item.posted_at || item.postedAt || item.published_at || item.publishedAt || validTime,
               created_at: validTime

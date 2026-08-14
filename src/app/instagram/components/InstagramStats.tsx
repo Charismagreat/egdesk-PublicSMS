@@ -46,12 +46,12 @@ export default function InstagramStats({
 
   // 2. 피드 평균 반응 (좋아요 + 댓글 실제 평균값)
   const totalEngagement = postedPosts.reduce(
-    (acc, cur) => acc + (cur.likes_count || 0) + (cur.comments_count || 0),
+    (acc, cur) => acc + Number(cur.likes ?? cur.likes_count ?? 0) + Number(cur.comments ?? cur.comments_count ?? 0),
     0
   );
   const avgEngagement = postedPosts.length > 0 ? (totalEngagement / postedPosts.length).toFixed(1) : "0";
   const engagementSubtext =
-    postedPosts.length > 0 ? `실제 발행 ${postedPosts.length}개 피드 종합 분석` : "분석 대상 피드 이력 없음";
+    postedPosts.length > 0 ? `실제 발행 ${postedPosts.length}개 피드 종합 분석 (총 반응 ${totalEngagement}건)` : "분석 대상 피드 이력 없음";
 
   // 3. 누적 업로드 건수 (유효 데이터 100% 통일)
   const uploadedCount = postedPosts.length;
