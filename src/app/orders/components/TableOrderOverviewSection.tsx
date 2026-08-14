@@ -1316,9 +1316,6 @@ export function TableOrderOverviewSection({
                 <QrCode className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-black text-slate-900">매장 입장 대기 등록 QR</h3>
-              <p className="text-xs text-slate-500">
-                매장 입구에 비치해 두시면 손님이 폰으로 직접 대기표를 발급받을 수 있습니다.
-              </p>
             </div>
 
             {/* QR 이미지 카드 */}
