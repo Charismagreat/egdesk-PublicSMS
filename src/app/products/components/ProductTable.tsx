@@ -319,28 +319,27 @@ export function ProductTable({
                 <>
                   <th className="p-4 font-semibold text-slate-600 text-right">가격</th>
                   <th className="p-4 font-semibold text-slate-600">
-                    <div className="flex items-center gap-2">
+                    {onBatchToggleCoupon ? (
+                      (() => {
+                        const isAllAllowed = paginatedData.length > 0 && paginatedData.every(p => Number(p.is_coupon_excludable ?? 1) === 0);
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => onBatchToggleCoupon(isAllAllowed ? 1 : 0)}
+                            className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer border shadow-3xs flex items-center gap-1 ${
+                              isAllAllowed
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200/90 hover:bg-emerald-600 hover:text-white'
+                                : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-700 hover:text-white'
+                            }`}
+                            title={isAllAllowed ? '클릭 시 목록 내 모든 상품 쿠폰 적용을 [쿠폰 전체 제외]로 변경합니다.' : '클릭 시 목록 내 모든 상품 쿠폰 적용을 [쿠폰 전체 허용]으로 변경합니다.'}
+                          >
+                            <span>{isAllAllowed ? '쿠폰 전체 제외 ⚪' : '쿠폰 전체 허용 🟢'}</span>
+                          </button>
+                        );
+                      })()
+                    ) : (
                       <span>쿠폰 적용</span>
-                      {onBatchToggleCoupon && (
-                        (() => {
-                          const isAllAllowed = paginatedData.length > 0 && paginatedData.every(p => Number(p.is_coupon_excludable ?? 1) === 0);
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => onBatchToggleCoupon(isAllAllowed ? 1 : 0)}
-                              className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer border shadow-3xs flex items-center gap-1 ${
-                                isAllAllowed
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200/90 hover:bg-emerald-600 hover:text-white'
-                                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-700 hover:text-white'
-                              }`}
-                              title={isAllAllowed ? '클릭 시 목록 내 모든 상품 쿠폰 적용을 [전체 제외]로 변경합니다.' : '클릭 시 목록 내 모든 상품 쿠폰 적용을 [전체 허용]으로 변경합니다.'}
-                            >
-                              <span>{isAllAllowed ? '전체 제외 ⚪' : '전체 허용 🟢'}</span>
-                            </button>
-                          );
-                        })()
-                      )}
-                    </div>
+                    )}
                   </th>
                   <th className="p-4 font-semibold text-slate-600">상세 설명</th>
                   <th className="p-4 font-semibold text-slate-600 text-center w-24">관리</th>
