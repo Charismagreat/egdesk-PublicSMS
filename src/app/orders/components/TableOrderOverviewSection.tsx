@@ -490,11 +490,8 @@ export function TableOrderOverviewSection({
                 </div>
                 <div>
                   <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                    테이블 {selectedTableForModal}번 전체 주문 상세 명세
+                    테이블 {selectedTableForModal}번 주문 상세 내역
                   </h2>
-                  <p className="text-slate-500 text-xs font-medium mt-0.5">
-                    접수된 1차, 2차 차수별 모든 주문 품목 및 결제 상태를 확인하고 관리합니다.
-                  </p>
                 </div>
               </div>
               <button
