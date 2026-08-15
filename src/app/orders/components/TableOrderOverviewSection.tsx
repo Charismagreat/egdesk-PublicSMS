@@ -190,6 +190,9 @@ export function TableOrderOverviewSection({
   const fetchWaitings = async () => {
     try {
       const res = await fetch('/api/waitings');
+      if (!res.ok) return;
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) return;
       const data = await res.json();
       if (data.success) {
         setWaitingsList(data.waitings || []);

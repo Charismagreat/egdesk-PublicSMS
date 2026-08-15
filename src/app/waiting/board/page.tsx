@@ -78,9 +78,16 @@ export default function WaitingBoardPage() {
   const fetchBoardData = async () => {
     try {
       const res = await fetch("/api/waitings", { cache: "no-store" });
+      if (!res.ok) {
+        return;
+      }
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        return;
+      }
       const json = await res.json();
-      if (json.success && json.data) {
-        const list = json.data as any[];
+      if (json.success) {
+        const list = (json.waitings || json.data || []) as any[];
         setWaitings(list);
         setLastUpdated(new Date().toLocaleTimeString());
 

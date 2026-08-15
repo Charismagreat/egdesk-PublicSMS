@@ -46,6 +46,9 @@ export default function CustomerWaitingStatusPage() {
     try {
       setRefreshing(true);
       const res = await fetch(`/api/waitings?id=${waitingId}`);
+      if (!res.ok) return;
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) return;
       const data = await res.json();
       if (data.success && data.waiting) {
         setWaitingData(data.waiting);
@@ -75,6 +78,9 @@ export default function CustomerWaitingStatusPage() {
     const loadProducts = async () => {
       try {
         const res = await fetch('/api/products?all=true');
+        if (!res.ok) return;
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) return;
         const json = await res.json();
         if (json.success && Array.isArray(json.products)) {
           // 💡 테이블오더 전용 상품('테이블용')만 필터링

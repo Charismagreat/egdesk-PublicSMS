@@ -28,6 +28,9 @@ export default function CustomerWaitingRegistrationPage() {
     const fetchWaitingStats = async () => {
       try {
         const res = await fetch('/api/waitings');
+        if (!res.ok) return;
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) return;
         const data = await res.json();
         if (data.success) {
           setCurrentWaitingCount(data.activeCount || 0);
