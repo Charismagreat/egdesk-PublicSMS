@@ -32,7 +32,11 @@ import {
   Play,
   Tv,
   Volume2,
-  VolumeX
+  VolumeX,
+  Scissors,
+  Tag,
+  Percent,
+  Edit3
 } from "lucide-react";
 import { generateTableToken } from "@/lib/table-token-helper";
 
@@ -112,6 +116,16 @@ export function TableOrderOverviewSection({
   // 💳 원터치 부분 결제(개별 선택 결제 / 더치페이) 상태
   const [selectedPartialOrderIds, setSelectedPartialOrderIds] = useState<string[]>([]);
 
+  // ✂️ 현장 할인 및 결제 금액 수정 모달 상태
+  const [discountModalData, setDiscountModalData] = useState<{
+    tableNum: string | number;
+    orderIds: string[];
+    orderTitles: string;
+    originalAmount: number;
+    customAmount: number;
+    reason: string;
+  } | null>(null);
+
   // 🗣️ 카운터 음성 TTS 호출 방송 상태 (기본 ON)
   const [isTtsEnabled, setIsTtsEnabled] = useState<boolean>(true);
 
@@ -162,6 +176,85 @@ export function TableOrderOverviewSection({
       await onFetchData();
     } catch (e) {
       alert('부분 결제 처리 중 오류가 발생했습니다.');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  // ✂️ 현장 결제 금액 수정 및 할인 처리 실행기
+  const handleApplyDiscount = async (payImmediately: boolean = false) => {
+    if (!discountModalData) return;
+    const { orderIds, originalAmount, customAmount, reason } = discountModalData;
+    
+    if (isNaN(customAmount) || customAmount < 0) {
+      alert('유효한 결제 금액을 입력해 주세요.');
+      return;
+    }
+
+    const discountDiff = originalAmount - customAmount;
+    const targetOrderList = orders.filter(o => orderIds.includes(o.id));
+    if (targetOrderList.length === 0) return;
+
+    setLoadingAction('apply_discount');
+    try {
+      if (targetOrderList.length === 1) {
+        // 단건 주문 금액 수정
+        const ord = targetOrderList[0];
+        const prevMemo = ord.customer_memo || ord.customerMemo || '';
+        const memoTag = discountDiff > 0 
+          ? `[현장할인: -${discountDiff.toLocaleString()}원 (${reason || '금액조정'})]` 
+          : discountDiff < 0 
+          ? `[금액추가: +${Math.abs(discountDiff).toLocaleString()}원 (${reason || '금액조정'})]` 
+          : `[금액확정: ${customAmount.toLocaleString()}원 (${reason || '금액조정'})]`;
+        const newMemo = prevMemo ? `${prevMemo} ${memoTag}`.trim() : memoTag;
+
+        await onUpdateOrder(ord.id, {
+          total_price: String(customAmount),
+          totalPrice: String(customAmount),
+          customer_memo: newMemo,
+          customerMemo: newMemo,
+          status: payImmediately ? '결제완료' : (ord.status || '결제대기')
+        });
+      } else {
+        // 다건 주문인 경우: 비율 분할하여 각 주문의 금액을 분할 조정
+        let runningTotal = 0;
+        for (let i = 0; i < targetOrderList.length; i++) {
+          const ord = targetOrderList[i];
+          const ordPrice = Number(String(ord.total_price || ord.totalPrice || '0').replace(/[^0-9]/g, ''));
+          let allocatedPrice = originalAmount > 0 
+            ? Math.round((ordPrice / originalAmount) * customAmount)
+            : Math.round(customAmount / targetOrderList.length);
+            
+          if (i === targetOrderList.length - 1) {
+            // 끝자리 단수 보정
+            allocatedPrice = customAmount - runningTotal;
+          } else {
+            runningTotal += allocatedPrice;
+          }
+
+          const prevMemo = ord.customer_memo || ord.customerMemo || '';
+          const memoTag = `[현장할인: ${reason || '금액조정'}]`;
+          const newMemo = prevMemo ? `${prevMemo} ${memoTag}`.trim() : memoTag;
+
+          await onUpdateOrder(ord.id, {
+            total_price: String(allocatedPrice),
+            totalPrice: String(allocatedPrice),
+            customer_memo: newMemo,
+            customerMemo: newMemo,
+            status: payImmediately ? '결제완료' : (ord.status || '결제대기')
+          });
+        }
+      }
+
+      await onFetchData();
+      setDiscountModalData(null);
+      if (payImmediately) {
+        setSelectedTableForModal(null);
+        setSelectedSessionData(null);
+        setSelectedPartialOrderIds([]);
+      }
+    } catch (e: any) {
+      alert('금액 수정 처리 중 오류가 발생했습니다: ' + (e.message || ''));
     } finally {
       setLoadingAction(null);
     }
@@ -1466,7 +1559,29 @@ export function TableOrderOverviewSection({
                         </div>
 
                         <div className="flex justify-between items-center pt-2 border-t border-slate-100 font-black">
-                          <span className="text-slate-500 text-xs font-bold">주문 금액</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500 text-xs font-bold">주문 금액</span>
+                            {!isPaid && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDiscountModalData({
+                                    tableNum: activeTableNum,
+                                    orderIds: [ord.id],
+                                    orderTitles: `${pName} (${qty}개)`,
+                                    originalAmount: pPrice,
+                                    customAmount: pPrice,
+                                    reason: ''
+                                  });
+                                }}
+                                className="px-2 py-0.5 bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-orange-600 border border-slate-200 hover:border-orange-300 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                                title="이 항목의 결제 금액 직접 수정 / 할인"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                                <span>금액수정</span>
+                              </button>
+                            )}
+                          </div>
                           <span className="text-base text-orange-650">{pPrice.toLocaleString()}원</span>
                         </div>
                       </div>
@@ -1495,6 +1610,39 @@ export function TableOrderOverviewSection({
                     <span>영수증 인쇄</span>
                   </button>
 
+                  {/* ✂️ 현장 할인 / 금액 수정 버튼 (미결제 건이 있을 때 노출) */}
+                  {hasUnpaidInModal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetUnpaidOrders = selectedPartialOrderIds.length > 0
+                          ? targetOrders.filter(o => selectedPartialOrderIds.includes(o.id) && o.status !== '결제완료')
+                          : targetOrders.filter(o => o.status !== '결제완료');
+                        
+                        const totalAmount = targetUnpaidOrders.reduce((sum, o) => {
+                          const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
+                          return sum + (isNaN(p) ? 0 : p);
+                        }, 0);
+
+                        setDiscountModalData({
+                          tableNum: activeTableNum,
+                          orderIds: targetUnpaidOrders.map(o => o.id),
+                          orderTitles: targetUnpaidOrders.length === 1 
+                            ? `${targetUnpaidOrders[0].product_name || targetUnpaidOrders[0].productName}` 
+                            : `${targetUnpaidOrders[0]?.product_name || '주문'} 외 ${targetUnpaidOrders.length - 1}건`,
+                          originalAmount: totalAmount,
+                          customAmount: totalAmount,
+                          reason: ''
+                        });
+                      }}
+                      className="px-4 py-3 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-xs shrink-0"
+                      title="결제 금액 직접 수정 또는 현장 할인 적용"
+                    >
+                      <Scissors className="w-4 h-4 text-amber-700" />
+                      <span>금액 수정 / 할인</span>
+                    </button>
+                  )}
+
                   {/* 💳 1. 원터치 부분 결제 버튼 (체크된 항목이 1개 이상 있을 때) */}
                   {selectedPartialOrderIds.length > 0 && (() => {
                     const selectedOrders = targetOrders.filter(o => selectedPartialOrderIds.includes(o.id));
@@ -1510,7 +1658,7 @@ export function TableOrderOverviewSection({
                         className="px-5 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-1.5 border-0 cursor-pointer shadow-lg shadow-orange-600/30 transition-all shrink-0 animate-fade-in"
                       >
                         <CreditCard className="w-4 h-4" />
-                        <span>선택 {selectedOrders.length}건 부분 결제 ({selectedAmount.toLocaleString()}원)</span>
+                        <span>선택 {selectedOrders.length}건 결제 ({selectedAmount.toLocaleString()}원)</span>
                       </button>
                     );
                   })()}
@@ -1541,6 +1689,243 @@ export function TableOrderOverviewSection({
                     닫기
                   </button>
                 </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ✂️ 0. 현장 결제 금액 수정 및 할인 모달 팝업 */}
+      {discountModalData && (() => {
+        const { originalAmount, customAmount, reason, tableNum, orderTitles, orderIds } = discountModalData;
+        const discountDiff = originalAmount - customAmount;
+        const discountPercent = originalAmount > 0 ? ((discountDiff / originalAmount) * 100).toFixed(1) : '0';
+
+        const applyPresetAmount = (reduceVal: number) => {
+          const next = Math.max(0, originalAmount - reduceVal);
+          setDiscountModalData(prev => prev ? { ...prev, customAmount: next } : null);
+        };
+
+        const applyPresetPercent = (pct: number) => {
+          const discount = Math.round((originalAmount * pct) / 100);
+          const next = Math.max(0, originalAmount - discount);
+          setDiscountModalData(prev => prev ? { ...prev, customAmount: next } : null);
+        };
+
+        const applyTruncate = (unit: number) => {
+          const next = Math.floor(originalAmount / unit) * unit;
+          setDiscountModalData(prev => prev ? { ...prev, customAmount: next } : null);
+        };
+
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-fade-in font-sans">
+            <div className="bg-white rounded-3xl w-full max-w-lg p-6 sm:p-7 shadow-2xl space-y-5 relative max-h-[90vh] overflow-y-auto">
+              
+              {/* 헤더 */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center shadow-xs">
+                    <Scissors className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">
+                      테이블 {tableNum}번 금액 수정 및 할인
+                    </h3>
+                    <p className="text-xs text-slate-500 font-bold">
+                      대상: {orderTitles} ({orderIds.length}건)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDiscountModalData(null)}
+                  className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors border-0 bg-transparent cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 원래 금액 vs 수정할 금액 표시 카드 */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-3">
+                <div className="flex justify-between items-center text-xs font-bold text-slate-500 border-b border-slate-200/60 pb-2">
+                  <span>원래 총 주문 금액</span>
+                  <span className="text-base font-black text-slate-800 line-through">
+                    {originalAmount.toLocaleString()}원
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-black text-orange-900 flex items-center gap-1">
+                    <Tag className="w-4 h-4 text-orange-600" />
+                    최종 결제 적용 금액
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      value={customAmount}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setDiscountModalData(prev => prev ? { ...prev, customAmount: isNaN(val) ? 0 : val } : null);
+                      }}
+                      className="w-36 sm:w-44 text-right text-xl font-black text-orange-650 bg-white border-2 border-orange-400 rounded-xl px-3 py-1.5 outline-none focus:ring-2 focus:ring-orange-500 shadow-xs"
+                      min={0}
+                      step={100}
+                    />
+                    <span className="text-base font-black text-slate-800">원</span>
+                  </div>
+                </div>
+
+                {/* 할인/증액 차액 요약 */}
+                <div className="flex justify-between items-center text-xs font-bold pt-1">
+                  <span className="text-slate-400">조정 차액 (할인 혜택)</span>
+                  <span className={`font-black ${discountDiff > 0 ? 'text-rose-600' : discountDiff < 0 ? 'text-indigo-600' : 'text-slate-500'}`}>
+                    {discountDiff > 0 
+                      ? `-${discountDiff.toLocaleString()}원 (${discountPercent}% 할인)` 
+                      : discountDiff < 0 
+                      ? `+${Math.abs(discountDiff).toLocaleString()}원 추가` 
+                      : '금액 변동 없음'}
+                  </span>
+                </div>
+              </div>
+
+              {/* ⚡ 빠른 원터치 할인 프리셋 버튼들 */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-black text-slate-400 block">원터치 빠른 할인 적용</span>
+                
+                {/* 정액 할인 칩 */}
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => applyPresetAmount(1000)}
+                    className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs"
+                  >
+                    -1,000원
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetAmount(3000)}
+                    className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs"
+                  >
+                    -3,000원
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetAmount(5000)}
+                    className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs"
+                  >
+                    -5,000원
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetAmount(10000)}
+                    className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs"
+                  >
+                    -10,000원
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetAmount(20000)}
+                    className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs"
+                  >
+                    -20,000원
+                  </button>
+                </div>
+
+                {/* 정률(%) 및 절사 칩 */}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => applyPresetPercent(5)}
+                    className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs"
+                  >
+                    5% 할인
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetPercent(10)}
+                    className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs"
+                  >
+                    10% 할인
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetPercent(20)}
+                    className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs"
+                  >
+                    20% 할인
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyTruncate(1000)}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                  >
+                    1천원 단위 버림
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDiscountModalData(prev => prev ? { ...prev, customAmount: originalAmount } : null)}
+                    className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-500 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                  >
+                    원래대로 리셋
+                  </button>
+                </div>
+              </div>
+
+              {/* 📝 할인 / 수정 사유 입력 */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-black text-slate-400 block">할인 / 수정 사유 (장부 메모 자동 기록)</span>
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {['단골 우대', '지인/임직원', '서비스 감액', '불만/파손 보상', '끝자리 절사'].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setDiscountModalData(prev => prev ? { ...prev, reason: tag } : null)}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                        reason === tag
+                          ? 'bg-orange-600 text-white border-orange-600 shadow-2xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={reason}
+                  onChange={(e) => setDiscountModalData(prev => prev ? { ...prev, reason: e.target.value } : null)}
+                  placeholder="사유를 입력해 주세요 (예: 단골 손님 1만원 특별 할인)"
+                  className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-orange-500 text-slate-800"
+                />
+              </div>
+
+              {/* 하단 액션 버튼 */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setDiscountModalData(null)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs border-0 cursor-pointer transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyDiscount(false)}
+                  disabled={loadingAction === 'apply_discount'}
+                  className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold rounded-xl text-xs cursor-pointer shadow-xs transition-all"
+                >
+                  금액만 수정 (결제대기)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyDiscount(true)}
+                  disabled={loadingAction === 'apply_discount'}
+                  className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-xl text-xs border-0 cursor-pointer shadow-lg shadow-orange-600/30 transition-all flex items-center gap-1.5"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>수정 후 바로 결제완료</span>
+                </button>
               </div>
 
             </div>
