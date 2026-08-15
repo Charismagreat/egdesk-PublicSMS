@@ -1859,12 +1859,13 @@ export function TableOrderOverviewSection({
                         )}
                       </div>
                     </div>
-                  );
-                  })}
-                </div>
-              </>
-            );
-          })()}
+                    );
+                  })
+                )}
+              </div>
+            </>
+          );
+        })()}
 
             {/* 착석 테이블 배정 서브 선택 패널 */}
             {seatingTableSelection && (
