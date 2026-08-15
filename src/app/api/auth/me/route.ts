@@ -74,6 +74,7 @@ export async function GET() {
       role: payload.role as string || 'SUB_OPERATOR',
       name: name,
       username: username,
+      tenant_id: (payload as any).tenant_id || 'default',
       avatar_url: avatarUrl,
       workplace_id: workplaceId,
       workplace_name: workplaceName || '본사',

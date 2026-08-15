@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { ShoppingCart, Coins, X, Trash2 } from "lucide-react";
+import React, { useState } from "react";
+import { ShoppingCart, Coins, X, Trash2, ChevronUp, ChevronDown, Tag } from "lucide-react";
 import { AppliedCoupon } from "../types";
 
 interface CartFloatingBarProps {
@@ -73,26 +73,69 @@ export function CartFloatingBar({
   onClearCart,
   isSubmitting
 }: CartFloatingBarProps) {
+  // 쿠폰 및 적립금 상세 패널 접기/펼치기 상태 (기본값: 접힘)
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
+
   return (
-    <div className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-auto sm:w-[400px] sm:mx-auto z-50">
+    <div className="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-auto sm:w-[420px] sm:mx-auto z-50 animate-fade-in">
       
-      {/* 할인 & 적립금 적용 래퍼 패널 */}
-      <div className="bg-white rounded-2xl shadow-2xl p-4 mb-2 border border-slate-100 flex flex-col gap-3 relative">
-        
-        {/* 전체 취소 / 비우기 버튼 (패널 상단 우측) */}
+      {/* 🏷️ 미니 할인 & 전체 취소 토글 바 */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <button
+          type="button"
+          onClick={() => setIsExpanded(prev => !prev)}
+          className={`flex-1 text-xs font-bold py-2 px-3.5 rounded-xl shadow-lg border flex items-center justify-between transition-all backdrop-blur-md cursor-pointer ${
+            isExpanded
+              ? 'bg-slate-900 text-white border-slate-800'
+              : appliedCoupon || appliedPoints > 0
+              ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 ring-2 ring-emerald-500/20'
+              : 'bg-white/95 hover:bg-white text-slate-700 border-slate-200'
+          }`}
+        >
+          <span className="flex items-center gap-1.5 truncate">
+            <Tag className={`w-3.5 h-3.5 shrink-0 ${appliedCoupon || appliedPoints > 0 ? 'text-emerald-600' : 'text-orange-600'}`} />
+            <span className="truncate">
+              {appliedCoupon || appliedPoints > 0
+                ? `할인 적용됨 (-${((appliedCoupon?.discountAmount || 0) + appliedPoints).toLocaleString()}원)`
+                : '쿠폰 번호 / 단골 적립금 사용'}
+            </span>
+          </span>
+          <span className={`flex items-center gap-1 text-[11px] shrink-0 ml-2 font-black ${isExpanded ? 'text-slate-300' : 'text-slate-500'}`}>
+            <span>{isExpanded ? '접기' : '열기'}</span>
+            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+          </span>
+        </button>
+
         {onClearCart && (
-          <div className="flex justify-end border-b border-slate-100 pb-1.5">
+          <button
+            type="button"
+            onClick={onClearCart}
+            className="bg-white/95 hover:bg-rose-50 text-rose-600 text-xs font-bold py-2 px-3 rounded-xl shadow-lg border border-rose-200 flex items-center gap-1 transition-all backdrop-blur-md cursor-pointer shrink-0"
+            title="장바구니 전체 담기 취소"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+            <span>비우기</span>
+          </button>
+        )}
+      </div>
+
+      {/* 할인 & 적립금 적용 래퍼 패널 (펼쳐졌을 때만 표시) */}
+      {isExpanded && (
+        <div className="bg-white rounded-2xl shadow-2xl p-4 mb-2 border border-slate-200 flex flex-col gap-3 relative animate-slide-up max-h-[50vh] overflow-y-auto scrollbar-thin">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <span className="text-xs font-black text-slate-800 flex items-center gap-1">
+              <Tag className="w-3.5 h-3.5 text-orange-600" />
+              할인 및 혜택 적용
+            </span>
             <button
               type="button"
-              onClick={onClearCart}
-              className="text-[11px] font-bold text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all border-none cursor-pointer"
-              title="장바구니 전체 담기 취소"
+              onClick={() => setIsExpanded(false)}
+              className="text-[11px] font-bold text-slate-400 hover:text-slate-700 flex items-center gap-0.5 border-0 bg-transparent cursor-pointer"
             >
-              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-              <span>주문 전체 취소</span>
+              <span>접어두기</span>
+              <ChevronDown className="w-3.5 h-3.5" />
             </button>
           </div>
-        )}
 
         {/* 1. 쿠폰 영역 */}
         <div className="border-b border-slate-100 pb-2">
@@ -257,25 +300,26 @@ export function CartFloatingBar({
         </div>
 
       </div>
+      )}
 
       <button 
         onClick={onSubmitOrder}
         disabled={isSubmitting}
-        className="w-full bg-orange-600 text-white rounded-2xl shadow-xl shadow-orange-650/30 p-4 flex items-center justify-between hover:bg-orange-700 transition-colors border-0 cursor-pointer group disabled:bg-slate-400 disabled:shadow-none"
+        className="w-full bg-orange-600 text-white rounded-2xl shadow-xl shadow-orange-650/30 p-4 flex items-center justify-between hover:bg-orange-700 transition-colors border-0 cursor-pointer group disabled:bg-slate-400 disabled:shadow-none gap-2"
       >
-        <div className="flex items-center gap-3 text-left">
-          <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+        <div className="flex items-center gap-2.5 text-left min-w-0 flex-1">
+          <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0">
             <ShoppingCart className="w-5 h-5 text-white" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="text-orange-100 text-sm font-medium">총 {cartItemsCount}개 담음</div>
-            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {(appliedCoupon || appliedPoints > 0) && (
-                <span className="text-white/60 line-through text-sm">
+                <span className="text-white/60 line-through text-xs shrink-0">
                   {cartTotalAmount.toLocaleString()}원
                 </span>
               )}
-              <span className="text-white font-black text-xl">
+              <span className="text-white font-black text-xl shrink-0">
                 {finalEarningBasis.toLocaleString()}원
               </span>
               
@@ -283,7 +327,7 @@ export function CartFloatingBar({
               {expectedPoints > 0 && (
                 <span 
                   onClick={(e) => { e.stopPropagation(); setShowPointGuide(true); }}
-                  className="bg-gradient-to-r from-amber-400 to-orange-400 text-slate-900 font-extrabold text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-md ml-1.5 animate-pulse select-none"
+                  className="bg-gradient-to-r from-amber-400 to-orange-400 text-slate-900 font-extrabold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-md shrink-0 whitespace-nowrap animate-pulse select-none"
                   title="적립 혜택 자세히 보기"
                 >
                   <Coins className="w-3 h-3 text-slate-900 shrink-0" />
@@ -293,7 +337,7 @@ export function CartFloatingBar({
             </div>
           </div>
         </div>
-        <div className="font-bold text-lg flex items-center bg-white/10 px-5 py-3 rounded-xl group-hover:bg-white/20 transition-colors">
+        <div className="font-bold text-lg flex items-center bg-white/10 px-4 py-3 rounded-xl group-hover:bg-white/20 transition-colors shrink-0 whitespace-nowrap">
           주문하기
         </div>
       </button>

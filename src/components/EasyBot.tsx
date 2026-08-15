@@ -488,6 +488,7 @@ export default function EasyBot() {
     pathname.startsWith('/shared/view') || 
     pathname.startsWith('/store') || 
     pathname.startsWith('/table-order') || 
+    pathname.startsWith('/waiting') || 
     pathname.startsWith('/booking') || 
     (isMobilePath && !isSuperAdmin) ||
     pathname.startsWith('/expenses/mobile-approve') ||

@@ -44,12 +44,24 @@ export function useTableOrder() {
   const [showPointGuide, setShowPointGuide] = useState(false); // 포인트 안내 팝업 상태
   const [pointEarningRate, setPointEarningRate] = useState<number>(1); // 포인트 적립 비율 (기본값 1%)
 
+  // 테넌트 ID 상태
+  const [tenantId, setTenantId] = useState<string>('default');
+
   // 보안 토큰 및 주소창 마스킹 검증
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const urlParams = new URLSearchParams(window.location.search);
     const tokenParam = urlParams.get('token');
+    const tenantParam = urlParams.get('tenantId') || urlParams.get('tenant');
     const tableStr = String(tableId || '');
+
+    if (tenantParam) {
+      setTenantId(tenantParam);
+      sessionStorage.setItem(`table_tenant_${tableStr}`, tenantParam);
+    } else {
+      const savedTenant = sessionStorage.getItem(`table_tenant_${tableStr}`);
+      if (savedTenant) setTenantId(savedTenant);
+    }
 
     const sessionTokenKey = `table_token_${tableStr}`;
     const savedToken = sessionStorage.getItem(sessionTokenKey);
@@ -405,6 +417,7 @@ export function useTableOrder() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          tenant_id: tenantId || 'default',
           customerName: `테이블 ${tableId}번`,
           customerPhone: phoneForPoints || '010-0000-0000',
           productName,
@@ -451,7 +464,7 @@ export function useTableOrder() {
           setOrderSuccess(false);
         }, 3000);
       } else {
-        alert("주문 접수 중 오류가 발생했습니다.");
+        alert(json.error || "주문 접수 중 오류가 발생했습니다.");
       }
     } catch (e) {
       alert("네트워크 오류가 발생했습니다.");

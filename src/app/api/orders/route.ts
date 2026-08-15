@@ -6,18 +6,30 @@ import { PointService } from '@/lib/point-service';
 import { getTenantId } from '@/lib/tenant';
 import { gmAutomation } from '@/lib/google-messages';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const queryTenantId = searchParams.get('tenantId');
     const rawTenantId = await getTenantId();
-    const tenantId = rawTenantId || 'default';
+    const tenantId = queryTenantId || rawTenantId || 'default';
 
     const result = await queryTable('crm_orders', {
-      filters: { tenant_id: tenantId },
       orderBy: 'order_date',
       orderDirection: 'DESC'
     });
     // 데이터베이스 감사 룰 준수: 소프트 삭제된 항목 배제 (deleted_at이 있는 주문은 반환 안 함)
-    const activeOrders = (result.rows || []).filter((order: any) => !order.deleted_at);
+    let activeOrders = (result.rows || []).filter((order: any) => !order.deleted_at);
+
+    // ⚡ 비로그인 테이블오더 주문('default') 및 현재 활성 테넌트 주문을 모두 안전하게 표시
+    if (tenantId && tenantId !== 'default') {
+      activeOrders = activeOrders.filter((order: any) => 
+        order.tenant_id === tenantId || 
+        order.tenant_id === 'default' || 
+        !order.tenant_id ||
+        order.tenant_id === 'tenant-guest-id-2222'
+      );
+    }
+
     return NextResponse.json({ success: true, orders: activeOrders });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -26,12 +38,9 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const tenantId = await getTenantId();
-    if (!tenantId) {
-      return NextResponse.json({ success: false, error: '인증이 필요합니다.' }, { status: 401 });
-    }
-
+    const rawTenantId = await getTenantId();
     const data = await req.json();
+    const tenantId = rawTenantId || data.tenant_id || 'default';
     const { 
       customerName, 
       customerPhone, 

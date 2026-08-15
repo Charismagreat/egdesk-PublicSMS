@@ -16,11 +16,14 @@ export function TableOrderHistoryModal({ tableId, onClose }: TableOrderHistoryMo
   useEffect(() => {
     async function fetchTableOrders() {
       try {
-        const res = await apiFetch("/api/orders");
+        const cleanTableId = String(tableId || "").trim();
+        const savedTenant = typeof window !== "undefined" ? sessionStorage.getItem(`table_tenant_${cleanTableId}`) : null;
+        const queryUrl = savedTenant && savedTenant !== "default" ? `/api/orders?tenantId=${encodeURIComponent(savedTenant)}` : "/api/orders";
+        
+        const res = await apiFetch(queryUrl);
         const json = await res.json();
         if (json.success && Array.isArray(json.orders)) {
           // 현재 테이블Id 매칭 (customer_name에 "테이블 1번", "테이블 1", "테이블1" 유연 포함)
-          const cleanTableId = String(tableId || "").trim();
           const filtered = json.orders.filter((o: any) => {
             const name = String(o.customer_name || o.customerName || "");
             return (

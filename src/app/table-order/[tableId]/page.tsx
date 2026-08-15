@@ -92,7 +92,7 @@ export default function TableOrderMenuPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col pb-32 w-full font-sans text-slate-800">
+    <div className="min-h-screen bg-slate-50 flex flex-col pb-52 w-full font-sans text-slate-800">
       
       {/* 상단 스티키 헤더 및 검색, 카테고리 탭 영역 */}
       <OrderHeader

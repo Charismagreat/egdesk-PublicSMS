@@ -8,17 +8,28 @@ export function TableQrSection() {
   const [tableCount, setTableCount] = useState<number>(12);
   const [origin, setOrigin] = useState<string>("");
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [tenantId, setTenantId] = useState<string>("default");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       setOrigin(window.location.origin);
     }
+    // 관리자 매장의 고유 테넌트 ID 조회
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.tenant_id) {
+          setTenantId(data.tenant_id);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const getTableUrl = (tableNum: number) => {
     const base = origin || "http://localhost:4005";
     const token = generateTableToken(tableNum.toString());
-    return `${base}/table-order/${tableNum}?token=${token}`;
+    const tenantParam = tenantId && tenantId !== "default" ? `&tenantId=${encodeURIComponent(tenantId)}` : "";
+    return `${base}/table-order/${tableNum}?token=${token}${tenantParam}`;
   };
 
   const getQrImageUrl = (url: string) => {

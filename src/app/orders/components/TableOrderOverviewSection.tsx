@@ -754,7 +754,9 @@ export function TableOrderOverviewSection({
   const totalTableCount = allTableIds.length;
   const occupiedTableCount = allTableIds.filter(id => {
     const tOrders = getOrdersForTable(id);
-    return tOrders.some(o => o.status !== '주문취소' && o.status !== '결제완료');
+    const hasOrd = tOrders.some(o => o.status !== '주문취소' && o.status !== '결제완료');
+    const hasWait = waitingsList.some(w => w.status === 'SEATED' && String(w.assigned_table) === String(id));
+    return hasOrd || hasWait;
   }).length;
   const occupancyRate = totalTableCount > 0 ? Math.round((occupiedTableCount / totalTableCount) * 100) : 0;
 
@@ -771,10 +773,13 @@ export function TableOrderOverviewSection({
     return sum + (isNaN(p) ? 0 : p);
   }, 0);
 
-  // 오늘 테이블 결제 완료 매출 총액
+  const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  // 오늘 테이블 결제 완료 매출 총액 (당일 발생/완료된 주문만 엄격히 집계)
   const allPaidOrders = orders.filter(o => {
     const name = o.customer_name || o.customerName || "";
-    return name.includes('테이블') && o.status === '결제완료';
+    const orderDateStr = (o.order_date || o.created_at || "").substring(0, 10);
+    return name.includes('테이블') && o.status === '결제완료' && orderDateStr === todayStr;
   });
   const totalPaidAmount = allPaidOrders.reduce((sum, o) => {
     const p = Number(String(o.total_price || o.totalPrice || '0').replace(/[^0-9]/g, ''));
@@ -921,7 +926,10 @@ export function TableOrderOverviewSection({
           // 현재 식사 중인 미결제 활성 주문 목록 (결제완료/주문취소 제외)
           const activeOrders = tableOrders.filter(o => o.status !== '주문취소' && o.status !== '결제완료');
           const hasOrders = activeOrders.length > 0;
-          const isOccupied = hasOrders;
+          
+          // 🪑 해당 테이블에 착석 배정된 대기 손님 정보 감지
+          const seatedWaiting = waitingsList.find(w => w.status === 'SEATED' && String(w.assigned_table) === String(tableNum));
+          const isOccupied = hasOrders || Boolean(seatedWaiting);
           const sessions = getTableSessions(tableNum);
           const isDisabledTable = disabledTables.includes(tableNum);
 
@@ -965,10 +973,15 @@ export function TableOrderOverviewSection({
                       <Ban className="w-2.5 h-2.5" />
                       사용 중지 (홀딩)
                     </span>
-                  ) : isOccupied ? (
+                  ) : hasOrders ? (
                     <span className="bg-orange-600 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
                       <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
                       이용중 ({activeOrders.length}건)
+                    </span>
+                  ) : seatedWaiting ? (
+                    <span className="bg-emerald-600 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse shadow-xs">
+                      <UserCheck className="w-3 h-3" />
+                      대기 {seatedWaiting.waiting_no}번 착석 ({seatedWaiting.party_size || 2}명)
                     </span>
                   ) : (
                     <span className="bg-slate-200 text-slate-500 font-bold text-[10px] px-2 py-0.5 rounded-full">
@@ -1103,24 +1116,81 @@ export function TableOrderOverviewSection({
                     </button>
                   </div>
                 ) : !hasOrders ? (
-                  <div className="my-auto text-center py-6 space-y-2">
-                    <div>
-                      <p className="text-slate-400 text-xs font-bold">주문 내역 없음</p>
-                      <p className="text-slate-400 text-[10px] mt-0.5">손님 대기 중</p>
+                  seatedWaiting ? (
+                    <div className="my-auto py-3 space-y-2.5 bg-emerald-50/80 border border-emerald-200 rounded-2xl p-3 text-center animate-fade-in" onClick={e => e.stopPropagation()}>
+                      <div className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto shadow-2xs">
+                        <UserCheck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-emerald-950 text-xs font-black">
+                          대기 {seatedWaiting.waiting_no}번 ({seatedWaiting.customer_name}) 착석
+                        </p>
+                        <p className="text-emerald-700 text-[10px] mt-0.5 font-bold">
+                          인원: {seatedWaiting.party_size || 2}명 · 착석: {seatedWaiting.seated_at?.substring(11, 16) || '방금'}
+                        </p>
+                        <p className="text-slate-500 text-[10px] mt-1 font-medium">
+                          💡 테이블에서 메뉴를 고르고 있습니다.
+                        </p>
+                      </div>
+                      <div className="pt-1 flex items-center justify-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setChangingTableSelection({ waitingId: seatedWaiting.id, waitingNo: seatedWaiting.waiting_no, currentTable: String(tableNum) });
+                            setIsWaitingModalOpen(true);
+                          }}
+                          className="px-2 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[10px] rounded-lg transition-all cursor-pointer shadow-2xs inline-flex items-center gap-1"
+                          title="다른 테이블로 자리 이동 / 합석"
+                        >
+                          <ArrowLeftRight className="w-2.5 h-2.5 text-emerald-600" />
+                          <span>자리이동</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRevertSeating(seatedWaiting.id, seatedWaiting.waiting_no, seatedWaiting.customer_name);
+                          }}
+                          className="px-2 py-1 bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold text-[10px] rounded-lg transition-all cursor-pointer shadow-2xs inline-flex items-center gap-1"
+                          title="착석 취소 또는 퇴장 처리"
+                        >
+                          <Undo2 className="w-2.5 h-2.5 text-red-500" />
+                          <span>착석취소</span>
+                        </button>
+                        <a
+                          href={`/table-order/${tableNum}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg transition-all shadow-2xs inline-flex items-center gap-1"
+                          title="해당 테이블 오더 페이지 열기"
+                        >
+                          <Utensils className="w-2.5 h-2.5" />
+                          <span>주문하기</span>
+                        </a>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleDisableTable(tableNum);
-                      }}
-                      className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-500 hover:text-amber-700 border border-slate-200 hover:border-amber-300 font-bold text-[10px] rounded-lg transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs"
-                      title="단체석 보조, 예약석, 정비 등을 위해 사용 중지"
-                    >
-                      <Ban className="w-2.5 h-2.5 text-slate-400" />
-                      <span>테이블 사용 중지</span>
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="my-auto text-center py-6 space-y-2">
+                      <div>
+                        <p className="text-slate-400 text-xs font-bold">주문 내역 없음</p>
+                        <p className="text-slate-400 text-[10px] mt-0.5">손님 대기 중</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleDisableTable(tableNum);
+                        }}
+                        className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-500 hover:text-amber-700 border border-slate-200 hover:border-amber-300 font-bold text-[10px] rounded-lg transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                        title="단체석 보조, 예약석, 정비 등을 위해 사용 중지"
+                      >
+                        <Ban className="w-2.5 h-2.5 text-slate-400" />
+                        <span>테이블 사용 중지</span>
+                      </button>
+                    </div>
+                  )
                 ) : (
                   <div className="space-y-2.5 overflow-y-auto max-h-[220px] pr-1 scrollbar-thin">
                     {activeOrders.map((ord, idx) => {
