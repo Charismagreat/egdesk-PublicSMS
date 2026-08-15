@@ -10,7 +10,6 @@ export function getTableDisplayName(tableName: string): string {
     crm_orders: "주문 내역 관리",
     products: "광고 상품 관리",
     expense_projects: "지출 프로젝트 관리",
-    crm_instagram_posts: "인스타그램 포스트 관리",
     crm_naver_blog_posts: "네이버 블로그 포스트 관리",
     crm_partner_contacts: "거래처 담당자 명함첩",
     crm_payments: "결제 내역 관리",

@@ -277,15 +277,6 @@ export async function setupDatabase() {
     { name: 'api_client_secret', type: 'TEXT' }
   ], { tableName: 'naver_blog_marketing_settings', uniqueKeyColumns: ['id'] });
 
-  // 💡 [신규] 네이버 블로그 다중 오토파일럿 마케팅 규칙 대장 테이블 생성
-  await safeCreateTable('네이버 블로그 오토파일럿 규칙 대장', [
-    { name: 'id', type: 'INTEGER', notNull: true },
-    { name: 'name', type: 'TEXT', notNull: true },
-    { name: 'interval_type', type: 'TEXT' },
-    { name: 'scheduled_time', type: 'TEXT' },
-    { name: 'tone_style', type: 'TEXT' },
-    { name: 'is_active', type: 'INTEGER' }
-  ], { tableName: 'naver_blog_autopilot_rules', uniqueKeyColumns: ['id'] });
 
   // 💡 [신규] 맞춤형 커스텀 페이지 데이터 테이블 생성
   await safeCreateTable('맞춤형 커스텀 페이지 데이터', [

@@ -20,7 +20,6 @@ export async function GET() {
       'crm_payments',
       'crm_reservations',
       'crm_deliveries',
-      'crm_instagram_posts',
       'crm_naver_blog_posts',
       'coupons',
       'crm_coupons_restrictions',
