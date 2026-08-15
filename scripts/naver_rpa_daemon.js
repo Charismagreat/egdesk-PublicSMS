@@ -30,7 +30,16 @@ const jitterSleep = (min = 1500, max = 4000) => {
 
 // 백엔드 실행 포트 감지 헬퍼 함수
 async function getAppUrlWithFallback() {
-  const candidatePorts = [process.env.NEXT_PUBLIC_APP_URL, 'http://localhost:4002', 'http://localhost:4000', 'http://localhost:4001', 'http://localhost:4003'];
+  const candidatePorts = [
+    process.env.NEXT_PUBLIC_APP_URL, 
+    'http://localhost:4005', 
+    'http://localhost:4000', 
+    'http://localhost:4002', 
+    'http://localhost:4001', 
+    'http://localhost:4003',
+    'http://localhost:4004',
+    'http://localhost:3000'
+  ];
   for (const url of candidatePorts) {
     if (!url) continue;
     try {
@@ -39,7 +48,7 @@ async function getAppUrlWithFallback() {
       if (res.ok) return cleanUrl;
     } catch (e) {}
   }
-  return 'http://localhost:4002';
+  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4005';
 }
 
 // 네이버 로그인 폼 자동 타이핑 및 클릭 헬퍼 함수

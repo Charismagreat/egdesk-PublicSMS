@@ -3,14 +3,23 @@ import { NextResponse } from 'next/server';
 import { queryTable, insertRows } from '../../../../../egdesk-helpers';
 
 // RPA 발행 데몬 백그라운드 자동 기동 헬퍼 (publish-rpa 경유로 싱글톤 락 준수)
-async function triggerRpaDaemon(requestUrl?: string) {
+async function triggerRpaDaemon(req?: Request) {
   try {
-    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4002';
-    if (requestUrl) {
-      try {
-        const u = new URL(requestUrl);
-        baseUrl = `${u.protocol}//${u.host}`;
-      } catch (e) {}
+    let baseUrl = '';
+    if (req) {
+      const host = req.headers.get('host');
+      if (host) {
+        const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
+        baseUrl = `${protocol}://${host}`;
+      } else {
+        try {
+          const u = new URL(req.url);
+          baseUrl = `${u.protocol}//${u.host}`;
+        } catch (e) {}
+      }
+    }
+    if (!baseUrl) {
+      baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4005';
     }
     await fetch(`${baseUrl}/api/naver-blog/publish-rpa`, { method: 'POST' });
   } catch (err: any) {
@@ -34,7 +43,7 @@ export async function GET(req: Request) {
     );
     if (pendingPosts.length > 0) {
       console.log(`⏰ [Scheduler] 발행 시각이 경과한 예약 포스트 ${pendingPosts.length}건 감지! RPA 데몬을 기동합니다.`);
-      triggerRpaDaemon(req.url);
+      triggerRpaDaemon(req);
     }
 
     // 1. 네이버 블로그 설정 조회
