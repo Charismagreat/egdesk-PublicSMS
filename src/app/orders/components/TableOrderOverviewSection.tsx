@@ -280,10 +280,8 @@ export function TableOrderOverviewSection({
       });
       const data = await res.json();
       if (data.success) {
-        alert(`대기 ${waitingNo}번 손님이 테이블 ${targetTable}번에 착석(${isOccupied ? '합석' : '배정'}) 처리되었습니다.`);
         setSeatingTableSelection(null);
-        fetchWaitings();
-        onFetchData();
+        await Promise.all([fetchWaitings(), onFetchData()]);
       }
     } catch (e) {
       alert('착석 처리 중 오류가 발생했습니다.');
@@ -313,10 +311,8 @@ export function TableOrderOverviewSection({
       });
       const data = await res.json();
       if (data.success) {
-        alert(`대기 ${waitingNo}번 손님이 테이블 ${newTable}번으로 이동(주문 ${isOccupied ? '병합' : '이관'})되었습니다.`);
         setChangingTableSelection(null);
-        fetchWaitings();
-        onFetchData();
+        await Promise.all([fetchWaitings(), onFetchData()]);
       }
     } catch (e) {
       alert('테이블 변경 중 오류가 발생했습니다.');
