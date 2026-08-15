@@ -1241,7 +1241,7 @@ export function TableOrderOverviewSection({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleRevertSeating(seatedWaiting.id, seatedWaiting.waiting_no, seatedWaiting.customer_name);
+                            handleRevertSeatWaiting(seatedWaiting.id, seatedWaiting.waiting_no, seatedWaiting.customer_name);
                           }}
                           className="px-2 py-1 bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold text-[10px] rounded-lg transition-all cursor-pointer shadow-2xs inline-flex items-center gap-1"
                           title="착석 취소 또는 퇴장 처리"
