@@ -100,6 +100,7 @@ export function TableOrderOverviewSection({
   // ⏳ 실시간 대기자(웨이팅) 관리 상태
   const [waitingsList, setWaitingsList] = useState<any[]>([]);
   const [activeWaitingCount, setActiveWaitingCount] = useState<number>(0);
+  const [waitingTab, setWaitingTab] = useState<'WAITING' | 'SEATED' | 'ALL'>('WAITING');
   const [isWaitingModalOpen, setIsWaitingModalOpen] = useState<boolean>(false);
   const [isWaitingQrModalOpen, setIsWaitingQrModalOpen] = useState<boolean>(false);
   const [waitingActionLoading, setWaitingActionLoading] = useState<string | null>(null);
@@ -1636,17 +1637,69 @@ export function TableOrderOverviewSection({
               </div>
             </div>
 
-            {/* 본문 대기자 리스트 */}
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
-              {waitingsList.length === 0 ? (
-                <div className="py-16 text-center text-slate-400 text-sm font-bold">
-                  오늘 등록된 대기자가 없습니다.
-                </div>
-              ) : (
-                waitingsList.map((wait) => {
-                  const isWaiting = wait.status === 'WAITING';
-                  const isCalled = wait.status === 'CALLED';
-                  const isSeated = wait.status === 'SEATED';
+            {/* 🏷️ 웨이팅 탭 필터 (현재 대기중 손님에게 기본 집중) */}
+            {(() => {
+              const activeWaitings = waitingsList.filter(w => w.status === 'WAITING' || w.status === 'CALLED');
+              const seatedWaitings = waitingsList.filter(w => w.status === 'SEATED');
+              const displayedWaitings = waitingTab === 'WAITING'
+                ? activeWaitings
+                : waitingTab === 'SEATED'
+                ? seatedWaitings
+                : waitingsList;
+
+              return (
+                <>
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => { setWaitingTab('WAITING'); setSeatingTableSelection(null); }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                        waitingTab === 'WAITING'
+                          ? 'bg-orange-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>현재 대기 ({activeWaitings.length}팀)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setWaitingTab('SEATED'); setSeatingTableSelection(null); }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                        waitingTab === 'SEATED'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <UserCheck className="w-3.5 h-3.5" />
+                      <span>착석 완료 ({seatedWaitings.length}팀)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setWaitingTab('ALL'); setSeatingTableSelection(null); }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                        waitingTab === 'ALL'
+                          ? 'bg-slate-800 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      <span>전체 이력 ({waitingsList.length}건)</span>
+                    </button>
+                  </div>
+
+                  {/* 본문 대기자 리스트 */}
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
+                    {displayedWaitings.length === 0 ? (
+                      <div className="py-16 text-center text-slate-400 text-sm font-bold space-y-1">
+                        <p>{waitingTab === 'WAITING' ? '현재 대기 중인 손님이 없습니다.' : waitingTab === 'SEATED' ? '오늘 착석 완료된 손님이 없습니다.' : '등록된 대기 이력이 없습니다.'}</p>
+                        {waitingTab === 'WAITING' && <p className="text-xs text-slate-400 font-normal">새로운 손님이 대기 등록하면 여기에 즉시 나타납니다.</p>}
+                      </div>
+                    ) : (
+                      displayedWaitings.map((wait) => {
+                        const isWaiting = wait.status === 'WAITING';
+                        const isCalled = wait.status === 'CALLED';
+                        const isSeated = wait.status === 'SEATED';
 
                   // 사전 주문 내역 파싱
                   let waitPreOrders: any[] = [];
@@ -1807,9 +1860,11 @@ export function TableOrderOverviewSection({
                       </div>
                     </div>
                   );
-                })
-              )}
-            </div>
+                  })}
+                </div>
+              </>
+            );
+          })()}
 
             {/* 착석 테이블 배정 서브 선택 패널 */}
             {seatingTableSelection && (
