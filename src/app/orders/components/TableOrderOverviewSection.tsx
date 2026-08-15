@@ -34,6 +34,7 @@ import {
   Volume2,
   VolumeX
 } from "lucide-react";
+import { generateTableToken } from "@/lib/table-token-helper";
 
 interface TableOrderOverviewSectionProps {
   orders: Order[];
@@ -1077,7 +1078,7 @@ export function TableOrderOverviewSection({
                     </button>
                   )}
                   <a
-                    href={`/table-order/${tableNum}`}
+                    href={`/table-order/${tableNum}?token=${generateTableToken(String(tableNum))}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
@@ -1156,7 +1157,7 @@ export function TableOrderOverviewSection({
                           <span>착석취소</span>
                         </button>
                         <a
-                          href={`/table-order/${tableNum}`}
+                          href={`/table-order/${tableNum}?token=${generateTableToken(String(tableNum))}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}

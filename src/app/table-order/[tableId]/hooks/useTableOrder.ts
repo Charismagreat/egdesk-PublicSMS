@@ -47,7 +47,7 @@ export function useTableOrder() {
   // 테넌트 ID 상태
   const [tenantId, setTenantId] = useState<string>('default');
 
-  // 보안 토큰 및 주소창 마스킹 검증
+  // 보안 토큰 및 관리자 세션 검증
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const urlParams = new URLSearchParams(window.location.search);
@@ -63,24 +63,48 @@ export function useTableOrder() {
       if (savedTenant) setTenantId(savedTenant);
     }
 
-    const sessionTokenKey = `table_token_${tableStr}`;
-    const savedToken = sessionStorage.getItem(sessionTokenKey);
-    const activeToken = tokenParam || savedToken;
-
-    if (activeToken && verifyTableToken(tableStr, activeToken)) {
-      setIsTokenValid(true);
-      setTokenError('');
-      sessionStorage.setItem(sessionTokenKey, activeToken);
-      
-      // 🎨 주소창 URL 마스킹 (History API State Masking - token 파라미터를 숨김)
-      if (tokenParam) {
-        const cleanUrl = `${window.location.pathname}`;
-        window.history.replaceState({}, '', cleanUrl);
+    const checkAccess = async () => {
+      // 1. 👑 관리자/직원 로그인 세션 확인 (관리자는 보안 토큰 없이도 주문 페이지 자유 접근 허용)
+      try {
+        const meRes = await apiFetch('/api/auth/me');
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          if (meData.user || meData.success) {
+            setIsTokenValid(true);
+            setTokenError('');
+            if (meData.tenant_id) {
+              setTenantId(meData.tenant_id);
+              sessionStorage.setItem(`table_tenant_${tableStr}`, meData.tenant_id);
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        // 비로그인 손님인 경우 계속 진행
       }
-    } else {
-      setIsTokenValid(false);
-      setTokenError(`⚠️ 유효하지 않은 접근이거나 보안 토큰이 일치하지 않습니다. 올바른 테이블 ${tableStr}번 QR 코드를 다시 스캔해 주세요.`);
-    }
+
+      // 2. 🔒 비로그인 고객의 경우 QR 보안 토큰 검증
+      const sessionTokenKey = `table_token_${tableStr}`;
+      const savedToken = sessionStorage.getItem(sessionTokenKey);
+      const activeToken = tokenParam || savedToken;
+
+      if (activeToken && verifyTableToken(tableStr, activeToken)) {
+        setIsTokenValid(true);
+        setTokenError('');
+        sessionStorage.setItem(sessionTokenKey, activeToken);
+        
+        // 🎨 주소창 URL 마스킹 (History API State Masking - token 파라미터를 숨김)
+        if (tokenParam) {
+          const cleanUrl = `${window.location.pathname}`;
+          window.history.replaceState({}, '', cleanUrl);
+        }
+      } else {
+        setIsTokenValid(false);
+        setTokenError(`⚠️ 유효하지 않은 접근이거나 보안 토큰이 일치하지 않습니다. 올바른 테이블 ${tableStr}번 QR 코드를 다시 스캔해 주세요.`);
+      }
+    };
+
+    checkAccess();
   }, [tableId]);
 
   useEffect(() => {
