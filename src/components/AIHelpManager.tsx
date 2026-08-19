@@ -361,7 +361,8 @@ export default function AIHelpManager() {
     pathname.startsWith('/estimates/web-view') ||
     pathname.startsWith('/estimates/print-pdf') ||
     pathname.startsWith('/estimates/manufacture-webview') ||
-    pathname.startsWith('/import-customs/web-view')
+    pathname.startsWith('/import-customs/web-view') ||
+    pathname.startsWith('/promo')
   ) {
     return null;
   }

@@ -17,6 +17,7 @@ function DynamicTitleHandler() {
     // 정적 경로와 메뉴명 매핑
     const staticTitles: Record<string, string> = {
       "/": "CEO 대시보드",
+      "/promo": "이지데스크 | 중소기업 올인원 AI 스마트 솔루션 (EGDesk Server)",
       "/sms": "문자 관제 AI",
       "/message-logs": "문자 관제 AI - 발송 내역",
       "/automation": "문자 관제 AI - 자동 발송",
