@@ -2,7 +2,7 @@
 
 import { apiFetch } from '@/lib/api';
 import React, { useState, useEffect, useRef } from 'react';
-import { Package, Plus, Sliders, ArrowRightLeft, FileText, Download, Loader2 } from 'lucide-react';
+import { Package, Plus, Sliders, ArrowRightLeft, FileText, Download, Loader2, Globe } from 'lucide-react';
 import { usePersistedState } from "@/hooks/usePersistedState";
 
 // 타입 및 유틸리티 임포트
@@ -24,6 +24,7 @@ import { BarcodePrintModal } from './components/BarcodePrintModal';
 import { DeadstockControl } from './components/DeadstockControl';
 import InboundExcelModal from './components/InboundExcelModal';
 import { InboundOcrModal } from './components/InboundOcrModal';
+import InventoryGoogleSheetsModal from './components/InventoryGoogleSheetsModal';
 
 export default function InventoryPage() {
   // 상태 정의
@@ -130,6 +131,7 @@ export default function InventoryPage() {
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [isInboundExcelModalOpen, setIsInboundExcelModalOpen] = useState(false);
+  const [isGoogleSheetsModalOpen, setIsGoogleSheetsModalOpen] = useState(false);
   const [isInboundOcrModalOpen, setIsInboundOcrModalOpen] = useState(false);
   const [inboundOcrFile, setInboundOcrFile] = useState<File | null>(null);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -1010,6 +1012,15 @@ export default function InventoryPage() {
             <span>입고등록(엑셀)</span>
           </button>
 
+          <button
+            onClick={() => setIsGoogleSheetsModalOpen(true)}
+            className="bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm px-5 py-3 rounded-xl border border-teal-500 active:scale-95 transition-all flex items-center space-x-2 shadow-lg shadow-teal-950/10 cursor-pointer"
+            title="구글 스프레드시트의 재고 일괄 등록 서식을 실시간 연동하여 품목 마스터에 일괄 등록합니다."
+          >
+            <Globe className="w-4.5 h-4.5 text-teal-200" />
+            <span>구글 시트 연동</span>
+          </button>
+
           <button 
             onClick={openNewItemModal}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm px-5 py-3 rounded-xl border border-indigo-500 active:scale-95 transition-all flex items-center space-x-2 shadow-lg shadow-indigo-950/10 cursor-pointer"
@@ -1254,6 +1265,16 @@ export default function InventoryPage() {
       <InboundExcelModal
         isOpen={isInboundExcelModalOpen}
         onClose={() => setIsInboundExcelModalOpen(false)}
+        onSuccess={(msg) => {
+          alert(msg);
+          fetchData();
+        }}
+      />
+
+      {/* 🌐 재고 품목 구글 스프레드시트 연동 등록 모달 */}
+      <InventoryGoogleSheetsModal
+        isOpen={isGoogleSheetsModalOpen}
+        onClose={() => setIsGoogleSheetsModalOpen(false)}
         onSuccess={(msg) => {
           alert(msg);
           fetchData();

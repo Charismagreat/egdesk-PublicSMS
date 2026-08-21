@@ -1,7 +1,8 @@
 /**
  * EGDesk Helper Functions for Next.js
  *
- * Type-safe helpers for EGDesk user data, FinanceHub (banks, cards, Hometax, promissory notes),
+ * Type-safe helpers for EGDesk user data, Google Workspace (Sheets / Drive / Gmail / Apps Script sync),
+ * FinanceHub (banks, cards, Hometax, promissory notes),
  * internal knowledge / business identity / company research (MCP), Korean law (MCP), and browser recorder replay.
  * Works in both client and server components.
  *
@@ -110,6 +111,78 @@ async function parseEgdeskMcpToolResponse(response: Response): Promise<any> {
 
   const content = result.result?.content?.[0]?.text;
   return content ? JSON.parse(content) : null;
+}
+
+async function parseEgdeskHttpResponse(response: Response): Promise<any> {
+  const result = await response.json().catch(() => null);
+  if (!result) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+  if (!response.ok || result.status === 'error' || result.success === false) {
+    const msg =
+      (typeof result.message === 'string' && result.message) ||
+      (typeof result.error === 'string' && result.error) ||
+      `HTTP ${response.status}`;
+    throw new Error(msg);
+  }
+  return result;
+}
+
+export type WorkspaceSyncDirection = 'toWorkspace' | 'toLocal' | 'both';
+
+export type EgdeskHttpMethod = 'GET' | 'POST';
+
+/**
+ * Call an EGDesk HTTP endpoint (not MCP `/tools/call`).
+ * Used for bidirectional Google Workspace sync: `/sheets/sync`, `/drive/sync`, `/apps-script/sync`.
+ *
+ * - Server: `GET|POST {apiUrl}{pathname}`
+ * - Client: `POST /__egdesk_http_proxy`
+ */
+export async function callEgdeskHttp(
+  pathname: string,
+  options: {
+    method?: EgdeskHttpMethod;
+    body?: Record<string, unknown>;
+    query?: Record<string, string | undefined>;
+  } = {}
+): Promise<any> {
+  const method: EgdeskHttpMethod = options.method || 'GET';
+  const query: Record<string, string> = {};
+  for (const [key, value] of Object.entries(options.query || {})) {
+    if (value) query[key] = value;
+  }
+
+  const isServer = typeof window === 'undefined';
+  let response: Response;
+  if (isServer) {
+    const apiUrl =
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) ||
+      EGDESK_CONFIG.apiUrl;
+    const base = apiUrl.endsWith('/') ? apiUrl : `${apiUrl}/`;
+    const url = new URL(pathname.startsWith('/') ? pathname.slice(1) : pathname, base);
+    for (const [key, value] of Object.entries(query)) {
+      url.searchParams.set(key, value);
+    }
+    response = await fetch(url.toString(), {
+      method,
+      headers: buildServerEgdeskHeaders(),
+      body: method === 'POST' ? JSON.stringify(options.body || {}) : undefined,
+    });
+  } else {
+    response = await apiFetch('/__egdesk_http_proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path: pathname,
+        method,
+        body: options.body || {},
+        query,
+      }),
+    });
+  }
+
+  return parseEgdeskHttpResponse(response);
 }
 
 /**
@@ -2497,7 +2570,10 @@ export async function deletePageIndexDocument(docId: string) {
 /**
  * Call EGDesk Drive MCP tool (Google Drive change notifications + poll).
  *
- * Auth on EGDesk: GOOGLE_SERVICE_ACCOUNT_JSON or Google Workspace sign-in.
+ * Owner MCP auth on EGDesk: GOOGLE_SERVICE_ACCOUNT_JSON or Google Workspace sign-in
+ * via startDriveAuthLogin() — configures THIS EGDesk instance, not website visitors.
+ * Website visitors should use startVisitorGoogleLogin() from egdesk-visitor-google.ts
+ * (EGDesk brokers Auth; the site never receives Supabase keys).
  * Share target folders with the service account when using SA credentials.
  *
  * - Server: `POST {apiUrl}/drive/tools/call`
@@ -2533,14 +2609,16 @@ export async function callDriveTool(
   return parseEgdeskMcpToolResponse(response);
 }
 
-/** Check Drive auth (service account / Google OAuth) */
+/** Check owner Drive auth on this EGDesk instance (service account / Google OAuth) */
 export async function getDriveAuthStatus() {
   return callDriveTool('drive_auth_status', {});
 }
 
 /**
- * Start Google OAuth for Drive. Returns { status:'pending', authUrl } immediately.
- * Open authUrl in the browser, then poll getDriveAuthStatus() until connected.
+ * Start Google OAuth for THIS EGDesk instance (owner MCP credentials).
+ * Returns { status:'pending', authUrl } immediately. EGDesk receives the callback
+ * on localhost:54321 (dev) or egdesk://. Do not use this for website visitors —
+ * they sign in via startVisitorGoogleLogin() in egdesk-visitor-google.ts (EGDesk brokers Auth).
  */
 export async function startDriveAuthLogin(options: {
   openWindow?: boolean;
@@ -2612,6 +2690,205 @@ export async function listDriveEvents(options: {
 /** Replace monitored folder IDs without resetting the page token */
 export async function setDriveTargetFolders(folderIds: string[]) {
   return callDriveTool('drive_set_target_folders', { folderIds });
+}
+
+/** Upload a local file into a watched Drive folder (local → Workspace) */
+export async function uploadDriveFile(options: {
+  filePath: string;
+  folderId?: string;
+  destName?: string;
+  mimeType?: string;
+}) {
+  return callDriveTool('drive_upload', options);
+}
+
+/**
+ * Drive HTTP sync (same as GET/POST /drive/sync).
+ * Omit options to GET status. Pass `direction: 'toLocal'` to download, or
+ * `direction: 'toWorkspace'` + `filePath` to upload.
+ */
+export async function syncDrive(options: {
+  direction?: WorkspaceSyncDirection;
+  filePath?: string;
+  folderId?: string;
+  destName?: string;
+} = {}) {
+  const hasBody = Boolean(options.direction || options.filePath || options.folderId || options.destName);
+  return callEgdeskHttp('/drive/sync', {
+    method: hasBody ? 'POST' : 'GET',
+    body: hasBody ? options : undefined,
+  });
+}
+
+// ==========================================
+// Google Sheets HTTP sync — My DB ↔ Workspace
+// ==========================================
+
+/** List overwrite configs + incremental links (GET /sheets/sync) */
+export async function listSheetSyncConnections(options: {
+  projectId?: string;
+  environment?: 'development' | 'production';
+} = {}) {
+  return callEgdeskHttp('/sheets/sync', {
+    method: 'GET',
+    query: {
+      projectId: options.projectId,
+      environment: options.environment,
+    },
+  });
+}
+
+/**
+ * Sync Sheets either direction (POST /sheets/sync).
+ * - toWorkspace (default): My DB → Sheet overwrite, or incremental push if no overwrite config
+ * - toLocal: Sheet → My DB (requires a sheet table link)
+ * - both: pull then push
+ */
+export async function syncSheets(options: {
+  direction?: WorkspaceSyncDirection;
+  projectId?: string;
+  environment?: 'development' | 'production';
+  configId?: string;
+  linkId?: string;
+  spreadsheetId?: string;
+  tabName?: string;
+} = {}) {
+  return callEgdeskHttp('/sheets/sync', {
+    method: 'POST',
+    body: options,
+  });
+}
+
+// ==========================================
+// Gmail (MCP) — fetch domain mail + send
+// ==========================================
+
+/**
+ * Call EGDesk Gmail MCP tool.
+ *
+ * - Server: `POST {apiUrl}/gmail/tools/call`
+ * - Client: `POST /__gmail_proxy`
+ */
+export async function callGmailTool(
+  toolName: string,
+  args: Record<string, any> = {}
+): Promise<any> {
+  const body = JSON.stringify({ tool: toolName, arguments: args });
+  const isServer = typeof window === 'undefined';
+  let response: Response;
+  if (isServer) {
+    const apiUrl =
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) ||
+      EGDESK_CONFIG.apiUrl;
+    response = await fetch(`${apiUrl}/gmail/tools/call`, {
+      method: 'POST',
+      headers: buildServerEgdeskHeaders(),
+      body
+    });
+  } else {
+    response = await apiFetch('/__gmail_proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+  }
+  return parseEgdeskMcpToolResponse(response);
+}
+
+/** Workspace → local: list domain users */
+export async function listGmailUsers() {
+  return callGmailTool('gmail_list_users', {});
+}
+
+/** Workspace → local: fetch a user's messages */
+export async function getGmailUserMessages(email: string, options: { maxResults?: number } = {}) {
+  return callGmailTool('gmail_get_user_messages', { email, ...options });
+}
+
+export async function getGmailUserStats(email: string) {
+  return callGmailTool('gmail_get_user_stats', { email });
+}
+
+export async function searchGmailMessages(
+  query: string,
+  options: { email?: string; maxResults?: number } = {}
+) {
+  return callGmailTool('gmail_search_messages', { query, ...options });
+}
+
+/** Local → Workspace: send from the signed-in Google account */
+export async function sendGmailMessage(options: {
+  to: string;
+  subject: string;
+  body: string;
+  attachments?: Array<{ filename: string; path: string; mimeType: string }>;
+}) {
+  return callGmailTool('gmail_send_message', options);
+}
+
+// ==========================================
+// Apps Script (MCP + HTTP) — local ↔ Google
+// ==========================================
+
+/**
+ * Call EGDesk Apps Script MCP tool.
+ *
+ * - Server: `POST {apiUrl}/apps-script/tools/call`
+ * - Client: `POST /__apps_script_proxy`
+ */
+export async function callAppsScriptTool(
+  toolName: string,
+  args: Record<string, any> = {}
+): Promise<any> {
+  const body = JSON.stringify({ tool: toolName, arguments: args });
+  const isServer = typeof window === 'undefined';
+  let response: Response;
+  if (isServer) {
+    const apiUrl =
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) ||
+      EGDESK_CONFIG.apiUrl;
+    response = await fetch(`${apiUrl}/apps-script/tools/call`, {
+      method: 'POST',
+      headers: buildServerEgdeskHeaders(),
+      body
+    });
+  } else {
+    response = await apiFetch('/__apps_script_proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+  }
+  return parseEgdeskMcpToolResponse(response);
+}
+
+/** Local → Workspace */
+export async function pushAppsScriptToGoogle(
+  projectId: string,
+  options: { createVersion?: boolean; versionDescription?: string } = {}
+) {
+  return callAppsScriptTool('apps_script_push_to_google', { projectId, ...options });
+}
+
+/** Workspace → local */
+export async function pullAppsScriptFromGoogle(projectId: string) {
+  return callAppsScriptTool('apps_script_pull_from_google', { projectId });
+}
+
+/**
+ * Apps Script HTTP sync (POST /apps-script/sync).
+ * direction toWorkspace = push; toLocal = pull. Does not accept `both`.
+ */
+export async function syncAppsScript(options: {
+  direction?: Exclude<WorkspaceSyncDirection, 'both'>;
+  projectId: string;
+  createVersion?: boolean;
+  versionDescription?: string;
+}) {
+  return callEgdeskHttp('/apps-script/sync', {
+    method: 'POST',
+    body: options,
+  });
 }
 
 // ==========================================
@@ -3123,12 +3400,12 @@ export async function syncInstagramPostStats(options: {
   return callInstagramTool('instagram_sync_post_stats', options);
 }
 
-/** Alias of syncInstagramPostStats — scrape recent posts with engagement. */
+/** @deprecated Use syncInstagramPostStats — same scrape + history merge. */
 export async function fetchInstagramPosts(options: {
   connectionId: string;
   limit?: number;
 }) {
-  return callInstagramTool('instagram_fetch_posts', options);
+  return syncInstagramPostStats(options);
 }
 
 export type GenerateInstagramContentOptions = {

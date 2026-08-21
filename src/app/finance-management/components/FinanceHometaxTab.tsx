@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { FileSpreadsheet, Edit } from "lucide-react";
+import { FileSpreadsheet, Edit, Globe } from "lucide-react";
 import { HometaxInvoice, HometaxCash, DbExpenseTag } from "../types";
 import { downloadHometaxCashExcel, downloadHometaxInvoiceExcel } from "../utils";
 import TableSkeleton from "./TableSkeleton";
@@ -34,6 +34,7 @@ interface FinanceHometaxTabProps {
   handleTagToggle: (tagName: string) => void;
   handleUpdateHometaxTransaction: (txId: string, type: "invoice" | "exempt" | "cash", updates: { memo?: string }) => Promise<void>;
   isUpdatingHometaxTx: boolean;
+  onOpenGoogleSheets?: () => void;
 }
 
 export default function FinanceHometaxTab({
@@ -63,6 +64,7 @@ export default function FinanceHometaxTab({
   handleTagToggle,
   handleUpdateHometaxTransaction,
   isUpdatingHometaxTx,
+  onOpenGoogleSheets,
 }: FinanceHometaxTabProps) {
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
 

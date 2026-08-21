@@ -108,28 +108,28 @@ export default function FeatureShowcase() {
           </p>
         </div>
 
-        {/* 탭 네비게이션 */}
-        <div className="mt-12 flex flex-wrap items-center justify-center gap-2 p-1.5 bg-slate-200/70 rounded-2xl max-w-5xl mx-auto">
+        {/* 탭 네비게이션 (5개 버튼 1줄 균등 정렬) */}
+        <div className="mt-12 grid grid-cols-5 gap-1.5 p-1.5 bg-slate-200/70 rounded-2xl w-full mx-auto shadow-3xs overflow-x-auto">
           {pillars.map((item, idx) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(idx)}
-              className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === idx
                   ? "bg-white text-slate-900 shadow-sm scale-100"
                   : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
               }`}
             >
-              <span className={activeTab === idx ? "text-indigo-600" : "text-slate-400"}>
+              <span className={`shrink-0 ${activeTab === idx ? "text-indigo-600" : "text-slate-400"}`}>
                 {item.icon}
               </span>
-              <span>{item.title}</span>
+              <span className="truncate">{item.title}</span>
             </button>
           ))}
         </div>
 
         {/* 탭 콘텐츠 쇼케이스 카드 */}
-        <div className="mt-10 bg-white rounded-3xl p-8 sm:p-12 border border-slate-200/80 shadow-md max-w-5xl mx-auto transition-all">
+        <div className="mt-8 bg-white rounded-3xl p-8 sm:p-12 border border-slate-200/80 shadow-md w-full mx-auto transition-all">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             {/* 좌측 설명 영역 */}
             <div className="lg:col-span-7 space-y-6">

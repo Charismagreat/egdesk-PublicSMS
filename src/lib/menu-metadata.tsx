@@ -3,7 +3,7 @@ import {
   Home, Users, MessageSquare, Settings, ShoppingCart, 
   ClipboardList, CreditCard, CalendarDays, Truck, Send, 
   PackageSearch, Package, UserCog, Zap, Ticket, Landmark, Globe, Briefcase, HelpCircle,
-  ArrowRightLeft, Handshake, Sparkles, Coins, Database, Compass, Shield, CheckSquare, Wrench, ShieldAlert, Award, Scale, Key, Mic, Bot, Mail, LayoutDashboard, FolderOpen
+  ArrowRightLeft, Handshake, Sparkles, Coins, Database, Compass, Shield, CheckSquare, Wrench, ShieldAlert, Award, Scale, Key, Mic, Bot, Mail, LayoutDashboard, FolderOpen, HardDrive
 } from "lucide-react";
 
 // 커스텀 인스타그램 아이콘 SVG
@@ -96,6 +96,7 @@ export const MENU_METADATA_LIST: MenuMetadata[] = [
   { href: "/quality-control", label: "품질 관리 AI", icon: CheckSquare, color: "text-indigo-600", category: 3 },
   { href: "/grant-management", label: "지원금 신청 AI", icon: Award, color: "text-amber-555", category: 3 },
   { href: "/knowledge-ai", label: "지식 관리 AI", icon: Compass, color: "text-indigo-550", category: 3 },
+  { href: "/google-drive", label: "구글 드라이브 관리 AI", icon: HardDrive, color: "text-indigo-600", category: 3 },
   { href: "/ecount-erp-ai", label: "이카운트 ERP AI", icon: ArrowRightLeft, color: "text-sky-550", category: 3 },
 
   // 4. 인사/노무/경영지원 (전사 백오피스)

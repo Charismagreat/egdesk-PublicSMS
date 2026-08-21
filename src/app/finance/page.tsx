@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // 기존 모달 컴포넌트 임포트
@@ -7,6 +8,9 @@ import UploadExcelModal from "./components/UploadExcelModal";
 import UploadHometaxModal from "./components/UploadHometaxModal";
 import UploadCardModal from "./components/UploadCardModal";
 import ReceiptViewerModal from "./components/ReceiptViewerModal";
+import HometaxGoogleSheetsModal from "./components/HometaxGoogleSheetsModal";
+import BankGoogleSheetsModal from "./components/BankGoogleSheetsModal";
+import CardGoogleSheetsModal from "./components/CardGoogleSheetsModal";
 
 // 새로 정의된 컴포넌트 임포트
 import FinanceHeader from "./components/FinanceHeader";
@@ -130,6 +134,10 @@ export default function FinancePage() {
     handleResetPeriod,
   } = useFinance();
 
+  const [isHometaxGoogleSheetsModalOpen, setIsHometaxGoogleSheetsModalOpen] = useState(false);
+  const [isBankGoogleSheetsModalOpen, setIsBankGoogleSheetsModalOpen] = useState(false);
+  const [isCardGoogleSheetsModalOpen, setIsCardGoogleSheetsModalOpen] = useState(false);
+
   return (
     <div className="w-full space-y-6 pb-20 min-w-0 font-sans text-slate-800 animate-fade-in text-left" data-easybot-hint="금융 정보 AI: 등록된 사내 법인 계좌의 예적금 현황과 실시간 금융 거래 내역 관리를 통합 제공합니다.">
       {/* 1. 상단 웰컴 및 실시간 동기화 헤더 */}
@@ -137,8 +145,11 @@ export default function FinancePage() {
         refreshing={refreshing}
         onRefresh={handleRefresh}
         setIsUploadModalOpen={setIsUploadModalOpen}
+        setIsBankGoogleSheetsModalOpen={setIsBankGoogleSheetsModalOpen}
         setIsCardModalOpen={setIsCardModalOpen}
+        setIsCardGoogleSheetsModalOpen={setIsCardGoogleSheetsModalOpen}
         setIsHometaxModalOpen={setIsHometaxModalOpen}
+        setIsHometaxGoogleSheetsModalOpen={setIsHometaxGoogleSheetsModalOpen}
       />
 
       {/* 2. 감성적인 Framer Motion 통계 카드 영역 */}
@@ -207,6 +218,7 @@ export default function FinancePage() {
               handleTagToggle={handleTagToggle}
               handleUpdateBankTransaction={handleUpdateBankTransaction}
               isUpdatingBankTx={isUpdatingBankTx}
+              onOpenGoogleSheets={() => setIsBankGoogleSheetsModalOpen(true)}
             />
           )}
 
@@ -257,6 +269,7 @@ export default function FinancePage() {
               setIsReceiptModalOpen={setIsReceiptModalOpen}
               setReceiptSelectedTxId={setReceiptSelectedTxId}
               setViewingReceiptUrl={setViewingReceiptUrl}
+              onOpenGoogleSheets={() => setIsCardGoogleSheetsModalOpen(true)}
             />
           )}
 
@@ -289,6 +302,7 @@ export default function FinancePage() {
               handleTagToggle={handleTagToggle}
               handleUpdateHometaxTransaction={handleUpdateHometaxTransaction}
               isUpdatingHometaxTx={isUpdatingHometaxTx}
+              onOpenGoogleSheets={() => setIsHometaxGoogleSheetsModalOpen(true)}
             />
           )}
 
@@ -323,6 +337,14 @@ export default function FinancePage() {
         onSuccess={handleRefresh}
       />
 
+      {/* 🌐 인터넷뱅킹 거래 내역 구글 스프레드시트 연동 UI */}
+      <BankGoogleSheetsModal
+        isOpen={isBankGoogleSheetsModalOpen}
+        onClose={() => setIsBankGoogleSheetsModalOpen(false)}
+        accounts={accounts}
+        onSuccess={handleRefresh}
+      />
+
       {/* 7. 국세청 홈택스 엑셀 수동 가져오기 UI */}
       <UploadHometaxModal
         isOpen={isHometaxModalOpen}
@@ -330,10 +352,24 @@ export default function FinancePage() {
         onSuccess={handleRefresh}
       />
 
+      {/* 🌐 국세청 홈택스 구글 스프레드시트 연동 UI */}
+      <HometaxGoogleSheetsModal
+        isOpen={isHometaxGoogleSheetsModalOpen}
+        onClose={() => setIsHometaxGoogleSheetsModalOpen(false)}
+        onSuccess={handleRefresh}
+      />
+
       {/* 8. 신용카드 수동 엑셀 업로드 모달 UI */}
       <UploadCardModal
         isOpen={isCardModalOpen}
         onClose={() => setIsCardModalOpen(false)}
+        onSuccess={handleRefresh}
+      />
+
+      {/* 🌐 신용카드 승인 내역 구글 스프레드시트 연동 UI */}
+      <CardGoogleSheetsModal
+        isOpen={isCardGoogleSheetsModalOpen}
+        onClose={() => setIsCardGoogleSheetsModalOpen(false)}
         onSuccess={handleRefresh}
       />
 

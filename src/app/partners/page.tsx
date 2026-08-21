@@ -9,6 +9,7 @@ import { PartnerFormModal } from "./components/PartnerFormModal";
 import { PartnerDetailModal } from "./components/PartnerDetailModal";
 import { PartnerAnalysisModal } from "./components/PartnerAnalysisModal";
 import { PartnerBulkImportModal } from "./components/PartnerBulkImportModal";
+import PartnerGoogleSheetsImportModal from "./components/PartnerGoogleSheetsImportModal";
 
 export default function PartnersDashboard() {
   const {
@@ -69,6 +70,8 @@ export default function PartnersDashboard() {
 
   // 📂 엑셀 일괄 등록 모달 열림 상태
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  // 🌐 구글 시트 연동 모달 열림 상태
+  const [isGoogleSheetsImportOpen, setIsGoogleSheetsImportOpen] = useState(false);
 
   // 외상 거래 경고 거래처 집계
   const pendingAlertCount = partners.filter(p => p.pending_count! > 0).length;
@@ -107,6 +110,8 @@ export default function PartnersDashboard() {
         openAnalysisPopup={openAnalysisPopup}
         // 📂 엑셀 일괄 등록 클릭 트리거
         handleBulkImportClick={() => setIsBulkImportOpen(true)}
+        // 🌐 구글 시트 연동 클릭 트리거
+        handleGoogleSheetsClick={() => setIsGoogleSheetsImportOpen(true)}
         // ⚡ 페이지네이션 연동 추가
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
@@ -154,6 +159,13 @@ export default function PartnersDashboard() {
       <PartnerBulkImportModal
         isOpen={isBulkImportOpen}
         onClose={() => setIsBulkImportOpen(false)}
+        onImport={handleBulkImport}
+      />
+
+      {/* 🌐 구글 스프레드시트 일괄 연동 모달 */}
+      <PartnerGoogleSheetsImportModal
+        isOpen={isGoogleSheetsImportOpen}
+        onClose={() => setIsGoogleSheetsImportOpen(false)}
         onImport={handleBulkImport}
       />
 

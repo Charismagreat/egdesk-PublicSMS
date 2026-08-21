@@ -46,7 +46,7 @@ export default function AiAppStoreStory() {
         </div>
 
         {/* 3대 현실적 병목 카드 */}
-        <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-6 w-full mx-auto">
           
           {/* 병목 1: 외부 배포 불가 & 보안 위험 */}
           <div className="bg-slate-800/80 rounded-3xl p-7 border border-slate-700/80 hover:border-rose-500/50 transition-all flex flex-col justify-between">
@@ -108,7 +108,7 @@ export default function AiAppStoreStory() {
         </div>
 
         {/* 파트 2: EGDESK 사내 AI 앱스토어 솔루션 공개 */}
-        <div className="mt-20 max-w-5xl mx-auto bg-gradient-to-br from-indigo-950/90 via-slate-800/90 to-slate-900/90 rounded-3xl p-8 sm:p-12 border border-indigo-700/50 shadow-2xl">
+        <div className="mt-20 w-full mx-auto bg-gradient-to-br from-indigo-950/90 via-slate-800/90 to-slate-900/90 rounded-3xl p-8 sm:p-12 border border-indigo-700/50 shadow-2xl">
           <div className="text-center max-w-2xl mx-auto mb-10">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 mb-3">
               <Boxes className="w-3.5 h-3.5" />

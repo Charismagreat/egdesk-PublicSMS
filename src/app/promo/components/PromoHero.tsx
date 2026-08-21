@@ -42,39 +42,9 @@ export default function PromoHero() {
             외부 유출 없는 <strong>안전한 사내 배포</strong>, <strong>권한·이력 관리</strong>, <strong>사내 데이터 안전 연동</strong>까지 단 하나의 프라이빗 서버로 완성됩니다.
           </p>
 
-          {/* CTA 버튼 그룹 */}
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button
-              onClick={scrollToInquiry}
-              className="w-full sm:w-auto px-8 py-4 text-base font-extrabold text-white bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-2xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/35 transition-all flex items-center justify-center gap-2 cursor-pointer group"
-            >
-              <span>맞춤 도입 상담 & 데모 신청</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-
-            <Link
-              href="/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-auto px-7 py-4 text-base font-bold text-slate-800 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-2xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Sparkles className="w-5 h-5 text-indigo-600" />
-              <span>CEO 관제 대시보드 바로 체험</span>
-            </Link>
-
-            <Link
-              href="/m"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-auto px-6 py-4 text-base font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-100 rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Smartphone className="w-5 h-5 text-indigo-600" />
-              <span>모바일 포털 (/m)</span>
-            </Link>
-          </div>
 
           {/* 서브 안심 문구 */}
-          <div className="mt-6 flex items-center justify-center gap-6 text-xs text-slate-700 font-medium">
+          <div className="mt-8 flex items-center justify-center gap-6 text-xs text-slate-700 font-medium">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-700" />
               <span>1분 간편 셋업 (자가치유 DB)</span>
@@ -91,7 +61,7 @@ export default function PromoHero() {
         </div>
 
         {/* 3대 핵심 성과 카드 */}
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 w-full mx-auto">
           <div className="bg-white/80 backdrop-blur-sm p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all">
             <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4">
               <ShieldCheck className="w-6 h-6" />
@@ -124,7 +94,7 @@ export default function PromoHero() {
         </div>
 
         {/* 인터랙티브 그래픽 프리뷰 목업 */}
-        <div className="mt-16 relative max-w-5xl mx-auto rounded-3xl overflow-hidden shadow-2xl border border-slate-200/90 bg-slate-900">
+        <div className="mt-16 relative w-full mx-auto rounded-3xl overflow-hidden shadow-2xl border border-slate-200/90 bg-slate-900">
           <div className="bg-slate-800/90 px-4 py-3 border-b border-slate-700/60 flex items-center justify-between text-xs text-slate-400">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-rose-500/80 inline-block" />

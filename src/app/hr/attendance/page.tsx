@@ -2,7 +2,7 @@
 
 import { apiFetch } from '@/lib/api';
 import { useState, useEffect } from "react";
-import { Calendar, Bot, Sparkles, FileText, UserCheck } from "lucide-react";
+import { Calendar, Bot, Sparkles, FileText, UserCheck, Globe } from "lucide-react";
 import { usePersistedState } from "@/hooks/usePersistedState";
 
 // 공통 타입 임포트
@@ -25,6 +25,7 @@ import { LeaveRejectModal } from "./components/LeaveRejectModal";
 import { EventTypeMasterModal } from "./components/EventTypeMasterModal";
 import { BriefingZoomModal } from "./components/BriefingZoomModal";
 import HrBatchUploadModal from "./components/HrBatchUploadModal";
+import HrGoogleSheetsUploadModal from "./components/HrGoogleSheetsUploadModal";
 
 export default function HrAttendancePage() {
   // 1. 데이터 리스트 및 세션 상태
@@ -48,6 +49,7 @@ export default function HrAttendancePage() {
   const [isTypeManagerOpen, setIsTypeManagerOpen] = useState(false);
   const [isBriefingZoomed, setIsBriefingZoomed] = useState(false);
   const [isHrBatchModalOpen, setIsHrBatchModalOpen] = useState(false);
+  const [isHrGoogleSheetsModalOpen, setIsHrGoogleSheetsModalOpen] = useState(false);
 
   // 4. 선택 식별자(ID) 상태
   const [selectedLeaveId, setSelectedLeaveId] = useState<string | null>(null);
@@ -805,6 +807,15 @@ export default function HrAttendancePage() {
               >
                 <span>📊 HR 인사 엑셀 일괄 등록</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setIsHrGoogleSheetsModalOpen(true)}
+                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95 flex items-center gap-1.5"
+                title="구글 스프레드시트의 HR 인사 종합 서식을 실시간 연동하여 임직원 데이터를 일괄 등록합니다."
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>🌐 구글 시트 연동</span>
+              </button>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               360도 Dynamic 프로필, 근로계약 및 실시간 급여 정산, 임직원 인적사항을 각각의 별도 탭으로 분개하여 관리합니다.
@@ -940,6 +951,13 @@ export default function HrAttendancePage() {
       <HrBatchUploadModal
         isOpen={isHrBatchModalOpen}
         onClose={() => setIsHrBatchModalOpen(false)}
+        onSuccess={fetchHrData}
+      />
+
+      {/* 🌐 모달 0-2: HR 인사 종합 구글 스프레드시트 연동 등록 모달 */}
+      <HrGoogleSheetsUploadModal
+        isOpen={isHrGoogleSheetsModalOpen}
+        onClose={() => setIsHrGoogleSheetsModalOpen(false)}
         onSuccess={fetchHrData}
       />
 

@@ -2,9 +2,10 @@
 
 import { apiFetch } from '@/lib/api';
 import React, { useState, useEffect } from 'react';
-import { Building2, Save, CheckCircle2, AlertCircle, RefreshCw, Sparkles, Plus, FileSpreadsheet } from 'lucide-react';
+import { Building2, Save, CheckCircle2, AlertCircle, RefreshCw, Sparkles, Plus, FileSpreadsheet, Globe } from 'lucide-react';
 import { WorkplaceSettingsCard } from '../ai-settings/components/WorkplaceSettingsCard';
 import CompanyProfileExcelModal from './components/CompanyProfileExcelModal';
+import CompanyProfileGoogleSheetsModal from './components/CompanyProfileGoogleSheetsModal';
 
 interface CompanyProfile {
   companyName: string;
@@ -45,6 +46,7 @@ export default function CompanySettingsCard() {
 
   // 📊 회사 프로필 엑셀 등록 모달 상태
   const [isProfileExcelModalOpen, setIsProfileExcelModalOpen] = useState<boolean>(false);
+  const [isProfileGoogleSheetsModalOpen, setIsProfileGoogleSheetsModalOpen] = useState<boolean>(false);
 
   // 🎨 스마트 도장(직인) 자동 생성 모달 상태
   const [isSealModalOpen, setIsSealModalOpen] = useState<boolean>(false);
@@ -426,6 +428,15 @@ export default function CompanySettingsCard() {
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             <span>📊 회사 프로필 엑셀 등록</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsProfileGoogleSheetsModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/90 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95"
+            title="구글 스프레드시트 URL을 입력하여 회사 기본 정보 및 입금 계좌를 실시간으로 연동하여 반영합니다."
+          >
+            <Globe className="w-4 h-4 text-teal-600" />
+            <span>🌐 구글 시트 연동</span>
           </button>
           <button
             type="button"
@@ -1108,6 +1119,19 @@ export default function CompanySettingsCard() {
             ...updatedProfile
           }));
           setMessage({ type: 'success', text: '🎉 엑셀 판독을 통해 회사 프로필 및 입금 계좌 정보가 즉시 판독되어 적용 완료되었습니다.' });
+        }}
+      />
+
+      {/* 🌐 회사 프로필 구글 스프레드시트 연동 등록 모달 */}
+      <CompanyProfileGoogleSheetsModal
+        isOpen={isProfileGoogleSheetsModalOpen}
+        onClose={() => setIsProfileGoogleSheetsModalOpen(false)}
+        onSuccess={(updatedProfile) => {
+          setProfile((prev) => ({
+            ...prev,
+            ...updatedProfile
+          }));
+          setMessage({ type: 'success', text: '🎉 구글 스프레드시트 연동을 통해 회사 프로필 및 입금 계좌 정보가 즉시 판독되어 적용 완료되었습니다.' });
         }}
       />
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Layers, FileSpreadsheet, ArrowDownLeft, ArrowUpRight, Edit } from "lucide-react";
+import { Layers, FileSpreadsheet, ArrowDownLeft, ArrowUpRight, Edit, Globe } from "lucide-react";
 import { Account, Transaction, DbExpenseTag } from "../types";
 import { downloadAccountsExcel } from "../utils";
 import TableSkeleton from "./TableSkeleton";
@@ -31,6 +31,7 @@ interface FinanceAccountsTabProps {
   handleTagToggle: (tagName: string) => void;
   handleUpdateBankTransaction: (txId: string, updates: { category?: string; memo?: string }) => Promise<void>;
   isUpdatingBankTx: boolean;
+  onOpenGoogleSheets?: () => void;
 }
 
 export default function FinanceAccountsTab({
@@ -57,6 +58,7 @@ export default function FinanceAccountsTab({
   handleTagToggle,
   handleUpdateBankTransaction,
   isUpdatingBankTx,
+  onOpenGoogleSheets,
 }: FinanceAccountsTabProps) {
   // 계좌 필터링
   const bankAccounts = accounts.filter(

@@ -2,7 +2,8 @@
 
 import { apiFetch } from '@/lib/api';
 import React, { useState, useEffect } from "react";
-import { X, FileSpreadsheet, RefreshCw, Sparkles, Sliders } from "lucide-react";
+import { X, FileSpreadsheet, RefreshCw, Sparkles, Sliders, Download, CreditCard } from "lucide-react";
+import * as XLSX from "xlsx";
 
 interface UploadCardModalProps {
   isOpen: boolean;
@@ -79,6 +80,61 @@ export default function UploadCardModal({
     }
   };
 
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      {
+        "승인일자": "2026-08-21",
+        "승인시간": "12:40:15",
+        "카드번호/카드명": "하나법인(1234)",
+        "가맹점명": "맛있는식당",
+        "승인금액(원)": 44000,
+        "부가세(원)": 4000,
+        "승인구분": "승인",
+        "할부개월": "일시불",
+        "승인번호": "12345678"
+      },
+      {
+        "승인일자": "2026-08-21",
+        "승인시간": "15:20:00",
+        "카드번호/카드명": "신한법인(5678)",
+        "가맹점명": "오피스디포",
+        "승인금액(원)": 88000,
+        "부가세(원)": 8000,
+        "승인구분": "승인",
+        "할부개월": "일시불",
+        "승인번호": "87654321"
+      },
+      {
+        "승인일자": "2026-08-21",
+        "승인시간": "18:05:30",
+        "카드번호/카드명": "국민법인(9900)",
+        "가맹점명": "GS25 편의점",
+        "승인금액(원)": 15000,
+        "부가세(원)": 1363,
+        "승인구분": "승인",
+        "할부개월": "일시불",
+        "승인번호": "55667788"
+      }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    worksheet["!cols"] = [
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 22 },
+      { wch: 15 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 14 }
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "신용카드_승인내역");
+    XLSX.writeFile(workbook, "신용카드_승인내역_표준양식.xlsx");
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-[32px] border border-slate-100 max-w-lg w-full p-6 md:p-8 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh] animate-scale-up">
@@ -90,9 +146,25 @@ export default function UploadCardModal({
         </button>
 
         <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-4">
-          <FileSpreadsheet className="w-5 h-5 text-indigo-500" />
+          <CreditCard className="w-5 h-5 text-amber-500" />
           <span>수동 신용카드 거래 내역 반입 (Excel)</span>
         </h3>
+
+        {/* 📥 표준 양식 다운로드 가이드 카드 */}
+        <div className="mb-4 p-3.5 bg-amber-50/60 border border-amber-100 rounded-2xl flex items-center justify-between gap-3">
+          <div>
+            <span className="text-xs font-black text-amber-950 block">표준 엑셀 서식이 필요하신가요?</span>
+            <span className="text-[11px] text-amber-800/80 font-medium">승인일시, 가맹점, 승인금액 등 표준 규격 서식을 다운로드합니다.</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>표준 양식 다운로드</span>
+          </button>
+        </div>
 
         <form onSubmit={handleCardUpload} className="space-y-4">
           {/* 업로드 방식 선택 토글 카드 */}

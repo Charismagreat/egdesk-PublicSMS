@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Search, Plus, Edit2, Trash2, FileSpreadsheet, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, FileSpreadsheet, Download, ChevronLeft, ChevronRight, Globe } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Partner } from "../types";
 
@@ -18,6 +18,8 @@ interface PartnerTableProps {
   openAnalysisPopup: (pt: Partner, e: React.MouseEvent) => void;
   // 📂 엑셀 일괄 등록 트리거
   handleBulkImportClick: () => void;
+  // 🌐 구글 시트 연동 트리거
+  handleGoogleSheetsClick: () => void;
   // ⚡ 페이지네이션 Props 추가
   currentPage: number;
   setCurrentPage: (page: number) => void;
@@ -37,6 +39,7 @@ export function PartnerTable({
   handleDeletePartner,
   openAnalysisPopup,
   handleBulkImportClick,
+  handleGoogleSheetsClick,
   // ⚡ 페이지네이션 Props 연동
   currentPage,
   setCurrentPage,
@@ -158,6 +161,16 @@ export function PartnerTable({
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             엑셀 일괄 등록
+          </button>
+
+          {/* 🌐 구글 시트 연동 버튼 */}
+          <button
+            onClick={handleGoogleSheetsClick}
+            className="px-4 py-3 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-black rounded-xl flex items-center gap-1.5 border border-teal-200 cursor-pointer transition-all shadow-sm active:scale-95"
+            title="구글 스프레드시트의 거래처 템플릿과 실시간 연동하여 일괄 등록합니다."
+          >
+            <Globe className="w-4 h-4 text-teal-600" />
+            구글 시트 연동
           </button>
 
           <button

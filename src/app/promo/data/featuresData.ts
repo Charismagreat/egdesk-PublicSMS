@@ -116,6 +116,30 @@ export const ALL_FEATURES: FeatureItem[] = [
     benefits: ["법적 감사 요건 100% 충족", "실수로 삭제된 데이터 즉시 복원", "작업자별 접근 권한 철저 통제"],
     demoPath: "/governance"
   },
+  {
+    id: "google-workspace-hub",
+    category: "data_lake",
+    name: "구글 워크스페이스 & 시트 원클릭 연동",
+    badge: "기존 시트 그대로",
+    iconName: "FileSpreadsheet",
+    summary: "구글 스프레드시트 한 권과 드라이브 폴더를 그대로 연결하여 8대 업무 실시간 동기화",
+    description: "새로운 시스템 적응 없이 기존 구글 시트 URL을 등록하면 거래처, 직원, 재고, 근태, 세금계산서, 은행, 카드 내역을 이지데스크가 실시간으로 분석하고 양방향 동기화합니다.",
+    benefits: ["도입 교육 비용 0원 (기존 시트 100% 호환)", "구글 드라이브 파일 실시간 감시(Watch)", "G메일 첨부파일 사내 지식 자동 아카이빙"],
+    demoPath: "/google-drive",
+    highlight: true
+  },
+  {
+    id: "finance-management-hub",
+    category: "finance",
+    name: "3대 금융·세무 자동화 (홈택스·통장·법인카드)",
+    badge: "월말 정산 3분",
+    iconName: "Coins",
+    summary: "국세청 전자세금계산서, 은행 통장 실시간 잔액, 법인카드 승인내역 1초 일원화",
+    description: "홈택스 매입·매출 명세, 주요 은행 계좌 입출금, 카드사 승인내역을 엑셀 및 구글 시트로 원터치 적재하여 수기 대조 없이 완벽한 자금 장부를 완성합니다.",
+    benefits: ["월말 결산 시간 95% 단축", "표준 엑셀 서식 1초 다운로드 제공", "실시간 법인 잔액 및 매입/매출 세액 자동 계산"],
+    demoPath: "/finance-management",
+    highlight: true
+  },
 
   // 2. 차세대 AI ERP & MES
   {

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CreditCard, Plus, Sparkles, Edit, FileSpreadsheet } from "lucide-react";
+import { CreditCard, Plus, Sparkles, Edit, FileSpreadsheet, Globe } from "lucide-react";
 import { CardTransaction, DbExpenseCategory, DbExpenseTag } from "../types";
 import {
   getCategoryHierarchy,
@@ -67,6 +67,7 @@ interface FinanceCardsTabProps {
   setIsReceiptModalOpen: (open: boolean) => void;
   setReceiptSelectedTxId: (id: string) => void;
   setViewingReceiptUrl: (url: string | null) => void;
+  onOpenGoogleSheets?: () => void;
 }
 
 export default function FinanceCardsTab({
@@ -114,6 +115,7 @@ export default function FinanceCardsTab({
   setIsReceiptModalOpen,
   setReceiptSelectedTxId,
   setViewingReceiptUrl,
+  onOpenGoogleSheets,
 }: FinanceCardsTabProps) {
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
 

@@ -2,7 +2,8 @@
 
 import { apiFetch } from '@/lib/api';
 import React, { useState, useEffect } from "react";
-import { X, FileSpreadsheet, RefreshCw, Sparkles, Sliders } from "lucide-react";
+import { X, FileSpreadsheet, RefreshCw, Sparkles, Sliders, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Account } from "../types";
 
 interface UploadExcelModalProps {
@@ -87,6 +88,53 @@ export default function UploadExcelModal({
     }
   };
 
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      {
+        "거래일시": "2026-08-21 09:30:00",
+        "구분": "입금",
+        "거래금액(원)": 5000000,
+        "거래후잔액(원)": 25000000,
+        "보낸분/받는분": "(주)원컨덕터",
+        "적요/내용": "물품대금 입금",
+        "취급점/메모": "본점영업부"
+      },
+      {
+        "거래일시": "2026-08-21 14:15:00",
+        "구분": "출금",
+        "거래금액(원)": 150000,
+        "거래후잔액(원)": 24850000,
+        "보낸분/받는분": "한국전력공사",
+        "적요/내용": "8월 전기요금 납부",
+        "취급점/메모": "자동이체"
+      },
+      {
+        "거래일시": "2026-08-21 16:40:00",
+        "구분": "출금",
+        "거래금액(원)": 45000,
+        "거래후잔액(원)": 24805000,
+        "보낸분/받는분": "스타벅스",
+        "적요/내용": "팀 미팅 다과비",
+        "취급점/메모": "카드결제"
+      }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    worksheet["!cols"] = [
+      { wch: 22 },
+      { wch: 10 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 20 },
+      { wch: 25 },
+      { wch: 18 }
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "인터넷뱅킹_거래내역");
+    XLSX.writeFile(workbook, "인터넷뱅킹_거래내역_표준양식.xlsx");
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-[32px] border border-slate-100 max-w-lg w-full p-6 md:p-8 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh] animate-scale-up">
@@ -101,6 +149,22 @@ export default function UploadExcelModal({
           <FileSpreadsheet className="w-5 h-5 text-indigo-500" />
           <span>수동 계좌 거래 내역 반입 (Excel)</span>
         </h3>
+
+        {/* 📥 표준 양식 다운로드 가이드 카드 */}
+        <div className="mb-4 p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-2xl flex items-center justify-between gap-3">
+          <div>
+            <span className="text-xs font-black text-indigo-900 block">표준 엑셀 서식이 필요하신가요?</span>
+            <span className="text-[11px] text-indigo-700/80 font-medium">거래일시, 입출금, 잔액 등 기본 규격 서식을 다운로드합니다.</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>표준 양식 다운로드</span>
+          </button>
+        </div>
 
         <form onSubmit={handleExcelUpload} className="space-y-4">
           {/* 업로드 방식 선택 토글 카드 */}

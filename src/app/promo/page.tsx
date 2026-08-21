@@ -5,8 +5,11 @@ import PromoGnb from "./components/PromoGnb";
 import PromoHero from "./components/PromoHero";
 import AiAppStoreStory from "./components/AiAppStoreStory";
 import ProblemSolution from "./components/ProblemSolution";
+import GoogleWorkspaceSyncSection from "./components/GoogleWorkspaceSyncSection";
 import FeatureShowcase from "./components/FeatureShowcase";
+import FinanceAutomationSection from "./components/FinanceAutomationSection";
 import ErpMesReplacementSection from "./components/ErpMesReplacementSection";
+import MobilePortalSection from "./components/MobilePortalSection";
 import FeatureMatrix from "./components/FeatureMatrix";
 import EgdeskInfraSection from "./components/EgdeskInfraSection";
 import RoiCalculator from "./components/RoiCalculator";
@@ -31,11 +34,20 @@ export default function PromoPage() {
       {/* 기존 고통 vs 도입 후 혁신 비교 */}
       <ProblemSolution />
 
+      {/* 🌟 [신규] 기존 구글 시트 & 드라이브 원클릭 실시간 연동 (도입 장벽 0%) */}
+      <GoogleWorkspaceSyncSection />
+
       {/* 5대 핵심 솔루션 인터랙티브 쇼케이스 */}
       <FeatureShowcase />
 
+      {/* 🌟 [신규] 3대 금융·세무 자동화 (홈택스 + 통장 + 법인카드) & 표준 엑셀 무손실 이관 */}
+      <FinanceAutomationSection />
+
       {/* 🌟 기존 ERP & MES 완벽 대체 섹션 */}
       <ErpMesReplacementSection />
+
+      {/* 🌟 [신규] PC 앞이 아니어도 완벽한 업무 통제, 모바일 전용 임직원 포털 (/m) */}
+      <MobilePortalSection />
 
       {/* 30+ 전체 기능 검색 & 카테고리별 올인원 디렉토리 */}
       <FeatureMatrix />

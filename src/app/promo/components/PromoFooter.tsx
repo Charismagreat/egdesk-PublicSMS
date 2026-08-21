@@ -63,7 +63,7 @@ export default function PromoFooter() {
               <div>주소: 경기도 시흥시 서울대학로 59-69 배곧테크노밸리 609호</div>
               <div className="pt-1 flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                <span>010-7923-5071 / 070-4024-5884</span>
+                <span>010-7216-5884 / 010-2412-7674</span>
               </div>
               <div className="flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5 text-indigo-400 shrink-0" />

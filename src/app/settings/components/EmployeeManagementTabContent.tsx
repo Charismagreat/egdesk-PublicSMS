@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Users, Plus, Search, Edit2, Trash2, Shield, Check, X, AlertTriangle, Key, FileSpreadsheet 
+  Users, Plus, Search, Edit2, Trash2, Shield, Check, X, AlertTriangle, Key, FileSpreadsheet, Globe 
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import EmployeeBatchUploadModal from "./EmployeeBatchUploadModal";
+import EmployeeGoogleSheetsUploadModal from "./EmployeeGoogleSheetsUploadModal";
 
 export default function EmployeeManagementTabContent() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -15,6 +16,8 @@ export default function EmployeeManagementTabContent() {
   
   // 엑셀 일괄 등록 모달 상태
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  // 🌐 구글 시트 연동 모달 상태
+  const [isGoogleSheetsModalOpen, setIsGoogleSheetsModalOpen] = useState(false);
   
   // 로그인한 오너(본인) 정보 저장
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -352,6 +355,14 @@ export default function EmployeeManagementTabContent() {
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
               <span>📊 엑셀 일괄 등록</span>
+            </button>
+            <button
+              onClick={() => setIsGoogleSheetsModalOpen(true)}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/90 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95"
+              title="구글 스프레드시트의 직원 표준 양식을 실시간 연동하여 일괄 등록합니다."
+            >
+              <Globe className="w-4 h-4 text-teal-600" />
+              <span>🌐 구글 시트 연동</span>
             </button>
             <button
               onClick={openAddModal}
@@ -795,6 +806,17 @@ export default function EmployeeManagementTabContent() {
         onClose={() => setIsBatchModalOpen(false)}
         onSuccess={() => {
           showToast("🎉 직원 계정 일괄 등록이 완료되었습니다.", "success");
+          fetchEmployees();
+        }}
+        workplaces={workplaces}
+      />
+
+      {/* 🌐 직원 계정 구글 스프레드시트 연동 등록 모달 */}
+      <EmployeeGoogleSheetsUploadModal
+        isOpen={isGoogleSheetsModalOpen}
+        onClose={() => setIsGoogleSheetsModalOpen(false)}
+        onSuccess={() => {
+          showToast("🎉 구글 시트 연동을 통해 직원 계정이 일괄 등록되었습니다.", "success");
           fetchEmployees();
         }}
         workplaces={workplaces}

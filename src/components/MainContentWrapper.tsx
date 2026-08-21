@@ -46,6 +46,7 @@ export default function MainContentWrapper({ children }: { children: React.React
     pathname.startsWith('/task-folders') ||
     pathname.startsWith('/tenant-cert-patent') ||
     pathname.startsWith('/custom') ||
+    pathname.startsWith('/google-drive') ||
     pathname.startsWith('/promo')
   ) {
     return <>{children}</>;
