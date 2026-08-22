@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Users } from "lucide-react";
+import { Plus, Users, FileSpreadsheet, Upload } from "lucide-react";
 
 interface HeaderProps {
   isUploading: boolean;
@@ -9,16 +9,25 @@ interface HeaderProps {
 
 export function Header({ isUploading, handleCsvUpload, setShowAddModal }: HeaderProps) {
   return (
-    <>
-      {/* 1. 상단 액션바 (PC용 고정 정렬) */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-slate-800 tracking-tight flex items-center">
-          <Users className="w-8 h-8 text-green-500 mr-3" />
-          고객 관리 AI
-        </h1>
-        <div className="flex space-x-2">
-          <label className={`bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm text-xs ${isUploading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}>
-            {isUploading ? "업로드 중..." : "CSV/엑셀 일괄 등록"}
+    <div className="space-y-3">
+      {/* 1. 상단 액션바 */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+            <span className="p-2 bg-indigo-50 text-indigo-600 rounded-2xl shadow-3xs">
+              <Users className="w-7 h-7" />
+            </span>
+            <span>고객 관리 AI</span>
+          </h1>
+          <p className="text-slate-500 mt-1.5 text-xs font-semibold pl-12">
+            고객 정보 등록, 그룹핑 필터링 및 적립금/거래 이력을 체계적으로 관리하는 스마트 CRM 센터입니다.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0">
+          <label className={`bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 shadow-2xs text-xs cursor-pointer active:scale-95 ${isUploading ? 'opacity-70 cursor-not-allowed' : ''}`}>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>{isUploading ? "업로드 중..." : "CSV/엑셀 일괄 등록"}</span>
             <input 
               type="file" 
               accept=".csv" 
@@ -29,25 +38,25 @@ export function Header({ isUploading, handleCsvUpload, setShowAddModal }: Header
           </label>
           <button 
             onClick={() => setShowAddModal(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm text-xs border-none cursor-pointer"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 shadow-md shadow-indigo-600/10 text-xs border-none cursor-pointer active:scale-95"
           >
-            <Plus className="w-4 h-4 mr-2" />
-            신규 등록
+            <Plus className="w-4 h-4" />
+            <span>신규 고객 등록</span>
           </button>
         </div>
       </div>
 
       {isUploading && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-xl flex items-center justify-between shadow-sm">
-          <div className="flex items-center">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+        <div className="bg-indigo-50/80 border border-indigo-200 text-indigo-900 p-4 rounded-2xl flex items-center justify-between shadow-xs animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-600 border-t-transparent"></div>
             <div>
-              <p className="font-bold text-xs">연락처를 업로드하는 중입니다...</p>
-              <p className="text-xs mt-1 text-slate-500">파일의 연락처를 분석하고 데이터베이스에 저장하고 있습니다.</p>
+              <p className="font-extrabold text-xs">고객 연락처 데이터를 분석하고 있습니다...</p>
+              <p className="text-[11px] font-semibold text-indigo-600 mt-0.5">파일 내의 연락처와 태그 정보를 확인하여 데이터베이스에 안전하게 등록 중입니다.</p>
             </div>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

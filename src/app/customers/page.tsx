@@ -2,6 +2,7 @@
 
 import { useCustomers } from "./hooks/useCustomers";
 import { Header } from "./components/Header";
+import { CustomerStats } from "./components/CustomerStats";
 import { FilterBar } from "./components/FilterBar";
 import { CustomerTable } from "./components/CustomerTable";
 import { AddCustomerModal } from "./components/AddCustomerModal";
@@ -50,23 +51,30 @@ export default function CustomersPage() {
   } = useCustomers();
 
   return (
-    <div className="space-y-6 w-full min-w-0 font-sans text-slate-800" data-easybot-hint="고객 관리 AI: 고객 정보 등록, 그룹핑 필터링 및 고객 맞춤 관리를 지원하는 CRM 센터입니다.">
+    <div className="space-y-6 w-full min-w-0 font-sans text-slate-800 animate-scale-up" data-easybot-hint="고객 관리 AI: 고객 정보 등록, 그룹핑 필터링 및 고객 맞춤 관리를 지원하는 CRM 센터입니다.">
+      {/* 1. 상단 타이틀 및 액션 헤더 */}
       <Header
         isUploading={isUploading}
         handleCsvUpload={handleCsvUpload}
         setShowAddModal={setShowAddModal}
       />
 
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+      {/* 2. 핵심 지표 요약 카드 (KPI Cards) */}
+      <CustomerStats customers={filteredCustomers} />
+
+      {/* 3. 고객 메인 전광판 대장 영역 (단일 카드 래핑) */}
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/80 space-y-4">
+        {/* 검색 및 필터 컨트롤 바 */}
         <FilterBar
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
 
+        {/* 고객 목록 테이블 */}
         <CustomerTable
           isLoading={isLoading}
           paginatedCustomers={paginatedCustomers}
-          customers={filteredCustomers} // filteredCustomers 로 대치하거나 전체 고객 수 정보용으로 사용
+          customers={filteredCustomers}
           filteredCustomers={filteredCustomers}
           handleRowClick={handleRowClick}
           itemsPerPage={itemsPerPage}
@@ -76,9 +84,11 @@ export default function CustomersPage() {
           totalPages={totalPages}
           startIndex={startIndex}
           endIndex={endIndex}
+          onOpenAddModal={() => setShowAddModal(true)}
         />
       </div>
 
+      {/* 신규 등록 모달 */}
       <AddCustomerModal
         showAddModal={showAddModal}
         setShowAddModal={setShowAddModal}
@@ -88,6 +98,7 @@ export default function CustomersPage() {
         isSubmitting={isSubmitting}
       />
 
+      {/* 상세 이력 모달 */}
       <HistoryModal
         showHistoryModal={showHistoryModal}
         setShowHistoryModal={setShowHistoryModal}
