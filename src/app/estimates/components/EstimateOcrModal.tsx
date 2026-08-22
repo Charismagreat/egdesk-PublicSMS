@@ -64,8 +64,14 @@ export default function EstimateOcrModal({
       }
       try {
         const savedUrl = getSavedGoogleSheetUrl('estimate_inbound_sheet_url');
-        if (savedUrl) setGoogleSheetUrl(savedUrl);
-      } catch (e) {}
+        if (savedUrl && !savedUrl.includes("1t3OiWthLbcZDgcrLJSI-XVKX")) {
+          setGoogleSheetUrl(savedUrl);
+        } else {
+          setGoogleSheetUrl("");
+        }
+      } catch (e) {
+        setGoogleSheetUrl("");
+      }
     }
     if (isOpen) {
       fetchUserRoleAndSettings();
