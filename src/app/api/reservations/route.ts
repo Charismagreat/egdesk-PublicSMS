@@ -3,9 +3,18 @@ import { NextResponse } from 'next/server';
 import { queryTable, insertRows, deleteRows } from '../../../../egdesk-helpers';
 import { triggerAutomation } from '@/lib/automation-trigger';
 
+import { getTenantId } from '@/lib/tenant';
+
 export async function GET() {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     const result = await queryTable('crm_reservations', {
+      filters: queryFilters,
       orderBy: 'reservation_date',
       orderDirection: 'DESC'
     });
@@ -17,6 +26,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const tenantId = (await getTenantId()) || 'default';
     const data = await req.json();
     const id = data.id || Date.now().toString();
     
@@ -24,7 +34,9 @@ export async function POST(req: Request) {
     let resolvedAmount = data.amount ? String(data.amount) : '';
     if (!resolvedAmount && data.serviceName) {
       try {
-        const prodRes = await queryTable('products', { filters: { name: data.serviceName } });
+        const prodFilters: any = { name: data.serviceName };
+        if (tenantId && tenantId !== 'all') prodFilters.tenant_id = tenantId;
+        const prodRes = await queryTable('products', { filters: prodFilters });
         if (prodRes.rows && prodRes.rows.length > 0) {
           const matchedProd = prodRes.rows[0];
           if (matchedProd.price && matchedProd.price !== '상담후결정') {
@@ -45,7 +57,8 @@ export async function POST(req: Request) {
       service_name: data.serviceName,
       reservation_date: data.reservationDate || new Date().toISOString().split('T')[0],
       reservation_time: data.reservationTime || '12:00',
-      status: data.status || '예약확정'
+      status: data.status || '예약확정',
+      tenant_id: tenantId
     }]);
 
     // 2. 거래 내역 (crm_transactions) 자동 연동 생성
@@ -57,7 +70,8 @@ export async function POST(req: Request) {
       amount: resolvedAmount,
       order_date: data.reservationDate || new Date().toISOString().split('T')[0],
       status: '결제대기', // 예약의 기본 상태는 결제대기
-      order_id: id // 원천 예약 ID 기록
+      order_id: id, // 원천 예약 ID 기록
+      tenant_id: tenantId
     }]);
 
     // Trigger automation in the background

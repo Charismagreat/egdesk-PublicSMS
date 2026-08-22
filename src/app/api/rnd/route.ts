@@ -3,12 +3,20 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, deleteRows } from '../../../../egdesk-helpers';
 
+import { getTenantId } from '@/lib/tenant';
+
 /**
  * GET: 기업부설연구소 사후관리 관련 데이터 조회
  * - type 파라미터에 따라 분기 처리 (center, staffs, spaces, logs, alarms)
  */
 export async function GET(req: Request) {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     const { searchParams } = new URL(req.url);
     const type = searchParams.get('type');
 
@@ -19,28 +27,28 @@ export async function GET(req: Request) {
     let result;
     switch (type) {
       case 'center':
-        // 연구소 기본 정보 조회 (단일 항목으로 가정하여 ID 1 조회)
-        result = await queryTable('rnd_centers', { filters: { center_id: '1' } });
+        // 연구소 기본 정보 조회
+        result = await queryTable('rnd_centers', { filters: { ...queryFilters, center_id: '1' } });
         return NextResponse.json({ success: true, center: result.rows?.[0] || null });
 
       case 'staffs':
         // 연구원 목록 조회
-        result = await queryTable('rnd_staffs', { orderBy: 'staff_id', orderDirection: 'ASC' });
+        result = await queryTable('rnd_staffs', { filters: queryFilters, orderBy: 'staff_id', orderDirection: 'ASC' });
         return NextResponse.json({ success: true, staffs: result.rows || [] });
 
       case 'spaces':
         // 연구 공간 점검 이력 조회
-        result = await queryTable('rnd_spaces', { orderBy: 'space_check_id', orderDirection: 'DESC' });
+        result = await queryTable('rnd_spaces', { filters: queryFilters, orderBy: 'space_check_id', orderDirection: 'DESC' });
         return NextResponse.json({ success: true, spaces: result.rows || [] });
 
       case 'logs':
         // R&D 연구일지 조회
-        result = await queryTable('rnd_logs', { orderBy: 'log_id', orderDirection: 'DESC' });
+        result = await queryTable('rnd_logs', { filters: queryFilters, orderBy: 'log_id', orderDirection: 'DESC' });
         return NextResponse.json({ success: true, logs: result.rows || [] });
 
       case 'alarms':
         // 규제 알림 이력 조회
-        result = await queryTable('rnd_compliance_alarms', { orderBy: 'alarm_id', orderDirection: 'DESC' });
+        result = await queryTable('rnd_compliance_alarms', { filters: queryFilters, orderBy: 'alarm_id', orderDirection: 'DESC' });
         return NextResponse.json({ success: true, alarms: result.rows || [] });
 
       default:
@@ -84,7 +92,8 @@ export async function POST(req: Request) {
 
       case 'staff_add':
         // 신규 연구원 추가 (OCR 검증 통과 후 DB 적재 시 사용)
-        const staffRes = await queryTable('rnd_staffs', {});
+        const rndTenantId = (await getTenantId()) || 'default';
+        const staffRes = await queryTable('rnd_staffs', { filters: rndTenantId !== 'all' ? { tenant_id: rndTenantId } : {} });
         const nextStaffId = (staffRes.rows || []).reduce((max: number, r: any) => Math.max(max, Number(r.staff_id || 0)), 0) + 1;
 
         await insertRows('rnd_staffs', [{
@@ -98,11 +107,12 @@ export async function POST(req: Request) {
           major_category: data.major_category,
           qualification_status: data.qualification_status || 'QUALIFIED',
           graduation_cert_ocr_json: data.graduation_cert_ocr_json ? JSON.stringify(data.graduation_cert_ocr_json) : null,
-          joined_date: data.joined_date || nowStr.slice(0, 10)
+          joined_date: data.joined_date || nowStr.slice(0, 10),
+          tenant_id: rndTenantId
         }]);
 
         // 알림에 연구원 변경신고 기한 D-Day 경보 트리거 추가
-        const alarmRes = await queryTable('rnd_compliance_alarms', {});
+        const alarmRes = await queryTable('rnd_compliance_alarms', { filters: rndTenantId !== 'all' ? { tenant_id: rndTenantId } : {} });
         const nextAlarmId = (alarmRes.rows || []).reduce((max: number, r: any) => Math.max(max, Number(r.alarm_id || 0)), 0) + 1;
         const limitDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
@@ -114,7 +124,8 @@ export async function POST(req: Request) {
           message: `신규 등록된 연구원(${data.name || '연구원'})의 학위 및 자격 요건 검증이 완료되었습니다. 관할 KOITA 사이트에서 14일 이내 변경신고를 이행해 주세요.`,
           due_date: limitDate,
           is_resolved: 0,
-          created_at: nowStr
+          created_at: nowStr,
+          tenant_id: rndTenantId
         }]);
 
         return NextResponse.json({ success: true, message: '연구원이 성공적으로 추가되었습니다. 변경신고(14일 이내) 기한 경고가 활성화되었습니다.' });

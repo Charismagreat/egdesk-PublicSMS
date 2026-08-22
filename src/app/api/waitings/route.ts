@@ -13,10 +13,15 @@ export async function GET(req: Request) {
     const tenantId = (await getTenantId()) || 'default';
     const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+    const waitingFilters: any = { waiting_date: todayStr };
+    if (tenantId && tenantId !== 'all') {
+      waitingFilters.tenant_id = tenantId;
+    }
+
     let result;
     try {
       result = await queryTable('crm_waitings', {
-        filters: { waiting_date: todayStr },
+        filters: waitingFilters,
         orderBy: 'waiting_no',
         orderDirection: 'ASC'
       });
@@ -24,7 +29,7 @@ export async function GET(req: Request) {
       if (tblErr.message?.includes('Table not found')) {
         await setupDatabase();
         result = await queryTable('crm_waitings', {
-          filters: { waiting_date: todayStr },
+          filters: waitingFilters,
           orderBy: 'waiting_no',
           orderDirection: 'ASC'
         });
@@ -45,7 +50,7 @@ export async function GET(req: Request) {
 
       // 내 앞 대기 팀 수 계산 (나보다 먼저 등록되었고 아직 WAITING 상태인 팀 수)
       const allActiveRes = await queryTable('crm_waitings', {
-        filters: { waiting_date: waiting.waiting_date || todayStr },
+        filters: { ...waitingFilters, waiting_date: waiting.waiting_date || todayStr },
         orderBy: 'waiting_no',
         orderDirection: 'ASC'
       });
@@ -93,16 +98,21 @@ export async function POST(req: Request) {
     const id = `WAIT-${Date.now()}`;
 
     // 오늘 등록된 대기자 조회하여 대기번호(waiting_no) 자동 채번
+    const waitingQueryFilters: any = { waiting_date: todayStr };
+    if (tenantId && tenantId !== 'all') {
+      waitingQueryFilters.tenant_id = tenantId;
+    }
+
     let todayRes;
     try {
       todayRes = await queryTable('crm_waitings', {
-        filters: { waiting_date: todayStr }
+        filters: waitingQueryFilters
       });
     } catch (tblErr: any) {
       if (tblErr.message?.includes('Table not found')) {
         await setupDatabase();
         todayRes = await queryTable('crm_waitings', {
-          filters: { waiting_date: todayStr }
+          filters: waitingQueryFilters
         });
       } else {
         throw tblErr;

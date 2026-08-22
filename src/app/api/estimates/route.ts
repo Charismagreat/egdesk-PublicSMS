@@ -416,9 +416,12 @@ export async function GET(req: Request) {
     }
 
     // 기본값: 모바일용 견적 상품 목록 조회
-    // 💡 SQL Query 헬퍼를 활용하여 견적가 플래그가 켜진 상품만 확실히 색출 (queryTable 우회)
+    const prodFilters: any = { is_estimate_price: '1' };
+    if (tenantId && tenantId !== 'all') {
+      prodFilters.tenant_id = tenantId;
+    }
     const prodRes = await queryTable('products', {
-      filters: { is_estimate_price: '1' },
+      filters: prodFilters,
       limit: 1000
     });
     const estimateProducts = (prodRes.rows || []).filter((p: any) => !p.deleted_at);

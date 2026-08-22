@@ -27,21 +27,13 @@ export async function GET(req: Request) {
       console.warn('[Self-Healing Warning] Auto-backfill check warning:', selfHealingErr.message);
     }
 
-    // ⚡ 테넌트 불일치 자가 복구 가드(Self-Healing Guard):
-    // 타 환경(다른 컴퓨터/세션)에서 접속 시 기존 테넌트('tenant-guest-id-2222', 'default', NULL 등)로 적재된
-    // 모든 상품 데이터를 현재 세션의 활성 테넌트 ID(tenantId)로 자동 마이그레이션 바인딩합니다.
+    // 컬럼 무손실 인앱 마이그레이션 자동 보정
     try {
-      // ⚡ brand, spec, unit 컬럼 무손실 인앱 마이그레이션 자동 보정
       await executeSQL(`ALTER TABLE products ADD COLUMN brand TEXT`).catch(() => {});
       await executeSQL(`ALTER TABLE products ADD COLUMN spec TEXT`).catch(() => {});
       await executeSQL(`ALTER TABLE products ADD COLUMN unit TEXT`).catch(() => {});
-
-      if (tenantId) {
-        await executeSQL(`UPDATE products SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL OR tenant_id = 'default' OR tenant_id = '' OR (tenant_id != '${tenantId}' AND tenant_id = 'tenant-guest-id-2222')`).catch(() => {});
-        console.log(`[Self-Healing] Successfully bound products to current active tenant: ${tenantId}`);
-      }
     } catch (patchErr: any) {
-      console.warn('[Self-Healing Warning] Failed to run tenant migration in products:', patchErr.message);
+      console.warn('[Migration Warning] Failed to run column migration in products:', patchErr.message);
     }
 
     const { searchParams } = new URL(req.url);
@@ -53,9 +45,9 @@ export async function GET(req: Request) {
     const offset = isAllMode ? 0 : (page - 1) * limit;
     const search = searchParams.get('search')?.trim() || '';
 
-    // ⚡ 비로그인 테이블오더 손님 접속 및 다중 테넌트 환경 방어용 안전 WHERE 조건식
-    const tenantCondition = (tenantId && tenantId !== 'default') 
-      ? `(p.tenant_id = '${tenantId}' OR p.tenant_id IS NULL OR p.tenant_id = 'default' OR p.tenant_id = 'tenant-guest-id-2222')`
+    // 🛡️ 테넌트별 완벽 격리 조건식
+    const tenantCondition = (tenantId && tenantId !== 'all')
+      ? `p.tenant_id = '${tenantId}'`
       : `1=1`;
 
     const statusCondition = status === 'DRAFT' 
@@ -123,8 +115,12 @@ export async function GET(req: Request) {
         console.error('폴백 중 재고 목록 로드 실패:', invErr);
       }
       
-      // 메모리 기반 테넌트, 삭제, 상태 필터링 (비로그인 손님 보정)
-      allRows = allRows.filter((r: any) => !r.deleted_at && (status === 'DRAFT' ? r.status === 'DRAFT' : r.status !== 'DRAFT'));
+      // 메모리 기반 테넌트, 삭제, 상태 필터링
+      allRows = allRows.filter((r: any) => 
+        !r.deleted_at && 
+        (tenantId && tenantId !== 'all' ? r.tenant_id === tenantId : true) &&
+        (status === 'DRAFT' ? r.status === 'DRAFT' : r.status !== 'DRAFT')
+      );
       
       if (search) {
         const cleanSearch = search.toLowerCase();

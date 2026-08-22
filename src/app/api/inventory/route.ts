@@ -29,15 +29,7 @@ export async function GET(request: Request) {
 
 
 
-    // ⚡ 테넌트 불일치 자가 복구 가드(Self-Healing Guard):
-    // 기존에 다른 테넌트 ID('tenant-guest-id-2222' 또는 NULL)로 적재된 재고 데이터를
-    // 현재 세션의 활성 테넌트 ID(tenantId)로 자동 바인딩 보정 처리합니다. (updateRows filters 활용)
-    try {
-      await executeSQL(`UPDATE inventory_items SET tenant_id = '${tenantId}' WHERE tenant_id IS NULL OR tenant_id = 'default'`);
-      console.log(`[Self-Healing] Successfully migrated null/default tenant items to: ${tenantId}`);
-    } catch (patchErr: any) {
-      console.warn('[Self-Healing Warning] Failed to run tenant migration in inventory:', patchErr.message);
-    }
+
 
     // In-app migration: 기존의 자재/제품/material/product 명칭을 표준 명칭으로 보정 (while 루프 반복 분할 보정)
     try {
@@ -72,14 +64,19 @@ export async function GET(request: Request) {
       if (invMatch) itemId = Number(invMatch[1]);
       else if (pureNumberMatch) itemId = Number(cleanCode);
 
+      const itemFilters: any = {};
+      if (tenantId && tenantId !== 'all') {
+        itemFilters.tenant_id = tenantId;
+      }
+
       if (itemId) {
-        const idQuery = await queryTable('inventory_items', { filters: { id: String(itemId) } });
+        const idQuery = await queryTable('inventory_items', { filters: { ...itemFilters, id: String(itemId) } });
         const found = (idQuery.rows || []).find((r: any) => !r.deleted_at);
         if (found) matchedRow = found;
       }
 
       if (!matchedRow) {
-        const barcodeQuery = await queryTable('inventory_items', { filters: { barcode: String(cleanCode) } });
+        const barcodeQuery = await queryTable('inventory_items', { filters: { ...itemFilters, barcode: String(cleanCode) } });
         const found = (barcodeQuery.rows || []).find((r: any) => !r.deleted_at);
         if (found) matchedRow = found;
       }

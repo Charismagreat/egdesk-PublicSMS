@@ -16,23 +16,7 @@ async function getUserTenantId() {
   }
 }
 
-/**
- * 🛡️ crm_partners 테이블의 tenant_id 자율 자가치유(Auto-heal) 헬퍼
- * tenant_id가 null이거나 비어있는 기존 물리 레코드들을 사용자의 테넌트 ID로 자동 귀속 업데이트합니다.
- */
-async function healPartnerTenantData(targetTenantId: string = 'default') {
-  try {
-    const partnersRes = await queryTableAll('crm_partners');
-    const partners = partnersRes.rows || [];
-    for (const partner of partners) {
-      if (!partner.deleted_at && (!partner.tenant_id || partner.tenant_id === 'null')) {
-        await updateRows('crm_partners', { tenant_id: targetTenantId }, { filters: { id: partner.id } });
-      }
-    }
-  } catch (err: any) {
-    console.error('Partner tenant_id auto-heal fail:', err?.message || err);
-  }
-}
+
 
 /**
  * ⚡ 이지데스크 user_data_query 툴의 내부 1000개 수신 한계(Clamping Limit)를 우회하기 위해
@@ -328,19 +312,24 @@ export async function GET(req: Request) {
     // 2. 전체 거래처 리스트 조회 및 실시간 거래 지표 합계 산출
     // ────────────────────────────────────────────────────────
     const tenantId = await getUserTenantId();
-    await healPartnerTenantData(tenantId);
 
-    const partnersRes = await queryTableAll('crm_partners');
+    const partnerFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      partnerFilters.tenant_id = tenantId;
+    }
+
+    const partnersRes = await queryTableAll('crm_partners', { filters: partnerFilters });
     const partners = (partnersRes.rows || []).filter((pt: any) => !pt.deleted_at);
 
-    // 각 거래처별 수/발주 총 거래액을 집계하기 위해 전체 발주/수주 테이블 마이닝
+    // 각 거래처별 수/발주 총 거래액을 집계하기 위해 전체 발주/수주 테이블 마이닝 (해당 테넌트 격리)
     let allPos: any[] = [];
     let allSos: any[] = [];
     try {
-      const poRes = await queryTableAll('crm_purchase_orders');
+      const filterObj = (tenantId && tenantId !== 'all') ? { tenant_id: tenantId } : {};
+      const poRes = await queryTableAll('crm_purchase_orders', { filters: filterObj });
       allPos = (poRes.rows || []).filter((r: any) => !r.deleted_at);
       
-      const soRes = await queryTableAll('crm_sales_orders');
+      const soRes = await queryTableAll('crm_sales_orders', { filters: filterObj });
       allSos = (soRes.rows || []).filter((r: any) => !r.deleted_at);
     } catch (e) {
       console.error('SCM 집계용 베이스 마이닝 지연:', e);

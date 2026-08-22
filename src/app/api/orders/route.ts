@@ -20,14 +20,9 @@ export async function GET(req: Request) {
     // 데이터베이스 감사 룰 준수: 소프트 삭제된 항목 배제 (deleted_at이 있는 주문은 반환 안 함)
     let activeOrders = (result.rows || []).filter((order: any) => !order.deleted_at);
 
-    // ⚡ 비로그인 테이블오더 주문('default') 및 현재 활성 테넌트 주문을 모두 안전하게 표시
-    if (tenantId && tenantId !== 'default') {
-      activeOrders = activeOrders.filter((order: any) => 
-        order.tenant_id === tenantId || 
-        order.tenant_id === 'default' || 
-        !order.tenant_id ||
-        order.tenant_id === 'tenant-guest-id-2222'
-      );
+    // 🛡️ 해당 테넌트 주문만 엄격히 격리 표시
+    if (tenantId && tenantId !== 'all') {
+      activeOrders = activeOrders.filter((order: any) => order.tenant_id === tenantId);
     }
 
     return NextResponse.json({ success: true, orders: activeOrders });

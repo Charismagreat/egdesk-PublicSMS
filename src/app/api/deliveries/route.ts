@@ -3,9 +3,18 @@ import { NextResponse } from 'next/server';
 import { queryTable, insertRows, deleteRows } from '../../../../egdesk-helpers';
 import { triggerAutomation } from '@/lib/automation-trigger';
 
+import { getTenantId } from '@/lib/tenant';
+
 export async function GET() {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     const result = await queryTable('crm_deliveries', {
+      filters: queryFilters,
       orderBy: 'id',
       orderDirection: 'DESC'
     });
@@ -19,6 +28,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const tenantId = (await getTenantId()) || 'default';
     const data = await req.json();
     const id = data.id || Date.now().toString();
     await insertRows('crm_deliveries', [{
@@ -28,7 +38,8 @@ export async function POST(req: Request) {
       address: data.address,
       courier: data.courier || '대한통운',
       tracking_number: data.trackingNumber || '',
-      status: data.status || '상품준비중'
+      status: data.status || '상품준비중',
+      tenant_id: tenantId
     }]);
 
     // Trigger automation in the background

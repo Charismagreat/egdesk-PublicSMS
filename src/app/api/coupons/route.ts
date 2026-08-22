@@ -3,16 +3,20 @@ import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, deleteRows } from '../../../../egdesk-helpers';
 import { couponCache } from '@/lib/coupon-cache';
 
+import { getTenantId } from '@/lib/tenant';
+
 // GET /api/coupons : 발급된 쿠폰 목록 조회
 export async function GET() {
   try {
-    // 1) 인메모리 캐시가 존재하는 경우 즉시 반환 (수 ms 수준의 극도 성능 실현)
-    const cached = couponCache.getCoupons();
-    if (cached) {
-      return NextResponse.json({ success: true, coupons: cached });
+    const tenantId = await getTenantId();
+
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
     }
 
     const result = await queryTable('coupons', {
+      filters: queryFilters,
       orderBy: 'created_at',
       orderDirection: 'DESC'
     });
@@ -20,7 +24,9 @@ export async function GET() {
     // 각 쿠폰에 매핑된 제한 조건 조회 및 병합
     let restrictionsRows: any[] = [];
     try {
-      const restrictionsResult = await queryTable('crm_coupons_restrictions', {});
+      const restrictionsResult = await queryTable('crm_coupons_restrictions', {
+        filters: queryFilters
+      });
       restrictionsRows = restrictionsResult.rows || [];
     } catch (e) {
       console.log('crm_coupons_restrictions table might be empty or not loaded yet.');
@@ -30,9 +36,6 @@ export async function GET() {
       const matched = restrictionsRows.filter((r: any) => r.coupon_id === c.id);
       return { ...c, restrictions: matched };
     });
-    
-    // 2) 인메모리 캐시 적재
-    couponCache.setCoupons(couponsWithRestrictions);
     
     return NextResponse.json({ success: true, coupons: couponsWithRestrictions });
   } catch (error: any) {
@@ -57,6 +60,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Coupon code is required for single issue' }, { status: 400 });
     }
 
+    const tenantId = (await getTenantId()) || 'default';
     const rows = [];
     const timestamp = Date.now();
 
@@ -78,7 +82,8 @@ export async function POST(req: Request) {
         min_order_amount: Number(min_order_amount) || 0,
         status: status || 'active',
         expires_at: expires_at || null,
-        created_at: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19)
+        created_at: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
+        tenant_id: tenantId
       });
     }
 
