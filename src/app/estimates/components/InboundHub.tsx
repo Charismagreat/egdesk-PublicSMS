@@ -399,25 +399,18 @@ export default function InboundHub({
             <>
               <button
                 onClick={() => window.open("/estimates/web-view?type=inbound_po", "_blank")}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap transition-all"
               >
-                <Printer className="w-4 h-4 text-indigo-400" />
+                <Printer className="w-4 h-4 text-indigo-600" />
                 보낸 발주 대장
               </button>
               <Link
                 href="/estimates/purchase-order-write"
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap inline-flex"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap inline-flex active:scale-95 transition-all"
               >
-                <Plus className="w-4 h-4 text-emerald-400" />
+                <Plus className="w-4 h-4" />
                 발주서 작성
               </Link>
-              <button
-                onClick={() => setIsPoOcrOpen(true)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/10 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-              >
-                <Upload className="w-4 h-4" />
-                보낸 발주서 스캔
-              </button>
             </>
           )}
         </div>
