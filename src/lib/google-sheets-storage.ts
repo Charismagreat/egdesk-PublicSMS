@@ -1,13 +1,23 @@
-"use client";
+import { getEgdeskBasePath } from '../../egdesk-helpers';
 
 const GOOGLE_SHEET_URL_KEY = "last_connected_google_sheet_url";
 export const SAMPLE_GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1is3rN5OZ7Hzf29XJGzuNbRFyHnhcdNmx268UYakDDDk/edit?usp=sharing";
 const LEGACY_DUMMY_URL = "https://docs.google.com/spreadsheets/d/1t3OiWthLbcZDgcrLJSI-XVKX-07_KBtLdcx3XCVrUoM/edit";
 
+function getTenantStorageKey(rawKey: string): string {
+  const basePath = getEgdeskBasePath();
+  if (basePath) {
+    const cleanPath = basePath.replace(/[^a-zA-Z0-9_-]/g, '_');
+    return `${cleanPath}_${rawKey}`;
+  }
+  return rawKey;
+}
+
 export function getSavedGoogleSheetUrl(key?: string): string {
   if (typeof window === "undefined") return "";
   try {
-    const storageKey = key || GOOGLE_SHEET_URL_KEY;
+    const rawKey = key || GOOGLE_SHEET_URL_KEY;
+    const storageKey = getTenantStorageKey(rawKey);
     const saved = localStorage.getItem(storageKey);
     if (!saved || !saved.trim()) return "";
     
@@ -26,12 +36,13 @@ export function getSavedGoogleSheetUrl(key?: string): string {
 export function setSavedGoogleSheetUrl(urlOrKey: string, maybeUrl?: string): void {
   if (typeof window === "undefined") return;
   try {
-    let storageKey = GOOGLE_SHEET_URL_KEY;
+    let rawKey = GOOGLE_SHEET_URL_KEY;
     let value = urlOrKey;
     if (maybeUrl !== undefined) {
-      storageKey = urlOrKey;
+      rawKey = urlOrKey;
       value = maybeUrl;
     }
+    const storageKey = getTenantStorageKey(rawKey);
     if (value) {
       localStorage.setItem(storageKey, value.trim());
     }
