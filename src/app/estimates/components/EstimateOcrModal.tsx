@@ -180,7 +180,7 @@ export default function EstimateOcrModal({
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "견적서");
-      XLSX.writeFile(wb, "이지데스크_표준_견적서_양식.xlsx");
+      XLSX.writeFile(wb, "이지데스크-표준- 받은 견적 등록 양식.xlsx");
     } catch (err: any) {
       alert("표준 엑셀 양식 다운로드 중 오류: " + err.message);
     }
