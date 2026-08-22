@@ -1,8 +1,9 @@
 "use client";
 
 import { apiFetch } from '@/lib/api';
-import React, { useState, useRef } from "react";
-import { Upload, X, FileText, CheckCircle2, RefreshCw, AlertCircle } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Upload, X, FileText, CheckCircle2, RefreshCw, AlertCircle, FileSpreadsheet, Download, Link2, Sparkles, Database } from "lucide-react";
+import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from '@/lib/google-sheets-storage';
 
 interface EstimateOcrModalProps {
   isOpen: boolean;
@@ -16,6 +17,9 @@ export default function EstimateOcrModal({
   onSuccess
 }: EstimateOcrModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const excelInputRef = useRef<HTMLInputElement>(null);
+  
+  const [activeImportTab, setActiveImportTab] = useState<'ocr' | 'excel' | 'sheets'>('ocr');
   const [ocrScanning, setOcrScanning] = useState(false);
   const [ocrSuccess, setOcrSuccess] = useState(false);
   const [ocrFilename, setOcrFilename] = useState("");
@@ -26,6 +30,10 @@ export default function EstimateOcrModal({
   const [userName, setUserName] = useState<string>("");
   const [forceBypass, setForceBypass] = useState<boolean>(false);
   const [bypassReason, setBypassReason] = useState<string>("");
+
+  const [googleSheetUrl, setGoogleSheetUrl] = useState<string>("");
+  const [isFetchingSheet, setIsFetchingSheet] = useState(false);
+
   const [ocrForm, setOcrForm] = useState({
     partner_name: "",
     partner_phone: "",
@@ -42,8 +50,8 @@ export default function EstimateOcrModal({
     originalTotalQuantity: 0
   });
 
-  React.useEffect(() => {
-    async function fetchUserRole() {
+  useEffect(() => {
+    async function fetchUserRoleAndSettings() {
       try {
         const res = await apiFetch("/api/auth/me");
         const data = await res.json();
@@ -54,9 +62,13 @@ export default function EstimateOcrModal({
       } catch (e) {
         console.error("세션 조회 실패:", e);
       }
+      try {
+        const savedUrl = getSavedGoogleSheetUrl('estimate_inbound_sheet_url');
+        if (savedUrl) setGoogleSheetUrl(savedUrl);
+      } catch (e) {}
     }
     if (isOpen) {
-      fetchUserRole();
+      fetchUserRoleAndSettings();
     }
   }, [isOpen]);
 
@@ -86,9 +98,8 @@ export default function EstimateOcrModal({
       originalTotalAmount: 0,
       originalTotalQuantity: 0
     });
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (excelInputRef.current) excelInputRef.current.value = "";
   };
 
   const handleClose = () => {
@@ -96,119 +107,251 @@ export default function EstimateOcrModal({
     onClose();
   };
 
-  // HTML5 Canvas를 이용해 이미지를 회전시키는 헬퍼 함수
+  const handleDownloadStandardTemplate = async () => {
+    try {
+      const XLSX = await import("xlsx");
+      const headers = [
+        "거래처명",
+        "사업자번호",
+        "대표자명",
+        "연락처",
+        "담당자",
+        "견적서번호",
+        "견적일자",
+        "품목코드",
+        "품목명",
+        "규격",
+        "수량",
+        "단가",
+        "공급가액",
+        "세액",
+        "비고"
+      ];
+      const sampleRows = [
+        [
+          "(주)대선기공",
+          "120-81-12345",
+          "박대선",
+          "02-555-1234",
+          "박민우",
+          "EST-20260822-001",
+          "2026-08-22",
+          "INV-1002",
+          "고성능 서보 모터",
+          "100W / 220V",
+          10,
+          150000,
+          1500000,
+          150000,
+          "납기 3일 이내 납품 요망"
+        ]
+      ];
+      const wsData = [headers, ...sampleRows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      
+      ws['!cols'] = [
+        { wch: 16 }, { wch: 15 }, { wch: 12 }, { wch: 14 }, { wch: 12 },
+        { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 22 }, { wch: 16 },
+        { wch: 8 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 24 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "견적서");
+      XLSX.writeFile(wb, "이지데스크_표준_견적서_양식.xlsx");
+    } catch (err: any) {
+      alert("표준 엑셀 양식 다운로드 중 오류: " + err.message);
+    }
+  };
+
+  const parseTableDataToEstimate = async (rawRows: any[][], sourceTitle: string) => {
+    if (!rawRows || rawRows.length < 2) {
+      throw new Error("유효한 데이터 행이 부족합니다.");
+    }
+
+    setOcrScanning(true);
+    setOcrScanStep("테이블 데이터를 분석하여 품목 및 거래처 정보를 스마트 매핑 중...");
+    setOcrFilename(sourceTitle);
+
+    let partner_name = "", partner_phone = "", partner_manager = "", business_number = "", representative = "", address = "", document_number = "", document_date = "", document_memo = "";
+    let headerRowIdx = -1;
+    let colMap: Record<string, number> = {};
+
+    for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
+      const row = rawRows[r] || [];
+      const rowStr = row.map(v => String(v || '').trim().toLowerCase());
+      const hasProd = rowStr.some(v => v.includes("품명") || v.includes("품목") || v.includes("item"));
+      const hasQty = rowStr.some(v => v.includes("수량") || v.includes("qty"));
+      const hasPrice = rowStr.some(v => v.includes("단가") || v.includes("가격") || v.includes("price"));
+
+      if ((hasProd && hasQty) || (hasProd && hasPrice)) {
+        headerRowIdx = r;
+        row.forEach((colVal, cIdx) => {
+          const c = String(colVal || '').trim();
+          if (!c) return;
+          if (c.includes("거래처")) colMap["partner_name"] = cIdx;
+          if (c.includes("사업자")) colMap["business_number"] = cIdx;
+          if (c.includes("대표자")) colMap["representative"] = cIdx;
+          if (c.includes("전화")) colMap["partner_phone"] = cIdx;
+          if (c.includes("담당")) colMap["partner_manager"] = cIdx;
+          if (c.includes("문서번호")) colMap["document_number"] = cIdx;
+          if (c.includes("일자")) colMap["document_date"] = cIdx;
+          if (c.includes("비고")) colMap["document_memo"] = cIdx;
+          if (c.includes("코드")) colMap["item_code"] = cIdx;
+          if (c.includes("품명")) colMap["product_name"] = cIdx;
+          if (c.includes("규격")) colMap["spec"] = cIdx;
+          if (c.includes("수량")) colMap["quantity"] = cIdx;
+          if (c.includes("단가")) colMap["unit_price"] = cIdx;
+        });
+        break;
+      }
+    }
+
+    if (headerRowIdx === -1) {
+      headerRowIdx = 0;
+      (rawRows[0] || []).forEach((colVal, cIdx) => {
+        const c = String(colVal || '').trim();
+        if (c.includes("품명")) colMap["product_name"] = cIdx;
+        if (c.includes("규격")) colMap["spec"] = cIdx;
+        if (c.includes("수량")) colMap["quantity"] = cIdx;
+        if (c.includes("단가")) colMap["unit_price"] = cIdx;
+      });
+    }
+
+    for (let r = 0; r < headerRowIdx; r++) {
+      const row = rawRows[r] || [];
+      for (let c = 0; c < row.length; c++) {
+        const val = String(row[c] || "").trim();
+        if (!val) continue;
+        if ((val.includes("공급처") || val.includes("거래처")) && !partner_name) partner_name = String(row[c + 1] || "").trim();
+        if ((val.includes("사업자")) && !business_number) business_number = String(row[c + 1] || "").trim();
+        if ((val.includes("대표자")) && !representative) representative = String(row[c + 1] || "").trim();
+        if ((val.includes("연락처")) && !partner_phone) partner_phone = String(row[c + 1] || "").trim();
+        if ((val.includes("담당자")) && !partner_manager) partner_manager = String(row[c + 1] || "").trim();
+      }
+    }
+
+    const items: Array<any> = [];
+    const numClean = (val: any) => parseFloat(String(val || '').replace(/[^0-9.-]/g, '')) || 0;
+    const prodIdx = colMap["product_name"] ?? 0;
+    const specIdx = colMap["spec"] ?? -1;
+    const qtyIdx = colMap["quantity"] ?? 2;
+    const priceIdx = colMap["unit_price"] ?? 3;
+    const codeIdx = colMap["item_code"] ?? -1;
+
+    for (let r = headerRowIdx + 1; r < rawRows.length; r++) {
+      const row = rawRows[r];
+      if (!row || !row[prodIdx] || String(row[prodIdx]).includes("합계")) continue;
+      items.push({
+        product_name: String(row[prodIdx]).trim(),
+        spec: specIdx >= 0 ? String(row[specIdx] || '').trim() : '',
+        quantity: numClean(row[qtyIdx]) || 1,
+        unit_price: numClean(row[priceIdx]),
+        item_code: codeIdx >= 0 ? String(row[codeIdx] || '').trim() : ''
+      });
+    }
+
+    try {
+      setOcrScanStep("마스터 품목 DB 대조 중...");
+      const prodRes = await apiFetch("/api/products?limit=5000");
+      const prodData = await prodRes.json();
+      if (prodData.success) {
+        items.forEach(it => {
+          const matched = prodData.products.find((mp: any) => mp.name === it.product_name || mp.barcode === it.item_code);
+          if (matched) {
+            it.validItemCode = matched.barcode;
+            it.valid_item_code = it.validItemCode;
+          }
+        });
+      }
+    } catch (e) {}
+
+    setOcrForm({
+      partner_name: partner_name || "(주)신규공급사",
+      partner_phone, partner_manager, items, file_url: "", business_number, representative, address,
+      document_number: document_number || `EST-${Date.now()}`,
+      document_date: document_date || new Date().toISOString().slice(0, 10),
+      document_memo: document_memo || `${sourceTitle} 연동 접수`,
+      originalTotalAmount: items.reduce((s, i) => s + (i.quantity * i.unit_price), 0),
+      originalTotalQuantity: items.reduce((s, i) => s + i.quantity, 0)
+    });
+
+    setReceiverMatched(true);
+    setOcrScanning(false);
+    setOcrSuccess(true);
+  };
+
+  const handleExcelFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setOcrScanning(true);
+      const XLSX = await import("xlsx");
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: "array" });
+      const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }) as any[][];
+      await parseTableDataToEstimate(rawRows, file.name);
+    } catch (err: any) {
+      setOcrScanning(false);
+      alert("엑셀 파일 파싱 오류: " + err.message);
+    }
+  };
+
+  const handleFetchGoogleSheet = async () => {
+    if (!googleSheetUrl.trim()) return;
+    try {
+      setIsFetchingSheet(true);
+      setOcrScanning(true);
+      setSavedGoogleSheetUrl('estimate_inbound_sheet_url', googleSheetUrl.trim());
+      const res = await apiFetch("/api/shared/google-sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheetUrl: googleSheetUrl.trim() })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      await parseTableDataToEstimate(data.data, "구글 스프레드시트 연동");
+    } catch (err: any) {
+      setOcrScanning(false);
+      alert("연동 실패: " + err.message);
+    } finally {
+      setIsFetchingSheet(false);
+    }
+  };
+
   const rotateImageBase64 = (base64: string, degrees: number): Promise<string> => {
     return new Promise((resolve, reject) => {
-      if (degrees === 0) {
-        resolve(base64);
-        return;
-      }
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          reject(new Error("Canvas context를 생성할 수 없습니다."));
-          return;
-        }
-
-        // 90도 또는 270도 회전 시 가로세로 크기가 뒤바뀜
-        if (degrees === 90 || degrees === 270) {
-          canvas.width = img.height;
-          canvas.height = img.width;
-        } else {
-          canvas.width = img.width;
-          canvas.height = img.height;
-        }
-
-        // 회전 변환 적용
+        if (!ctx) return reject();
+        if (degrees === 90 || degrees === 270) { canvas.width = img.height; canvas.height = img.width; }
+        else { canvas.width = img.width; canvas.height = img.height; }
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.rotate((degrees * Math.PI) / 180);
         ctx.drawImage(img, -img.width / 2, -img.height / 2);
-
-        // 새 Base64 데이터 추출
         resolve(canvas.toDataURL("image/jpeg", 0.95));
       };
-      img.onerror = () => reject(new Error("이미지 로드에 실패했습니다."));
       img.src = base64;
     });
   };
 
-  // 실제 이미지/PDF 파일 업로드 후 AI OCR 가동
   const handleOcrFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // 업로드 직후 즉시 엘리먼트 가상 폼 캐시를 제거하여 중복 전송 꼬임을 차단합니다.
-    e.target.value = "";
-
     setOcrScanning(true);
-    setOcrSuccess(false);
     setOcrFilename(file.name);
-
     const reader = new FileReader();
     reader.onload = async () => {
       let base64Data = reader.result as string;
       try {
-        // PDF가 아닐 경우에만 이미지 회전 로직 가동 (PDF는 브라우저 Image 로드가 불가능하므로 예외 처리)
-        const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-
-        if (!isPdf) {
-          try {
-            // 1단계: 방향 판별 요청
-            setOcrScanStep("1단계: 이미지의 텍스트 레이아웃 방향을 자동 판별 중...");
-            const detectRes = await apiFetch("/api/estimates/ocr", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                imageBase64: base64Data,
-                filename: file.name,
-                mimeType: file.type,
-                action: "detect-orientation"
-              })
-            });
-            const detectData = await detectRes.json();
-            
-            // 2단계: 회전각이 0도 초과일 경우 브라우저 캔버스로 회전 보정 실행
-            if (detectData.success && detectData.rotation > 0) {
-              setOcrScanStep(`2단계: 누워 있는 이미지를 정방향으로 자동 보정 회전 중 (${detectData.rotation}도)...`);
-              console.log(`🔄 [AI 이미지 보정] 회전 감지: 시계방향 ${detectData.rotation}도 회전 보정 실행`);
-              base64Data = await rotateImageBase64(base64Data, detectData.rotation);
-              // 사용자가 보정 단계를 인식할 수 있도록 약 800ms의 시각적 딜레이를 줌
-              await new Promise(resolve => setTimeout(resolve, 800));
-            } else {
-              setOcrScanStep("이미지가 이미 정방향입니다. 보정 없이 즉시 판독을 시작합니다.");
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
-          } catch (rotateErr: any) {
-            console.error("이미지 자동 회전 보정 중 에러(무시하고 진행):", rotateErr);
-            setOcrScanStep(`자동 보정 중 오류가 발생하여 우회 진행합니다: ${rotateErr.message || rotateErr}`);
-            await new Promise(resolve => setTimeout(resolve, 1500));
-          }
-        } else {
-          setOcrScanStep("PDF 문서는 정방향 분석으로 즉시 분석을 진행합니다.");
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-
-        // 3단계: 보정된 이미지 데이터로 상세 OCR 요청 진행
-        setOcrScanStep("3단계: 정방향 문서를 기반으로 견적서 상세 내역을 추출하는 중...");
         const res = await apiFetch("/api/estimates/ocr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            imageBase64: base64Data,
-            filename: file.name,
-            mimeType: file.type,
-            document_type: "estimate"
-          })
+          body: JSON.stringify({ imageBase64: base64Data, filename: file.name, document_type: "estimate" })
         });
         const data = await res.json();
         if (data.success) {
-          console.log("📌 [DEBUG ESTIMATE OCR SUCCESS] Full Response Data:", data);
-          console.log("📌 [DEBUG ESTIMATE OCR SUCCESS] AI Raw OCR Response Text:\n", data.debug_raw_text);
-          
-          setOcrScanning(false);
-          setOcrSuccess(true);
           setOcrForm({
             partner_name: data.partner_name,
             partner_phone: data.partner_phone || "",
@@ -224,188 +367,209 @@ export default function EstimateOcrModal({
             originalTotalAmount: data.originalTotalAmount || 0,
             originalTotalQuantity: data.originalTotalQuantity || 0
           });
-          setReceiverMatched(data.receiver_matched !== false);
-          setMyCompanyName(data.my_company_name || "주식회사 쿠스");
-        } else {
           setOcrScanning(false);
-          alert(data.error || "OCR 파싱 실패");
+          setOcrSuccess(true);
         }
       } catch (err) {
         setOcrScanning(false);
-        alert("OCR 파싱 실패");
+        alert("OCR 실패");
       }
-    };
-    reader.onerror = () => {
-      setOcrScanning(false);
-      alert("파일을 읽는 도중 오류가 발생했습니다.");
     };
     reader.readAsDataURL(file);
   };
 
-  // 품목 합산금액 및 합계수량 계산
   const calculatedTotal = ocrForm.items.reduce((sum, it) => sum + (it.quantity * it.unit_price), 0);
   const calculatedTotalQuantity = ocrForm.items.reduce((sum, it) => sum + Number(it.quantity || 0), 0);
   const isAmountMatching = ocrForm.originalTotalAmount === calculatedTotal;
   const isQuantityMatching = ocrForm.originalTotalQuantity === calculatedTotalQuantity;
 
-  // OCR 완료된 받은 견적 접수 실행
   const handleSaveOcrEstimate = async () => {
-    if (!ocrForm.partner_name || ocrForm.items.length === 0) return;
-
-    // 금액 및 수량 불일치에 대한 이중 가드 컨펌 작동
-    const hasAmountMismatch = ocrForm.originalTotalAmount > 0 && calculatedTotal !== ocrForm.originalTotalAmount;
-    const hasQuantityMismatch = ocrForm.originalTotalQuantity > 0 && calculatedTotalQuantity !== ocrForm.originalTotalQuantity;
-
-    if (hasAmountMismatch || hasQuantityMismatch) {
-      let warningMsg = '[금액/수량 불일치 경고]\n\n';
-      if (hasAmountMismatch) {
-        warningMsg += `- 원본 명세서 금액(${ocrForm.originalTotalAmount.toLocaleString()}원)과 입력된 품목 합계금액(${calculatedTotal.toLocaleString()}원)이 일치하지 않습니다.\n`;
-      }
-      if (hasQuantityMismatch) {
-        warningMsg += `- 원본 명세서 수량(${ocrForm.originalTotalQuantity.toLocaleString()}개)과 입력된 품목 합계수량(${calculatedTotalQuantity.toLocaleString()}개)이 일치하지 않습니다.\n`;
-      }
-      warningMsg += '\n이대로 강제로 받은 견적서 등록을 진행하시겠습니까?';
-      const confirmForce = window.confirm(warningMsg);
-      if (!confirmForce) return;
-    }
-
     try {
-      const tagsObj = {
-        business_number: ocrForm.business_number,
-        representative: ocrForm.representative,
-        address: ocrForm.address,
-        document_number: ocrForm.document_number,
-        document_date: ocrForm.document_date,
-        document_memo: ocrForm.document_memo
-      };
-
       const res = await apiFetch("/api/estimates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...ocrForm,
           type: "INBOUND",
           direction_status: "REQUESTED",
-          partner_name: ocrForm.partner_name,
-          partner_phone: ocrForm.partner_phone,
-          partner_manager: ocrForm.partner_manager,
-          items: ocrForm.items,
           ai_parsed: 1,
-          file_url: ocrForm.file_url,
-          tags: JSON.stringify(tagsObj),
+          import_source: activeImportTab === 'excel' ? 'EXCEL_FILE' : activeImportTab === 'sheets' ? 'GOOGLE_SHEETS' : 'OCR_SCAN',
           force_bypass: forceBypass,
           bypass_reason: bypassReason
         })
       });
       const data = await res.json();
       if (data.success) {
-        handleClose();
+        alert("등록 성공!");
+        resetOcrState();
         onSuccess();
-        alert("AI OCR 분석 견적이 성공적으로 접수 대장에 적재되었습니다.");
-      } else {
-        alert(data.error || "접수 실패");
-      }
+        onClose();
+      } else alert(data.error);
     } catch (e) {
-      alert("접수 중 오류 발생");
+      alert("등록 오류");
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-[32px] border border-slate-100 max-w-xl w-full p-6 md:p-8 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh] animate-scale-up">
-        <button onClick={handleClose} className="absolute top-5 right-5 p-2 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500 transition-colors">
-          <X className="w-4 h-4" />
-        </button>
-
-        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-4">
-          <Upload className="w-5 h-5 text-indigo-500" />
-          <span>받은 견적서 스캔 등록 (AI OCR)</span>
-        </h3>
-
-        <div className="space-y-6 flex-1 overflow-y-auto pr-1">
-          {/* 이미지 가상 드롭존 */}
-          <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center bg-slate-50 relative min-h-[140px] overflow-hidden">
-            {ocrScanning && (
-              <div className="absolute inset-x-0 h-1 bg-indigo-500 animate-bounce z-20"></div>
-            )}
-
-            {ocrScanning ? (
-              <div className="flex flex-col items-center space-y-2 text-center">
-                <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
-                <span className="text-xs text-indigo-600 font-extrabold animate-pulse">{ocrScanStep || "Gemini Vision AI로 견적 이미지 고해상도 OCR 스캔 중..."}</span>
-              </div>
-            ) : ocrSuccess ? (
-              <div className="text-center space-y-2">
-                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
-                <div>
-                  <span className="text-xs font-bold text-slate-700 block">{ocrFilename} 스캔 성공!</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">공급사, 연락처 및 {ocrForm.items.length}개 품목의 단가/수량 파싱 완료</span>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center space-y-3">
-                <FileText className="w-8 h-8 text-slate-400 mx-auto" />
-                <div className="text-xs text-slate-500">견적서 사진/PDF 이미지 등록 시 AI가 데이터 자동 파싱</div>
-                <label 
-                  className="inline-block px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-black text-[11px] rounded-xl border border-indigo-100 cursor-pointer shadow-sm"
-                >
-                  견적서 파일 선택 (이미지 / PDF)
-                  <input 
-                    ref={fileInputRef}
-                    type="file" 
-                    accept="image/*,application/pdf"
-                    onChange={handleOcrFileChange}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            )}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <span className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+              <FileSpreadsheet className="w-5 h-5" />
+            </span>
+            <div>
+              <h3 className="text-lg font-black text-slate-800 tracking-tight">받은 견적서 스마트 접수</h3>
+              <p className="text-xs text-slate-400 font-semibold mt-0.5">실물 스캔, 엑셀, 구글 시트를 모두 지원합니다.</p>
+            </div>
           </div>
+          <button onClick={handleClose} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-          {/* 스캔 결과 폼 */}
-          {ocrSuccess && (
-            <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100 space-y-4 animate-scale-up">
-              {!receiverMatched && (
-                <div className="space-y-3">
-                  <div className="bg-rose-50 border border-rose-100 text-rose-700 p-4 rounded-xl text-xs font-bold leading-normal flex items-start gap-2 text-left">
-                    <span className="text-base shrink-0 mt-0.5">⚠️</span>
-                    <div>
-                      <span className="font-extrabold block text-rose-900 mb-1">수신인 불일치 (접수 거절)</span>
-                      스캔 결과 해당 문서의 수신인이 본사({myCompanyName})와 일치하지 않습니다. 잘못된 외부 문서는 법정/재무적 리스크 방지를 위해 등록이 원천 차단됩니다.
-                    </div>
+        {!ocrSuccess && (
+          <div className="flex items-center gap-2 mt-4 p-1 bg-slate-100/80 rounded-2xl border border-slate-200/80">
+            <button onClick={() => setActiveImportTab('ocr')} className={`flex-1 py-2.5 rounded-xl text-xs font-black ${activeImportTab === 'ocr' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>📸 실물 스캔</button>
+            <button onClick={() => setActiveImportTab('excel')} className={`flex-1 py-2.5 rounded-xl text-xs font-black ${activeImportTab === 'excel' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}>📁 엑셀 등록</button>
+            <button onClick={() => setActiveImportTab('sheets')} className={`flex-1 py-2.5 rounded-xl text-xs font-black ${activeImportTab === 'sheets' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>📊 구글 시트</button>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto pt-4 space-y-4 pr-1">
+          {activeImportTab === 'ocr' && !ocrSuccess && (
+            <div className="border-2 border-dashed border-slate-200 rounded-3xl p-8 text-center flex flex-col items-center justify-center min-h-[220px]">
+              <Upload className="w-8 h-8 text-indigo-400 mb-4" />
+              <p className="text-xs font-bold text-slate-600">견적서 이미지 또는 PDF 업로드</p>
+              <label className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer">
+                파일 선택
+                <input ref={fileInputRef} type="file" accept="image/*,application/pdf" onChange={handleOcrFileChange} className="hidden" />
+              </label>
+            </div>
+          )}
+
+          {activeImportTab === 'excel' && !ocrSuccess && (
+            <div className="space-y-4 text-left">
+              <div className="flex items-center justify-between bg-emerald-50/70 border border-emerald-200/80 p-3.5 rounded-2xl">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 bg-emerald-500 text-white rounded-xl shadow-xs">
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <span className="text-xs font-black text-emerald-950 block">표준 엑셀 템플릿 제공</span>
+                    <span className="text-[10px] text-emerald-700 font-medium">거래처에 배포하거나 직접 작성할 수 있는 정갈한 서식을 다운로드하세요.</span>
                   </div>
-                  
-                  {(userRole === 'SUPER_ADMIN' || userRole === 'PRESIDENT') && (
-                    <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl space-y-3 text-xs font-semibold text-left">
-                      <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest block">🛡️ 최고관리자 강제 승인 제어</span>
-                      <label className="flex items-center gap-2 cursor-pointer text-amber-900 font-bold select-none">
-                        <input 
-                          type="checkbox" 
-                          checked={forceBypass}
-                          onChange={(e) => {
-                            setForceBypass(e.target.checked);
-                            if (!e.target.checked) setBypassReason("");
-                          }}
-                          className="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-                        />
-                        불일치 경고를 무시하고 강제로 견적 등록 승인
-                      </label>
-                      
-                      {forceBypass && (
-                        <div className="space-y-1.5 animate-scale-up">
-                          <label className="block text-[10px] text-amber-700 font-bold">강제 승인 사유 입력 (5자 이상 필수) *</label>
-                          <textarea
-                            value={bypassReason}
-                            onChange={(e) => setBypassReason(e.target.value)}
-                            placeholder="예: 계열사 위탁 견적 대리 접수 건으로 임원 확인 완료"
-                            className="w-full p-2.5 bg-white border border-amber-200 rounded-xl text-xs font-semibold outline-none focus:border-amber-500 text-slate-800"
-                            rows={2}
-                          />
-                        </div>
-                      )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadStandardTemplate}
+                  className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 shrink-0"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>표준 양식 (.xlsx)</span>
+                </button>
+              </div>
+
+              <div className="border-2 border-dashed border-emerald-200 hover:border-emerald-400 bg-emerald-50/20 hover:bg-emerald-50/40 rounded-3xl p-8 text-center transition-all flex flex-col items-center justify-center min-h-[190px]">
+                {ocrScanning ? (
+                  <div className="space-y-3">
+                    <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                    <p className="text-xs font-extrabold text-emerald-700 animate-pulse">{ocrScanStep || "엑셀 데이터 분석 중..."}</p>
+                    <p className="text-[10px] text-slate-400 font-semibold">{ocrFilename}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="w-12 h-12 bg-white text-emerald-600 shadow-sm rounded-2xl flex items-center justify-center mx-auto border border-emerald-100">
+                      <FileSpreadsheet className="w-6 h-6" />
                     </div>
-                  )}
+                    <div>
+                      <p className="text-xs font-bold text-slate-700">견적서 엑셀(.xlsx, .xls, .csv) 파일을 선택하세요</p>
+                      <p className="text-[10px] text-slate-400 mt-1">표준 양식 및 거래처 자체 엑셀 양식 모두 스마트 자동 매핑됩니다.</p>
+                    </div>
+                    <label className="inline-flex items-center justify-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm">
+                      엑셀 파일 선택 (.xlsx / .csv)
+                      <input 
+                        ref={excelInputRef}
+                        type="file" 
+                        accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                        onChange={handleExcelFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeImportTab === 'sheets' && !ocrSuccess && (
+            <div className="space-y-4 text-left">
+              <div className="bg-blue-50/60 border border-blue-200/80 p-4 rounded-3xl space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-blue-600 text-white rounded-lg">
+                    <Link2 className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h4 className="text-xs font-black text-blue-950">구글 스프레드시트 실시간 데이터 연동</h4>
+                    <p className="text-[10px] text-blue-700 font-medium">공유된 구글 스프레드시트 링크를 통해 최신 견적 데이터를 1초 만에 가져옵니다.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700 block">구글 시트 공유 링크 (URL) *</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="url"
+                      value={googleSheetUrl}
+                      onChange={(e) => setGoogleSheetUrl(e.target.value)}
+                      placeholder="https://docs.google.com/spreadsheets/d/.../edit?usp=sharing"
+                      className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500 text-slate-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleFetchGoogleSheet}
+                      disabled={isFetchingSheet || ocrScanning}
+                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-50 shadow-sm cursor-pointer active:scale-95"
+                    >
+                      {isFetchingSheet ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                      <span>데이터 불러오기</span>
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                  💡 구글 시트 상단 [공유] 메뉴에서 <strong>'링크가 있는 모든 사용자에게 공개 (보기 권한)'</strong>로 설정되어 있어야 안전하게 데이터를 읽어올 수 있습니다.
+                </p>
+              </div>
+
+              {ocrScanning && (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-xs font-extrabold text-blue-700 animate-pulse">{ocrScanStep || "구글 시트 데이터 분석 중..."}</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 공통 파싱 결과 폼 & 이중 가드 수치 대조 */}
+          {ocrSuccess && (
+            <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100 space-y-4 animate-scale-up">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded text-[10px] font-black">
+                    {activeImportTab === 'excel' ? '📁 엑셀 파싱 완료' : activeImportTab === 'sheets' ? '📊 구글 시트 연동 완료' : '📸 OCR 판독 완료'}
+                  </span>
+                  <span className="text-xs font-bold text-slate-600 truncate max-w-[280px]">{ocrFilename}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetOcrState}
+                  className="text-[10px] font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>다시 불러오기</span>
+                </button>
+              </div>
 
               {/* 금액 및 수량 실시간 대조 배지 바 */}
               <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-2.5 rounded-2xl text-[10px] border border-slate-200 text-left">
@@ -478,16 +642,16 @@ export default function EstimateOcrModal({
                 )}
               </div>
 
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">AI 스캔 분석 결과 자동입력 대기</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block text-left">분석 결과 자동입력 확인</span>
               
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 text-left">
                 <div>
                   <label className="text-[10px] text-slate-400 font-bold block mb-1">공급처명</label>
                   <input 
                     type="text" 
                     value={ocrForm.partner_name}
                     onChange={e => setOcrForm(prev => ({ ...prev, partner_name: e.target.value }))}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   />
                 </div>
                 <div>
@@ -496,19 +660,19 @@ export default function EstimateOcrModal({
                     type="text" 
                     value={ocrForm.partner_phone}
                     onChange={e => setOcrForm(prev => ({ ...prev, partner_phone: e.target.value }))}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 text-left">
                 <div>
                   <label className="text-[10px] text-slate-400 font-bold block mb-1">사업자번호</label>
                   <input 
                     type="text" 
                     value={ocrForm.business_number}
                     onChange={e => setOcrForm(prev => ({ ...prev, business_number: e.target.value }))}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   />
                 </div>
                 <div>
@@ -517,19 +681,19 @@ export default function EstimateOcrModal({
                     type="text" 
                     value={ocrForm.representative}
                     onChange={e => setOcrForm(prev => ({ ...prev, representative: e.target.value }))}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 text-left">
                 <div>
                   <label className="text-[10px] text-slate-400 font-bold block mb-1">담당자명</label>
                   <input 
                     type="text" 
                     value={ocrForm.partner_manager}
                     onChange={e => setOcrForm(prev => ({ ...prev, partner_manager: e.target.value }))}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   />
                 </div>
                 <div>
@@ -538,19 +702,19 @@ export default function EstimateOcrModal({
                     type="text" 
                     value={ocrForm.document_number}
                     onChange={e => setOcrForm(prev => ({ ...prev, document_number: e.target.value }))}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 text-left">
                 <div>
                   <label className="text-[10px] text-slate-400 font-bold block mb-1">발행일자</label>
                   <input 
                     type="text" 
                     value={ocrForm.document_date}
                     onChange={e => setOcrForm(prev => ({ ...prev, document_date: e.target.value }))}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   />
                 </div>
                 <div>
@@ -559,26 +723,32 @@ export default function EstimateOcrModal({
                     type="text" 
                     value={ocrForm.address}
                     onChange={e => setOcrForm(prev => ({ ...prev, address: e.target.value }))}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   />
                 </div>
               </div>
 
-              <div>
+              <div className="text-left">
                 <label className="text-[10px] text-slate-400 font-bold block mb-1">기타 비고</label>
                 <textarea 
                   value={ocrForm.document_memo}
                   onChange={e => setOcrForm(prev => ({ ...prev, document_memo: e.target.value }))}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold resize-none"
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold resize-none text-slate-800"
                   rows={2}
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] text-slate-400 font-bold block text-left">상세 품목 리스트</label>
-                <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+              <div className="space-y-2 text-left">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] text-slate-400 font-bold block">상세 품목 리스트 ({ocrForm.items.length}개)</label>
+                  <span className="text-[10px] font-black text-indigo-600 flex items-center gap-1">
+                    <Database className="w-3 h-3" />
+                    마스터 품목 자동 연동
+                  </span>
+                </div>
+                <div className="space-y-2.5 max-h-[250px] overflow-y-auto pr-1">
                   {ocrForm.items.map((item, idx) => (
-                    <div key={idx} className="bg-white p-3.5 rounded-2xl border border-slate-200 flex flex-col gap-1 text-xs font-semibold text-left">
+                    <div key={idx} className="bg-white p-3.5 rounded-2xl border border-slate-200 flex flex-col gap-1 text-xs font-semibold text-left shadow-3xs">
                       <div className="flex items-start justify-between">
                         <div className="flex-1 truncate pr-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
@@ -590,7 +760,7 @@ export default function EstimateOcrModal({
                             )}
                             {(item.validItemCode || item.valid_item_code) && (
                               <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-black rounded border border-emerald-200">
-                                유효품목코드: {item.validItemCode || item.valid_item_code}
+                                유효코드: {item.validItemCode || item.valid_item_code}
                               </span>
                             )}
                           </div>
@@ -617,7 +787,7 @@ export default function EstimateOcrModal({
 
               {/* 총액 패널 */}
               <div className="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-100 flex items-center justify-between text-left shrink-0">
-                <span className="text-xs font-extrabold text-slate-600">스캔 견적 등록 예정 총액 (총 {ocrForm.items.length}개 품목)</span>
+                <span className="text-xs font-extrabold text-slate-600">견적 등록 예정 총액 (총 {ocrForm.items.length}개 품목)</span>
                 <span className="text-lg font-black text-indigo-700 font-mono">
                   {ocrForm.items.reduce((sum, it) => sum + (it.quantity * it.unit_price), 0).toLocaleString()}원
                 </span>
@@ -627,13 +797,13 @@ export default function EstimateOcrModal({
         </div>
 
         <div className="mt-6 border-t border-slate-100 pt-4 flex gap-3">
-          <button onClick={handleClose} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-xs">
+          <button onClick={handleClose} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-xs cursor-pointer transition-colors">
             취소
           </button>
           <button 
             onClick={handleSaveOcrEstimate}
             disabled={!ocrSuccess || (!receiverMatched && !forceBypass) || (forceBypass && bypassReason.trim().length < 5)}
-            className={`flex-1 py-3 text-white font-bold text-xs rounded-xl disabled:opacity-50 transition-colors ${
+            className={`flex-1 py-3 text-white font-bold text-xs rounded-xl disabled:opacity-50 transition-colors cursor-pointer ${
               forceBypass 
                 ? "bg-amber-600 hover:bg-amber-700" 
                 : "bg-indigo-600 hover:bg-indigo-700"

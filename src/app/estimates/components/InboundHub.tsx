@@ -367,10 +367,11 @@ export default function InboundHub({
               </button>
               <button
                 onClick={onOpenOcrModal}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/10 flex items-center gap-1.5 whitespace-nowrap"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/10 flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-all active:scale-95"
+                title="실물 OCR 스캔, 엑셀 파일 등록, 구글 스프레드시트 연동 지원"
               >
                 <Upload className="w-4 h-4" />
-                받은 견적서 스캔
+                받은 견적서 스마트 접수
               </button>
             </>
           )}
