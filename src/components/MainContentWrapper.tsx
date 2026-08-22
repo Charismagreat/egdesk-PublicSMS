@@ -47,7 +47,8 @@ export default function MainContentWrapper({ children }: { children: React.React
     pathname.startsWith('/tenant-cert-patent') ||
     pathname.startsWith('/custom') ||
     pathname.startsWith('/google-drive') ||
-    pathname.startsWith('/promo')
+    pathname.startsWith('/promo') ||
+    pathname.startsWith('/customers')
   ) {
     return <>{children}</>;
   }

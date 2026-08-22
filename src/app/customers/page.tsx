@@ -51,7 +51,7 @@ export default function CustomersPage() {
   } = useCustomers();
 
   return (
-    <div className="space-y-6 w-full min-w-0 font-sans text-slate-800 animate-scale-up" data-easybot-hint="고객 관리 AI: 고객 정보 등록, 그룹핑 필터링 및 고객 맞춤 관리를 지원하는 CRM 센터입니다.">
+    <div className="p-6 md:p-8 space-y-6 w-full min-w-0 font-sans text-slate-800 animate-scale-up" data-easybot-hint="고객 관리 AI: 고객 정보 등록, 그룹핑 필터링 및 고객 맞춤 관리를 지원하는 CRM 센터입니다.">
       {/* 1. 상단 타이틀 및 액션 헤더 */}
       <Header
         isUploading={isUploading}
