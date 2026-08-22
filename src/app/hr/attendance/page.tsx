@@ -66,9 +66,9 @@ export default function HrAttendancePage() {
   // 5. AI 업무 공백 모니터링 상태
   const [aiBriefing, setAiBriefing] = useState<any>({
     riskScore: 0,
-    alertTitle: '로딩 중...',
-    alertMessage: 'AI가 부서별 일정을 교차 예측하고 있습니다.',
-    briefingText: '데이터를 분석하여 업무 공백 보고서를 자동 작성하고 있습니다.'
+    alertTitle: '등록된 임직원 데이터 대기 중 ⚪',
+    alertMessage: '현재 등록된 임직원이 없습니다. 임직원을 등록하시면 실시간 AI 전사 업무 분석 예보가 작동합니다.',
+    briefingText: '[안내: 등록된 임직원 데이터 부재]\n현재 시스템에 등록된 활성 임직원이 없습니다. 따라서 전사 업무 공백 및 부서별 리스크 분석을 수행할 수 없습니다.\n\n[권장 조치 가이드]\n1. 상단의 엑셀 일괄 등록 또는 신규 등록 메뉴를 통해 임직원 정보를 먼저 등록해 주세요.\n2. 출퇴근 기록 및 연차/일정이 누적되면 Gemini AI가 출퇴근 타임스탬프와 일정을 교차 분석하여 업무 예보를 자동 생성합니다.'
   });
   const [aiLoading, setAiLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -335,11 +335,12 @@ export default function HrAttendancePage() {
       const res = await apiFetch('/api/hr/ai-briefing', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
+        const resData = data.data || data;
         const resultState = {
-          riskScore: data.riskScore || 0,
-          alertTitle: data.alertTitle || '정상 가동중 🟢',
-          alertMessage: data.alertMessage || '업무 공백 리스크가 극히 낮습니다.',
-          briefingText: data.briefingText || '안정적인 전사 인사 근태 환경이 유지되고 있습니다.'
+          riskScore: resData.riskScore || 0,
+          alertTitle: resData.alertTitle || '정상 가동중 🟢',
+          alertMessage: resData.alertMessage || '업무 공백 리스크가 극히 낮습니다.',
+          briefingText: resData.briefingText || '안정적인 전사 인사 근태 환경이 유지되고 있습니다.'
         };
         setAiBriefing(resultState);
         setLatestBriefing(resultState);
