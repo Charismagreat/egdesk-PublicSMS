@@ -15,6 +15,7 @@ import {
   executeSQL,
   queryTable
 } from "../../../../egdesk-helpers";
+import { getTenantId } from "@/lib/tenant";
 
 // 이중 안전 장치: 배열이 아닐 경우 빈 배열로 방어 처리
 function safeArray<T>(data: any): T[] {
@@ -168,6 +169,9 @@ export async function GET(request: NextRequest) {
     const limit = Number(searchParams.get("limit")) || 30;
     const offset = Number(searchParams.get("offset")) || 0;
 
+    const rawTenantId = await getTenantId();
+    const tenantId = rawTenantId || 'default';
+
     // 1. 계좌 목록 및 종합 통계 조회
     if (tab === "accounts") {
       const [accountsRes, stats] = await Promise.all([
@@ -179,7 +183,7 @@ export async function GET(request: NextRequest) {
       
       // [로컬 DB 실시간 실잔액 머지] 로컬 SQLite DB에 수동으로 직접 적재된 계좌가 있다면 그 최신 잔액으로 덮어씌워 줍니다.
       try {
-        const localAccountsRes = await executeSQL("SELECT id, balance FROM accounts").catch(() => ({ rows: [] }));
+        const localAccountsRes = await executeSQL(`SELECT id, balance FROM accounts WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] }));
         const localAccounts = localAccountsRes.rows || [];
         
         const localBalanceMap: Record<string, number> = {};
@@ -197,7 +201,7 @@ export async function GET(request: NextRequest) {
               const latestCardTxRes = await executeSQL(`
                 SELECT approval_date, time 
                 FROM card_transactions 
-                WHERE account_id = '${acc.id}' AND approval_date LIKE '2%'
+                WHERE account_id = '${acc.id}' AND tenant_id = '${tenantId}' AND approval_date LIKE '2%'
                 ORDER BY approval_date DESC, time DESC, id DESC 
                 LIMIT 1
               `);
@@ -211,7 +215,7 @@ export async function GET(request: NextRequest) {
               const latestTxRes = await executeSQL(`
                 SELECT transaction_date, transaction_time 
                 FROM bank_transactions 
-                WHERE account_id = '${acc.id}' AND transaction_date LIKE '2%'
+                WHERE account_id = '${acc.id}' AND tenant_id = '${tenantId}' AND transaction_date LIKE '2%'
                 ORDER BY transaction_date DESC, transaction_time DESC, id DESC 
                 LIMIT 1
               `);
@@ -267,7 +271,7 @@ export async function GET(request: NextRequest) {
 
       // [로컬 DB 실시간 실데이터 최우선 조회] 수동 업로드 등으로 로컬 DB에 실데이터가 적재된 환경이므로 로컬 DB를 최우선 조회합니다.
       try {
-        let query = `SELECT * FROM bank_transactions WHERE 1=1`;
+        let query = `SELECT * FROM bank_transactions WHERE tenant_id = '${tenantId}'`;
         const whereClauses: string[] = [];
         
         if (startDate) {
@@ -355,7 +359,7 @@ export async function GET(request: NextRequest) {
 
       // [로컬 DB 실시간 실데이터 최우선 조회] 수동 업로드 등으로 로컬 DB에 실데이터가 적재된 환경이므로 로컬 DB를 최우선 조회합니다.
       try {
-        let query = `SELECT * FROM card_transactions WHERE 1=1`;
+        let query = `SELECT * FROM card_transactions WHERE tenant_id = '${tenantId}'`;
         const whereClauses: string[] = [];
         
         if (startDate) {
@@ -471,7 +475,7 @@ export async function GET(request: NextRequest) {
       // [로컬 DB 실시간 실데이터 폴백] 원격 API 조회 결과가 없거나 부족한 경우 로컬 SQLite DB의 실데이터를 조회하여 대체 및 병합합니다.
       if (filteredList.length === 0) {
         try {
-          let query = `SELECT * FROM tax_invoices WHERE 1=1`;
+          let query = `SELECT * FROM tax_invoices WHERE tenant_id = '${tenantId}'`;
           const whereClauses: string[] = [];
           
           if (startDate) {
@@ -554,7 +558,7 @@ export async function GET(request: NextRequest) {
       // [로컬 DB 실시간 실데이터 폴백] 원격 API 조회 결과가 없거나 부족한 경우 로컬 SQLite DB의 실데이터를 조회하여 대체 및 병합합니다.
       if (filteredList.length === 0) {
         try {
-          let query = `SELECT * FROM tax_exempt_invoices WHERE 1=1`;
+          let query = `SELECT * FROM tax_exempt_invoices WHERE tenant_id = '${tenantId}'`;
           const whereClauses: string[] = [];
           
           if (startDate) {
@@ -641,7 +645,7 @@ export async function GET(request: NextRequest) {
       // [로컬 DB 실시간 실데이터 폴백] 원격 API 조회 결과가 없거나 부족한 경우 로컬 SQLite DB의 실데이터를 조회하여 대체 및 병합합니다.
       if (filteredList.length === 0) {
         try {
-          let query = `SELECT * FROM cash_receipts WHERE 1=1`;
+          let query = `SELECT * FROM cash_receipts WHERE tenant_id = '${tenantId}'`;
           const whereClauses: string[] = [];
           
           if (startDate) {

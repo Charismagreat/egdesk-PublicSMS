@@ -11,6 +11,7 @@ import {
 } from "../../../../../egdesk-helpers";
 import crypto from "crypto";
 import * as xlsx from "xlsx";
+import { getTenantId } from "@/lib/tenant";
 
 // 헤더 텍스트 정규화 헬퍼 (공백 및 특수 점 문자 제거)
 function normalizeHeader(str: any): string {
@@ -114,6 +115,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
     let bankId = formData.get("bankId") as string;
     const accountId = formData.get("accountId") as string;
+    const tenantId = (await getTenantId()) || 'default';
 
     if (!file) {
       return NextResponse.json(
@@ -548,7 +550,7 @@ export async function POST(request: NextRequest) {
 
         // [SQLite 외래 키 방어 로직] accounts 테이블에 계좌가 실제로 존재하는지 조회하고, 없으면 수동 개설(폴백)합니다.
         try {
-          const checkAccRes = await queryTable("accounts", { filters: { id: targetAccountId } });
+          const checkAccRes = await queryTable("accounts", { filters: { id: targetAccountId, tenant_id: tenantId } });
           if (!checkAccRes.rows || checkAccRes.rows.length === 0) {
             console.log(`[Local DB Fallback] accounts에 연동 계좌가 없어 자동 폴백 삽입합니다: ${targetAccountId}`);
             await insertRows("accounts", [{
@@ -560,19 +562,20 @@ export async function POST(request: NextRequest) {
               currency: 'KRW',
               is_active: 1,
               created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
+              updated_at: new Date().toISOString(),
+              tenant_id: tenantId
             }]);
           }
         } catch (accErr: any) {
           console.warn("⚠️ Local DB auto account insertion warning:", accErr.message);
         }
 
-        const existingTxIds = new Set<string>();
+        const existingKeys = new Set<string>();
         try {
-          const existingRes = await executeSQL(`SELECT id FROM bank_transactions WHERE account_id = '${targetAccountId}'`);
+          const existingRes = await executeSQL(`SELECT unique_key FROM bank_transactions WHERE account_id = '${targetAccountId}' AND tenant_id = '${tenantId}'`);
           if (existingRes && existingRes.rows) {
             existingRes.rows.forEach((r: any) => {
-              if (r.id) existingTxIds.add(String(r.id));
+              if (r.unique_key) existingKeys.add(String(r.unique_key));
             });
           }
         } catch (err: any) {
@@ -583,19 +586,16 @@ export async function POST(request: NextRequest) {
         const nowStr = new Date().toISOString();
 
         for (const row of transactions) {
-          const hashSeed = `${accountData.accountNumber}_${row.date}_${row.time}_${row.deposit}_${row.withdrawal}_${row.balance}_${row.description}`;
-          const uniqueId = crypto.createHash("md5").update(hashSeed).digest("hex");
-
-          if (!existingTxIds.has(uniqueId)) {
+          const isDup = existingKeys.has(row.uniqueKey);
+          if (!isDup) {
             rowsToInsert.push({
-              id: uniqueId,
+              id: `${targetAccountId}-${row.date.replace(/\D/g, "")}-${row.time.replace(/\D/g, "")}-${crypto.randomBytes(3).toString("hex")}`,
               account_id: targetAccountId,
               bank_id: bankId,
+              account_number: accountData.accountNumber,
               transaction_date: row.date,
               transaction_time: row.time,
               transaction_datetime: `${row.date} ${row.time}`,
-              account_number: accountData.accountNumber,
-              account_name: accountData.accountName,
               deposit: row.deposit,
               withdrawal: row.withdrawal,
               balance: row.balance,
@@ -606,7 +606,9 @@ export async function POST(request: NextRequest) {
               description2: row.description2,
               is_manual: 1,
               created_at: nowStr,
-              updated_at: nowStr
+              updated_at: nowStr,
+              tenant_id: tenantId,
+              unique_key: row.uniqueKey
             });
             insertedCount++;
           }
@@ -620,7 +622,7 @@ export async function POST(request: NextRequest) {
         try {
           const latestTxRes = await executeSQL(`
             SELECT balance FROM bank_transactions 
-            WHERE account_id = '${targetAccountId}' 
+            WHERE account_id = '${targetAccountId}' AND tenant_id = '${tenantId}'
             ORDER BY transaction_datetime DESC, id DESC 
             LIMIT 1
           `);

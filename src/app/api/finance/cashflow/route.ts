@@ -1,16 +1,22 @@
 import { NextResponse } from "next/server";
 import { queryTable } from "../../../../../egdesk-helpers";
+import { getTenantId } from "@/lib/tenant";
 
 /**
  * GET: 기본 자금 흐름 예측 시계열 데이터 및 제품 원가 정보 제공 (물리 DB 연동)
  */
 export async function GET() {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     // 1. DB에서 제품 기초 데이터 조회
-    // 1. DB에서 제품 기초 데이터 조회 (방어막 안전 로직 적용)
     let dbProducts: any[] = [];
     try {
-      const productsRes = await queryTable("crm_finance_products", {});
+      const productsRes = await queryTable("crm_finance_products", { filters: queryFilters });
       dbProducts = productsRes.rows || [];
     } catch (e) {
       console.warn("crm_finance_products 조회 안전 폴백 적용:", e);
@@ -22,7 +28,7 @@ export async function GET() {
     // 2. DB에서 수금/지출 대장 조회
     let forecastList: any[] = [];
     try {
-      const forecastRes = await queryTable("crm_finance_forecasts", {});
+      const forecastRes = await queryTable("crm_finance_forecasts", { filters: queryFilters });
       forecastList = (forecastRes.rows || []).map((item: any) => ({
         id: item.id,
         date: item.date,
@@ -120,14 +126,20 @@ export async function GET() {
  */
 export async function POST(req: Request) {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     const body = await req.json();
     const { exchangeRate, materialRate, laborRate } = body;
 
     // 1. DB에서 제품 기초 데이터 및 수금/지출 대장 조회
-    const productsRes = await queryTable("crm_finance_products", {});
+    const productsRes = await queryTable("crm_finance_products", { filters: queryFilters });
     const dbProducts = productsRes.rows || [];
 
-    const forecastRes = await queryTable("crm_finance_forecasts", {});
+    const forecastRes = await queryTable("crm_finance_forecasts", { filters: queryFilters });
     const forecastList = (forecastRes.rows || []).map((item: any) => ({
       id: item.id,
       date: item.date,
