@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows } from '@/../egdesk-helpers';
 import { couponCache } from '@/lib/coupon-cache';
+import { getTenantId } from '@/lib/tenant';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,10 +16,17 @@ export async function POST(request: Request) {
       );
     }
 
+    let tenantId = await getTenantId();
+    if (!tenantId) {
+      tenantId = 'default';
+    }
+
     // 1. 기존 DB에 등록된 모든 상품명(name) 가져와 중복 확인 및 스킵용 캐싱
     const existingProducts = new Set<string>();
     try {
-      const dbProducts = await queryTable('products');
+      const dbProducts = await queryTable('products', {
+        filters: tenantId !== 'all' ? { tenant_id: tenantId } : undefined
+      });
       if (dbProducts && Array.isArray(dbProducts.rows)) {
         dbProducts.rows.forEach((row: any) => {
           if (row.name) existingProducts.add(row.name.trim());
@@ -47,6 +55,9 @@ export async function POST(request: Request) {
       const detail_image_url = p.detail_image_url?.trim() || '';
       const available_methods = p.available_methods?.trim() || '';
       const is_coupon_excludable = Number(p.is_coupon_excludable) || 0;
+      const brand = p.brand?.trim() || '';
+      const spec = p.spec?.trim() || '';
+      const unit = p.unit?.trim() || '개';
 
       const productRow = {
         id,
@@ -59,7 +70,11 @@ export async function POST(request: Request) {
         main_image_url,
         detail_image_url,
         available_methods,
-        is_coupon_excludable
+        is_coupon_excludable,
+        brand,
+        spec,
+        unit,
+        tenant_id: tenantId
       };
 
       try {

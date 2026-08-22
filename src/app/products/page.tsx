@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 
 // 커스텀 훅 및 하위 컴포넌트 임포트
 import { useProducts } from "./hooks/useProducts";
@@ -10,6 +10,8 @@ import { ProductTable } from "./components/ProductTable";
 import { PaginationBar } from "./components/PaginationBar";
 import { ImagePreview } from "./components/ImagePreview";
 import { TableQrSection } from "./components/TableQrSection";
+import { ProductBulkUploadModal } from "./components/ProductBulkUploadModal";
+import { ProductGoogleSheetsUploadModal } from "./components/ProductGoogleSheetsUploadModal";
 
 export default function ProductsPage() {
   const {
@@ -21,7 +23,6 @@ export default function ProductsPage() {
     searchQuery, setSearchQuery,
     currentPage, setCurrentPage,
     itemsPerPage, setItemsPerPage,
-    isUploadingExcel,
     statusFilter, setStatusFilter,
     sourceFilter, setSourceFilter,
     categoryFilter, setCategoryFilter,
@@ -35,8 +36,7 @@ export default function ProductsPage() {
     endIndex,
     paginatedData,
     filteredData,
-    handleExcelUpload,
-    handleDownloadSample,
+    handleBulkImportProducts,
     addData,
     handleEditClick,
     cancelEdit,
@@ -47,14 +47,18 @@ export default function ProductsPage() {
     handleFileUpload
   } = useProducts();
 
+  // 📂 엑셀 일괄 업로드 모달 상태
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  // 🌐 구글 시트 연동 모달 상태
+  const [isGoogleSheetsOpen, setIsGoogleSheetsOpen] = useState(false);
+
   return (
     <div className="space-y-6 pb-20 w-full min-w-0 font-sans text-slate-800" data-easybot-hint="상품 관리 AI: 플랫폼에 등록된 상품 명세, 규격(BOM), 판매 가격 및 채널별 판매 활성화 상태를 관리합니다.">
       
-      {/* 상단 타이틀 및 엑셀 일괄 파일 처리 헤더 영역 */}
+      {/* 상단 타이틀 및 엑셀/구글 시트 일괄 업로드 헤더 영역 */}
       <ProductsHeader
-        isUploadingExcel={isUploadingExcel}
-        onDownloadSample={handleDownloadSample}
-        onExcelUpload={handleExcelUpload}
+        onOpenBulkUpload={() => setIsBulkUploadOpen(true)}
+        onOpenGoogleSheets={() => setIsGoogleSheetsOpen(true)}
       />
 
       {/* 탭 네비게이션 */}
@@ -154,6 +158,20 @@ export default function ProductsPage() {
           />
         </>
       )}
+
+      {/* 📂 엑셀 일괄 업로드 모달 */}
+      <ProductBulkUploadModal
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        onImport={handleBulkImportProducts}
+      />
+
+      {/* 🌐 구글 시트 업로드 모달 */}
+      <ProductGoogleSheetsUploadModal
+        isOpen={isGoogleSheetsOpen}
+        onClose={() => setIsGoogleSheetsOpen(false)}
+        onImport={handleBulkImportProducts}
+      />
 
       {/* 썸네일 이미지 마우스 호버 트래킹 프리뷰 포털 */}
       <ImagePreview hoverImage={hoverImage} />

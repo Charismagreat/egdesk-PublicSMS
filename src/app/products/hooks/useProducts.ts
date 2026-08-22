@@ -424,6 +424,26 @@ export function useProducts() {
     }
   };
 
+  // 🚀 다중 상품 일괄 등록 핸들러 (엑셀/구글 시트 연동)
+  const handleBulkImportProducts = async (productsList: any[]) => {
+    try {
+      const res = await apiFetch('/api/products/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products: productsList })
+      });
+      const json = await res.json();
+      if (json.success) {
+        await fetchData();
+        return { success: true, count: json.count || productsList.length };
+      } else {
+        return { success: false, error: json.error };
+      }
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  };
+
   return {
     data,
     form, setForm,
@@ -450,6 +470,7 @@ export function useProducts() {
     fetchData,
     handleExcelUpload,
     handleDownloadSample,
+    handleBulkImportProducts,
     addData,
     handleEditClick,
     cancelEdit,
