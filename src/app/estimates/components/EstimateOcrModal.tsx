@@ -771,19 +771,16 @@ export default function EstimateOcrModal({
           {activeImportTab === 'excel' && !ocrSuccess && (
             <div className="space-y-4 text-left">
               <div className="flex items-center justify-between bg-emerald-50/70 border border-emerald-200/80 p-3.5 rounded-2xl">
-                <div className="flex items-center gap-2.5">
-                  <span className="p-2 bg-emerald-500 text-white rounded-xl shadow-xs">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-emerald-600 text-white rounded-lg shadow-2xs">
                     <FileSpreadsheet className="w-4 h-4" />
                   </span>
-                  <div>
-                    <span className="text-xs font-black text-emerald-950 block">표준 엑셀 템플릿 제공</span>
-                    <span className="text-[10px] text-emerald-700 font-medium">거래처에 배포하거나 직접 작성할 수 있는 정규 서식을 다운로드하세요. (다중 거래처 지원)</span>
-                  </div>
+                  <h4 className="text-xs font-black text-emerald-950">엑셀 파일 등록</h4>
                 </div>
                 <button
                   type="button"
                   onClick={handleDownloadStandardTemplate}
-                  className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 shrink-0"
+                  className="px-3 py-1.5 bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 shrink-0"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>표준 양식 (.xlsx)</span>
