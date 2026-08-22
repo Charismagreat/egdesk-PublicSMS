@@ -96,9 +96,9 @@ function DynamicTitleHandler() {
       } else {
         const typeConfig: Record<string, string> = {
           inbound_est: "받은 견적서 상세 내역",
-          inbound_po: "보낸 발주서 상세 내역",
-          outbound_est: "(일반)보낸 견적서 상세 내역",
-          outbound_so: "받은 발주서 상세 내역",
+          inbound_po: "발주 대장 상세 내역",
+          outbound_est: "보낸 견적서 상세 내역",
+          outbound_so: "수주 대장 상세 내역",
         };
         title = typeConfig[typeParam] || "B2B 대장 내역";
       }
