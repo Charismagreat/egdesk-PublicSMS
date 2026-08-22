@@ -2,8 +2,8 @@
 
 import { apiFetch } from '@/lib/api';
 import React, { useState, useRef, useEffect } from "react";
-import { Upload, X, FileText, CheckCircle2, RefreshCw, AlertCircle, FileSpreadsheet, Download, Link2, Sparkles, Database } from "lucide-react";
-import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from '@/lib/google-sheets-storage';
+import { Upload, X, FileText, CheckCircle2, RefreshCw, AlertCircle, FileSpreadsheet, Download, Link2, Sparkles, Database, ExternalLink } from "lucide-react";
+import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, SAMPLE_GOOGLE_SHEET_URL } from '@/lib/google-sheets-storage';
 
 interface EstimateOcrModalProps {
   isOpen: boolean;
@@ -504,32 +504,65 @@ export default function EstimateOcrModal({
 
           {activeImportTab === 'sheets' && !ocrSuccess && (
             <div className="space-y-4 text-left">
-              <div className="bg-blue-50/60 border border-blue-200/80 p-4 rounded-3xl space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 bg-blue-600 text-white rounded-lg">
-                    <Link2 className="w-4 h-4" />
-                  </span>
-                  <div>
-                    <h4 className="text-xs font-black text-blue-950">구글 스프레드시트 실시간 데이터 연동</h4>
-                    <p className="text-[10px] text-blue-700 font-medium">공유된 구글 스프레드시트 링크를 통해 최신 견적 데이터를 1초 만에 가져옵니다.</p>
+              <div className="bg-blue-50/60 border border-blue-200/80 p-4 rounded-3xl space-y-3.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 bg-blue-600 text-white rounded-lg shadow-2xs">
+                      <Link2 className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-black text-blue-950">구글 스프레드시트 실시간 데이터 연동</h4>
+                      <p className="text-[10px] text-blue-700 font-medium">공유된 구글 스프레드시트 링크를 통해 최신 견적 데이터를 1초 만에 가져옵니다.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => window.open(SAMPLE_GOOGLE_SHEET_URL, "_blank")}
+                      className="px-2.5 py-1.5 bg-white hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 shadow-3xs cursor-pointer active:scale-95"
+                      title="시스템 표준 샘플 구글 스프레드시트를 새 창에서 열람합니다."
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>샘플 시트 보기</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGoogleSheetUrl(SAMPLE_GOOGLE_SHEET_URL)}
+                      className="px-2.5 py-1.5 bg-blue-100/80 hover:bg-blue-200 text-blue-800 rounded-lg text-[10px] font-bold transition-all cursor-pointer active:scale-95"
+                      title="샘플 주소를 입력창에 자동으로 채워 즉시 테스트합니다."
+                    >
+                      <span>샘플 URL 입력</span>
+                    </button>
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-700 block">구글 시트 공유 링크 (URL) *</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700 block">구글 시트 공유 링크 (URL) *</label>
+                    {googleSheetUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setGoogleSheetUrl("")}
+                        className="text-[10px] text-slate-400 hover:text-slate-600 font-semibold cursor-pointer"
+                      >
+                        입력 초기화
+                      </button>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <input 
                       type="url"
                       value={googleSheetUrl}
                       onChange={(e) => setGoogleSheetUrl(e.target.value)}
                       placeholder="https://docs.google.com/spreadsheets/d/.../edit?usp=sharing"
-                      className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500 text-slate-800"
+                      className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-500 text-slate-800 placeholder:text-slate-350"
                     />
                     <button
                       type="button"
                       onClick={handleFetchGoogleSheet}
-                      disabled={isFetchingSheet || ocrScanning}
-                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-50 shadow-sm cursor-pointer active:scale-95"
+                      disabled={isFetchingSheet || ocrScanning || !googleSheetUrl.trim()}
+                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-40 shadow-sm cursor-pointer active:scale-95"
                     >
                       {isFetchingSheet ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                       <span>데이터 불러오기</span>
@@ -537,7 +570,7 @@ export default function EstimateOcrModal({
                   </div>
                 </div>
 
-                <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                <p className="text-[10px] text-slate-500 font-medium leading-relaxed bg-white/70 p-2.5 rounded-xl border border-blue-100">
                   💡 구글 시트 상단 [공유] 메뉴에서 <strong>'링크가 있는 모든 사용자에게 공개 (보기 권한)'</strong>로 설정되어 있어야 안전하게 데이터를 읽어올 수 있습니다.
                 </p>
               </div>

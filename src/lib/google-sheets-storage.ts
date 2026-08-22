@@ -1,22 +1,31 @@
 "use client";
 
 const GOOGLE_SHEET_URL_KEY = "last_connected_google_sheet_url";
-const DEFAULT_URL = "https://docs.google.com/spreadsheets/d/1t3OiWthLbcZDgcrLJSI-XVKX-07_KBtLdcx3XCVrUoM/edit";
+export const SAMPLE_GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1t3OiWthLbcZDgcrLJSI-XVKX-07_KBtLdcx3XCVrUoM/edit";
 
-export function getSavedGoogleSheetUrl(): string {
-  if (typeof window === "undefined") return DEFAULT_URL;
+export function getSavedGoogleSheetUrl(key?: string): string {
+  if (typeof window === "undefined") return "";
   try {
-    const saved = localStorage.getItem(GOOGLE_SHEET_URL_KEY);
-    return saved && saved.trim() ? saved.trim() : DEFAULT_URL;
+    const storageKey = key || GOOGLE_SHEET_URL_KEY;
+    const saved = localStorage.getItem(storageKey);
+    return saved && saved.trim() ? saved.trim() : "";
   } catch (e) {
-    return DEFAULT_URL;
+    return "";
   }
 }
 
-export function setSavedGoogleSheetUrl(url: string): void {
-  if (typeof window === "undefined" || !url) return;
+export function setSavedGoogleSheetUrl(urlOrKey: string, maybeUrl?: string): void {
+  if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(GOOGLE_SHEET_URL_KEY, url.trim());
+    let storageKey = GOOGLE_SHEET_URL_KEY;
+    let value = urlOrKey;
+    if (maybeUrl !== undefined) {
+      storageKey = urlOrKey;
+      value = maybeUrl;
+    }
+    if (value) {
+      localStorage.setItem(storageKey, value.trim());
+    }
   } catch (e) {
     console.warn("Failed to save google sheet url to localStorage:", e);
   }
