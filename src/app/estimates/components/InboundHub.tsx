@@ -10,6 +10,7 @@ import PurchaseOrderOcrModal from "./PurchaseOrderOcrModal";
 import { usePersistedState } from "../../../hooks/usePersistedState";
 
 interface InboundHubProps {
+  currentTab: "inbound_est" | "inbound_po" | "inbound_statement";
   estimates: Estimate[];
   purchaseOrders: PurchaseOrder[];
   partners: Partner[];
@@ -35,6 +36,7 @@ interface InboundHubProps {
 }
 
 export default function InboundHub({
+  currentTab,
   estimates,
   purchaseOrders,
   partners,
@@ -52,8 +54,8 @@ export default function InboundHub({
   onDeleteEstimate,
   onDeletePurchaseOrder,
 }: InboundHubProps) {
-  // 서브 탭 및 필터 로컬 상태
-  const [inboundSubTab, setInboundSubTab] = usePersistedState<"estimates" | "pos" | "statements">("egdesk_inbound_subTab", "estimates");
+  // 탭 매핑
+  const inboundSubTab = currentTab === "inbound_est" ? "estimates" : currentTab === "inbound_po" ? "pos" : "statements";
   const [isPoOcrOpen, setIsPoOcrOpen] = useState(false);
   const [inboundSearch, setInboundSearch] = usePersistedState<string>("egdesk_inbound_search", "");
   const [inboundStatusFilter, setInboundStatusFilter] = usePersistedState<string>("egdesk_inbound_statusFilter", "ALL");
@@ -271,49 +273,6 @@ export default function InboundHub({
 
   return (
     <div className="space-y-6 animate-scale-up">
-      {/* 서브 탭 헤더 */}
-      <div className="flex border-b border-slate-100 gap-6 pb-2">
-        <button
-          onClick={() => {
-            setInboundSubTab("estimates");
-            setSelectedInboundIds(new Set());
-          }}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition-all ${
-            inboundSubTab === "estimates"
-              ? "border-indigo-600 text-indigo-600"
-              : "border-transparent text-slate-400 hover:text-slate-700"
-          }`}
-        >
-          🏷️ 받은 견적서 관리 대장
-        </button>
-        <button
-          onClick={() => {
-            setInboundSubTab("pos");
-            setSelectedInboundIds(new Set());
-          }}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition-all ${
-            inboundSubTab === "pos"
-              ? "border-indigo-600 text-indigo-600"
-              : "border-transparent text-slate-400 hover:text-slate-700"
-          }`}
-        >
-          📦 보낸 발주서 관리 대장
-        </button>
-        <button
-          onClick={() => {
-            setInboundSubTab("statements");
-            setSelectedInboundIds(new Set());
-          }}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition-all ${
-            inboundSubTab === "statements"
-              ? "border-indigo-600 text-indigo-600"
-              : "border-transparent text-slate-400 hover:text-slate-700"
-          }`}
-        >
-          📑 받은 거래명세서 관리 대장
-        </button>
-      </div>
-
       {/* 상단 컨트롤 바 */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
         <div className="flex flex-1 items-center gap-2 max-w-md">

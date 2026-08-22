@@ -10,6 +10,7 @@ import SalesOrderExcelModal from "./SalesOrderExcelModal";
 import { usePersistedState } from "../../../hooks/usePersistedState";
 
 interface OutboundHubProps {
+  currentTab: "outbound_est" | "outbound_so" | "outbound_statement";
   estimates: Estimate[];
   salesOrders: SalesOrder[];
   partners: Partner[];
@@ -32,6 +33,7 @@ interface OutboundHubProps {
 }
 
 export default function OutboundHub({
+  currentTab,
   estimates,
   salesOrders,
   partners,
@@ -46,8 +48,8 @@ export default function OutboundHub({
   onOpenOcrModal,
   onDeleteEstimate,
 }: OutboundHubProps) {
-  // 서브 탭 및 필터 로컬 상태
-  const [outboundSubTab, setOutboundSubTab] = usePersistedState<"estimates" | "statements" | "sos">("egdesk_outbound_subTab", "estimates");
+  // 탭 매핑
+  const outboundSubTab = currentTab === "outbound_est" ? "estimates" : currentTab === "outbound_so" ? "sos" : "statements";
   const [isSoExcelOpen, setIsSoExcelOpen] = useState(false);
   const [preParsedExcelData, setPreParsedExcelData] = useState<ExcelParsedPurchaseOrder | null>(null);
   const [uploadedExcelFile, setUploadedExcelFile] = useState<File | null>(null);
@@ -56,6 +58,8 @@ export default function OutboundHub({
   const [outboundSearch, setOutboundSearch] = usePersistedState<string>("egdesk_outbound_search", "");
   const [outboundStatusFilter, setOutboundStatusFilter] = usePersistedState<string>("egdesk_outbound_statusFilter", "ALL");
   const [outboundSortKey, setOutboundSortKey] = usePersistedState<string>("egdesk_outbound_sortKey", "created_at");
+  const [outboundSortDir, setOutboundSortDir] = usePersistedState<"asc" | "desc">("egdesk_outbound_sortDir", "desc");
+  const [selectedOutboundIds, setSelectedOutboundIds] = useState<Set<string>>(new Set());
 
   // 엑셀 업로드 직접 처리 (백그라운드 다이렉트 자동 수주 등록)
   const handleExcelUploadDirect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -170,10 +174,6 @@ export default function OutboundHub({
       e.target.value = "";
     }
   };
-  const [outboundSortDir, setOutboundSortDir] = usePersistedState<"asc" | "desc">("egdesk_outbound_sortDir", "desc");
-
-  // 다중 선택 로컬 상태
-  const [selectedOutboundIds, setSelectedOutboundIds] = useState<Set<string>>(new Set());
 
   // 거래명세서 식별 도우미
   const isStatementEstimate = (tagsStr: string) => {
@@ -389,48 +389,6 @@ export default function OutboundHub({
 
   return (
     <div className="space-y-6 animate-scale-up">
-      {/* 서브 탭 헤더 */}
-      <div className="flex border-b border-slate-100 gap-6 pb-2">
-        <button
-          onClick={() => {
-            setOutboundSubTab("estimates");
-            setSelectedOutboundIds(new Set());
-          }}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition-all ${
-            outboundSubTab === "estimates"
-              ? "border-indigo-600 text-indigo-600"
-              : "border-transparent text-slate-400 hover:text-slate-700"
-          }`}
-        >
-          🏷️ 보낸 견적서 관리 대장
-        </button>
-        <button
-          onClick={() => {
-            setOutboundSubTab("sos");
-            setSelectedOutboundIds(new Set());
-          }}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition-all ${
-            outboundSubTab === "sos"
-              ? "border-indigo-600 text-indigo-600"
-              : "border-transparent text-slate-400 hover:text-slate-700"
-          }`}
-        >
-          💼 받은 발주서 관리 대장
-        </button>
-        <button
-          onClick={() => {
-            setOutboundSubTab("statements");
-            setSelectedOutboundIds(new Set());
-          }}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition-all ${
-            outboundSubTab === "statements"
-              ? "border-indigo-600 text-indigo-600"
-              : "border-transparent text-slate-400 hover:text-slate-700"
-          }`}
-        >
-          📑 보낸 거래명세서 관리 대장
-        </button>
-      </div>
 
       {/* 상단 컨트롤 바 */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">

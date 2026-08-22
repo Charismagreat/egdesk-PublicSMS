@@ -15,12 +15,12 @@ import InboundStatementOcrModal from "./components/InboundStatementOcrModal";
 import ProcessingOverlay from "../../components/ProcessingOverlay";
 
 // 신설한 격리 하위 컴포넌트 가져오기
-import EstimatesHeader from "./components/EstimatesHeader";
+import EstimatesHeader, { EstimateTabType } from "./components/EstimatesHeader";
 import InboundHub from "./components/InboundHub";
 import OutboundHub from "./components/OutboundHub";
 
 export default function EstimatesDashboard() {
-  const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<"inbound" | "outbound">("egdesk_estimates_activeTab", "inbound");
+  const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<EstimateTabType>("egdesk_estimates_activeTab", "inbound_est");
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -30,7 +30,6 @@ export default function EstimatesDashboard() {
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
 
-  // 유저 권한 세션 상태
   const [userRole, setUserRole] = useState<string>("SUB_OPERATOR");
   const [dbTags, setDbTags] = useState<any[]>([]);
 
@@ -689,9 +688,10 @@ export default function EstimatesDashboard() {
         <div className="text-center py-24 text-slate-400 font-semibold">데이터를 로드하는 중입니다...</div>
       ) : (
         <>
-          {/* 탭 1: Inbound Hub (받은 견적서 ➡️ 발주 ➡️ 검수입고 ➡️ 재고반영) */}
-          {activeTab === "inbound" && (
+          {/* Inbound Hub: 받은 견적서 등록 / 발주서 작성 및 발송 / 거래 명세서 등록 */}
+          {(activeTab === "inbound_est" || activeTab === "inbound_po" || activeTab === "inbound_statement") && (
             <InboundHub
+              currentTab={activeTab as "inbound_est" | "inbound_po" | "inbound_statement"}
               estimates={estimates}
               purchaseOrders={purchaseOrders}
               partners={partners}
@@ -711,9 +711,10 @@ export default function EstimatesDashboard() {
             />
           )}
 
-          {/* 탭 2: Outbound Hub (보낸 견적서 ➡️ 수주 등록 ➡️ 수주확인서 발송) */}
-          {activeTab === "outbound" && (
+          {/* Outbound Hub: 견적서 작성 및 발송 / 수주 등록 / 거래 명세서 작성 및 발송 */}
+          {(activeTab === "outbound_est" || activeTab === "outbound_so" || activeTab === "outbound_statement") && (
             <OutboundHub
+              currentTab={activeTab as "outbound_est" | "outbound_so" | "outbound_statement"}
               estimates={estimates}
               salesOrders={salesOrders}
               partners={partners}
