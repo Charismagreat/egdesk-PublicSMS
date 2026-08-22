@@ -256,13 +256,18 @@ export default function TimelineTimeline({
                         🔍 실패 원인 & 해결
                       </button>
                     )}
-                    {post.status === 'SCHEDULED' && new Date(post.scheduled_at).getTime() > Date.now() + 60000 && (
+                    {post.status === 'SCHEDULED' && (
                       <button
                         onClick={() => handleApproveImmediate(post.id)}
-                        className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-[#03C75A] text-emerald-600 hover:text-white border border-emerald-100 hover:border-[#03C75A] text-[10px] font-black transition-all active:scale-95 flex items-center gap-1 cursor-pointer shadow-3xs"
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-all active:scale-95 flex items-center gap-1 cursor-pointer shadow-3xs ${
+                          new Date(post.scheduled_at).getTime() <= Date.now()
+                            ? 'bg-sky-500 hover:bg-sky-600 text-white border border-sky-600 animate-bounce'
+                            : 'bg-emerald-50 hover:bg-[#03C75A] text-emerald-600 hover:text-white border border-emerald-100 hover:border-[#03C75A]'
+                        }`}
+                        title="RPA 브라우저를 즉시 기동하여 네이버 블로그에 포스팅을 즉시 게재합니다"
                       >
                         <CheckCircle className="w-3.5 h-3.5 stroke-[2.5]" />
-                        발행 승인
+                        {new Date(post.scheduled_at).getTime() <= Date.now() ? '지금 즉시 강제 발행 🚀' : '발행 승인'}
                       </button>
                     )}
                     <button

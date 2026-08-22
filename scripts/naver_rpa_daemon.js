@@ -18,9 +18,31 @@ const { Readable } = require('stream');
 const { convertHtmlToSmartEditorJson } = require('./html-to-smarteditor');
 const { finished } = require('stream/promises');
 
+// 테넌트 CLI 인자 파싱
+let tenantArg = process.env.TENANT_ID || 'default';
+for (const arg of process.argv) {
+  if (arg.startsWith('--tenant=')) {
+    tenantArg = arg.split('=')[1].trim();
+  } else if (arg.startsWith('--tenant')) {
+    const nextIdx = process.argv.indexOf(arg) + 1;
+    if (nextIdx < process.argv.length && !process.argv[nextIdx].startsWith('--')) {
+      tenantArg = process.argv[nextIdx].trim();
+    }
+  }
+}
+
 // 환경변수 기반 기본 설정 로드 (EGDesk 운영 포트: 4002)
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:4002';
-const SESSION_FILE_PATH = path.join(__dirname, 'naver_session.json');
+let SESSION_FILE_PATH = (tenantArg && tenantArg !== 'default') 
+  ? path.join(__dirname, `naver_session_${tenantArg}.json`)
+  : path.join(__dirname, 'naver_session.json');
+
+// 만약 테넌트 전용 세션 파일이 없고 default 세션 파일이 존재하면 폴백 지원
+if (!fs.existsSync(SESSION_FILE_PATH) && fs.existsSync(path.join(__dirname, 'naver_session.json'))) {
+  SESSION_FILE_PATH = path.join(__dirname, 'naver_session.json');
+}
+
+console.log(`📌 [RPA Init] 활성 테넌트: [${tenantArg}] | 세션 파일 경로: ${SESSION_FILE_PATH}`);
 
 // 인간적인 타이핑/클릭 패턴 모방을 위한 랜덤 대기 유틸리티 (지터 딜레이)
 const jitterSleep = (min = 1500, max = 4000) => {
@@ -63,7 +85,10 @@ async function autoPerformNaverLogin(page, activeAppUrl) {
       if (!targetUrl) continue;
       try {
         const cleanUrl = targetUrl.replace(/\/$/, '');
-        const settingsRes = await fetch(`${cleanUrl}/api/naver-blog/settings`).catch(() => null);
+        const tenantQuery = tenantArg && tenantArg !== 'default' ? `?tenant_id=${encodeURIComponent(tenantArg)}` : '';
+        const settingsRes = await fetch(`${cleanUrl}/api/naver-blog/settings${tenantQuery}`, {
+          headers: { 'x-tenant-id': tenantArg || 'default' }
+        }).catch(() => null);
         if (settingsRes && settingsRes.ok) {
           const settingsData = await settingsRes.json().catch(() => null);
           if (settingsData?.settings?.naver_login_id && settingsData?.settings?.naver_login_pw) {
@@ -245,7 +270,11 @@ async function runNaverRpaDaemon() {
         const cleanUrl = testUrl.replace(/\/$/, '');
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃 확대 (GET 요청 실시간 동기화 완충)
-        const resList = await fetch(`${cleanUrl}/api/naver-blog/posts`, { signal: controller.signal });
+        const tenantQuery = tenantArg && tenantArg !== 'default' ? `?tenant_id=${encodeURIComponent(tenantArg)}` : '';
+        const resList = await fetch(`${cleanUrl}/api/naver-blog/posts${tenantQuery}`, { 
+          signal: controller.signal,
+          headers: { 'x-tenant-id': tenantArg || 'default' }
+        });
         clearTimeout(timeoutId);
 
         if (resList.ok) {

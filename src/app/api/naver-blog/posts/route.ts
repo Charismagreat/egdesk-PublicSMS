@@ -137,24 +137,25 @@ async function syncNaverMetrics(posts: any[]) {
 
 // 🤖 지연된 예약 포스트 감지 시 RPA 데몬 자가 복구 헬퍼
 let lastWatchdogTrigger = 0;
-function autoHealRpaDaemon() {
+function autoHealRpaDaemon(tenantId: string = 'default') {
   const now = Date.now();
   if (now - lastWatchdogTrigger < 30000) return; // 30초 쿨다운
   lastWatchdogTrigger = now;
   try {
     const daemonPath = path.join(process.cwd(), 'scripts', 'naver_rpa_daemon.js');
     const nodePath = process.execPath;
-    const cmd = `start "" /min "${nodePath}" "${daemonPath}"`;
-    exec(cmd, { cwd: process.cwd() }, () => {});
-    console.log('🤖 [RPA Watchdog] 지연된 예약 포스트 감지 ➔ RPA 자동화 데몬 자가 복구(Self-Healing) 기동 완료');
+    const cmd = `start "" /min "${nodePath}" "${daemonPath}" --tenant="${tenantId}"`;
+    exec(cmd, { cwd: process.cwd(), env: { ...process.env, TENANT_ID: tenantId } }, () => {});
+    console.log(`🤖 [RPA Watchdog] 지연된 예약 포스트 감지 ➔ RPA 자동화 데몬 자가 복구(Self-Healing) 기동 완료 (테넌트: ${tenantId})`);
   } catch (e) {}
 }
 
 export async function GET(req: Request) {
   try {
     const { getTenantId } = require('@/lib/tenant');
-    const tenantId = await getTenantId();
     const { searchParams } = new URL(req.url);
+    const paramTenantId = searchParams.get('tenant_id') || req.headers.get('x-tenant-id');
+    const tenantId = paramTenantId || (await getTenantId()) || 'default';
     const status = searchParams.get('status');
     
     const filters: any = {};
@@ -173,7 +174,7 @@ export async function GET(req: Request) {
     const nowTime = Date.now();
     const overduePost = posts.find((p: any) => p.status === 'SCHEDULED' && p.scheduled_at && new Date(p.scheduled_at).getTime() <= nowTime + 60000);
     if (overduePost) {
-      autoHealRpaDaemon();
+      autoHealRpaDaemon(tenantId);
     }
 
     // 2. 연관된 상품 정보 매핑을 위해 전체 상품 조회

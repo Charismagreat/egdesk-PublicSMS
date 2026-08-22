@@ -164,10 +164,10 @@ export default function NaverBlogMarketingPortal() {
     updateTime();
     const interval = setInterval(updateTime, 60000);
 
-    // 30초마다 목록 데이터만 주기적으로 동기화 갱신
+    // 10초마다 목록 데이터 동기화 및 예약 시간 도래 포스트 자동 왓치독 점검
     const scheduleInterval = setInterval(() => {
       fetchPosts();
-    }, 30000);
+    }, 10000);
 
     return () => {
       clearInterval(interval);
@@ -273,12 +273,23 @@ export default function NaverBlogMarketingPortal() {
     }
   };
 
+  const lastRpaAutoTriggerRef = useRef<number>(0);
+
   const fetchPosts = async () => {
     try {
       const res = await apiFetch('/api/naver-blog/posts');
       const data = await res.json();
       if (data.success && data.posts) {
         setPosts(data.posts);
+
+        // 🚀 예약 시각이 도래한 SCHEDULED 포스트가 있으면 브라우저가 활성 상태일 때 RPA 데몬 자동 기동
+        const now = Date.now();
+        const overdue = data.posts.find((p: any) => p.status === 'SCHEDULED' && p.scheduled_at && new Date(p.scheduled_at).getTime() <= now);
+        if (overdue && now - lastRpaAutoTriggerRef.current > 45000) {
+          lastRpaAutoTriggerRef.current = now;
+          console.log(`⏰ [Auto Trigger] 예약 시각 도래 포스트 감지 (ID: ${overdue.id}) ➔ RPA 자동 발행 데몬 기동`);
+          apiFetch('/api/naver-blog/publish-rpa', { method: 'POST' }).catch(() => {});
+        }
       }
     } catch (err) {
       console.error('게시물 목록 로딩 에러:', err);

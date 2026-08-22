@@ -87,18 +87,13 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. RPA 간편 연동 모드 (또는 공식 API 폴백) 처리
-    const daemonScriptPath = path.join(process.cwd(), 'scripts', 'naver_rpa_daemon.js');
-    const sessionFilePath = path.join(process.cwd(), 'scripts', 'naver_session.json');
+    const { getTenantId } = require('@/lib/tenant');
+    const tenantId = (await getTenantId()) || 'default';
+    const sessionFilePath = (tenantId && tenantId !== 'default') 
+      ? path.join(process.cwd(), 'scripts', `naver_session_${tenantId}.json`)
+      : path.join(process.cwd(), 'scripts', 'naver_session.json');
 
-    if (!fs.existsSync(daemonScriptPath)) {
-      return NextResponse.json({
-        success: false,
-        error: 'RPA 데몬 스크립트(naver_rpa_daemon.js)를 찾을 수 없습니다.'
-      }, { status: 404 });
-    }
-
-    const hasSession = fs.existsSync(sessionFilePath);
+    const hasSession = fs.existsSync(sessionFilePath) || fs.existsSync(path.join(process.cwd(), 'scripts', 'naver_session.json'));
 
     const hasLoginInfo = !!(settings?.naver_login_id?.trim() && settings?.naver_login_pw?.trim());
     
@@ -113,7 +108,7 @@ export async function POST(req: Request) {
     }
 
     isRpaRunning = true;
-    console.log('🤖 [API] 네이버 블로그 RPA 자동 발행 데몬을 즉시 기동합니다...');
+    console.log(`🤖 [API] 네이버 블로그 RPA 자동 발행 데몬을 즉시 기동합니다... (테넌트: ${tenantId})`);
 
     // 5초 안전 타임아웃 락 해제
     const lockTimer = setTimeout(() => {
@@ -135,17 +130,17 @@ export async function POST(req: Request) {
       currentAppUrl = `${protocol}://${host}`;
     }
 
-    const env = { ...process.env, NEXT_PUBLIC_APP_URL: currentAppUrl };
+    const env = { ...process.env, NEXT_PUBLIC_APP_URL: currentAppUrl, TENANT_ID: tenantId };
     
-    console.log(`🚀 [API] RPA 데몬 바인딩 실행 (CWD: ${process.cwd()}, Node: ${process.execPath})`);
+    console.log(`🚀 [API] RPA 데몬 바인딩 실행 (CWD: ${process.cwd()}, Node: ${process.execPath}, Tenant: ${tenantId})`);
 
     const isWindows = process.platform === 'win32';
     if (isWindows) {
       const nodeExe = process.execPath;
-      const cmd = `start "EGDesk Naver RPA" "${nodeExe}" "${daemonScriptPath}"`;
+      const cmd = `start "EGDesk Naver RPA" "${nodeExe}" "${daemonScriptPath}" --tenant="${tenantId}"`;
       exec(cmd, { cwd: process.cwd(), env });
     } else {
-      const child = spawn(process.execPath, [daemonScriptPath], {
+      const child = spawn(process.execPath, [daemonScriptPath, `--tenant=${tenantId}`], {
         cwd: process.cwd(),
         env,
         detached: true,
