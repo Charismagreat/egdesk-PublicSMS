@@ -1,17 +1,24 @@
 import { NextResponse } from "next/server";
 import { queryTable, updateRows } from "../../../../../egdesk-helpers";
+import { getTenantId } from "@/lib/tenant";
 
 /**
  * GET: 직원 근태 진단 정보 및 계약서 조항 조회 (물리 DB 연동)
  */
 export async function GET() {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     // 1. DB에서 직원별 근태 리스크 요약 조회
-    const statRes = await queryTable("crm_labor_stats", {});
+    const statRes = await queryTable("crm_labor_stats", { filters: queryFilters });
     const dbStats = statRes.rows || [];
 
     // 2. DB에서 근로계약서 독소조항 스캔 현황 조회
-    const contractRes = await queryTable("crm_labor_contracts", {});
+    const contractRes = await queryTable("crm_labor_contracts", { filters: queryFilters });
     const dbContracts = contractRes.rows || [];
 
     // 3. 근태 통계 매핑 (프론트엔드 호환 camelCase 변환)

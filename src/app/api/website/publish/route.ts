@@ -66,6 +66,8 @@ export async function POST(req: Request) {
     }
 
     // 2. 신규 배포 정보 적재 (7종 감사 컬럼 주입)
+    const { getTenantId } = require('@/lib/tenant');
+    const tenantId = (await getTenantId()) || 'default';
     const insertData = {
       domain_type: String(domain_type).trim(),
       domain_url: String(domain_url).trim(),
@@ -76,7 +78,8 @@ export async function POST(req: Request) {
       is_active: 1,
       uuid: crypto.randomUUID(),
       updated_at: timestamp,
-      updated_by: username || 'admin'
+      updated_by: username || 'admin',
+      tenant_id: tenantId
     };
 
     await insertRows('crm_web_published_sites', [insertData]);

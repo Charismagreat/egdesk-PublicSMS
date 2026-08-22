@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryTable, updateRows } from "../../../../../egdesk-helpers";
+import { getTenantId } from "@/lib/tenant";
 
 // 고정된 AI 대체 가능 공급처 추천 리스트 (지리적 정보 매핑)
 const BASE_ALTERNATIVES: Record<string, any[]> = {
@@ -14,12 +15,18 @@ const BASE_ALTERNATIVES: Record<string, any[]> = {
  */
 export async function GET() {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     // 1. DB에서 수입 화물 트래킹 리스트 조회
-    const shipRes = await queryTable("crm_scm_shipments", {});
+    const shipRes = await queryTable("crm_scm_shipments", { filters: queryFilters });
     const dbShipments = shipRes.rows || [];
 
     // 2. DB에서 협력사 신뢰성 평점 데이터 조회
-    const supRes = await queryTable("crm_scm_suppliers", {});
+    const supRes = await queryTable("crm_scm_suppliers", { filters: queryFilters });
     const dbSuppliers = supRes.rows || [];
 
     // 3. 화물 리스트 매핑 (좌표 및 리스크 계산 융합)

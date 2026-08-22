@@ -4,9 +4,18 @@ import { queryTable, insertRows, deleteRows } from '../../../../egdesk-helpers';
 import { triggerAutomation } from '@/lib/automation-trigger';
 import { PointService } from '@/lib/point-service';
 
+import { getTenantId } from '@/lib/tenant';
+
 export async function GET() {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     const result = await queryTable('crm_payments', {
+      filters: queryFilters,
       orderBy: 'payment_date',
       orderDirection: 'DESC'
     });
@@ -20,6 +29,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const tenantId = (await getTenantId()) || 'default';
     const data = await req.json();
     const id = data.id || Date.now().toString();
     await insertRows('crm_payments', [{
@@ -29,7 +39,8 @@ export async function POST(req: Request) {
       amount: data.amount,
       payment_date: data.paymentDate || new Date().toISOString().split('T')[0],
       status: data.status || '결제완료',
-      order_id: data.orderId || ''
+      order_id: data.orderId || '',
+      tenant_id: tenantId
     }]);
     
     // Trigger automation in the background

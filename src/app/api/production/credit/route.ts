@@ -70,22 +70,19 @@ const PARTNER_SEEDS = [
  */
 export async function GET() {
   try {
-    // 1. DB crm_partners 테이블 백필 상태 확인
-    const partnerRes = await queryTable("crm_partners", {});
-    let dbPartners = partnerRes.rows || [];
-
-    // 만약 거래처 정보가 비어있다면 자동 백필 수행
-    if (dbPartners.length === 0) {
-      const nowStr = new Date().toISOString().substring(0, 19).replace("T", " ");
-      const insertData = PARTNER_SEEDS.map(p => ({ ...p, created_at: nowStr }));
-      await insertRows("crm_partners", insertData);
-      
-      const freshRes = await queryTable("crm_partners", {});
-      dbPartners = freshRes.rows || [];
+    const { getTenantId } = require('@/lib/tenant');
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
     }
 
+    // 1. DB crm_partners 테이블 조회
+    const partnerRes = await queryTable("crm_partners", { filters: queryFilters });
+    let dbPartners = (partnerRes.rows || []).filter((p: any) => !p.deleted_at);
+
     // 2. DB crm_partner_credit_risks 테이블 조회
-    const creditRes = await queryTable("crm_partner_credit_risks", {});
+    const creditRes = await queryTable("crm_partner_credit_risks", { filters: queryFilters });
     const dbCredits = creditRes.rows || [];
 
     // 3. 조인 연산 및 통계 조립 (crm_partners + crm_partner_credit_risks)

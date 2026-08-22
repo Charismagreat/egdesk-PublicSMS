@@ -2,10 +2,12 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, executeSQL, joinTables, uploadFile } from '@/../egdesk-helpers';
+import { getTenantId } from '@/lib/tenant';
 
 // GET: 수입 통관 마스터 목록 조회 (메모리 필터링 방식으로 SQL 방화벽 우회)
 export async function GET(req: Request) {
   try {
+    const tenantId = await getTenantId();
     const { searchParams } = new URL(req.url);
     const searchQuery = (searchParams.get('searchQuery') || '').toLowerCase();
     const status = searchParams.get('status') || 'ALL'; // ALL, PAID, UNPAID
@@ -22,8 +24,14 @@ export async function GET(req: Request) {
 
     let allRows = joinRes.rows || [];
 
-    // 2. 소프트 삭제 필터링 수동 보정 (가드)
-    allRows = allRows.filter((r: any) => !r.deleted_at);
+    // 2. 테넌트 격리 및 소프트 삭제 필터링
+    allRows = allRows.filter((r: any) => {
+      if (r.deleted_at) return false;
+      if (tenantId && tenantId !== 'all') {
+        return (r.tenant_id === tenantId || (!r.tenant_id && tenantId === 'default'));
+      }
+      return true;
+    });
 
     // 3. 검색어 필터 (PO번호, SO번호, 수출자명)
     if (searchQuery) {
@@ -105,6 +113,7 @@ export async function POST(req: Request) {
       }
     }
 
+    const tenantId = (await getTenantId()) || 'default';
     const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
     const masterUuid = `mst-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -125,7 +134,8 @@ export async function POST(req: Request) {
       created_at: nowStr,
       uuid: masterUuid,
       updated_at: nowStr,
-      updated_by: 'USER'
+      updated_by: 'USER',
+      tenant_id: tenantId
     };
 
     const masterRes = await insertRows('import_master', [masterRow]);
@@ -164,7 +174,8 @@ export async function POST(req: Request) {
         created_at: nowStr,
         uuid: itemUuid,
         updated_at: nowStr,
-        updated_by: 'USER'
+        updated_by: 'USER',
+        tenant_id: tenantId
       };
     });
 
@@ -189,7 +200,8 @@ export async function POST(req: Request) {
       created_at: nowStr,
       uuid: financeUuid,
       updated_at: nowStr,
-      updated_by: 'USER'
+      updated_by: 'USER',
+      tenant_id: tenantId
     };
 
     const financeRes = await insertRows('import_finance', [financeRow]);

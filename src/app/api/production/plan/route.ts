@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryTable, insertRows, updateRows, deleteRows } from "../../../../../egdesk-helpers";
+import { getTenantId } from "@/lib/tenant";
 
 // 설비 ID별 이름 매핑 딕셔너리
 const EQ_NAMES: Record<string, string> = {
@@ -14,8 +15,14 @@ const EQ_NAMES: Record<string, string> = {
  */
 export async function GET() {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     // 1. DB에서 간트 태스크 조회
-    const ganttRes = await queryTable("crm_production_gantt_tasks", {});
+    const ganttRes = await queryTable("crm_production_gantt_tasks", { filters: queryFilters });
     const ganttTasks = (ganttRes.rows || []).map((t: any) => ({
       id: t.id,
       title: t.title,
@@ -29,7 +36,7 @@ export async function GET() {
     }));
 
     // 2. DB에서 미배정 주문 대장 조회
-    const orderRes = await queryTable("crm_production_unscheduled_orders", {});
+    const orderRes = await queryTable("crm_production_unscheduled_orders", { filters: queryFilters });
     const unscheduledOrders = (orderRes.rows || []).map((o: any) => ({
       orderId: o.orderId,
       productName: o.productName,
@@ -39,7 +46,7 @@ export async function GET() {
     }));
 
     // 3. DB에서 설비 병목지수 조회
-    const bottleRes = await queryTable("crm_production_bottlenecks", {});
+    const bottleRes = await queryTable("crm_production_bottlenecks", { filters: queryFilters });
     const bottlenecks = (bottleRes.rows || []).map((b: any) => ({
       id: b.id,
       name: b.name,
@@ -49,7 +56,7 @@ export async function GET() {
     }));
 
     // 4. DB에서 납기 준수 위험 분석 조회
-    const riskRes = await queryTable("crm_production_due_risk", {});
+    const riskRes = await queryTable("crm_production_due_risk", { filters: queryFilters });
     const dueRiskAnalysis = (riskRes.rows || []).map((r: any) => ({
       orderId: r.orderId,
       productName: r.productName,

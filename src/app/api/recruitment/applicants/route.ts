@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { queryTable, updateRows, insertRows } from '../../../../../egdesk-helpers';
+import { getTenantId } from '@/lib/tenant';
 
 /**
  * 🗄️ SQLite 물리 DB 지원자 관리 API 엔드포인트
@@ -10,8 +11,14 @@ import { queryTable, updateRows, insertRows } from '../../../../../egdesk-helper
 // 1. 지원자 목록 조회 (GET)
 export async function GET() {
   try {
-    const res = await queryTable('crm_recruitment_applicants', {});
-    const dbRows = res.rows || [];
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
+    const res = await queryTable('crm_recruitment_applicants', { filters: queryFilters });
+    const dbRows = (res.rows || []).filter((r: any) => !r.deleted_at);
 
     // 프론트엔드 CamelCase 타입(Applicant Interface)으로 변환 매핑
     const applicants = dbRows.map((row: any) => {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryTable, updateRows } from "../../../../../egdesk-helpers";
+import { getTenantId } from "@/lib/tenant";
 
 // 기본 베이스 시계열 차트 포인트 (09:00 ~ 21:00)
 const BASE_POWER_POINTS = [
@@ -25,12 +26,18 @@ const CONTRACT_POWER = 100; // 계약 전력 임계치 (kW)
  */
 export async function GET() {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     // 1. DB에서 에너지 설비 현황 조회
-    const eqRes = await queryTable("crm_energy_equipments", {});
+    const eqRes = await queryTable("crm_energy_equipments", { filters: queryFilters });
     const dbEquipments = eqRes.rows || [];
 
     // 2. DB에서 에너지 절감 스케줄 적용 상태 조회
-    const saveRes = await queryTable("crm_energy_savings", { filters: { id: "EV-01" } });
+    const saveRes = await queryTable("crm_energy_savings", { filters: { ...queryFilters, id: "EV-01" } });
     const isSavingApplied = saveRes.rows?.[0]?.is_active === 1;
 
     // 3. 설비 상태 매핑 (프론트엔드 호환 포맷 변환)

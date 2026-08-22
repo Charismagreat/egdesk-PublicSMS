@@ -622,7 +622,10 @@ Based on the guidelines, choose the most appropriate tables for this document pu
     }
 
     // 목록 조회
-    const res = await executeSQL('SELECT * FROM crm_web_templates ORDER BY id DESC');
+    const { getTenantId } = require('@/lib/tenant');
+    const tenantId = await getTenantId();
+    const tenantCond = (tenantId && tenantId !== 'all') ? `WHERE (tenant_id = '${tenantId}' OR tenant_id IS NULL OR tenant_id = 'default')` : '';
+    const res = await executeSQL(`SELECT * FROM crm_web_templates ${tenantCond} ORDER BY id DESC`);
     const rows = res.rows || [];
     const templates = rows.filter((r: any) => !r.deleted_at);
 
@@ -673,7 +676,8 @@ export async function POST(req: Request) {
       await updateRows('crm_web_templates', updateData, { filters: { id: String(templateId) } });
       return NextResponse.json({ success: true, message: '템플릿이 성공적으로 수정되었습니다.', id: templateId });
     } else {
-      // 등록 (Insert)
+      const { getTenantId } = require('@/lib/tenant');
+      const tenantId = (await getTenantId()) || 'default';
       const insertData = {
         template_name,
         // html_content는 NOT NULL 제약조건이 있으므로 비어있는 경우 폴백 텍스트 주입
@@ -685,7 +689,8 @@ export async function POST(req: Request) {
         is_web_active: is_web_active !== undefined ? Number(is_web_active) : 1,
         uuid: crypto.randomUUID(),
         updated_at: timestamp,
-        updated_by: username || 'admin'
+        updated_by: username || 'admin',
+        tenant_id: tenantId
       };
 
       await insertRows('crm_web_templates', [insertData]);

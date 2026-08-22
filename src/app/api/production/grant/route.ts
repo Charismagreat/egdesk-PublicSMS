@@ -93,12 +93,19 @@ const DEFAULT_RND_TEXTS: Record<string, Record<string, string>> = {
  */
 export async function GET() {
   try {
+    const { getTenantId } = require('@/lib/tenant');
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     // 1. DB에서 공고 전체 조회
     const annRes = await queryTable("crm_grant_announcements", { limit: 100000 });
     const dbAnnouncements = annRes.rows || [];
 
     // 2. DB에서 관심 북마크 목록 조회
-    const bookmarkRes = await queryTable("crm_grant_bookmarks", {});
+    const bookmarkRes = await queryTable("crm_grant_bookmarks", { filters: queryFilters });
     const dbBookmarks = bookmarkRes.rows || [];
     const bookmarkedIds = new Set(dbBookmarks.map((b: any) => b.announcement_id));
 

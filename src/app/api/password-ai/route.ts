@@ -50,15 +50,17 @@ async function verifySession() {
     const role = (payload.role as string || '').toUpperCase();
     const name = payload.name as string || payload.username as string || 'Unknown';
     const operatorId = Number(payload.id) || null;
+    const tenantId = payload.tenant_id as string || 'default';
     
     return {
-      isAuthorized: role === 'SUPER_ADMIN' || role === 'OPERATOR',
+      isAuthorized: role === 'SUPER_ADMIN' || role === 'OPERATOR' || role === 'TENANT_ADMIN' || role === 'SYSTEM_ADMIN' || role === 'SUB_OPERATOR',
       role,
       name,
-      operatorId
+      operatorId,
+      tenantId
     };
   } catch (e) {
-    return { isAuthorized: false, role: 'GUEST', name: 'Unknown', operatorId: null };
+    return { isAuthorized: false, role: 'GUEST', name: 'Unknown', operatorId: null, tenantId: 'default' };
   }
 }
 
@@ -132,10 +134,12 @@ export async function GET(request: Request) {
 
     // 2. 비밀번호 자산 대장 목록 조회 (비밀번호는 마스킹 처리하여 보냄)
     // crm_operators와 JOIN하여 담당자명 획득
+    const tenantFilter = (tenantId && tenantId !== 'all') ? `WHERE cv.tenant_id = '${tenantId}'` : '';
     const listRes = await executeSQL(`
       SELECT cv.*, op.name as owner_name 
       FROM crm_credential_vault cv
       LEFT JOIN crm_operators op ON cv.owner_operator_id = op.id
+      ${tenantFilter}
       ORDER BY cv.id DESC
     `);
     const list = listRes.rows || [];
@@ -192,10 +196,9 @@ export async function GET(request: Request) {
   }
 }
 
-// [POST] 신규 비밀번호 자산 등록
 export async function POST(request: Request) {
   try {
-    const { isAuthorized, name, operatorId } = await verifySession();
+    const { isAuthorized, name, operatorId, tenantId } = await verifySession();
     if (!isAuthorized) {
       return NextResponse.json({ success: false, error: '권한이 없습니다. 로그인이 필요합니다.' }, { status: 403 });
     }
@@ -232,7 +235,8 @@ export async function POST(request: Request) {
           owner_operator_id: owner_operator_id || operatorId,
           status: 'ACTIVE',
           created_at: nowKst,
-          updated_at: nowKst
+          updated_at: nowKst,
+          tenant_id: tenantId
         });
 
         auditRows.push({
@@ -241,7 +245,8 @@ export async function POST(request: Request) {
           operator_name: name,
           action_type: 'CREATE',
           access_reason: '엑셀 일괄 등록',
-          created_at: nowKst
+          created_at: nowKst,
+          tenant_id: tenantId
         });
 
         count++;
@@ -283,7 +288,8 @@ export async function POST(request: Request) {
       owner_operator_id: owner_operator_id || operatorId,
       status: 'ACTIVE',
       created_at: nowKst,
-      updated_at: nowKst
+      updated_at: nowKst,
+      tenant_id: tenantId
     }]);
 
     // 감사 로그 남기기
@@ -293,7 +299,8 @@ export async function POST(request: Request) {
       operator_name: name,
       action_type: 'CREATE',
       access_reason: '신규 기밀 자산 등록',
-      created_at: nowKst
+      created_at: nowKst,
+      tenant_id: tenantId
     }]);
 
     return NextResponse.json({ success: true, message: '신규 비밀번호 자산이 안전하게 암호화되어 등록되었습니다.' });

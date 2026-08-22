@@ -2,9 +2,17 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows, deleteRows } from '../../../../egdesk-helpers';
 
+import { getTenantId } from '@/lib/tenant';
+
 // GET: 관제 히스토리 조회 및 대시보드 통계 정보 생성
 export async function GET(req: Request) {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     // 1. 수집 설정 키 가져오기
     let mailInterval = '5';
     let mailEnabled = '1';
@@ -23,7 +31,7 @@ export async function GET(req: Request) {
     }
 
     // 2. 메일 관제 로그 전체 가져오기
-    const logsResult = await queryTable('system_mail_logs', { orderBy: 'created_at', orderDirection: 'DESC' });
+    const logsResult = await queryTable('system_mail_logs', { filters: queryFilters, orderBy: 'created_at', orderDirection: 'DESC' });
     const logs = logsResult.rows || [];
 
     // 3. 통계 분석

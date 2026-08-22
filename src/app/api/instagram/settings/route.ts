@@ -24,8 +24,16 @@ const DEFAULT_SETTINGS = {
   ig_user_id: '', // Meta Graph API 비즈니스 유저 ID
 };
 
+import { getTenantId } from '@/lib/tenant';
+
 export async function GET() {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     // DB 컬럼 무손실 마이그레이션 안전 가드
     try {
       await executeSQL(`ALTER TABLE instagram_marketing_settings ADD COLUMN ig_user_id TEXT;`);
@@ -45,7 +53,7 @@ export async function GET() {
     }
 
     // 설정 테이블 데이터 전체 조회 (규격 규칙: orderBy 'id' DESC 최신 정렬 필수 주입)
-    const result = await queryTable('instagram_marketing_settings', { orderBy: 'id', orderDirection: 'DESC', limit: 100 });
+    const result = await queryTable('instagram_marketing_settings', { filters: queryFilters, orderBy: 'id', orderDirection: 'DESC', limit: 100 });
     
     if (result && result.rows && result.rows.length > 0) {
       // deleted_at이 없는 최신 유효 행 선택

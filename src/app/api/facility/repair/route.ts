@@ -1,18 +1,25 @@
 import { NextResponse } from "next/server";
 import { queryTable, insertRows } from "../../../../../egdesk-helpers";
+import { getTenantId } from "@/lib/tenant";
 
 /**
  * GET: 수리 대장 조회 및 RAG 고장 해결 가이드 조회 (물리 DB 연동)
  */
 export async function GET(req: Request) {
   try {
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     const { searchParams } = new URL(req.url);
     const keyword = searchParams.get("query") || "";
     const errCodeQuery = searchParams.get("errorCode") || "";
 
     // 1. RAG 챗봇 질의 처리
     if (errCodeQuery) {
-      const solutionRes = await queryTable("crm_facility_repair_solutions", { filters: { errorCode: errCodeQuery.toUpperCase() } });
+      const solutionRes = await queryTable("crm_facility_repair_solutions", { filters: { ...queryFilters, errorCode: errCodeQuery.toUpperCase() } });
       const dbSolution = solutionRes.rows && solutionRes.rows.length > 0 ? solutionRes.rows[0] : null;
 
       let solution;
@@ -49,15 +56,7 @@ export async function GET(req: Request) {
     }
 
     // 2. 수리 대장 필터링 및 조회
-    let logsRes;
-    if (keyword) {
-      // 키워드 필터가 있을 시 대소문자 구분 없이 쿼리
-      // egdesk-helpers의 queryTable은 간단한 필터만 지원하므로, raw 쿼리를 쓰지 않고 queryTable로 가져온 후 메모리 상에서 필터링하거나 filters를 적용할 수 있습니다.
-      // 여기서는 수리 로그 수가 적으므로 queryTable로 전체를 조회한 후 메모리 필터링이 정밀합니다. (LIKE 복수 컬럼 검색 보장)
-      logsRes = await queryTable("crm_facility_repair_logs", {});
-    } else {
-      logsRes = await queryTable("crm_facility_repair_logs", {});
-    }
+    const logsRes = await queryTable("crm_facility_repair_logs", { filters: queryFilters });
 
     let logs = (logsRes.rows || []).map((l: any) => ({
       id: l.id,

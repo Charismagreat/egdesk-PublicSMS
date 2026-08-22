@@ -152,17 +152,22 @@ function autoHealRpaDaemon() {
 
 export async function GET(req: Request) {
   try {
+    const { getTenantId } = require('@/lib/tenant');
+    const tenantId = await getTenantId();
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status');
     
     const filters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      filters.tenant_id = tenantId;
+    }
     if (status) {
       filters.status = status;
     }
 
     // 1. 네이버 블로그 게시글 목록 조회
     const postsRes = await queryTable('crm_naver_blog_posts', { filters });
-    const posts = postsRes.rows || [];
+    const posts = (postsRes.rows || []).filter((p: any) => !p.deleted_at);
 
     // 2. 예약 시각이 지났는데 아직 게재 안된 포스트 존재 시 RPA 데몬 자가 복구
     const nowTime = Date.now();
@@ -222,6 +227,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: '상태값(status)은 필수입니다.' }, { status: 400 });
     }
 
+    const { getTenantId } = require('@/lib/tenant');
+    const tenantId = (await getTenantId()) || 'default';
+
     // 새 포스트 삽입
     const newPost = {
       id: Date.now(), // 타임스탬프 기반 고유 ID 생성
@@ -236,7 +244,8 @@ export async function POST(req: Request) {
       posted_at: status === 'POSTED' ? new Date().toISOString() : null,
       error_message: null,
       views_count: 0,
-      likes_count: 0
+      likes_count: 0,
+      tenant_id: tenantId
     };
 
     await insertRows('crm_naver_blog_posts', [newPost]);

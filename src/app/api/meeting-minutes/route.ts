@@ -61,8 +61,12 @@ function getFallbackAudioUrl(meetingId: number, meetingDate: string) {
  */
 export async function GET() {
   try {
+    const { getTenantId } = require('@/lib/tenant');
+    const tenantId = await getTenantId();
+    const tenantCond = (tenantId && tenantId !== 'all') ? `WHERE (tenant_id = '${tenantId}' OR tenant_id IS NULL OR tenant_id = 'default')` : '';
+    
     // queryTable 대신 executeSQL을 사용하여 스키마 캐시 필터링 우회
-    const result = await executeSQL('SELECT * FROM crm_meetings ORDER BY date DESC');
+    const result = await executeSQL(`SELECT * FROM crm_meetings ${tenantCond} ORDER BY date DESC`);
     const meetings = (result.rows || []).map((m: any) => {
       // summary 마크다운에서 [audio_url] 및 [meeting_type] 메타데이터를 추출하여 복원
       let extractedUrl = '';
@@ -120,6 +124,9 @@ export async function POST(req: Request) {
       const maxIdRes = await executeSQL('SELECT MAX(id) as maxId FROM crm_meetings');
       const nextId = (maxIdRes?.rows?.[0]?.maxId || 0) + 1;
 
+      const { getTenantId } = require('@/lib/tenant');
+      const tenantId = (await getTenantId()) || 'default';
+
       const newMeeting = {
         id: nextId,
         title,
@@ -131,7 +138,8 @@ export async function POST(req: Request) {
         audio_url: '',
         uuid: crypto.randomUUID(),
         updated_at: nowStr,
-        updated_by: 'SYSTEM'
+        updated_by: 'SYSTEM',
+        tenant_id: tenantId
       };
 
       await insertRows('crm_meetings', [newMeeting]);

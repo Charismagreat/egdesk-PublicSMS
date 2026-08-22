@@ -9,6 +9,13 @@ import { queryTable, updateRows, insertRows } from "../../../../../egdesk-helper
  */
 export async function GET(req: Request) {
   try {
+    const { getTenantId } = require('@/lib/tenant');
+    const tenantId = await getTenantId();
+    const queryFilters: any = {};
+    if (tenantId && tenantId !== 'all') {
+      queryFilters.tenant_id = tenantId;
+    }
+
     const { searchParams } = new URL(req.url);
     const searchKeyword = searchParams.get("query") || "";
 
@@ -21,7 +28,7 @@ export async function GET(req: Request) {
     }
 
     // 2. DB에서 NCR 전체 조회
-    const ncrRes = await queryTable("crm_quality_ncr_items", {});
+    const ncrRes = await queryTable("crm_quality_ncr_items", { filters: queryFilters });
     let ncrList = (ncrRes.rows || []).map((item: any) => ({
       id: item.id,
       date: item.date,

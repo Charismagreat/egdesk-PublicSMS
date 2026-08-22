@@ -32,10 +32,16 @@ export async function POST(req: Request) {
       ? modelRes.rows[0].value
       : 'gemini-2.5-flash';
 
-    // 본사 프로필 로드 (기본값 주식회사 원컨덕터트레이딩/지상현/2428700357)
+    // 본사 프로필 로드
+    const { getTenantId } = require('@/lib/tenant');
+    const tenantId = (await getTenantId()) || 'default';
     let myCompanyProfile = { companyName: '주식회사 원컨덕터트레이딩', representative: '지상현', businessNumber: '2428700357' };
     try {
-      const myCompanySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
+      const cKey = `${tenantId}:my_company_profile`;
+      let myCompanySetting = await queryTable('system_settings', { filters: { key: cKey } });
+      if (!myCompanySetting.rows || myCompanySetting.rows.length === 0) {
+        myCompanySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
+      }
       if (myCompanySetting.rows && myCompanySetting.rows.length > 0) {
         const parsed = JSON.parse(myCompanySetting.rows[0].value);
         if (parsed.companyName) myCompanyProfile.companyName = parsed.companyName;
