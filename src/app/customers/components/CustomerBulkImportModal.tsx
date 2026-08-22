@@ -1,6 +1,5 @@
-"use client";
-
 import React, { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X, UploadCloud, Sparkles, CheckCircle2, AlertCircle, FileSpreadsheet, Info, Check, Download } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -45,7 +44,7 @@ export function CustomerBulkImportModal({ isOpen, onClose, onImport }: CustomerB
   const [importStatus, setImportStatus] = useState<string>("엑셀 파싱 및 데이터 검증 진행 중...");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!isOpen) return null;
+  if (typeof window === "undefined" || !isOpen) return null;
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -186,8 +185,8 @@ export function CustomerBulkImportModal({ isOpen, onClose, onImport }: CustomerB
     link.click();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
         
         {/* 헤더 */}
@@ -346,6 +345,7 @@ export function CustomerBulkImportModal({ isOpen, onClose, onImport }: CustomerB
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,6 +1,5 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { 
   Globe, AlertCircle, CheckCircle2, X, RefreshCw, Sparkles, Download, ExternalLink, Info, Users
 } from "lucide-react";
@@ -62,7 +61,7 @@ export function CustomerGoogleSheetsImportModal({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (typeof window === "undefined" || !isOpen) return null;
 
   // 구글 시트 데이터 읽어오기
   const handleFetchSheet = async (overrideSheetName?: string) => {
@@ -200,8 +199,8 @@ export function CustomerGoogleSheetsImportModal({
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
         
         {/* 헤더 */}
@@ -353,6 +352,7 @@ export function CustomerGoogleSheetsImportModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

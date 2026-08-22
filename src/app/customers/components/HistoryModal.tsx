@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { X, Phone, MapPin, Calendar, Package, AlertCircle, RefreshCw, DollarSign, Truck, Coins, ShoppingBag } from "lucide-react";
 import { Customer, CustomerHistory, PointHistoryItem } from "../types";
 
@@ -41,7 +42,7 @@ export function HistoryModal({
   isAdjusting,
   handleAdjustPoints
 }: HistoryModalProps) {
-  if (!showHistoryModal || !selectedCustomer) return null;
+  if (typeof window === "undefined" || !showHistoryModal || !selectedCustomer) return null;
 
   const handleClose = () => {
     setShowHistoryModal(false);
@@ -49,8 +50,8 @@ export function HistoryModal({
     setCustomerHistory(null);
   };
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all duration-300 animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[99999] p-4 transition-all duration-300 animate-fade-in">
       <div className="bg-white/95 backdrop-blur-md rounded-3xl w-full max-w-5xl h-[85vh] shadow-2xl flex flex-col overflow-hidden border border-slate-200/50 animate-scale-up">
         
         {/* 모달 헤더 (PC용 단일행 고정 배열) */}
@@ -559,6 +560,7 @@ export function HistoryModal({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { NewCustomerInput } from "../types";
 
@@ -19,10 +20,10 @@ export function AddCustomerModal({
   handleAddCustomer,
   isSubmitting
 }: AddCustomerModalProps) {
-  if (!showAddModal) return null;
+  if (typeof window === "undefined" || !showAddModal) return null;
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[99999] backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-3xl p-6 w-[500px] shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
         <div className="flex justify-between items-center border-b pb-3 mb-4">
           <h3 className="text-base font-black text-slate-800">신규 고객 등록</h3>
@@ -130,6 +131,7 @@ export function AddCustomerModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
