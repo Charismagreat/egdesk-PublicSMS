@@ -89,3 +89,18 @@ See `.agents/rules/egdesk-dev-context.md` for full details.
    - 이지데스크 플러그인은 Next.js 16+에서 `proxy.ts` 를 통해 CORS 우회 및 프록시 처리를 독자 수행하도록 설정됩니다. 
    - 이 설정을 해치지 않도록 미들웨어 파일 생성을 철저히 지양해야 합니다.
 <!-- END:nextjs-turbopack-middleware-rules -->
+
+<!-- BEGIN:tenant-isolation-rules -->
+## 테넌트별 데이터 및 스토리지 완전 격리(Multi-Tenancy Isolation) 준수 원칙
+
+1. **백엔드 DB 쿼리 시 테넌트 식별자 및 헤더 의무 경유**:
+   - 모든 데이터 CRUD 작업은 `egdesk-helpers.ts`의 표준 함수(`queryTable`, `insertRows`, `updateRows`, `deleteRows`, `executeSQL`)를 통해서만 수행되어야 하며, 시스템 환경변수 및 요청 헤더(`X-EGDesk-Project-Id`, `X-EGDesk-Env`, `X-Api-Key`)를 통해 해당 테넌트의 격리된 데이터베이스 인스턴스에만 바인딩되어야 합니다.
+   - 타 테넌트의 데이터를 조회하거나 교차 갱신하는 쿼리를 절대 수행해서는 안 됩니다.
+2. **파일 및 첨부파일 스토리지 격리**:
+   - 영수증, 계약서, 견적서, OCR 이미지 등 모든 파일은 `uploadFile` API를 통해 테넌트 격리 스토리지 버킷에 보관되어야 하며, 타 테넌트의 파일 ID로의 무단 접근이 불가능하도록 게이트웨이 인증을 필수로 거쳐야 합니다.
+3. **클라이언트 브라우저 로컬 저장소(`localStorage` / `sessionStorage`) 테넌트 Prefix 격리**:
+   - 브라우저 스토리지에 저장되는 임시 상태, 시트 URL, 검색 기록, 필터 조건 등은 반드시 `getEgdeskBasePath()` 기반의 테넌트 고유 Prefix(예: `_t_tunnelId_p_projectName_key`)를 적용하여 격리해야 합니다.
+   - 이를 통해 동일한 PC 브라우저에서 복수의 테넌트/회사 계정으로 전환하더라도 데이터나 입력값이 교차 노출되지 않도록 원천 차단합니다.
+4. **외부 연동(구글 시트, 알림톡, 결제 등) 테넌트 분리**:
+   - 구글 스프레드시트, 네이버 블로그, 카카오 알림톡 등 외부 API 연동 시 계정 자격증명 및 세션 정보는 각 테넌트별 설정 레코드(`system_settings`) 및 격리 파일로 분리 관리되어야 합니다.
+<!-- END:tenant-isolation-rules -->
