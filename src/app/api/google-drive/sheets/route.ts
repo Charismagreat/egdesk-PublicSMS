@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from '@/lib/google-sheets-storage';
-import { callSheetsTool } from '@/lib/egdesk-helpers';
 
 export async function GET() {
   try {
@@ -9,8 +8,18 @@ export async function GET() {
 
     if (savedUrl) {
       try {
-        const metadataRes = await callSheetsTool('sheets_get_spreadsheet', { url: savedUrl });
-        sheetMetadata = metadataRes;
+        const apiUrl = process.env.NEXT_PUBLIC_EGDESK_API_URL || 'http://localhost:8080';
+        const res = await fetch(`${apiUrl}/sheets/tools/call`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tool: 'sheets_get_spreadsheet',
+            arguments: { url: savedUrl }
+          })
+        });
+        if (res.ok) {
+          sheetMetadata = await res.json();
+        }
       } catch (e: any) {
         sheetMetadata = { error: e.message };
       }

@@ -176,7 +176,7 @@ export default function HrGoogleSheetsUploadModal({
     setStatusMsg(null);
 
     try {
-      const res = await apiFetch("/api/hr/attendance/batch-upload", {
+      const res = await apiFetch("/api/hr/batch-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows: parsedRows })

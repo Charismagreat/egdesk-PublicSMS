@@ -111,7 +111,7 @@ export default function EmployeeGoogleSheetsUploadModal({
         let name = "";
         let username = "";
         let password = "";
-        let role = "USER";
+        let role = "EMPLOYEE";
         let department = "";
         let phone = "";
         let work_start_time = "09:00";
@@ -126,9 +126,9 @@ export default function EmployeeGoogleSheetsUploadModal({
           else if (cleanH.includes("아이디") || cleanH.includes("계정")) username = val;
           else if (cleanH.includes("비밀번호") || cleanH.includes("패스워드")) password = val;
           else if (cleanH.includes("권한") || cleanH.includes("등급")) {
-            if (val.includes("최고") || val.includes("SUPER_ADMIN")) role = "SUPER_ADMIN";
-            else if (val.includes("부운영") || val.includes("ADMIN") || val.includes("매니저")) role = "ADMIN";
-            else role = "USER";
+            if (val.includes("최고") || val.toUpperCase().includes("SUPER_ADMIN")) role = "SUPER_ADMIN";
+            else if (val.includes("부운영") || val.toUpperCase().includes("ADMIN") || val.includes("매니저") || val.toUpperCase().includes("SUB_OPERATOR")) role = "SUB_OPERATOR";
+            else role = "EMPLOYEE";
           }
           else if (cleanH.includes("부서") || cleanH.includes("소속")) department = val;
           else if (cleanH.includes("전화") || cleanH.includes("연락처")) phone = val;
@@ -190,17 +190,20 @@ export default function EmployeeGoogleSheetsUploadModal({
     setStatusMsg(null);
 
     try {
-      const res = await apiFetch("/api/admin/members/batch", {
+      const res = await apiFetch("/api/employees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employees: validEmployees })
+        body: JSON.stringify({
+          action: "batch_register",
+          employees: validEmployees
+        })
       });
 
       const data = await res.json();
       if (data.success) {
         setStatusMsg({
           type: 'success',
-          text: `🎉 총 ${data.insertedCount || validEmployees.length}명의 직원 계정이 성공적으로 일괄 등록되었습니다.`
+          text: `🎉 총 ${data.count || validEmployees.length}명의 직원 계정이 성공적으로 일괄 등록되었습니다.`
         });
         setTimeout(() => {
           onSuccess();
@@ -360,10 +363,10 @@ export default function EmployeeGoogleSheetsUploadModal({
                         <td className="py-2 px-3">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                             emp.role === 'SUPER_ADMIN' ? 'bg-amber-100 text-amber-800' :
-                            emp.role === 'ADMIN' ? 'bg-indigo-100 text-indigo-800' :
+                            (emp.role === 'ADMIN' || emp.role === 'SUB_OPERATOR') ? 'bg-indigo-100 text-indigo-800' :
                             'bg-slate-100 text-slate-700'
                           }`}>
-                            {emp.role === 'SUPER_ADMIN' ? '최고관리자' : emp.role === 'ADMIN' ? '부운영자' : '일반직원'}
+                            {emp.role === 'SUPER_ADMIN' ? '최고관리자' : (emp.role === 'ADMIN' || emp.role === 'SUB_OPERATOR') ? '부운영자' : '일반직원'}
                           </span>
                         </td>
                         <td className="py-2 px-3 text-slate-600">{emp.department || '-'}</td>

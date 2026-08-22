@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { insertRows } from '../../../../egdesk-helpers';
+import { insertRows } from '@/../egdesk-helpers';
 
 export async function POST(req: Request) {
   try {
