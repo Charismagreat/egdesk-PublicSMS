@@ -20,7 +20,7 @@ import {
   Database,
   Receipt
 } from "lucide-react";
-import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, SAMPLE_GOOGLE_SHEET_URL } from "../../../lib/google-sheets-storage";
+import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, SAMPLE_STATEMENT_GOOGLE_SHEET_URL } from "../../../lib/google-sheets-storage";
 
 interface InboundStatementOcrModalProps {
   isOpen: boolean;
@@ -755,7 +755,7 @@ export default function InboundStatementOcrModal({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => window.open(SAMPLE_GOOGLE_SHEET_URL, "_blank")}
+                      onClick={() => window.open(SAMPLE_STATEMENT_GOOGLE_SHEET_URL, "_blank")}
                       className="px-2.5 py-1.5 bg-white hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 shadow-3xs cursor-pointer active:scale-95"
                       title="시스템 표준 샘플 구글 스프레드시트를 새 창에서 열람합니다."
                     >
@@ -764,7 +764,7 @@ export default function InboundStatementOcrModal({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setGoogleSheetUrl(SAMPLE_GOOGLE_SHEET_URL)}
+                      onClick={() => setGoogleSheetUrl(SAMPLE_STATEMENT_GOOGLE_SHEET_URL)}
                       className="px-2.5 py-1.5 bg-blue-100/80 hover:bg-blue-200 text-blue-800 rounded-lg text-[10px] font-bold transition-all cursor-pointer active:scale-95"
                       title="샘플 주소를 입력창에 자동으로 채워 즉시 테스트합니다."
                     >
