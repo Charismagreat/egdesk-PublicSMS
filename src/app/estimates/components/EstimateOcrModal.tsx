@@ -826,8 +826,7 @@ export default function EstimateOcrModal({
                       <Link2 className="w-4 h-4" />
                     </span>
                     <div>
-                      <h4 className="text-xs font-black text-blue-950">구글 스프레드시트 실시간 데이터 연동</h4>
-                      <p className="text-[10px] text-blue-700 font-medium">공유된 구글 스프레드시트 링크를 통해 다중 거래처 견적을 1초 만에 가져옵니다.</p>
+                      <h4 className="text-xs font-black text-blue-950">구글 시트 연동</h4>
                     </div>
                   </div>
 
