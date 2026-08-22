@@ -1,16 +1,16 @@
 import React from "react";
-import { Plus, Users, FileSpreadsheet, Upload } from "lucide-react";
+import { Plus, Users, FileSpreadsheet, Globe } from "lucide-react";
 
 interface HeaderProps {
-  isUploading: boolean;
-  handleCsvUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onOpenBulkImport: () => void;
+  onOpenGoogleSheets: () => void;
   setShowAddModal: (show: boolean) => void;
 }
 
-export function Header({ isUploading, handleCsvUpload, setShowAddModal }: HeaderProps) {
+export function Header({ onOpenBulkImport, onOpenGoogleSheets, setShowAddModal }: HeaderProps) {
   return (
     <div className="space-y-3">
-      {/* 1. 상단 액션바 */}
+      {/* 상단 액션바 */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
@@ -24,18 +24,28 @@ export function Header({ isUploading, handleCsvUpload, setShowAddModal }: Header
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
-          <label className={`bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 shadow-2xs text-xs cursor-pointer active:scale-95 ${isUploading ? 'opacity-70 cursor-not-allowed' : ''}`}>
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          {/* 1. 엑셀 일괄 등록 버튼 */}
+          <button 
+            onClick={onOpenBulkImport}
+            className="bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 shadow-2xs text-xs cursor-pointer active:scale-95"
+            title="엑셀 파일을 업로드하여 고객 데이터를 일괄 등록합니다."
+          >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span>{isUploading ? "업로드 중..." : "CSV/엑셀 일괄 등록"}</span>
-            <input 
-              type="file" 
-              accept=".csv" 
-              className="hidden" 
-              onChange={handleCsvUpload}
-              disabled={isUploading}
-            />
-          </label>
+            <span>엑셀 일괄 등록</span>
+          </button>
+
+          {/* 2. 구글 시트 연동 버튼 */}
+          <button 
+            onClick={onOpenGoogleSheets}
+            className="bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 shadow-2xs text-xs cursor-pointer active:scale-95"
+            title="구글 스프레드시트 링크와 실시간 연동하여 고객 데이터를 일괄 등록합니다."
+          >
+            <Globe className="w-4 h-4 text-blue-600" />
+            <span>구글 시트 연동</span>
+          </button>
+
+          {/* 3. 신규 고객 등록 버튼 */}
           <button 
             onClick={() => setShowAddModal(true)}
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 shadow-md shadow-indigo-600/10 text-xs border-none cursor-pointer active:scale-95"
@@ -45,18 +55,6 @@ export function Header({ isUploading, handleCsvUpload, setShowAddModal }: Header
           </button>
         </div>
       </div>
-
-      {isUploading && (
-        <div className="bg-indigo-50/80 border border-indigo-200 text-indigo-900 p-4 rounded-2xl flex items-center justify-between shadow-xs animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-600 border-t-transparent"></div>
-            <div>
-              <p className="font-extrabold text-xs">고객 연락처 데이터를 분석하고 있습니다...</p>
-              <p className="text-[11px] font-semibold text-indigo-600 mt-0.5">파일 내의 연락처와 태그 정보를 확인하여 데이터베이스에 안전하게 등록 중입니다.</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

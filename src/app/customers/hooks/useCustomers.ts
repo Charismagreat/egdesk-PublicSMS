@@ -241,6 +241,26 @@ export function useCustomers() {
   const endIndex = startIndex + itemsPerPage;
   const paginatedCustomers = filteredCustomers.slice(startIndex, endIndex);
 
+  // 🚀 다중 고객 일괄 등록 핸들러 (엑셀/구글 시트 연동)
+  const handleBulkImportCustomers = async (customersList: any[]) => {
+    try {
+      const res = await apiFetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customers: customersList })
+      });
+      const json = await res.json();
+      if (json.success) {
+        await fetchCustomers();
+        return { success: true, addedCount: json.addedCount || customersList.length };
+      } else {
+        return { success: false, error: json.error };
+      }
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  };
+
   return {
     customers,
     isLoading,
@@ -276,6 +296,7 @@ export function useCustomers() {
     handleAdjustPoints,
     handleAddCustomer,
     handleCsvUpload,
+    handleBulkImportCustomers,
     filteredCustomers,
     totalPages,
     startIndex,

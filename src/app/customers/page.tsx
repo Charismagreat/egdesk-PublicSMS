@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useState } from "react";
 import { useCustomers } from "./hooks/useCustomers";
 import { Header } from "./components/Header";
 import { CustomerStats } from "./components/CustomerStats";
@@ -7,6 +8,8 @@ import { FilterBar } from "./components/FilterBar";
 import { CustomerTable } from "./components/CustomerTable";
 import { AddCustomerModal } from "./components/AddCustomerModal";
 import { HistoryModal } from "./components/HistoryModal";
+import { CustomerBulkImportModal } from "./components/CustomerBulkImportModal";
+import { CustomerGoogleSheetsImportModal } from "./components/CustomerGoogleSheetsImportModal";
 
 export default function CustomersPage() {
   const {
@@ -38,11 +41,10 @@ export default function CustomersPage() {
     newCustomer,
     setNewCustomer,
     isSubmitting,
-    isUploading,
     handleRowClick,
     handleAdjustPoints,
     handleAddCustomer,
-    handleCsvUpload,
+    handleBulkImportCustomers,
     filteredCustomers,
     totalPages,
     startIndex,
@@ -50,12 +52,17 @@ export default function CustomersPage() {
     paginatedCustomers,
   } = useCustomers();
 
+  // 📂 엑셀 일괄 등록 모달 상태
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+  // 🌐 구글 시트 연동 모달 상태
+  const [showGoogleSheetsModal, setShowGoogleSheetsModal] = useState(false);
+
   return (
     <div className="p-6 md:p-8 space-y-6 w-full min-w-0 font-sans text-slate-800 animate-scale-up" data-easybot-hint="고객 관리 AI: 고객 정보 등록, 그룹핑 필터링 및 고객 맞춤 관리를 지원하는 CRM 센터입니다.">
       {/* 1. 상단 타이틀 및 액션 헤더 */}
       <Header
-        isUploading={isUploading}
-        handleCsvUpload={handleCsvUpload}
+        onOpenBulkImport={() => setShowBulkImportModal(true)}
+        onOpenGoogleSheets={() => setShowGoogleSheetsModal(true)}
         setShowAddModal={setShowAddModal}
       />
 
@@ -96,6 +103,20 @@ export default function CustomersPage() {
         setNewCustomer={setNewCustomer}
         handleAddCustomer={handleAddCustomer}
         isSubmitting={isSubmitting}
+      />
+
+      {/* 📂 엑셀 일괄 등록 모달 */}
+      <CustomerBulkImportModal
+        isOpen={showBulkImportModal}
+        onClose={() => setShowBulkImportModal(false)}
+        onImport={handleBulkImportCustomers}
+      />
+
+      {/* 🌐 구글 시트 연동 모달 */}
+      <CustomerGoogleSheetsImportModal
+        isOpen={showGoogleSheetsModal}
+        onClose={() => setShowGoogleSheetsModal(false)}
+        onImport={handleBulkImportCustomers}
       />
 
       {/* 상세 이력 모달 */}
