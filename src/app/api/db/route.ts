@@ -67,6 +67,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'list';
     const tableName = searchParams.get('tableName') || '';
+    const isGlobalAdmin = username === 'admin' || role === 'SYSTEM_ADMIN';
 
     // 1. 모든 물리 테이블 목록 조회
     if (action === 'list') {
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
 
       // 일반 회원 사장님(admin이 아닌 경우)의 경우 시스템 민감 테이블 필터링 제거
       let filteredTables = tablesList;
-      if (username !== 'admin') {
+      if (!isGlobalAdmin) {
         filteredTables = tablesList.filter((t: any) => {
           const name = t.tableName || t.name;
           return !SYSTEM_SENSITIVE_TABLES.includes(name);
@@ -94,7 +95,7 @@ export async function GET(request: Request) {
           
           // 🛡️ 해당 테넌트 데이터만 조회 (테넌트 격리 원칙 엄격 적용)
           const queryFilters: any = {};
-          if (hasTenantIdCol && role !== 'SUPER_ADMIN') {
+          if (hasTenantIdCol && !isGlobalAdmin) {
             queryFilters.tenant_id = tenantId;
           }
 
@@ -149,7 +150,7 @@ export async function GET(request: Request) {
       }
 
       // 일반 사장님의 시스템 테이블 직접 접근 방어
-      if (username !== 'admin' && SYSTEM_SENSITIVE_TABLES.includes(tableName)) {
+      if (!isGlobalAdmin && SYSTEM_SENSITIVE_TABLES.includes(tableName)) {
         return NextResponse.json({ success: false, error: '시스템 민감 테이블 스키마에 접근할 수 없습니다.' }, { status: 403 });
       }
 
@@ -188,7 +189,7 @@ export async function GET(request: Request) {
       }
 
       // 일반 사장님의 시스템 테이블 직접 접근 방어
-      if (username !== 'admin' && SYSTEM_SENSITIVE_TABLES.includes(tableName)) {
+      if (!isGlobalAdmin && SYSTEM_SENSITIVE_TABLES.includes(tableName)) {
         return NextResponse.json({ success: false, error: '시스템 민감 테이블 데이터에 접근할 수 없습니다.' }, { status: 403 });
       }
 
@@ -206,7 +207,7 @@ export async function GET(request: Request) {
 
       // 🛡️ 해당 테넌트 데이터만 조회 (테넌트 격리 원칙 엄격 적용)
       const queryFilters: any = {};
-      if (hasTenantIdCol && role !== 'SUPER_ADMIN') {
+      if (hasTenantIdCol && !isGlobalAdmin) {
         queryFilters.tenant_id = tenantId;
       }
 
@@ -277,16 +278,17 @@ export async function GET(request: Request) {
 // 📥 [POST] 원시 SQL 실행 및 레코드 삽입 (INSERT) (egdesk-helpers 통일 적용)
 export async function POST(request: Request) {
   try {
-    const { isAuthorized, name: operatorName, username, tenantId } = await verifyUserRole();
+    const { isAuthorized, name: operatorName, role, username, tenantId } = await verifyUserRole();
     if (!isAuthorized) {
       return NextResponse.json({ success: false, error: '권한이 없습니다. 관리자 전용 기능입니다.' }, { status: 403 });
     }
 
+    const isGlobalAdmin = username === 'admin' || role === 'SYSTEM_ADMIN';
     const { action, query, tableName, rows } = await request.json();
 
-    // 1. 커스텀 원시 SQL 직접 실행 (플레이그라운드 샌드박스) - 🛡️ 오직 호스트 최고관리자(admin)만 허용
+    // 1. 커스텀 원시 SQL 직접 실행 (플레이그라운드 샌드박스) - 🛡️ 오직 호스트 최고관리자(admin/SYSTEM_ADMIN)만 허용
     if (action === 'execute') {
-      if (username !== 'admin') {
+      if (!isGlobalAdmin) {
         return NextResponse.json({ success: false, error: '보안 정책 경고: 커스텀 SQL 콘솔 실행 권한이 없습니다.' }, { status: 403 });
       }
 
@@ -323,7 +325,7 @@ export async function POST(request: Request) {
       }
 
       // 일반 사장님의 시스템 테이블 직접 접근 방어
-      if (username !== 'admin' && SYSTEM_SENSITIVE_TABLES.includes(tableName)) {
+      if (!isGlobalAdmin && SYSTEM_SENSITIVE_TABLES.includes(tableName)) {
         return NextResponse.json({ success: false, error: '시스템 민감 테이블에 삽입할 수 없습니다.' }, { status: 403 });
       }
 
@@ -346,7 +348,7 @@ export async function POST(request: Request) {
           newRow.created_at = now;
         }
         // 🛡️ 테넌트 ID 강제 세팅
-        if (hasTenantIdCol && username !== 'admin') {
+        if (hasTenantIdCol && !isGlobalAdmin) {
           newRow.tenant_id = tenantId;
         }
         return newRow;
@@ -366,15 +368,16 @@ export async function POST(request: Request) {
 // ✏️ [PUT] 기존 레코드 갱신 (UPDATE) / 소프트 삭제 레코드 복원 (RESTORE) (egdesk-helpers 통일 적용)
 export async function PUT(request: Request) {
   try {
-    const { isAuthorized, name: operatorName, username, tenantId } = await verifyUserRole();
+    const { isAuthorized, name: operatorName, role, username, tenantId } = await verifyUserRole();
     if (!isAuthorized) {
       return NextResponse.json({ success: false, error: '권한이 없습니다. 관리자 전용 기능입니다.' }, { status: 403 });
     }
 
+    const isGlobalAdmin = username === 'admin' || role === 'SYSTEM_ADMIN';
     const { action, tableName, rows, id } = await request.json();
 
     // 일반 사장님의 시스템 테이블 직접 접근 방어
-    if (username !== 'admin' && tableName && SYSTEM_SENSITIVE_TABLES.includes(tableName)) {
+    if (!isGlobalAdmin && tableName && SYSTEM_SENSITIVE_TABLES.includes(tableName)) {
       return NextResponse.json({ success: false, error: '시스템 민감 테이블을 조작할 수 없습니다.' }, { status: 403 });
     }
 
@@ -394,7 +397,7 @@ export async function PUT(request: Request) {
 
       // 🛡️ 복구할 레코드가 본인 테넌트 소속인지 체크하는 격리 필터
       const updateFilters: any = { [pkCol]: String(id) };
-      if (hasTenantIdCol && username !== 'admin') {
+      if (hasTenantIdCol && !isGlobalAdmin) {
         updateFilters.tenant_id = tenantId;
       }
 
@@ -444,7 +447,7 @@ export async function PUT(request: Request) {
 
       // 🛡️ 업데이트 필터에 테넌트 조건 결합
       const updateFilters: any = { [pkCol]: String(pkVal) };
-      if (hasTenantIdCol && username !== 'admin') {
+      if (hasTenantIdCol && !isGlobalAdmin) {
         updateFilters.tenant_id = tenantId;
       }
 
@@ -462,17 +465,18 @@ export async function PUT(request: Request) {
 // ✕ [DELETE] 특정 레코드 삭제 (Soft/Hard) 및 테이블 완전 삭제 (DROP) (egdesk-helpers 통일 적용)
 export async function DELETE(request: Request) {
   try {
-    const { isAuthorized, name: operatorName, username, tenantId } = await verifyUserRole();
+    const { isAuthorized, name: operatorName, role, username, tenantId } = await verifyUserRole();
     if (!isAuthorized) {
       return NextResponse.json({ success: false, error: '권한이 없습니다. 관리자 전용 기능입니다.' }, { status: 403 });
     }
 
+    const isGlobalAdmin = username === 'admin' || role === 'SYSTEM_ADMIN';
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'deleteRows';
     const tableName = searchParams.get('tableName') || '';
 
     // 일반 사장님의 시스템 테이블 직접 접근 방어
-    if (username !== 'admin' && tableName && SYSTEM_SENSITIVE_TABLES.includes(tableName)) {
+    if (!isGlobalAdmin && tableName && SYSTEM_SENSITIVE_TABLES.includes(tableName)) {
       return NextResponse.json({ success: false, error: '시스템 민감 테이블을 조작할 수 없습니다.' }, { status: 403 });
     }
 
@@ -507,7 +511,7 @@ export async function DELETE(request: Request) {
           
           // 🛡️ 삭제 필터 테넌트 격리 결합
           const deleteFilters: any = { [pkCol]: String(id) };
-          if (hasTenantIdCol && username !== 'admin') {
+          if (hasTenantIdCol && !isGlobalAdmin) {
             deleteFilters.tenant_id = tenantId;
           }
           
@@ -523,7 +527,7 @@ export async function DELETE(request: Request) {
         for (const id of ids) {
           // 🛡️ 삭제 필터 테넌트 격리 결합
           const deleteFilters: any = { [pkCol]: String(id) };
-          if (hasTenantIdCol && username !== 'admin') {
+          if (hasTenantIdCol && !isGlobalAdmin) {
             deleteFilters.tenant_id = tenantId;
           }
           
@@ -533,9 +537,9 @@ export async function DELETE(request: Request) {
       }
     }
 
-    // 2. 테이블 완전 drop 가드 - 🛡️ 오직 호스트 최고관리자(admin)만 허용
+    // 2. 테이블 완전 drop 가드 - 🛡️ 오직 호스트 최고관리자(admin/SYSTEM_ADMIN)만 허용
     if (action === 'dropTable') {
-      if (username !== 'admin') {
+      if (!isGlobalAdmin) {
         return NextResponse.json({ success: false, error: '보안 정책 경고: 테이블 삭제(DROP) 권한이 없습니다.' }, { status: 403 });
       }
 

@@ -708,7 +708,7 @@ export function useMyDB() {
           url += `&searchKey=${encodeURIComponent(key)}`;
         }
       }
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const data = await res.json();
       if (data.success) {
         setTableRows(data.rows || []);
