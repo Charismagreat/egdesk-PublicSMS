@@ -150,6 +150,23 @@ export default function EstimateOcrModal({
           1500000,
           150000,
           "납기 3일 이내 납품 요망"
+        ],
+        [
+          "(주)대선기공",
+          "120-81-12345",
+          "박대선",
+          "02-555-1234",
+          "박민우",
+          "EST-20260822-001",
+          "2026-08-22",
+          "INV-1008",
+          "인버터 컨트롤러",
+          "V-02 정밀 제어형",
+          5,
+          300000,
+          1500000,
+          150000,
+          "KC 인증서 동봉 필수"
         ]
       ];
       const wsData = [headers, ...sampleRows];
@@ -171,114 +188,263 @@ export default function EstimateOcrModal({
 
   const parseTableDataToEstimate = async (rawRows: any[][], sourceTitle: string) => {
     if (!rawRows || rawRows.length < 2) {
-      throw new Error("유효한 데이터 행이 부족합니다.");
+      throw new Error("유효한 데이터 행이 부족합니다. 최소 1개 이상의 헤더와 데이터가 필요합니다.");
     }
 
     setOcrScanning(true);
-    setOcrScanStep("테이블 데이터를 분석하여 품목 및 거래처 정보를 스마트 매핑 중...");
+    setOcrScanStep("테이블 데이터를 정밀 분석하여 거래처 정보 및 품목 내역을 스마트 매핑 중...");
     setOcrFilename(sourceTitle);
 
-    let partner_name = "", partner_phone = "", partner_manager = "", business_number = "", representative = "", address = "", document_number = "", document_date = "", document_memo = "";
+    let partner_name = "";
+    let partner_phone = "";
+    let partner_manager = "";
+    let business_number = "";
+    let representative = "";
+    let address = "";
+    let document_number = "";
+    let document_date = "";
+    let document_memo = "";
+
+    // 1. 헤더 행 탐색 및 정밀 컬럼 매핑 (키워드 우선순위 정규화)
     let headerRowIdx = -1;
     let colMap: Record<string, number> = {};
 
-    for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
+    for (let r = 0; r < Math.min(rawRows.length, 15); r++) {
       const row = rawRows[r] || [];
-      const rowStr = row.map(v => String(v || '').trim().toLowerCase());
-      const hasProd = rowStr.some(v => v.includes("품명") || v.includes("품목") || v.includes("item"));
-      const hasQty = rowStr.some(v => v.includes("수량") || v.includes("qty"));
-      const hasPrice = rowStr.some(v => v.includes("단가") || v.includes("가격") || v.includes("price"));
+      const tempColMap: Record<string, number> = {};
 
-      if ((hasProd && hasQty) || (hasProd && hasPrice)) {
+      row.forEach((colVal, cIdx) => {
+        const c = String(colVal || '').trim().toLowerCase().replace(/\s+/g, '');
+        if (!c) return;
+
+        // 품목코드 우선 검사 (품목명과 충돌 방지)
+        if (c.includes("품목코드") || c.includes("상품코드") || c.includes("품번") || c.includes("바코드") || c === "코드" || c === "code" || c === "itemcode") {
+          tempColMap["item_code"] = cIdx;
+        } else if (c.includes("품목명") || c.includes("품명") || c.includes("상품명") || c.includes("물품명") || c.includes("제품명") || c === "품목" || c === "item" || c === "description") {
+          tempColMap["product_name"] = cIdx;
+        } else if (c.includes("규격") || c.includes("사양") || c.includes("옵션") || c.includes("spec") || c.includes("specification")) {
+          tempColMap["spec"] = cIdx;
+        } else if (c.includes("수량") || c.includes("qty") || c.includes("ea") || c.includes("수량(ea)") || c === "개수" || c === "수량(개)") {
+          tempColMap["quantity"] = cIdx;
+        } else if (c.includes("단가") || c.includes("공급단가") || c.includes("price") || c.includes("unitprice") || c.includes("단가(원)")) {
+          tempColMap["unit_price"] = cIdx;
+        } else if (c.includes("공급가액") || c.includes("공급가") || c.includes("합계금액") || c.includes("금액") || c.includes("amount") || c.includes("합계(원)")) {
+          tempColMap["amount"] = cIdx;
+        } else if (c.includes("거래처") || c.includes("공급처") || c.includes("상호") || c.includes("업체명") || c === "업체" || c === "거래처명") {
+          tempColMap["partner_name"] = cIdx;
+        } else if (c.includes("사업자") || c.includes("등록번호") || c.includes("사업자번호") || c.includes("사업자등록번호")) {
+          tempColMap["business_number"] = cIdx;
+        } else if (c.includes("대표자") || c.includes("대표명") || c === "대표" || c === "대표자명" || c === "성명") {
+          tempColMap["representative"] = cIdx;
+        } else if (c.includes("연락처") || c.includes("전화번호") || c.includes("휴대폰") || c.includes("tel") || c.includes("phone")) {
+          tempColMap["partner_phone"] = cIdx;
+        } else if (c.includes("담당자") || c.includes("담당") || c.includes("매니저") || c.includes("작성자")) {
+          tempColMap["partner_manager"] = cIdx;
+        } else if (c.includes("견적서번호") || c.includes("견적번호") || c.includes("문서번호") || c.includes("관리번호") || c.includes("docno") || c.includes("no")) {
+          tempColMap["document_number"] = cIdx;
+        } else if (c.includes("견적일자") || c.includes("발행일자") || c.includes("작성일자") || c.includes("일자") || c.includes("날짜") || c.includes("date")) {
+          tempColMap["document_date"] = cIdx;
+        } else if (c.includes("소재지") || c.includes("주소") || c.includes("사업장") || c.includes("address")) {
+          tempColMap["address"] = cIdx;
+        } else if (c.includes("비고") || c.includes("메모") || c.includes("참조") || c.includes("memo") || c.includes("remark")) {
+          tempColMap["document_memo"] = cIdx;
+        }
+      });
+
+      // 품목명 또는 (수량/단가)가 감지된 행을 헤더 행으로 채택
+      if (tempColMap["product_name"] !== undefined || (tempColMap["quantity"] !== undefined && tempColMap["unit_price"] !== undefined)) {
         headerRowIdx = r;
-        row.forEach((colVal, cIdx) => {
-          const c = String(colVal || '').trim();
-          if (!c) return;
-          if (c.includes("거래처")) colMap["partner_name"] = cIdx;
-          if (c.includes("사업자")) colMap["business_number"] = cIdx;
-          if (c.includes("대표자")) colMap["representative"] = cIdx;
-          if (c.includes("전화")) colMap["partner_phone"] = cIdx;
-          if (c.includes("담당")) colMap["partner_manager"] = cIdx;
-          if (c.includes("문서번호")) colMap["document_number"] = cIdx;
-          if (c.includes("일자")) colMap["document_date"] = cIdx;
-          if (c.includes("비고")) colMap["document_memo"] = cIdx;
-          if (c.includes("코드")) colMap["item_code"] = cIdx;
-          if (c.includes("품명")) colMap["product_name"] = cIdx;
-          if (c.includes("규격")) colMap["spec"] = cIdx;
-          if (c.includes("수량")) colMap["quantity"] = cIdx;
-          if (c.includes("단가")) colMap["unit_price"] = cIdx;
-        });
+        colMap = tempColMap;
         break;
       }
     }
 
+    // 헤더 행을 못 찾은 경우 첫 번째 행을 기본 헤더로 매핑
     if (headerRowIdx === -1) {
       headerRowIdx = 0;
       (rawRows[0] || []).forEach((colVal, cIdx) => {
-        const c = String(colVal || '').trim();
-        if (c.includes("품명")) colMap["product_name"] = cIdx;
+        const c = String(colVal || '').trim().toLowerCase();
+        if (c.includes("품목명") || c.includes("품명") || c.includes("상품명")) colMap["product_name"] = cIdx;
         if (c.includes("규격")) colMap["spec"] = cIdx;
         if (c.includes("수량")) colMap["quantity"] = cIdx;
         if (c.includes("단가")) colMap["unit_price"] = cIdx;
+        if (c.includes("거래처") || c.includes("상호")) colMap["partner_name"] = cIdx;
       });
     }
 
+    // 2. 헤더 이전 Key-Value 형태의 메타데이터 추출 (있을 경우)
     for (let r = 0; r < headerRowIdx; r++) {
       const row = rawRows[r] || [];
       for (let c = 0; c < row.length; c++) {
         const val = String(row[c] || "").trim();
         if (!val) continue;
-        if ((val.includes("공급처") || val.includes("거래처")) && !partner_name) partner_name = String(row[c + 1] || "").trim();
-        if ((val.includes("사업자")) && !business_number) business_number = String(row[c + 1] || "").trim();
-        if ((val.includes("대표자")) && !representative) representative = String(row[c + 1] || "").trim();
-        if ((val.includes("연락처")) && !partner_phone) partner_phone = String(row[c + 1] || "").trim();
-        if ((val.includes("담당자")) && !partner_manager) partner_manager = String(row[c + 1] || "").trim();
+        if ((val.includes("공급처") || val.includes("거래처") || val.includes("상호") || val.includes("업체명")) && !partner_name) {
+          partner_name = String(row[c + 1] || (rawRows[r + 1] && rawRows[r + 1][c]) || "").trim();
+        }
+        if ((val.includes("사업자") || val.includes("등록번호")) && !business_number) {
+          business_number = String(row[c + 1] || (rawRows[r + 1] && rawRows[r + 1][c]) || "").trim();
+        }
+        if ((val.includes("대표자") || val.includes("대표")) && !representative) {
+          representative = String(row[c + 1] || "").trim();
+        }
+        if ((val.includes("연락처") || val.includes("전화번호") || val.includes("tel")) && !partner_phone) {
+          partner_phone = String(row[c + 1] || "").trim();
+        }
+        if ((val.includes("담당자") || val.includes("담당")) && !partner_manager) {
+          partner_manager = String(row[c + 1] || "").trim();
+        }
+        if ((val.includes("문서번호") || val.includes("견적번호") || val.includes("견적서번호")) && !document_number) {
+          document_number = String(row[c + 1] || "").trim();
+        }
+        if ((val.includes("견적일자") || val.includes("발행일자") || val.includes("작성일자") || val.includes("일자")) && !document_date) {
+          document_date = String(row[c + 1] || "").trim();
+        }
+        if ((val.includes("소재지") || val.includes("주소")) && !address) {
+          address = String(row[c + 1] || "").trim();
+        }
       }
     }
 
+    // 3. 본문 품목 행들 파싱 및 데이터 컬럼에서 메타데이터 보강
     const items: Array<any> = [];
-    const numClean = (val: any) => parseFloat(String(val || '').replace(/[^0-9.-]/g, '')) || 0;
-    const prodIdx = colMap["product_name"] ?? 0;
-    const specIdx = colMap["spec"] ?? -1;
-    const qtyIdx = colMap["quantity"] ?? 2;
-    const priceIdx = colMap["unit_price"] ?? 3;
-    const codeIdx = colMap["item_code"] ?? -1;
+    const numClean = (val: any) => {
+      if (typeof val === 'number') return val;
+      const str = String(val || '').replace(/[^0-9.-]/g, '');
+      return parseFloat(str) || 0;
+    };
+
+    const prodIdx = colMap["product_name"] !== undefined ? colMap["product_name"] : (colMap["item_code"] !== undefined ? colMap["item_code"] + 1 : 0);
+    const specIdx = colMap["spec"] !== undefined ? colMap["spec"] : -1;
+    const qtyIdx = colMap["quantity"] !== undefined ? colMap["quantity"] : -1;
+    const priceIdx = colMap["unit_price"] !== undefined ? colMap["unit_price"] : -1;
+    const codeIdx = colMap["item_code"] !== undefined ? colMap["item_code"] : -1;
+    const amountIdx = colMap["amount"] !== undefined ? colMap["amount"] : -1;
+
+    let originalTotalAmountFromSheet = 0;
+    let originalTotalQuantityFromSheet = 0;
 
     for (let r = headerRowIdx + 1; r < rawRows.length; r++) {
       const row = rawRows[r];
-      if (!row || !row[prodIdx] || String(row[prodIdx]).includes("합계")) continue;
+      if (!row || row.length === 0) continue;
+
+      const firstCell = String(row[0] || '').trim();
+      const prodCell = String(row[prodIdx] || '').trim();
+
+      // 합계/총액 행 감지 시 실물 합계액 추출
+      if (firstCell.includes("합계") || firstCell.includes("총액") || prodCell.includes("합계") || prodCell.includes("총액") || firstCell.toLowerCase().includes("total")) {
+        if (amountIdx >= 0 && row[amountIdx]) {
+          originalTotalAmountFromSheet = numClean(row[amountIdx]);
+        }
+        if (qtyIdx >= 0 && row[qtyIdx]) {
+          originalTotalQuantityFromSheet = numClean(row[qtyIdx]);
+        }
+        continue;
+      }
+
+      if (!prodCell) continue;
+
+      // 데이터 행 컬럼에서 거래처 메타데이터 추출 (비어있는 경우 백필)
+      if (!partner_name && colMap["partner_name"] !== undefined && row[colMap["partner_name"]]) {
+        partner_name = String(row[colMap["partner_name"]]).trim();
+      }
+      if (!business_number && colMap["business_number"] !== undefined && row[colMap["business_number"]]) {
+        business_number = String(row[colMap["business_number"]]).trim();
+      }
+      if (!representative && colMap["representative"] !== undefined && row[colMap["representative"]]) {
+        representative = String(row[colMap["representative"]]).trim();
+      }
+      if (!partner_phone && colMap["partner_phone"] !== undefined && row[colMap["partner_phone"]]) {
+        partner_phone = String(row[colMap["partner_phone"]]).trim();
+      }
+      if (!partner_manager && colMap["partner_manager"] !== undefined && row[colMap["partner_manager"]]) {
+        partner_manager = String(row[colMap["partner_manager"]]).trim();
+      }
+      if (!document_number && colMap["document_number"] !== undefined && row[colMap["document_number"]]) {
+        document_number = String(row[colMap["document_number"]]).trim();
+      }
+      if (!document_date && colMap["document_date"] !== undefined && row[colMap["document_date"]]) {
+        let dateVal = String(row[colMap["document_date"]]).trim();
+        // 엑셀 시리얼 날짜 숫자 처리
+        if (/^\d{5}$/.test(dateVal)) {
+          const jsDate = new Date((Number(dateVal) - 25569) * 86400 * 1000);
+          if (!isNaN(jsDate.getTime())) dateVal = jsDate.toISOString().slice(0, 10);
+        }
+        document_date = dateVal;
+      }
+      if (!address && colMap["address"] !== undefined && row[colMap["address"]]) {
+        address = String(row[colMap["address"]]).trim();
+      }
+      if (!document_memo && colMap["document_memo"] !== undefined && row[colMap["document_memo"]]) {
+        document_memo = String(row[colMap["document_memo"]]).trim();
+      }
+
+      const rawSpec = specIdx >= 0 ? String(row[specIdx] || '').trim() : '';
+      const rawQty = qtyIdx >= 0 ? (numClean(row[qtyIdx]) || 1) : 1;
+      let rawPrice = priceIdx >= 0 ? numClean(row[priceIdx]) : 0;
+      
+      // 단가가 없고 공급가액만 있는 경우 단가 역산
+      if (rawPrice === 0 && amountIdx >= 0 && row[amountIdx]) {
+        const amt = numClean(row[amountIdx]);
+        if (amt > 0 && rawQty > 0) rawPrice = Math.round(amt / rawQty);
+      }
+
+      const rawCode = codeIdx >= 0 ? String(row[codeIdx] || '').trim() : '';
+
       items.push({
-        product_name: String(row[prodIdx]).trim(),
-        spec: specIdx >= 0 ? String(row[specIdx] || '').trim() : '',
-        quantity: numClean(row[qtyIdx]) || 1,
-        unit_price: numClean(row[priceIdx]),
-        item_code: codeIdx >= 0 ? String(row[codeIdx] || '').trim() : ''
+        product_name: prodCell,
+        spec: rawSpec,
+        quantity: rawQty,
+        unit_price: rawPrice,
+        item_code: rawCode
       });
     }
 
+    if (items.length === 0) {
+      throw new Error("인식된 품목 데이터가 없습니다. 엑셀의 품목명, 수량, 단가 컬럼을 확인해 주세요.");
+    }
+
+    // 4. 품목 마스터 DB 조회 후 validItemCode 자동 매칭
     try {
-      setOcrScanStep("마스터 품목 DB 대조 중...");
+      setOcrScanStep("마스터 품목 DB와 대조하여 품목코드(바코드)를 자동 매칭 중...");
       const prodRes = await apiFetch("/api/products?limit=5000");
       const prodData = await prodRes.json();
-      if (prodData.success) {
+      if (prodData.success && Array.isArray(prodData.products)) {
+        const masterProducts = prodData.products;
         items.forEach(it => {
-          const matched = prodData.products.find((mp: any) => mp.name === it.product_name || mp.barcode === it.item_code);
+          const matched = masterProducts.find((mp: any) => 
+            mp.name?.trim().toLowerCase() === it.product_name.toLowerCase() ||
+            (it.item_code && mp.barcode === it.item_code)
+          );
           if (matched) {
-            it.validItemCode = matched.barcode;
+            it.validItemCode = matched.barcode || `INV-${matched.id}`;
             it.valid_item_code = it.validItemCode;
+            if (!it.spec && matched.spec) it.spec = matched.spec;
+          } else if (it.item_code) {
+            it.validItemCode = it.item_code;
           }
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn("품목 매칭 건너뜀:", e);
+    }
+
+    const calculatedTotalAmt = items.reduce((sum, it) => sum + (it.quantity * it.unit_price), 0);
+    const calculatedTotalQty = items.reduce((sum, it) => sum + it.quantity, 0);
 
     setOcrForm({
       partner_name: partner_name || "(주)신규공급사",
-      partner_phone, partner_manager, items, file_url: "", business_number, representative, address,
-      document_number: document_number || `EST-${Date.now()}`,
+      partner_phone: partner_phone || "",
+      partner_manager: partner_manager || "",
+      items: items,
+      file_url: "",
+      business_number: business_number || "",
+      representative: representative || "",
+      address: address || "",
+      document_number: document_number || `EST-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 899 + 100)}`,
       document_date: document_date || new Date().toISOString().slice(0, 10),
       document_memo: document_memo || `${sourceTitle} 연동 접수`,
-      originalTotalAmount: items.reduce((s, i) => s + (i.quantity * i.unit_price), 0),
-      originalTotalQuantity: items.reduce((s, i) => s + i.quantity, 0)
+      originalTotalAmount: originalTotalAmountFromSheet || calculatedTotalAmt,
+      originalTotalQuantity: originalTotalQuantityFromSheet || calculatedTotalQty
     });
 
     setReceiverMatched(true);
