@@ -114,7 +114,8 @@ export default async function Home() {
     // }
 
     const { getTenantId } = require("@/lib/tenant");
-    const tenantId = await getTenantId() || 'default';
+    const rawTenantId = await getTenantId();
+    const tenantId = rawTenantId || 'default';
     const copilotCompositeKey = `${tenantId}:copilot_widget_enabled`;
 
     let copilotSetting = await queryTable('system_settings', { filters: { key: copilotCompositeKey } }).catch(() => ({ rows: [] }));
@@ -126,11 +127,16 @@ export default async function Home() {
     console.warn("⚠️ 설정 로드 실패:", e.message);
   }
 
-  // 2. DB 데이터 집계 쿼리 구동
+  // 2. DB 데이터 집계 쿼리 구동 (테넌트 격리)
   try {
+    const { getTenantId } = require("@/lib/tenant");
+    const rawTenantId = await getTenantId();
+    const tenantId = rawTenantId || 'default';
+    const tenantFilterObj = (tenantId && tenantId !== 'all') ? { tenant_id: tenantId } : {};
+
     // 2.1. 수주액 & 발주액 집계 (crm_estimates)
     const estimatesRes = await queryTable('crm_estimates', {
-      filters: { deleted_at: null },
+      filters: { ...tenantFilterObj, deleted_at: null },
       limit: 10000
     }).catch(() => ({ rows: [] }));
     const estimates = estimatesRes.rows || [];
@@ -152,9 +158,10 @@ export default async function Home() {
 
     // 2.2. 매출액 & 매입액 집계 (excel_hometax_invoices)
     const invoicesRes = await queryTable('excel_hometax_invoices', {
+      filters: tenantFilterObj,
       limit: 10000
     }).catch(() => ({ rows: [] }));
-    const invoices = invoicesRes.rows || [];
+    const invoices = (invoicesRes.rows || []).filter((i: any) => !i.deleted_at);
 
     invoices.forEach((i: any) => {
       const amount = Number(i.total_amount || i.supply_amount) || 0;
@@ -176,6 +183,7 @@ export default async function Home() {
 
     // 2.3. 임직원 근태 데이터 집계 (자가치유 필터링 기법 도입)
     const operatorsRes = await queryTable('crm_operators', {
+      filters: tenantFilterObj,
       limit: 1000
     }).catch(() => ({ rows: [] }));
     const operators = (operatorsRes.rows || []).filter((emp: any) => {
@@ -186,6 +194,7 @@ export default async function Home() {
     totalOperators = operators.length;
 
     const attendanceRes = await queryTable('crm_attendance', {
+      filters: tenantFilterObj,
       limit: 1000
     }).catch(() => ({ rows: [] }));
     const todayAttendance = (attendanceRes.rows || []).filter((a: any) => 
@@ -205,20 +214,21 @@ export default async function Home() {
     // 2.4. 추천 프리미엄 지표 집계
     // 1) 결재 대기 중인 일일 업무 보고서 수
     const pendingRepRes = await queryTable('crm_daily_reports', {
-      filters: { status: 'SUBMITTED', deleted_at: null },
+      filters: { ...tenantFilterObj, status: 'SUBMITTED', deleted_at: null },
       limit: 1000
     }).catch(() => ({ rows: [] }));
     pendingReports = pendingRepRes.rows?.length || 0;
 
     // 2) 활성화된 자율 규칙 수
     const activeRulesRes = await queryTable('crm_governance_rules', {
-      filters: { is_active: '1', deleted_at: null },
+      filters: { ...tenantFilterObj, is_active: '1', deleted_at: null },
       limit: 1000
     }).catch(() => ({ rows: [] }));
     activeRules = activeRulesRes.rows?.length || 0;
 
     // 3) 금일 AI 자율 조치 이력 수
     const govLogsRes = await queryTable('crm_governance_logs', {
+      filters: tenantFilterObj,
       limit: 1000
     }).catch(() => ({ rows: [] }));
     todayAutoActions = (govLogsRes.rows || []).filter((l: any) => 
@@ -227,6 +237,7 @@ export default async function Home() {
 
     // 4) 금일 수집자료 업로드 수
     const folderItemsRes = await queryTable('crm_task_folder_items', {
+      filters: tenantFilterObj,
       limit: 1000
     }).catch(() => ({ rows: [] }));
     todayDocsCount = (folderItemsRes.rows || []).filter((item: any) => 
@@ -236,8 +247,6 @@ export default async function Home() {
     // 2.5. 재고 자산 및 평가방법 통계 집계 (실시간 DB 연동)
     try {
       // 💡 테넌트 복합 키 연동 적용
-      const { getTenantId } = require("@/lib/tenant");
-      const tenantId = await getTenantId() || 'default';
       const cKey = `${tenantId}:inventory_valuation_method`;
 
       let valuationSetting = await queryTable('system_settings', { filters: { key: cKey } }).catch(() => ({ rows: [] }));
@@ -247,12 +256,13 @@ export default async function Home() {
       const valuationMethodVal = valuationSetting.rows && valuationSetting.rows.length > 0 ? valuationSetting.rows[0].value : 'moving_average';
       valuationMethodLabel = valuationMethodVal === 'fifo' ? '선입선출법 (FIFO)' : valuationMethodVal === 'lifo' ? '후입선출법 (LIFO)' : '이동평균법 (Moving Average)';
 
+      const tenantInvCond = (tenantId && tenantId !== 'all') ? `AND tenant_id = '${tenantId}'` : '';
       const statsRes = await executeSQL(`
         SELECT 
           SUM(CASE WHEN type IN ('원부자재', '자재', '원자재', 'material') THEN stock * price ELSE 0 END) as materialValue,
           SUM(CASE WHEN type IN ('완제품', '제품', 'product') THEN stock * price ELSE 0 END) as productValue
         FROM inventory_items 
-        WHERE deleted_at IS NULL
+        WHERE deleted_at IS NULL ${tenantInvCond}
       `).catch(() => ({ rows: [] }));
 
       const stats = statsRes.rows?.[0] || {};
@@ -266,7 +276,7 @@ export default async function Home() {
     // 2.5. 🏦 은행계좌 거래내역 최종 잔액(가용자금) 합산 집계
     try {
       const accountsRes = await queryTable('excel_accounts', {
-        filters: { deleted_at: null },
+        filters: { ...tenantFilterObj, deleted_at: null },
         limit: 1000
       }).catch(() => ({ rows: [] }));
       const accounts = accountsRes.rows || [];
@@ -279,7 +289,7 @@ export default async function Home() {
     // 2.6. 🏭 실시간 생산현황 (총생산량, 불량건수, 납기준수율 / 금일, 금월, 금년) 집계
     try {
       const prodRes = await queryTable('crm_estimates', {
-        filters: { deleted_at: null },
+        filters: { ...tenantFilterObj, deleted_at: null },
         limit: 10000
       }).catch(() => ({ rows: [] }));
       const prodRows = (prodRes.rows || []).filter((r: any) => r.type === 'outbound_so' || r.type === 'manufacture' || r.is_manufacture === 1);
@@ -310,7 +320,7 @@ export default async function Home() {
     try {
       // 미수금 & 미지급금 (crm_estimates 기반)
       const estimatesRes = await queryTable('crm_estimates', {
-        filters: { deleted_at: null },
+        filters: { ...tenantFilterObj, deleted_at: null },
         limit: 10000
       }).catch(() => ({ rows: [] }));
 
@@ -328,7 +338,7 @@ export default async function Home() {
 
       // 가지급금 (excel_bank_transactions 또는 crm_expenses)
       const bankTxRes = await queryTable('excel_bank_transactions', {
-        filters: { deleted_at: null },
+        filters: { ...tenantFilterObj, deleted_at: null },
         limit: 10000
       }).catch(() => ({ rows: [] }));
 
@@ -350,7 +360,7 @@ export default async function Home() {
 
       // 발주 미지급금 예정일 기반
       const estimatesRes = await queryTable('crm_estimates', {
-        filters: { deleted_at: null },
+        filters: { ...tenantFilterObj, deleted_at: null },
         limit: 10000
       }).catch(() => ({ rows: [] }));
 

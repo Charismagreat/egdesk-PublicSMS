@@ -234,6 +234,9 @@ export async function GET(request: Request) {
       }
     }
 
+    const tenantId = await resolveTenantId();
+    const tenantFilterObj = (tenantId && tenantId !== 'all') ? { tenant_id: tenantId } : {};
+
     // 1. 통합 관제 게시판 이벤트 피드 조립
     if (action === 'events') {
       const events: any[] = [];
@@ -241,11 +244,11 @@ export async function GET(request: Request) {
 
       // 1.1. crm_governance_logs (결재 보류 건 및 모바일 취소 요청 건)
       try {
-        const govRes = await queryTable('crm_governance_logs', { limit: 500 });
+        const govRes = await queryTable('crm_governance_logs', { filters: tenantFilterObj, limit: 500 });
         const logs = govRes.rows || [];
         
         // 💡 첨부 파일명 매칭을 위해 crm_snaptask_items 전체 목록 미리 조회 (최신순 DESC 정렬)
-        const itemsRes = await queryTable('crm_snaptask_items', { limit: 10000, orderBy: 'id', orderDirection: 'DESC' });
+        const itemsRes = await queryTable('crm_snaptask_items', { filters: tenantFilterObj, limit: 10000, orderBy: 'id', orderDirection: 'DESC' });
         const itemsRows = itemsRes.rows || [];
 
         // 💡 수입 통관 실물 서류 파일 정보 조회
@@ -419,7 +422,7 @@ export async function GET(request: Request) {
 
       // 1.2. crm_orders (스토어 주문 건 중 대기 중인 주문접수/승인대기 건)
       try {
-        const ordersRes = await queryTable('crm_orders', { limit: 500 });
+        const ordersRes = await queryTable('crm_orders', { filters: tenantFilterObj, limit: 500 });
         const orders = ordersRes.rows || [];
         orders.forEach((order: any) => {
           if (order.deleted_at) return;
@@ -440,7 +443,7 @@ export async function GET(request: Request) {
 
       // 1.3. inventory_items (안전재고 이하 품목 조회)
       try {
-        const invRes = await queryTable('inventory_items', { limit: 1000 });
+        const invRes = await queryTable('inventory_items', { filters: tenantFilterObj, limit: 1000 });
         const items = invRes.rows || [];
         items.forEach((item: any) => {
           if (item.deleted_at) return;
@@ -465,12 +468,11 @@ export async function GET(request: Request) {
 
       // 1.4. crm_annual_leaves (휴가 신청 결재 대기 건)
       try {
-        const leavesRes = await queryTable('crm_annual_leaves', { filters: { status: 'PENDING' } });
+        const leavesRes = await queryTable('crm_annual_leaves', { filters: { ...tenantFilterObj, status: 'PENDING' } });
         const pendingLeaves = leavesRes.rows || [];
         
         // 이름 매핑을 위한 직원 마스터 조회
-        const tenantId = await resolveTenantId();
-        const operatorsRes = await queryTable('crm_operators', { filters: { tenant_id: tenantId } });
+        const operatorsRes = await queryTable('crm_operators', { filters: tenantFilterObj });
         const ops = operatorsRes.rows || [];
 
         pendingLeaves.forEach((leave: any) => {
@@ -517,16 +519,16 @@ export async function GET(request: Request) {
     }
 
     if (action === 'logs') {
-      const res = await queryTable('crm_governance_logs', { limit: 2000 });
+      const res = await queryTable('crm_governance_logs', { filters: tenantFilterObj, limit: 2000 });
       const logs = res.rows || [];
       logs.sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
       return NextResponse.json({ success: true, logs });
     }
 
     if (action === 'deleted_items') {
-      const estRes = await queryTable('crm_estimates', { limit: 10000 });
-      const poRes = await queryTable('crm_purchase_orders', { limit: 10000 });
-      const soRes = await queryTable('crm_sales_orders', { limit: 10000 });
+      const estRes = await queryTable('crm_estimates', { filters: tenantFilterObj, limit: 10000 });
+      const poRes = await queryTable('crm_purchase_orders', { filters: tenantFilterObj, limit: 10000 });
+      const soRes = await queryTable('crm_sales_orders', { filters: tenantFilterObj, limit: 10000 });
 
       const estimates = (estRes.rows || [])
         .filter((item: any) => item.deleted_at !== null && item.deleted_at !== undefined && item.deleted_at !== '')
@@ -555,7 +557,7 @@ export async function GET(request: Request) {
 
     if (action === 'audit_logs') {
       try {
-        const res = await queryTable('crm_audit_logs', { limit: 10000 });
+        const res = await queryTable('crm_audit_logs', { filters: tenantFilterObj, limit: 10000 });
         const auditLogs = res.rows || [];
         auditLogs.sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
         return NextResponse.json({ success: true, auditLogs });
@@ -566,7 +568,6 @@ export async function GET(request: Request) {
 
     if (action === 'rules') {
       try {
-        const tenantId = await resolveTenantId();
         const res = await queryTable('crm_governance_rules', { 
           filters: { deleted_at: null, tenant_id: tenantId } 
         });
@@ -582,6 +583,7 @@ export async function GET(request: Request) {
     if (action === 'get_task_folders') {
       try {
         const res = await queryTable('crm_task_folders', {
+          filters: tenantFilterObj,
           orderBy: 'created_at DESC'
         });
         let rows = (res.rows || []).filter((r: any) => !r.deleted_at);
@@ -593,15 +595,15 @@ export async function GET(request: Request) {
             description: '모바일 포털 및 현장에서 스캔하여 수집한 관제용 무역 서류를 안전하게 보관하는 기본 폴더입니다.',
             created_at: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19),
             created_by: '최고관리자',
-            tenant_id: 'default',
-            uuid: 'folder_default_13'
+            tenant_id: tenantId,
+            uuid: `folder_${tenantId}_13`
           };
           await insertRows('crm_task_folders', [defaultFolder]);
           rows = [defaultFolder];
         }
 
         // crm_employees 정보 조인 또는 아이디 -> 이름 매핑 정제
-        const empRes = await queryTable('crm_employees', { limit: 1000 });
+        const empRes = await queryTable('crm_employees', { filters: tenantFilterObj, limit: 1000 });
         const employees = empRes.rows || [];
         const empMap: Record<string, string> = {};
         employees.forEach((emp: any) => {
@@ -641,6 +643,7 @@ export async function GET(request: Request) {
         
         // 1) crm_task_folder_items 조회
         const folderItemsRes = await queryTable('crm_task_folder_items', {
+          filters: tenantFilterObj,
           limit: 10000,
           orderBy: 'created_at',
           orderDirection: 'DESC'
@@ -648,6 +651,7 @@ export async function GET(request: Request) {
         
         // 2) crm_snaptask_items 조회
         const snapItemsRes = await queryTable('crm_snaptask_items', {
+          filters: tenantFilterObj,
           limit: 10000,
           orderBy: 'id',
           orderDirection: 'DESC'
