@@ -311,11 +311,17 @@ export default function EstimateOcrModal({
       const res = await apiFetch("/api/shared/google-sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sheetUrl: googleSheetUrl.trim() })
+        body: JSON.stringify({
+          url: googleSheetUrl.trim(),
+          sheetUrl: googleSheetUrl.trim(),
+          fetchAllRows: true
+        })
       });
       const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      await parseTableDataToEstimate(data.data, "구글 스프레드시트 연동");
+      if (!data.success) throw new Error(data.error || "구글 시트 데이터를 가져오지 못했습니다.");
+      
+      const rawRows = data.data || (data.headers ? [data.headers, ...(data.rows || [])] : data.rows || []);
+      await parseTableDataToEstimate(rawRows, data.spreadsheetTitle || "구글 스프레드시트 연동");
     } catch (err: any) {
       setOcrScanning(false);
       alert("연동 실패: " + err.message);

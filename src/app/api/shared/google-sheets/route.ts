@@ -22,10 +22,11 @@ function extractGid(input: string): string | null {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { url, spreadsheetId: inputId, sheetName: requestedSheetName, sampleRows = 20, fetchAllRows = true } = body;
+    const { url, sheetUrl, spreadsheetId: inputId, sheetName: requestedSheetName, sampleRows = 20, fetchAllRows = true } = body;
 
-    const spreadsheetId = extractSpreadsheetId(url || inputId);
-    const gid = extractGid(url || '');
+    const targetUrl = url || sheetUrl || '';
+    const spreadsheetId = extractSpreadsheetId(targetUrl || inputId);
+    const gid = extractGid(targetUrl);
 
     if (!spreadsheetId) {
       return NextResponse.json(
@@ -159,6 +160,7 @@ export async function POST(req: Request) {
       availableSheets,
       headers,
       rows: allRows,
+      data: [headers, ...allRows],
       rowCount: allRows.length
     });
   } catch (error: any) {
