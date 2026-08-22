@@ -3,6 +3,7 @@ import { getEgdeskBasePath } from '../../egdesk-helpers';
 const GOOGLE_SHEET_URL_KEY = "last_connected_google_sheet_url";
 export const SAMPLE_GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1is3rN5OZ7Hzf29XJGzuNbRFyHnhcdNmx268UYakDDDk/edit?usp=sharing";
 export const SAMPLE_STATEMENT_GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1KVVCbyOnOcQeNSCbJEcZD5eKtea2HnfjKaivJwgBWB4/edit?usp=sharing";
+export const SAMPLE_SALES_ORDER_GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1atWHydklPh9pDH0UeXVPYXgXAvhG8uBuEOPbmAFr0Zc/edit?usp=sharing";
 const LEGACY_DUMMY_URL = "https://docs.google.com/spreadsheets/d/1t3OiWthLbcZDgcrLJSI-XVKX-07_KBtLdcx3XCVrUoM/edit";
 
 function getTenantStorageKey(rawKey: string): string {
