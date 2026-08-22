@@ -27,8 +27,14 @@ async function triggerRpaDaemon(req?: Request) {
   }
 }
 
+import { getTenantId } from '@/lib/tenant';
+
 export async function GET(req: Request) {
   try {
+    const rawTenantId = await getTenantId();
+    const tenantId = rawTenantId || 'default';
+    const tenantFilterObj = (tenantId && tenantId !== 'all') ? { tenant_id: tenantId } : {};
+
     const { searchParams } = new URL(req.url);
     const targetProductIdParam = searchParams.get('productId');
     const targetProductIdsParam = searchParams.get('productIds'); // 다중 선택된 상품 ID들 ("PROD-1,PROD-2")
@@ -36,7 +42,7 @@ export async function GET(req: Request) {
     const customScheduledTime = searchParams.get('scheduledTime'); // 다중 규칙 지정 발행 시각 파라미터 ("10:00")
 
     // 0. 예약 시각이 지난 포스트 탐색 및 RPA 자동 기동
-    const allPostsRes = await queryTable('crm_naver_blog_posts', { limit: 10000 });
+    const allPostsRes = await queryTable('crm_naver_blog_posts', { filters: tenantFilterObj, limit: 10000 });
     const nowIso = new Date().toISOString();
     const pendingPosts = (allPostsRes.rows || []).filter(
       (p: any) => p.status === 'SCHEDULED' && p.scheduled_at && p.scheduled_at <= nowIso
@@ -47,7 +53,10 @@ export async function GET(req: Request) {
     }
 
     // 1. 네이버 블로그 설정 조회
-    const settingsRes = await queryTable('naver_blog_marketing_settings', { filters: { id: '1' } });
+    let settingsRes = await queryTable('naver_blog_marketing_settings', { filters: { tenant_id: tenantId } });
+    if ((!settingsRes.rows || settingsRes.rows.length === 0) && tenantId === 'default') {
+      settingsRes = await queryTable('naver_blog_marketing_settings', { filters: { id: '1' } });
+    }
     const settings = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0] : null;
 
     if (!settings) {
@@ -77,11 +86,11 @@ export async function GET(req: Request) {
     if (targetProductIdsParam) {
       const idsArr = targetProductIdsParam.split(',').map(s => s.trim()).filter(Boolean);
       if (idsArr.length > 0) {
-        const poolProductsRes = await queryTable('products', { limit: 10000 });
+        const poolProductsRes = await queryTable('products', { filters: tenantFilterObj, limit: 10000 });
         const poolProducts = (poolProductsRes.rows || []).filter((p: any) => !p.deleted_at && idsArr.includes(String(p.id)));
 
         if (poolProducts.length > 0) {
-          const postsRes = await queryTable('crm_naver_blog_posts', { limit: 10000 });
+          const postsRes = await queryTable('crm_naver_blog_posts', { filters: tenantFilterObj, limit: 10000 });
           const posts = postsRes.rows || [];
           const postedProductIds = new Set(posts.map((post: any) => post.product_id).filter(Boolean));
 
@@ -95,7 +104,7 @@ export async function GET(req: Request) {
 
     if (!targetProduct && targetProductIdParam) {
       try {
-        const singleRes = await queryTable('products', { filters: { id: targetProductIdParam } });
+        const singleRes = await queryTable('products', { filters: { ...tenantFilterObj, id: targetProductIdParam } });
         if (singleRes.rows && singleRes.rows.length > 0) {
           targetProduct = singleRes.rows[0];
         }

@@ -1,13 +1,13 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, updateRows } from '../../../../../egdesk-helpers';
+import { queryTable, insertRows, updateRows, executeSQL } from '../../../../../egdesk-helpers';
 import fs from 'fs';
 import path from 'path';
 import { exec, spawn } from 'child_process';
+import { getTenantId } from '@/lib/tenant';
 
 // 기본 설정 값 정의
 const DEFAULT_SETTINGS = {
-  id: 1,
   is_autopilot: 0, // 0: 수동 검토 모드, 1: 100% 무인 오토파일럿 모드
   autopilot_interval: 'DAILY', // DAILY, WEEKLY
   autopilot_time: '10:00', // 발행 시간 (HH:MM)
@@ -19,17 +19,22 @@ const DEFAULT_SETTINGS = {
   api_client_secret: '', // (더이상 사용하지 않으나 하위 호환 유지)
 };
 
-// 세션 상태 파일 경로
-const SESSION_FILE_PATH = path.join(process.cwd(), 'scripts', 'naver_session.json');
+// 세션 상태 파일 경로 헬퍼
+function getSessionFilePath(tenantId: string): string {
+  if (!tenantId || tenantId === 'default') {
+    return path.join(process.cwd(), 'scripts', 'naver_session.json');
+  }
+  return path.join(process.cwd(), 'scripts', `naver_session_${tenantId}.json`);
+}
 
 /**
  * naver_session.json 쿠키로 네이버 Live Ping (https://nid.naver.com/user2/help/myInfo)을 수행하여
  * 실제 네이버 서버에서 로그인 세션이 유지되어 있는지 100% 실시간 검증합니다.
  */
-async function checkSessionValidity(): Promise<number> {
-  if (!fs.existsSync(SESSION_FILE_PATH)) return 0;
+async function checkSessionValidity(sessionFilePath: string): Promise<number> {
+  if (!fs.existsSync(sessionFilePath)) return 0;
   try {
-    const raw = fs.readFileSync(SESSION_FILE_PATH, 'utf-8');
+    const raw = fs.readFileSync(sessionFilePath, 'utf-8');
     const parsed = JSON.parse(raw);
     const cookies = parsed.cookies || [];
     
@@ -39,7 +44,7 @@ async function checkSessionValidity(): Promise<number> {
     const nidSes = cookies.find((c: any) => c.name === 'NID_SES')?.value;
 
     if (!nidAut || !nidSes) {
-      console.warn('⚠️ [API] naver_session.json 파일에 필수 로그인 인증 쿠키(NID_AUT/NID_SES)가 누락되었습니다.');
+      console.warn('⚠️ [API] naver_session 파일에 필수 로그인 인증 쿠키(NID_AUT/NID_SES)가 누락되었습니다.');
       return 0;
     }
 
@@ -58,7 +63,7 @@ async function checkSessionValidity(): Promise<number> {
       // 302 Redirect 또는 nidlogin 유도 시 세션 만료 처리
       if (liveRes.status === 302 && location.includes('nidlogin')) {
         console.warn('🔴 [API Live Ping] 네이버 서버에서 로그인 세션 거부(만료)가 감지되었습니다. 잔여 세션 파일을 정리합니다.');
-        try { fs.unlinkSync(SESSION_FILE_PATH); } catch (e) {}
+        try { fs.unlinkSync(sessionFilePath); } catch (e) {}
         return 0;
       }
     }
@@ -73,22 +78,26 @@ async function checkSessionValidity(): Promise<number> {
 
 export async function GET(req: Request) {
   try {
+    const rawTenantId = await getTenantId();
+    const tenantId = rawTenantId || 'default';
+    const sessionFilePath = getSessionFilePath(tenantId);
+
     const { searchParams } = new URL(req.url);
     const action = searchParams.get('action');
 
     // 1. 세션 파일 강제 생성 트리거 액션 핸들링 (로컬 Playwright 수동 로그인 기동)
     if (action === 'trigger_session') {
-      console.log('🤖 [API] 사용자 요청에 따라 로컬 Playwright 로그인 세션 굽기 브라우저를 기동합니다.');
+      console.log(`🤖 [API] 사용자 요청에 따라 로컬 Playwright 로그인 세션 브라우저를 기동합니다. (테넌트: ${tenantId})`);
       
       const daemonScriptPath = path.join(process.cwd(), 'scripts', 'naver_rpa_daemon.js');
       
       const isWindows = process.platform === 'win32';
       if (isWindows) {
         const nodeExe = process.execPath;
-        const cmd = `start "EGDesk Naver RPA Login" "${nodeExe}" "${daemonScriptPath}" --login`;
+        const cmd = `start "EGDesk Naver RPA Login" "${nodeExe}" "${daemonScriptPath}" --login --tenant="${tenantId}"`;
         exec(cmd, { cwd: process.cwd() });
       } else {
-        const child = spawn(process.execPath, [daemonScriptPath, '--login'], {
+        const child = spawn(process.execPath, [daemonScriptPath, '--login', `--tenant=${tenantId}`], {
           cwd: process.cwd(),
           detached: true,
           windowsHide: false,
@@ -106,32 +115,52 @@ export async function GET(req: Request) {
 
     // 2. 세션 파일 강제 삭제 (로그아웃/해제) 액션 핸들링
     if (action === 'clear_session') {
-      if (fs.existsSync(SESSION_FILE_PATH)) {
-        fs.unlinkSync(SESSION_FILE_PATH);
-        console.log('🧹 [API] naver_session.json 쿠키 인증 파일이 강제 파기되었습니다.');
+      if (fs.existsSync(sessionFilePath)) {
+        fs.unlinkSync(sessionFilePath);
+        console.log(`🧹 [API] ${sessionFilePath} 쿠키 인증 파일이 강제 파기되었습니다.`);
       }
       return NextResponse.json({ success: true, message: 'RPA 자동화 세션이 안전하게 폐기되었습니다.' });
     }
 
-    // 3. ID가 1인 설정을 조회
-    const result = await queryTable('naver_blog_marketing_settings', { filters: { id: '1' } });
+    // 3. 테넌트별 설정 조회
+    const result = await queryTable('naver_blog_marketing_settings', { filters: { tenant_id: tenantId } });
     
     // 로컬 세션 파일 실시간 네이버 Live Ping 쿠키 유효성 검증
-    const hasValidSession = await checkSessionValidity();
+    const hasValidSession = await checkSessionValidity(sessionFilePath);
 
     if (result.rows && result.rows.length > 0) {
-      return NextResponse.json({ 
-        success: true, 
-        settings: result.rows[0],
-        has_session: hasValidSession
-      });
+      const activeRows = result.rows.filter((r: any) => !r.deleted_at);
+      if (activeRows.length > 0) {
+        return NextResponse.json({ 
+          success: true, 
+          settings: activeRows[0],
+          has_session: hasValidSession
+        });
+      }
+    }
+
+    // default 테넌트인 경우 하위 호환성을 위해 id: '1' 폴백 시도
+    if (tenantId === 'default') {
+      const fallbackRes = await queryTable('naver_blog_marketing_settings', { filters: { id: '1' } });
+      if (fallbackRes.rows && fallbackRes.rows.length > 0) {
+        return NextResponse.json({
+          success: true,
+          settings: fallbackRes.rows[0],
+          has_session: hasValidSession
+        });
+      }
     }
 
     // 설정이 없을 경우 기본 설정값으로 생성 및 저장
-    await insertRows('naver_blog_marketing_settings', [DEFAULT_SETTINGS]);
+    const defaultData = {
+      id: tenantId === 'default' ? 1 : `setting_${tenantId}`,
+      tenant_id: tenantId,
+      ...DEFAULT_SETTINGS
+    };
+    await insertRows('naver_blog_marketing_settings', [defaultData]);
     return NextResponse.json({ 
       success: true, 
-      settings: DEFAULT_SETTINGS,
+      settings: defaultData,
       has_session: hasValidSession
     });
   } catch (error: any) {
@@ -142,36 +171,43 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const rawTenantId = await getTenantId();
+    const tenantId = rawTenantId || 'default';
+    const sessionFilePath = getSessionFilePath(tenantId);
+
     const data = await req.json();
     
-    // 설정이 존재하는지 확인
-    const checkExist = await queryTable('naver_blog_marketing_settings', { filters: { id: '1' } });
+    // 해당 테넌트 설정이 존재하는지 확인
+    const checkExist = await queryTable('naver_blog_marketing_settings', { filters: { tenant_id: tenantId } });
+    const existing = (checkExist.rows || []).find((r: any) => !r.deleted_at) || (tenantId === 'default' ? (await queryTable('naver_blog_marketing_settings', { filters: { id: '1' } })).rows?.[0] : null);
     
     const updates = {
+      tenant_id: tenantId,
       is_autopilot: data.is_autopilot !== undefined ? Number(data.is_autopilot) : 0,
       autopilot_interval: data.autopilot_interval || 'DAILY',
       autopilot_time: data.autopilot_time || '10:00',
       tone_style: data.tone_style || '정보제공형',
-      naver_blog_id: data.naver_blog_id !== undefined ? data.naver_blog_id : (checkExist.rows?.[0]?.naver_blog_id || ''),
-      naver_login_id: data.naver_login_id !== undefined ? data.naver_login_id : (checkExist.rows?.[0]?.naver_login_id || ''),
-      naver_login_pw: data.naver_login_pw !== undefined ? data.naver_login_pw : (checkExist.rows?.[0]?.naver_login_pw || ''),
-      api_client_id: data.api_client_id !== undefined ? data.api_client_id : (checkExist.rows?.[0]?.api_client_id || ''),
-      api_client_secret: data.api_client_secret !== undefined ? data.api_client_secret : (checkExist.rows?.[0]?.api_client_secret || ''),
+      naver_blog_id: data.naver_blog_id !== undefined ? data.naver_blog_id : (existing?.naver_blog_id || ''),
+      naver_login_id: data.naver_login_id !== undefined ? data.naver_login_id : (existing?.naver_login_id || ''),
+      naver_login_pw: data.naver_login_pw !== undefined ? data.naver_login_pw : (existing?.naver_login_pw || ''),
+      api_client_id: data.api_client_id !== undefined ? data.api_client_id : (existing?.api_client_id || ''),
+      api_client_secret: data.api_client_secret !== undefined ? data.api_client_secret : (existing?.api_client_secret || ''),
     };
 
-    if (checkExist.rows && checkExist.rows.length > 0) {
+    if (existing) {
       // 존재하면 업데이트
-      await updateRows('naver_blog_marketing_settings', updates, { filters: { id: '1' } });
+      await updateRows('naver_blog_marketing_settings', updates, { filters: { id: String(existing.id) } });
     } else {
-      // 존재하지 않으면 삽입
-      await insertRows('naver_blog_marketing_settings', [{ id: 1, ...updates }]);
+      // 존재하지 않으면 신규 삽입
+      const newId = tenantId === 'default' ? 1 : `setting_${tenantId}`;
+      await insertRows('naver_blog_marketing_settings', [{ id: newId, ...updates }]);
     }
 
-    const hasSessionFile = fs.existsSync(SESSION_FILE_PATH) ? 1 : 0;
+    const hasSessionFile = fs.existsSync(sessionFilePath) ? 1 : 0;
 
     return NextResponse.json({ 
       success: true, 
-      settings: { id: 1, ...updates },
+      settings: { id: existing?.id || (tenantId === 'default' ? 1 : `setting_${tenantId}`), ...updates },
       has_session: hasSessionFile
     });
   } catch (error: any) {

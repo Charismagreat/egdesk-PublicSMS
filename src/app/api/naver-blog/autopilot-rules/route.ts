@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows } from '../../../../../egdesk-helpers';
+import { getTenantId } from '@/lib/tenant';
 
 // 기본 시드 규칙 정의
 const DEFAULT_RULES = [
@@ -22,15 +23,22 @@ const DEFAULT_RULES = [
   }
 ];
 
-// egdesk-helpers.ts 의 queryTable 함수만을 사용하여 DB에서 규칙 목록 조회
-async function getRulesFromDb(): Promise<any[]> {
+// egdesk-helpers.ts 의 queryTable 함수만을 사용하여 DB에서 테넌트별 규칙 목록 조회
+async function getRulesFromDb(tenantId: string): Promise<any[]> {
   try {
-    const res = await queryTable('crm_custom_page_data', { filters: { page_id: 'naver_blog_autopilot_rules' } });
+    const pageId = `naver_blog_autopilot_rules_${tenantId}`;
+    let res = await queryTable('crm_custom_page_data', { filters: { page_id: pageId } });
+    
+    // 테넌트 전용 데이터가 없는데 default 테넌트인 경우 하위 호환 조회
+    if ((!res.rows || res.rows.length === 0) && tenantId === 'default') {
+      res = await queryTable('crm_custom_page_data', { filters: { page_id: 'naver_blog_autopilot_rules' } });
+    }
+
     if (res.rows && res.rows.length > 0) {
       const rowData = res.rows[0].row_data;
       if (rowData) {
         const parsed = JSON.parse(rowData);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return parsed;
         }
       }
@@ -41,18 +49,20 @@ async function getRulesFromDb(): Promise<any[]> {
   return DEFAULT_RULES;
 }
 
-// egdesk-helpers.ts 의 insertRows / updateRows 함수만을 사용하여 DB에 규칙 데이터 반영
-async function saveRulesToDb(rules: any[]): Promise<boolean> {
+// egdesk-helpers.ts 의 insertRows / updateRows 함수만을 사용하여 DB에 테넌트별 규칙 데이터 반영
+async function saveRulesToDb(rules: any[], tenantId: string): Promise<boolean> {
   try {
-    const res = await queryTable('crm_custom_page_data', { filters: { page_id: 'naver_blog_autopilot_rules' } });
+    const pageId = `naver_blog_autopilot_rules_${tenantId}`;
+    const res = await queryTable('crm_custom_page_data', { filters: { page_id: pageId } });
     const rowStr = JSON.stringify(rules);
     if (res.rows && res.rows.length > 0) {
-      await updateRows('crm_custom_page_data', { row_data: rowStr }, { filters: { page_id: 'naver_blog_autopilot_rules' } });
+      await updateRows('crm_custom_page_data', { row_data: rowStr }, { filters: { page_id: pageId } });
     } else {
       await insertRows('crm_custom_page_data', [{
         id: Date.now(),
-        page_id: 'naver_blog_autopilot_rules',
-        row_data: rowStr
+        page_id: pageId,
+        row_data: rowStr,
+        tenant_id: tenantId
       }]);
     }
     return true;
@@ -64,7 +74,9 @@ async function saveRulesToDb(rules: any[]): Promise<boolean> {
 
 export async function GET(req: Request) {
   try {
-    const rules = await getRulesFromDb();
+    const rawTenantId = await getTenantId();
+    const tenantId = rawTenantId || 'default';
+    const rules = await getRulesFromDb(tenantId);
     return NextResponse.json({ success: true, rules });
   } catch (error: any) {
     return NextResponse.json({ success: false, rules: DEFAULT_RULES, error: error.message });
@@ -73,9 +85,12 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const rawTenantId = await getTenantId();
+    const tenantId = rawTenantId || 'default';
+
     const data = await req.json();
     const { action, rule, ruleId } = data;
-    let rules = await getRulesFromDb();
+    let rules = await getRulesFromDb(tenantId);
 
     if (action === 'create') {
       const newRule = {
@@ -96,7 +111,7 @@ export async function POST(req: Request) {
       rules = rules.filter(r => r.id !== Number(ruleId));
     }
 
-    await saveRulesToDb(rules);
+    await saveRulesToDb(rules, tenantId);
     return NextResponse.json({ success: true, rules });
   } catch (error: any) {
     console.error('오토파일럿 규칙 DB 조작 실패:', error);
