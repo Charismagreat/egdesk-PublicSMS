@@ -346,10 +346,10 @@ export default function InboundHub({
               </button>
               <button
                 onClick={onOpenStatementOcrModal}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/10 flex items-center gap-1.5 whitespace-nowrap"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/10 flex items-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 transition-all"
               >
                 <Upload className="w-4 h-4" />
-                받은 거래명세서 스캔
+                받은 거래명세서 스마트 접수
               </button>
             </>
           )}
