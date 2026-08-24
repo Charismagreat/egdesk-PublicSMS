@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { insertRows } from '@/../egdesk-helpers';
+import { queryTable, insertRows, updateRows, executeSQL } from '@/../egdesk-helpers';
 import { getTenantId } from '@/lib/tenant';
 import { sanitizeDate, sanitizeAmount, reconcileAmounts, sanitizeBusinessNumber } from '@/lib/data-validator';
 import { smartSyncPartnersFromInvoices, InvoicePartnerInfo } from '@/lib/partner-sync';
@@ -19,27 +19,64 @@ export async function POST(req: Request) {
 
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
+    // 1. 기존 DB 내 등록된 승인번호 맵 구축 (중복 방지 및 스마트 업데이트용)
+    const existingTaxInvoices = new Map<string, any>();
+    const existingExemptInvoices = new Map<string, any>();
+    const existingCashReceipts = new Map<string, any>();
+
+    try {
+      const [taxRes, exemptRes, cashRes] = await Promise.all([
+        queryTable('tax_invoices', { limit: 5000 }).catch(() => ({ rows: [] })),
+        queryTable('tax_exempt_invoices', { limit: 5000 }).catch(() => ({ rows: [] })),
+        queryTable('cash_receipts', { limit: 5000 }).catch(() => ({ rows: [] }))
+      ]);
+
+      (taxRes.rows || []).forEach((r: any) => {
+        const appNo = (r.승인번호 || r.approval_no || '').trim();
+        if (appNo) existingTaxInvoices.set(appNo, r);
+      });
+
+      (exemptRes.rows || []).forEach((r: any) => {
+        const appNo = (r.승인번호 || r.approval_no || '').trim();
+        if (appNo) existingExemptInvoices.set(appNo, r);
+      });
+
+      (cashRes.rows || []).forEach((r: any) => {
+        const appNo = (r.승인번호 || r.approval_number || '').trim();
+        if (appNo) existingCashReceipts.set(appNo, r);
+      });
+    } catch (err: any) {
+      console.warn('⚠️ Table read warning in hometax-sheets:', err.message);
+    }
+
     const taxInvoiceRows: any[] = [];
     const taxExemptRows: any[] = [];
     const cashReceiptRows: any[] = [];
     const partnerSyncList: InvoicePartnerInfo[] = [];
 
-    invoices.forEach((inv: any) => {
+    let duplicateCount = 0;
+
+    for (const inv of invoices) {
       const isSales = inv.type === 'SALES' || inv.type === '매출';
       const invoiceType = isSales ? 'sales' : 'purchase';
       
       const dateRes = sanitizeDate(inv.issue_date);
       const issueDate = dateRes.isValid ? dateRes.value : (inv.issue_date || now.substring(0, 10));
 
-      const approvalNo = inv.approval_no || '';
+      const approvalNo = (inv.approval_no || inv.승인번호 || '').trim();
       const supplierBn = sanitizeBusinessNumber(inv.supplier_corp_num);
       const buyerBn = sanitizeBusinessNumber(inv.buyer_corp_num);
       const supplierNum = supplierBn.formatted || inv.supplier_corp_num || '';
-      const supplierName = inv.supplier_corp_name || '';
-      const supplierCeo = inv.supplier_ceo_name || '';
+      const supplierName = inv.supplier_corp_name || inv.공급자상호 || '';
+      const supplierCeo = inv.supplier_ceo_name || inv.공급자대표자명 || '';
       const buyerNum = buyerBn.formatted || inv.buyer_corp_num || '';
-      const buyerName = inv.buyer_corp_name || '';
-      const buyerCeo = inv.buyer_ceo_name || '';
+      const buyerName = inv.buyer_corp_name || inv.공급받는자상호 || '';
+      const buyerCeo = inv.buyer_ceo_name || inv.공급받는자대표자명 || '';
+
+      const buyerEmail = inv.buyer_email || inv.email || inv.공급받는자이메일1 || inv.공급받는자이메일2 || inv.공급받는자이메일 || '';
+      const buyerAddress = inv.buyer_address || inv.address || inv.공급받는자주소 || '';
+      const supplierEmail = inv.supplier_email || inv.email || inv.공급자이메일 || '';
+      const supplierAddress = inv.supplier_address || inv.address || inv.공급자주소 || '';
 
       const supplySan = sanitizeAmount(inv.supply_amount);
       const taxSan = sanitizeAmount(inv.tax_amount);
@@ -49,11 +86,17 @@ export async function POST(req: Request) {
       const taxAmt = reconciled.tax;
       const totalAmt = reconciled.total;
 
-      const itemName = inv.item_name || '';
-      const remark = inv.remark || '';
+      const itemName = inv.item_name || inv.품목명 || '';
+      const remark = inv.remark || inv.비고 || '';
       const kind = inv.invoice_kind || inv.target_table || 'tax_invoices';
 
+      // 1. 현금영수증
       if (kind === 'cash_receipts' || kind === 'CASH_RECEIPT') {
+        if (approvalNo && existingCashReceipts.has(approvalNo)) {
+          duplicateCount++;
+          continue;
+        }
+
         cashReceiptRows.push({
           business_number: supplierNum || buyerNum || '',
           발행구분: isSales ? '매출' : '매입',
@@ -85,10 +128,49 @@ export async function POST(req: Request) {
           partnerSyncList.push({
             type: 'BUYER',
             companyName: supplierName || buyerName,
-            businessNumber: supplierNum || buyerNum
+            businessNumber: supplierNum || buyerNum,
+            address: buyerAddress || supplierAddress,
+            email: buyerEmail || supplierEmail
           });
         }
-      } else if (kind === 'tax_exempt_invoices' || kind === 'TAX_EXEMPT_INVOICE' || (taxAmt === 0 && (remark.includes('면세') || inv.is_exempt))) {
+      } 
+      // 2. 면세 전자계산서
+      else if (kind === 'tax_exempt_invoices' || kind === 'TAX_EXEMPT_INVOICE' || (taxAmt === 0 && (remark.includes('면세') || inv.is_exempt))) {
+        if (approvalNo && existingExemptInvoices.has(approvalNo)) {
+          duplicateCount++;
+          const existing = existingExemptInvoices.get(approvalNo);
+          const patch: Record<string, any> = {};
+          if (!existing.공급자주소 && supplierAddress) patch.공급자주소 = supplierAddress;
+          if (!existing.공급자이메일 && supplierEmail) patch.공급자이메일 = supplierEmail;
+          if (!existing.공급받는자주소 && buyerAddress) patch.공급받는자주소 = buyerAddress;
+          if (!existing.공급받는자이메일1 && buyerEmail) patch.공급받는자이메일1 = buyerEmail;
+
+          if (Object.keys(patch).length > 0) {
+            await updateRows('tax_exempt_invoices', patch, { filters: { id: String(existing.id) } });
+          }
+
+          if (isSales && (buyerName || buyerNum)) {
+            partnerSyncList.push({
+              type: 'BUYER',
+              companyName: buyerName,
+              businessNumber: buyerNum,
+              representative: buyerCeo,
+              address: buyerAddress,
+              email: buyerEmail
+            });
+          } else if (!isSales && (supplierName || supplierNum)) {
+            partnerSyncList.push({
+              type: 'VENDOR',
+              companyName: supplierName,
+              businessNumber: supplierNum,
+              representative: supplierCeo,
+              address: supplierAddress,
+              email: supplierEmail
+            });
+          }
+          continue;
+        }
+
         taxExemptRows.push({
           issue_date: issueDate,
           작성일자: issueDate,
@@ -103,12 +185,16 @@ export async function POST(req: Request) {
           공급자상호: supplierName,
           supplier_ceo_name: supplierCeo,
           공급자대표자명: supplierCeo,
+          공급자주소: supplierAddress,
+          공급자이메일: supplierEmail,
           buyer_corp_num: buyerNum,
           공급받는자사업자등록번호: buyerNum,
           buyer_corp_name: buyerName,
           공급받는자상호: buyerName,
           buyer_ceo_name: buyerCeo,
           공급받는자대표자명: buyerCeo,
+          공급받는자주소: buyerAddress,
+          공급받는자이메일1: buyerEmail,
           supply_amount: supplyAmt || totalAmt,
           공급가액: supplyAmt || totalAmt,
           tax_amount: 0,
@@ -132,7 +218,9 @@ export async function POST(req: Request) {
               type: 'BUYER',
               companyName: buyerName,
               businessNumber: buyerNum,
-              representative: buyerCeo
+              representative: buyerCeo,
+              address: buyerAddress,
+              email: buyerEmail
             });
           }
         } else {
@@ -141,11 +229,50 @@ export async function POST(req: Request) {
               type: 'VENDOR',
               companyName: supplierName,
               businessNumber: supplierNum,
-              representative: supplierCeo
+              representative: supplierCeo,
+              address: supplierAddress,
+              email: supplierEmail
             });
           }
         }
-      } else {
+      } 
+      // 3. 과세 전자세금계산서
+      else {
+        if (approvalNo && existingTaxInvoices.has(approvalNo)) {
+          duplicateCount++;
+          const existing = existingTaxInvoices.get(approvalNo);
+          const patch: Record<string, any> = {};
+          if (!existing.공급자주소 && supplierAddress) patch.공급자주소 = supplierAddress;
+          if (!existing.공급자이메일 && supplierEmail) patch.공급자이메일 = supplierEmail;
+          if (!existing.공급받는자주소 && buyerAddress) patch.공급받는자주소 = buyerAddress;
+          if (!existing.공급받는자이메일1 && buyerEmail) patch.공급받는자이메일1 = buyerEmail;
+
+          if (Object.keys(patch).length > 0) {
+            await updateRows('tax_invoices', patch, { filters: { id: String(existing.id) } });
+          }
+
+          if (isSales && (buyerName || buyerNum)) {
+            partnerSyncList.push({
+              type: 'BUYER',
+              companyName: buyerName,
+              businessNumber: buyerNum,
+              representative: buyerCeo,
+              address: buyerAddress,
+              email: buyerEmail
+            });
+          } else if (!isSales && (supplierName || supplierNum)) {
+            partnerSyncList.push({
+              type: 'VENDOR',
+              companyName: supplierName,
+              businessNumber: supplierNum,
+              representative: supplierCeo,
+              address: supplierAddress,
+              email: supplierEmail
+            });
+          }
+          continue;
+        }
+
         taxInvoiceRows.push({
           issue_date: issueDate,
           작성일자: issueDate,
@@ -160,12 +287,16 @@ export async function POST(req: Request) {
           공급자상호: supplierName,
           supplier_ceo_name: supplierCeo,
           공급자대표자명: supplierCeo,
+          공급자주소: supplierAddress,
+          공급자이메일: supplierEmail,
           buyer_corp_num: buyerNum,
           공급받는자사업자등록번호: buyerNum,
           buyer_corp_name: buyerName,
           공급받는자상호: buyerName,
           buyer_ceo_name: buyerCeo,
           공급받는자대표자명: buyerCeo,
+          공급받는자주소: buyerAddress,
+          공급받는자이메일1: buyerEmail,
           supply_amount: supplyAmt,
           공급가액: supplyAmt,
           tax_amount: taxAmt,
@@ -182,11 +313,6 @@ export async function POST(req: Request) {
           updated_at: now,
           deleted_at: null
         });
-
-        const buyerEmail = inv.buyer_email || inv.email || inv.공급받는자이메일1 || inv.공급받는자이메일2 || inv.공급받는자이메일;
-        const buyerAddress = inv.buyer_address || inv.address || inv.공급받는자주소;
-        const supplierEmail = inv.supplier_email || inv.email || inv.공급자이메일;
-        const supplierAddress = inv.supplier_address || inv.address || inv.공급자주소;
 
         if (isSales) {
           if (buyerName || buyerNum) {
@@ -212,7 +338,7 @@ export async function POST(req: Request) {
           }
         }
       }
-    });
+    }
 
     let totalInserted = 0;
     if (taxInvoiceRows.length > 0) {
@@ -241,17 +367,19 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       insertedCount: totalInserted,
+      duplicateCount,
       details: {
         taxInvoices: taxInvoiceRows.length,
-        taxExempt: taxExemptRows.length,
-        cashReceipts: cashReceiptRows.length,
-        partnerSync: partnerSyncStats
-      }
+        taxExemptInvoices: taxExemptRows.length,
+        cashReceipts: cashReceiptRows.length
+      },
+      partnerSync: partnerSyncStats
     });
+
   } catch (error: any) {
-    console.error('Hometax sheets bulk insert error:', error);
+    console.error('Hometax Sheets Import Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || '홈택스 세금계산서 일괄 등록 중 오류 발생' },
+      { success: false, error: error.message || '홈택스 구글 시트 연동 처리 중 에러가 발생했습니다.' },
       { status: 500 }
     );
   }
