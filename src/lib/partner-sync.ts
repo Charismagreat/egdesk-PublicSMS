@@ -36,12 +36,15 @@ export async function smartSyncPartnersFromInvoices(
   let updated = 0;
 
   try {
-    // 1. 해당 테넌트의 기존 거래처 목록 조회
-    const existingPartnersRes = await executeSQL(
-      `SELECT * FROM crm_partners WHERE tenant_id = '${tenantId}'`
-    ).catch(() => ({ rows: [] }));
-
-    const existingPartners = (existingPartnersRes.rows || []).filter((r: any) => !r.deleted_at);
+    // 1. 기존 거래처 목록 조회 (테넌트 유연 매칭)
+    let existingPartners: any[] = [];
+    try {
+      const qRes = await queryTable('crm_partners', { limit: 10000 });
+      existingPartners = (qRes.rows || []).filter((r: any) => !r.deleted_at);
+    } catch {
+      const dbRes = await executeSQL(`SELECT * FROM crm_partners WHERE deleted_at IS NULL`).catch(() => ({ rows: [] }));
+      existingPartners = dbRes.rows || [];
+    }
 
     // 사업자등록번호(정규화) Map 및 상호명(정규화) Map 구축
     const bizMap = new Map<string, any>();
@@ -93,8 +96,8 @@ export async function smartSyncPartnersFromInvoices(
           needUpdate = true;
         }
 
-        // 주소가 비어있는데 세금계산서에 있으면 보충
-        if (!existing.address && item.address) {
+        // 주소가 비어있거나 짧은데 세금계산서에 있으면 보충
+        if ((!existing.address || existing.address.length < 5) && item.address) {
           updateData.address = item.address.trim();
           needUpdate = true;
         }
@@ -111,6 +114,9 @@ export async function smartSyncPartnersFromInvoices(
           const resEmail = sanitizeEmail(item.email);
           if (resEmail.isValid) {
             updateData.email = resEmail.value;
+            needUpdate = true;
+          } else if (String(item.email).includes('@')) {
+            updateData.email = String(item.email).trim();
             needUpdate = true;
           }
         }

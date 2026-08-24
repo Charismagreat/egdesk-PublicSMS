@@ -22,9 +22,13 @@ interface ParsedHometaxInvoice {
   supplier_corp_num: string;
   supplier_corp_name: string;
   supplier_ceo_name: string;
+  supplier_address?: string;
+  supplier_email?: string;
   buyer_corp_num: string;
   buyer_corp_name: string;
   buyer_ceo_name: string;
+  buyer_address?: string;
+  buyer_email?: string;
   supply_amount: number;
   tax_amount: number;
   total_amount: number;
@@ -174,9 +178,13 @@ export default function HometaxGoogleSheetsModal({
       let colSupplierNum = -1;
       let colSupplierName = -1;
       let colSupplierCeo = -1;
+      let colSupplierAddress = -1;
+      let colSupplierEmail = -1;
       let colBuyerNum = -1;
       let colBuyerName = -1;
       let colBuyerCeo = -1;
+      let colBuyerAddress = -1;
+      let colBuyerEmail = -1;
       let colTotalAmount = -1;
       let colSupplyAmount = -1;
       let colTaxAmount = -1;
@@ -204,12 +212,20 @@ export default function HometaxGoogleSheetsModal({
           colSupplierName = idx;
         } else if (clean.includes('공급자대표자') || clean.includes('공급자성명') || (clean.includes('공급자') && (clean.includes('대표') || clean.includes('성명')))) {
           colSupplierCeo = idx;
+        } else if (clean.includes('공급자사업장주소') || clean.includes('공급자주소') || (clean.includes('공급자') && clean.includes('주소'))) {
+          colSupplierAddress = idx;
+        } else if (clean.includes('공급자이메일') || clean.includes('공급자전자우편') || (clean.includes('공급자') && clean.includes('이메일'))) {
+          colSupplierEmail = idx;
         } else if (clean.includes('공급받는자사업자등록번호') || (clean.includes('공급받는자') && clean.includes('등록번호'))) {
           colBuyerNum = idx;
         } else if (clean.includes('공급받는자상호') || clean.includes('공급받는자법인명') || (clean.includes('공급받는자') && clean.includes('상호'))) {
           colBuyerName = idx;
         } else if (clean.includes('공급받는자대표자') || clean.includes('공급받는자성명') || (clean.includes('공급받는자') && (clean.includes('대표') || clean.includes('성명')))) {
           colBuyerCeo = idx;
+        } else if (clean.includes('공급받는자사업장주소') || clean.includes('공급받는자주소') || (clean.includes('공급받는자') && clean.includes('주소'))) {
+          colBuyerAddress = idx;
+        } else if (clean.includes('공급받는자이메일') || clean.includes('공급받는자전자우편') || (clean.includes('공급받는자') && clean.includes('이메일'))) {
+          colBuyerEmail = idx;
         } else if (clean === '합계금액' || clean === '총액' || clean === '총금액' || (clean.includes('합계금액') && !clean.includes('품목'))) {
           colTotalAmount = idx;
         } else if ((clean === '공급가액' || clean.includes('공급가액')) && !clean.includes('품목')) {
@@ -231,6 +247,8 @@ export default function HometaxGoogleSheetsModal({
       let businessNumCount = 0;
       let nameCount = 0;
       let ceoCount = 0;
+      let addressCount = 0;
+      let emailCount = 0;
       actualHeaders.forEach((h, idx) => {
         const clean = String(h || '').replace(/\s+/g, '').toLowerCase();
         if (clean === '사업자등록번호' || clean === '등록번호' || clean === '사업자번호') {
@@ -248,6 +266,16 @@ export default function HometaxGoogleSheetsModal({
           if (ceoCount === 1 && colSupplierCeo === -1) colSupplierCeo = idx;
           if (ceoCount === 2 && colBuyerCeo === -1) colBuyerCeo = idx;
         }
+        if (clean === '주소' || clean === '사업장주소' || clean === '사업장' || (clean.includes('주소') && !clean.includes('이메일'))) {
+          addressCount++;
+          if (addressCount === 1 && colSupplierAddress === -1) colSupplierAddress = idx;
+          if (addressCount === 2 && colBuyerAddress === -1) colBuyerAddress = idx;
+        }
+        if (clean === '이메일' || clean === '이메일주소' || clean === '전자우편' || clean.includes('이메일') || clean.includes('email')) {
+          emailCount++;
+          if (emailCount === 1 && colSupplierEmail === -1) colSupplierEmail = idx;
+          if (emailCount === 2 && colBuyerEmail === -1) colBuyerEmail = idx;
+        }
       });
 
       // 3단계: 홈택스 엑셀 표준 33컬럼 포지션 폴백
@@ -256,12 +284,16 @@ export default function HometaxGoogleSheetsModal({
       if (colSupplierNum === -1 && actualHeaders.length >= 17) colSupplierNum = 4;
       if (colSupplierName === -1 && actualHeaders.length >= 17) colSupplierName = 6;
       if (colSupplierCeo === -1 && actualHeaders.length >= 17) colSupplierCeo = 7;
+      if (colSupplierAddress === -1 && actualHeaders.length >= 9) colSupplierAddress = 8;
       if (colBuyerNum === -1 && actualHeaders.length >= 17) colBuyerNum = 9;
       if (colBuyerName === -1 && actualHeaders.length >= 17) colBuyerName = 11;
       if (colBuyerCeo === -1 && actualHeaders.length >= 17) colBuyerCeo = 12;
+      if (colBuyerAddress === -1 && actualHeaders.length >= 14) colBuyerAddress = 13;
       if (colTotalAmount === -1 && actualHeaders.length >= 17) colTotalAmount = 14;
       if (colSupplyAmount === -1 && actualHeaders.length >= 17) colSupplyAmount = 15;
       if (colTaxAmount === -1 && actualHeaders.length >= 17) colTaxAmount = 16;
+      if (colSupplierEmail === -1 && actualHeaders.length >= 20) colSupplierEmail = 18;
+      if (colBuyerEmail === -1 && actualHeaders.length >= 21) colBuyerEmail = 19;
       if (colRemark === -1 && actualHeaders.length >= 21) colRemark = 20;
       if (colItemName === -1 && actualHeaders.length >= 27) colItemName = 26;
 
@@ -283,9 +315,15 @@ export default function HometaxGoogleSheetsModal({
         const rawSupplierNum = colSupplierNum !== -1 ? String(rowArr[colSupplierNum] || '').trim() : '';
         const supplier_corp_name = colSupplierName !== -1 ? String(rowArr[colSupplierName] || '').trim() : '';
         const supplier_ceo_name = colSupplierCeo !== -1 ? String(rowArr[colSupplierCeo] || '').trim() : '';
+        const supplier_address = colSupplierAddress !== -1 ? String(rowArr[colSupplierAddress] || '').trim() : '';
+        const supplier_email = colSupplierEmail !== -1 ? String(rowArr[colSupplierEmail] || '').trim() : '';
+
         const rawBuyerNum = colBuyerNum !== -1 ? String(rowArr[colBuyerNum] || '').trim() : '';
         const buyer_corp_name = colBuyerName !== -1 ? String(rowArr[colBuyerName] || '').trim() : '';
         const buyer_ceo_name = colBuyerCeo !== -1 ? String(rowArr[colBuyerCeo] || '').trim() : '';
+        const buyer_address = colBuyerAddress !== -1 ? String(rowArr[colBuyerAddress] || '').trim() : '';
+        const buyer_email = colBuyerEmail !== -1 ? String(rowArr[colBuyerEmail] || '').trim() : '';
+
         let item_name = colItemName !== -1 ? String(rowArr[colItemName] || '').trim() : '';
         let remark = colRemark !== -1 ? String(rowArr[colRemark] || '').trim() : '';
 
@@ -344,9 +382,13 @@ export default function HometaxGoogleSheetsModal({
             supplier_corp_num: supplierBn.formatted || rawSupplierNum,
             supplier_corp_name,
             supplier_ceo_name,
+            supplier_address,
+            supplier_email,
             buyer_corp_num: buyerBn.formatted || rawBuyerNum,
             buyer_corp_name,
             buyer_ceo_name,
+            buyer_address,
+            buyer_email,
             supply_amount: reconciled.supply,
             tax_amount: reconciled.tax,
             total_amount: reconciled.total,

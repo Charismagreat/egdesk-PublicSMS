@@ -64,10 +64,21 @@ export default function UploadHometaxModal({
       const result = await res.json();
 
       if (result.success) {
-        const { insertedCount, duplicateCount, totalCount } = result.data || {};
+        const { insertedCount = 0, duplicateCount = 0, totalCount = 0, partnerSync } = result.data || {};
+        const partnerAdded = partnerSync?.added || 0;
+        const partnerUpdated = partnerSync?.updated || 0;
+
+        let msg = `🎉 총 ${totalCount}건의 자료 중 신규 ${insertedCount}건 적재 완료`;
+        if (duplicateCount > 0) {
+          msg += ` (기존 중복 ${duplicateCount}건 건너뜀)`;
+        }
+        if (partnerUpdated > 0 || partnerAdded > 0) {
+          msg += ` [거래처: 신규 ${partnerAdded}개사, 갱신 ${partnerUpdated}개사]`;
+        }
+
         setHometaxUploadMessage({
           type: "success",
-          text: `성공! 총 ${totalCount}건의 자료 중 신규 ${insertedCount}건 적재 완료 (중복 ${duplicateCount}건 제외).`
+          text: msg
         });
         setHometaxFile(null);
         setTimeout(() => {
