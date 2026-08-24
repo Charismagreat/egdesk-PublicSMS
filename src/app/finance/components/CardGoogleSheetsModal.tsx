@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Globe, CreditCard, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check 
+  Globe, CreditCard, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check, ShieldCheck, AlertTriangle 
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from "@/lib/google-sheets-storage";
+import { sanitizeDate, sanitizeAmount } from "@/lib/data-validator";
 
 interface CardGoogleSheetsModalProps {
   isOpen: boolean;
@@ -24,6 +25,8 @@ interface ParsedCardTx {
   status: string;
   usage_type: string;
   approval_number: string;
+  isValid?: boolean;
+  validationWarning?: string;
 }
 
 export default function CardGoogleSheetsModal({
@@ -83,13 +86,15 @@ export default function CardGoogleSheetsModal({
       setSpreadsheetTitle(data.spreadsheetTitle || "");
       setAvailableSheets(data.availableSheets || []);
 
-      // 카드 탭 자동 매칭
-      let curSheet = data.sheetName;
-      if (!overrideSheetName && !selectedSheetName && data.availableSheets) {
+      // 서버에서 gid 또는 요청에 따라 정확히 결정한 시트명을 최우선 사용
+      let curSheet = overrideSheetName || data.sheetName;
+
+      // 만약 URL에 gid가 없고 특정 탭도 선택하지 않은 경우에만 카드 관련 탭으로 스마트 추천
+      if (!overrideSheetName && !selectedSheetName && !sheetUrl.includes("gid=") && data.availableSheets) {
         const cardTab = data.availableSheets.find((s: string) => 
           s.includes("카드") || s.includes("신용카드") || s.includes("승인내역") || s.includes("법인카드") || s.includes("법인폰")
         );
-        if (cardTab && cardTab !== data.sheetName) {
+        if (cardTab && cardTab !== curSheet) {
           setSelectedSheetName(cardTab);
           return handleFetchSheetData(cardTab);
         }
@@ -145,18 +150,30 @@ export default function CardGoogleSheetsModal({
           }
         });
 
-        if (approvalDate || merchantName || amount > 0) {
+        // 유효성 검증
+        const dateSan = sanitizeDate(approvalDate);
+        const appDate = dateSan.isValid ? dateSan.value : approvalDate;
+        const amtSan = sanitizeAmount(amount);
+        const taxSan = sanitizeAmount(taxAmount);
+
+        const warnings: string[] = [];
+        if (!dateSan.isValid && dateSan.warning) warnings.push(dateSan.warning);
+        const isValid = dateSan.isValid && (amtSan.value > 0 || Boolean(merchantName));
+
+        if (approvalDate || merchantName || amtSan.value > 0) {
           list.push({
-            approval_date: approvalDate || new Date().toISOString().split("T")[0],
+            approval_date: appDate || new Date().toISOString().split("T")[0],
             approval_time: approvalTime || "00:00:00",
             card_number: cardNumber || "법인카드",
             cardholder_name: cardholderName,
             merchant_name: merchantName || "가맹점",
-            amount,
-            tax_amount: taxAmount,
+            amount: amtSan.value,
+            tax_amount: taxSan.value,
             status,
             usage_type: usageType,
-            approval_number: approvalNumber || `AP-${Math.floor(100000 + Math.random() * 900000)}`
+            approval_number: approvalNumber || `AP-${Math.floor(100000 + Math.random() * 900000)}`,
+            isValid,
+            validationWarning: warnings.length > 0 ? warnings.join(', ') : undefined
           });
         }
       });
@@ -212,7 +229,7 @@ export default function CardGoogleSheetsModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-6xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* 헤더 */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-3">
@@ -351,9 +368,10 @@ export default function CardGoogleSheetsModal({
               </div>
 
               <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs max-h-72 overflow-y-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="bg-slate-100/80 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
                     <tr>
+                      <th className="py-2.5 px-3 text-center w-16">검증</th>
                       <th className="py-2.5 px-3">승인일시</th>
                       <th className="py-2.5 px-3">가맹점명</th>
                       <th className="py-2.5 px-3">카드번호</th>
@@ -365,6 +383,19 @@ export default function CardGoogleSheetsModal({
                   <tbody className="divide-y divide-slate-100">
                     {parsedTxs.map((tx, i) => (
                       <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2 px-3 text-center whitespace-nowrap">
+                          {tx.isValid !== false ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200" title="승인일시 및 카드이용금액 정상 검증됨">
+                              <ShieldCheck className="w-3 h-3 text-teal-600" />
+                              정상
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title={tx.validationWarning || "날짜/금액 확인 필요"}>
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              확인
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2 px-3 font-mono text-slate-600 whitespace-nowrap">
                           {tx.approval_date} {tx.approval_time}
                         </td>

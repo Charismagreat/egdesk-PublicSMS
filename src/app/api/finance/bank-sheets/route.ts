@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { insertRows, queryTable, updateRows, executeSQL } from '@/lib/egdesk-helpers';
+import { getTenantId } from '@/lib/tenant';
 
 export async function POST(req: Request) {
   try {
+    const tenantId = (await getTenantId()) || 'default';
     const body = await req.json().catch(() => ({}));
     const { transactions = [], bankId = 'shinhan', accountId = '' } = body;
 
@@ -17,7 +19,7 @@ export async function POST(req: Request) {
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
     // 기존 계좌 확인 또는 기본 계좌 생성
-    const accountsRes = await queryTable('excel_accounts', {});
+    const accountsRes = await queryTable('excel_accounts', { filters: { tenant_id: tenantId } });
     const accounts = Array.isArray(accountsRes?.rows) ? accountsRes.rows : [];
     let targetAccount = accounts.find((acc: any) => acc.id === accountId);
 
@@ -37,6 +39,7 @@ export async function POST(req: Request) {
         account_name: '구글 시트 연동 계좌',
         balance: 0,
         currency: 'KRW',
+        tenant_id: tenantId,
         created_at: now,
         updated_at: now,
         deleted_at: null
@@ -78,6 +81,7 @@ export async function POST(req: Request) {
           description,
           memo: tx.memo || '',
           category: tx.category || '',
+          tenant_id: tenantId,
           created_at: now,
           updated_at: now,
           deleted_at: null

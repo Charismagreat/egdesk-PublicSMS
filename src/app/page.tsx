@@ -131,7 +131,7 @@ export default async function Home() {
   try {
     const { getTenantId } = require("@/lib/tenant");
     const rawTenantId = await getTenantId();
-    const tenantId = rawTenantId || 'default';
+    const tenantId = rawTenantId || 'tenant-default-id';
     const tenantFilterObj = (tenantId && tenantId !== 'all') ? { tenant_id: tenantId } : {};
 
     // 2.1. 수주액 & 발주액 집계 (crm_estimates)
@@ -156,19 +156,24 @@ export default async function Home() {
       }
     });
 
-    // 2.2. 매출액 & 매입액 집계 (excel_hometax_invoices)
-    const invoicesRes = await queryTable('excel_hometax_invoices', {
-      filters: tenantFilterObj,
-      limit: 10000
-    }).catch(() => ({ rows: [] }));
-    const invoices = (invoicesRes.rows || []).filter((i: any) => !i.deleted_at);
+    // 2.2. 매출액 & 매입액 집계 (해당 테넌트 업로드 tax_invoices & tax_exempt_invoices)
+    const [taxInvRes, taxExemptRes] = await Promise.all([
+      executeSQL(`SELECT * FROM tax_invoices WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] })),
+      executeSQL(`SELECT * FROM tax_exempt_invoices WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] }))
+    ]);
+
+    const invoices = [
+      ...(taxInvRes.rows || []),
+      ...(taxExemptRes.rows || [])
+    ].filter((i: any) => !i.deleted_at);
 
     invoices.forEach((i: any) => {
-      const amount = Number(i.total_amount || i.supply_amount) || 0;
-      const dateStr = i.issue_date || "";
+      const amount = Number(i.공급가액 || i.supply_amount || i.합계금액 || i.total_amount) || 0;
+      const dateStr = (i.작성일자 || i.issue_date || "").replace(/\./g, "-");
 
-      const isSales = i.invoice_type === '매출' || i.invoice_type === 'sales';
-      const isPurchase = i.invoice_type === '매입' || i.invoice_type === 'purchase';
+      const invType = String(i.invoice_type || i.type || "").toLowerCase();
+      const isSales = invType === '매출' || invType === 'sales';
+      const isPurchase = invType === '매입' || invType === 'purchase';
 
       if (isSales) {
         if (dateStr.startsWith(todayStr)) salesStats.today += amount;
@@ -275,11 +280,15 @@ export default async function Home() {
 
     // 2.5. 🏦 은행계좌 거래내역 최종 잔액(가용자금) 합산 집계
     try {
-      const accountsRes = await queryTable('excel_accounts', {
-        filters: { ...tenantFilterObj, deleted_at: null },
-        limit: 1000
-      }).catch(() => ({ rows: [] }));
-      const accounts = accountsRes.rows || [];
+      const accountsRes = await executeSQL(`SELECT * FROM accounts WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] }));
+      let accounts = (accountsRes.rows || []).filter((r: any) => !r.deleted_at);
+      if (accounts.length === 0) {
+        const excelAccRes = await queryTable('excel_accounts', {
+          filters: { ...tenantFilterObj, deleted_at: null },
+          limit: 1000
+        }).catch(() => ({ rows: [] }));
+        accounts = excelAccRes.rows || [];
+      }
       bankAccountCount = accounts.length;
       totalAvailableCash = accounts.reduce((sum: number, acc: any) => sum + (Math.floor(Number(acc.balance)) || 0), 0);
     } catch (cashErr: any) {

@@ -120,24 +120,47 @@ function mapCardTransactionToFrontend(tx: any): any {
 // 국세청 세금계산서 데이터를 프론트엔드 영문 규격 포맷으로 변환하는 매퍼 함수
 function mapTaxInvoiceToFrontend(inv: any): any {
   if (!inv) return null;
-  const isSales = inv.invoice_type === "sales" || inv.invoiceType === "sales" || inv.invoiceType === "매출" || inv.invoice_type === "매출";
+  const isSales = inv.invoice_type === "sales" || inv.type === "SALES" || inv.invoice_type === "매출";
   
-  // 매입의 경우 공급자가 거래처, 매출의 경우 공급받는자가 거래처
-  const partnerBusinessNo = isSales 
-    ? (inv.공급받는자사업자등록번호 || inv.buyerBusinessNumber || "") 
-    : (inv.공급자사업자등록번호 || inv.supplierBusinessNumber || "");
+  let supplyAmt = Number(inv.공급가액 ?? inv.supply_amount ?? inv.supplyAmount ?? 0);
+  let taxAmt = Number(inv.세액 ?? inv.tax_amount ?? inv.taxAmount ?? 0);
+  let totalAmt = Number(inv.합계금액 ?? inv.total_amount ?? inv.totalAmount ?? 0);
+
+  // 공급가액이 0인데 합계금액과 세액이 있는 경우 역산 보정
+  if (!supplyAmt && totalAmt) {
+    supplyAmt = totalAmt - taxAmt;
+  }
+  // 합계금액이 0인데 공급가액과 세액이 있는 경우 보정
+  if (!totalAmt && supplyAmt) {
+    totalAmt = supplyAmt + taxAmt;
+  }
+  // 세액이 0인데 합계금액과 공급가액 차이가 있는 경우 보정
+  if (!taxAmt && totalAmt > supplyAmt && supplyAmt > 0) {
+    taxAmt = totalAmt - supplyAmt;
+  }
+
+  const supplierName = inv.공급자상호 || inv.supplier_corp_name || inv.supplierName || inv.supplier_name || inv.공급자 || "";
+  const buyerName = inv.공급받는자상호 || inv.buyer_corp_name || inv.buyerName || inv.buyer_name || inv.공급받는자 || "";
+  const supplierNum = inv.공급자사업자등록번호 || inv.supplier_corp_num || inv.supplierBusinessNumber || inv.supplier_business_number || "";
+  const buyerNum = inv.공급받는자사업자등록번호 || inv.buyer_corp_num || inv.buyerBusinessNumber || inv.buyer_business_number || "";
+
+  // 품목명이 숫자(세액 등)로 잘못 들어간 경우 보정
+  let itemName = inv.품목명 || inv.item_name || inv.itemName || "";
+  if (/^[0-9,.\s]+$/.test(itemName)) {
+    itemName = "";
+  }
 
   return {
     id: String(inv.id || ""),
-    issueDate: inv.작성일자 || inv.issueDate || "",
-    supplierName: inv.공급자상호 || inv.supplierName || "",
-    buyerName: inv.공급받는자상호 || inv.buyerName || "",
-    supplyAmount: Math.floor(Number(inv.공급가액 || inv.supplyAmount || 0)),
-    taxAmount: Math.floor(Number(inv.세액 || inv.taxAmount || 0)),
-    totalAmount: Math.floor(Number(inv.합계금액 || inv.totalAmount || 0)),
-    itemName: inv.품목명 || inv.itemName || "",
-    invoiceType: inv.invoice_type || inv.invoiceType || (isSales ? "sales" : "purchase"),
-    partnerBusinessNumber: partnerBusinessNo,
+    issueDate: inv.작성일자 || inv.issue_date || inv.issueDate || "",
+    supplierName,
+    buyerName,
+    supplyAmount: Math.floor(supplyAmt),
+    taxAmount: Math.floor(taxAmt),
+    totalAmount: Math.floor(totalAmt),
+    itemName,
+    invoiceType: isSales ? "sales" : "purchase",
+    partnerBusinessNumber: isSales ? (buyerNum || supplierNum) : (supplierNum || buyerNum),
     memo: inv.memo || ""
   };
 }
@@ -169,59 +192,45 @@ export async function GET(request: NextRequest) {
     const limit = Number(searchParams.get("limit")) || 30;
     const offset = Number(searchParams.get("offset")) || 0;
 
-    const rawTenantId = await getTenantId();
-    const tenantId = rawTenantId || 'default';
+    const rawTenantId = (await getTenantId()) || request.headers.get("x-egdesk-project-id") || request.headers.get("X-EGDesk-Project-Id") || "";
+    const tenantId = rawTenantId || 'tenant-default-id';
 
-    // 1. 계좌 목록 및 종합 통계 조회
+    // 1. 계좌 목록 및 종합 통계 조회 (해당 테넌트가 업로드/등록한 실데이터 전용)
     if (tab === "accounts") {
-      const [accountsRes, stats] = await Promise.all([
-        listAccounts().catch(() => ({ accounts: [] })),
-        getOverallStats().catch(() => null)
-      ]);
-      const accountsRaw = safeArray<any>(accountsRes?.accounts || accountsRes);
-      let accounts = accountsRaw.map(mapAccountToFrontend).filter(Boolean);
-      
-      // [로컬 DB 실시간 실잔액 머지] 로컬 SQLite DB에 수동으로 직접 적재된 계좌가 있다면 그 최신 잔액으로 덮어씌워 줍니다.
+      let accounts: any[] = [];
       try {
-        const localAccountsRes = await executeSQL(`SELECT id, balance FROM accounts WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] }));
-        const localAccounts = localAccountsRes.rows || [];
+        const localAccountsRes = await executeSQL(`SELECT * FROM accounts WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] }));
+        const localAccounts = (localAccountsRes.rows || []).filter((r: any) => !r.deleted_at);
         
-        const localBalanceMap: Record<string, number> = {};
-        localAccounts.forEach((la: any) => {
-          localBalanceMap[la.id] = la.balance;
-        });
-        
-        accounts = await Promise.all(accounts.map(async (acc: any) => {
+        accounts = await Promise.all(localAccounts.map(mapAccountToFrontend).filter(Boolean).map(async (acc: any) => {
           let lastTxDate = "";
           let lastTxTime = "";
           try {
             const isCard = acc.id.includes("CARD") || (acc.bankId && acc.bankId.includes("card")) || acc.accountName.includes("카드");
             if (isCard) {
-              // 신용카드의 가장 최신 정상 거래 일시 조회
               const latestCardTxRes = await executeSQL(`
                 SELECT approval_date, time 
                 FROM card_transactions 
-                WHERE account_id = '${acc.id}' AND tenant_id = '${tenantId}' AND approval_date LIKE '2%'
+                WHERE account_id = '${acc.id}' AND tenant_id = '${tenantId}'
                 ORDER BY approval_date DESC, time DESC, id DESC 
                 LIMIT 1
-              `);
+              `).catch(() => ({ rows: [] }));
               const latestCardTx = latestCardTxRes.rows?.[0];
               if (latestCardTx) {
-                lastTxDate = latestCardTx.approval_date || "";
+                lastTxDate = (latestCardTx.approval_date || "").replace(/\./g, "-");
                 lastTxTime = latestCardTx.time || "";
               }
             } else {
-              // 은행 계좌의 가장 최신 정상 거래 일시 조회
               const latestTxRes = await executeSQL(`
                 SELECT transaction_date, transaction_time 
                 FROM bank_transactions 
-                WHERE account_id = '${acc.id}' AND tenant_id = '${tenantId}' AND transaction_date LIKE '2%'
+                WHERE account_id = '${acc.id}' AND tenant_id = '${tenantId}'
                 ORDER BY transaction_date DESC, transaction_time DESC, id DESC 
                 LIMIT 1
-              `);
+              `).catch(() => ({ rows: [] }));
               const latestTx = latestTxRes.rows?.[0];
               if (latestTx) {
-                lastTxDate = latestTx.transaction_date || "";
+                lastTxDate = (latestTx.transaction_date || "").replace(/\./g, "-");
                 lastTxTime = latestTx.transaction_time || "";
               }
             }
@@ -229,24 +238,17 @@ export async function GET(request: NextRequest) {
             console.warn(`[Local DB last tx date query failed] for account ${acc.id}:`, txErr.message);
           }
 
-          const balanceVal = localBalanceMap[acc.id] !== undefined ? localBalanceMap[acc.id] : acc.balance;
-          if (localBalanceMap[acc.id] !== undefined) {
-            console.log(`[Local DB accounts merge] 계좌 잔액 동기화 반영: ${acc.id} -> ₩${localBalanceMap[acc.id]}`);
-          }
-
           return {
             ...acc,
-            balance: balanceVal,
             lastTxDate,
             lastTxTime
           };
         }));
       } catch (dbErr: any) {
-        console.warn("⚠️ Local DB accounts merge warning:", dbErr.message);
+        console.warn("⚠️ Local DB accounts query failed:", dbErr.message);
       }
       
-      // stats의 totalBalance 계산에 오류가 있을 수 있으므로 직접 합산하여 폴백 처리
-      const totalBalance = accounts.reduce((acc, curr) => acc + curr.balance, 0);
+      const totalBalance = accounts.reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0);
 
       return NextResponse.json({
         success: true,
@@ -260,16 +262,14 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 2. 은행 거래 내역 조회
+    // 2. 은행 거래 내역 조회 (해당 테넌트 업로드 실데이터 전용)
     if (tab === "transactions") {
       const bankId = searchParams.get("bankId") || undefined;
       const accountId = searchParams.get("accountId") || undefined;
       
       let list: any[] = [];
       let total = 0;
-      let localQuerySuccess = false;
 
-      // [로컬 DB 실시간 실데이터 최우선 조회] 수동 업로드 등으로 로컬 DB에 실데이터가 적재된 환경이므로 로컬 DB를 최우선 조회합니다.
       try {
         let query = `SELECT * FROM bank_transactions WHERE tenant_id = '${tenantId}'`;
         const whereClauses: string[] = [];
@@ -297,47 +297,20 @@ export async function GET(request: NextRequest) {
           query += " AND " + whereClauses.join(" AND ");
         }
         
-        // 전체 카운트 구하기
         const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as cnt");
         const countRes = await executeSQL(countQuery).catch(() => ({ rows: [] }));
         const totalCount = countRes.rows?.[0]?.cnt || 0;
         
         if (totalCount > 0) {
           total = totalCount;
-
-          // 페이징 및 최신순 정렬 적용
           query += ` ORDER BY transaction_date DESC, transaction_time DESC, id DESC LIMIT ${limit} OFFSET ${offset}`;
           
           const localTxsRes = await executeSQL(query);
-          const localTxs = localTxsRes.rows || [];
-          
-          // 프론트엔드가 요구하는 포맷으로 표준 매핑 가공
+          const localTxs = (localTxsRes.rows || []).filter((r: any) => !r.deleted_at);
           list = localTxs.map(mapTransactionToFrontend).filter(Boolean);
-          localQuerySuccess = true;
-          console.log(`[Local DB bank transactions] 로컬 실데이터 최우선 조회 성공: ${list.length}건 반환`);
         }
       } catch (dbErr: any) {
-        console.warn("⚠️ Local DB bank transactions primary query failed:", dbErr.message);
-      }
-
-      // 만약 로컬 SQLite DB에 데이터가 없거나 조회에 실패한 경우에만 폴백으로 원격 API 헬퍼를 찌릅니다.
-      if (!localQuerySuccess) {
-        console.log("[Remote DB bank transactions] 로컬 DB 데이터가 없어 원격 API 조회를 진행합니다.");
-        const transactions = await queryBankTransactions({
-          bankId: bankId === "all" ? undefined : bankId,
-          accountId: accountId === "all" ? undefined : accountId,
-          startDate,
-          endDate,
-          searchText,
-          limit,
-          offset,
-          orderBy: "date",
-          orderDir: "desc"
-        }).catch(() => ({ transactions: [], total: 0 }));
-
-        const rawList = safeArray(transactions?.transactions || transactions);
-        list = rawList.map(mapTransactionToFrontend).filter(Boolean);
-        total = transactions?.total || list.length;
+        console.warn("⚠️ Local DB bank transactions query failed:", dbErr.message);
       }
 
       return NextResponse.json({
@@ -349,15 +322,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 3. 신용 카드 거래 내역 조회
+    // 3. 신용 카드 거래 내역 조회 (해당 테넌트 업로드 실데이터 전용)
     if (tab === "cards") {
       let cardTxList: any[] = [];
       let total = 0;
       const cardCompanyId = searchParams.get("cardCompanyId") || undefined;
       const cardNumber = searchParams.get("cardNumber") || undefined;
-      let localQuerySuccess = false;
 
-      // [로컬 DB 실시간 실데이터 최우선 조회] 수동 업로드 등으로 로컬 DB에 실데이터가 적재된 환경이므로 로컬 DB를 최우선 조회합니다.
       try {
         let query = `SELECT * FROM card_transactions WHERE tenant_id = '${tenantId}'`;
         const whereClauses: string[] = [];
@@ -385,53 +356,20 @@ export async function GET(request: NextRequest) {
           query += " AND " + whereClauses.join(" AND ");
         }
 
-        // 전체 카운트 구하기
         const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as cnt");
         const countRes = await executeSQL(countQuery).catch(() => ({ rows: [] }));
         const totalCount = countRes.rows?.[0]?.cnt || 0;
         
         if (totalCount > 0) {
           total = totalCount;
-
-          // 페이징 및 최신순 정렬 적용
           query += ` ORDER BY approval_date DESC, approval_datetime DESC, id DESC LIMIT ${limit} OFFSET ${offset}`;
           
           const localCardTxsRes = await executeSQL(query);
-          const localCardTxs = localCardTxsRes.rows || [];
-          
-          // 프론트엔드가 요구하는 포맷으로 표준 매핑 가공
+          const localCardTxs = (localCardTxsRes.rows || []).filter((r: any) => !r.deleted_at);
           cardTxList = localCardTxs.map(mapCardTransactionToFrontend).filter(Boolean);
-          localQuerySuccess = true;
-          console.log(`[Local DB card transactions] 로컬 실데이터 최우선 조회 성공: ${cardTxList.length}건 반환 (총 ${total}건)`);
         }
       } catch (dbErr: any) {
-        console.warn("⚠️ Local DB card transactions primary query failed:", dbErr.message);
-      }
-
-      // 만약 로컬 SQLite DB에 데이터가 없거나 조회에 실패한 경우에만 폴백으로 원격 API 조회를 진행합니다.
-      if (!localQuerySuccess) {
-        console.log("[Remote DB card transactions] 로컬 DB 데이터가 없어 원격 API 조회를 진행합니다.");
-        try {
-          const cardTx = await queryCardTransactions({
-            cardCompanyId: cardCompanyId === "all" ? undefined : cardCompanyId,
-            cardNumber: cardNumber === "all" ? undefined : cardNumber,
-            startDate,
-            endDate,
-            merchantName: searchText,
-            limit,
-            offset,
-            orderBy: "date",
-            orderDir: "desc"
-          }).catch(() => null);
-
-          if (cardTx) {
-            const rawList = safeArray(cardTx.transactions || cardTx);
-            cardTxList = rawList.map(mapCardTransactionToFrontend).filter(Boolean);
-            total = cardTx?.total || cardTxList.length;
-          }
-        } catch (e) {
-          console.error("Remote card transactions query failed:", e);
-        }
+        console.warn("⚠️ Local DB card transactions query failed:", dbErr.message);
       }
 
       return NextResponse.json({
@@ -443,65 +381,42 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 4. 국세청 홈택스 전자세금계산서 조회
-    // 4. 국세청 홈택스 전자세금계산서 조회
+    // 4. 국세청 홈택스 전자세금계산서 조회 (해당 테넌트 업로드 실데이터 전용)
     if (tab === "hometax-invoice") {
       let filteredList: any[] = [];
       let total = 0;
 
       try {
-        const taxInvoices = await queryTaxInvoices({
-          invoiceType: invoiceType === "all" ? undefined : invoiceType,
-          startDate,
-          endDate,
-          limit,
-          offset
-        }).catch(() => ({ invoices: [], total: 0 }));
-
-        const rawList = safeArray(taxInvoices?.invoices || taxInvoices);
-        const list = rawList.map(mapTaxInvoiceToFrontend).filter(Boolean);
+        let query = `SELECT * FROM tax_invoices WHERE tenant_id = '${tenantId}'`;
+        const whereClauses: string[] = [];
         
-        filteredList = searchText
-          ? list.filter((inv: any) =>
-              (inv.supplierName || "").includes(searchText) ||
-              (inv.buyerName || "").includes(searchText) ||
-              (inv.itemName || "").includes(searchText)
-            )
-          : list;
-          
-        total = taxInvoices?.total || filteredList.length;
-      } catch (e) {}
-
-      // [로컬 DB 실시간 실데이터 폴백] 원격 API 조회 결과가 없거나 부족한 경우 로컬 SQLite DB의 실데이터를 조회하여 대체 및 병합합니다.
-      if (filteredList.length === 0) {
-        try {
-          let query = `SELECT * FROM tax_invoices WHERE tenant_id = '${tenantId}'`;
-          const whereClauses: string[] = [];
-          
-          if (startDate) {
-            whereClauses.push(`작성일자 >= '${startDate}'`);
-          }
-          if (endDate) {
-            whereClauses.push(`작성일자 <= '${endDate}'`);
-          }
-          if (invoiceType && invoiceType !== "all") {
-            whereClauses.push(`invoice_type = '${invoiceType}'`);
-          }
-          
-          if (whereClauses.length > 0) {
-            query += " AND " + whereClauses.join(" AND ");
-          }
-          
-          // 전체 카운트 구하기
-          const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as cnt");
-          const countRes = await executeSQL(countQuery).catch(() => ({ rows: [] }));
-          const totalCount = countRes.rows?.[0]?.cnt || 0;
-          
-          // 정렬 및 페이징 적용
-          query += ` ORDER BY 작성일자 DESC, id DESC LIMIT ${limit} OFFSET ${offset}`;
+        if (startDate) {
+          const normalizedStart = startDate.replace(/-/g, ".");
+          whereClauses.push(`(작성일자 >= '${startDate}' OR 작성일자 >= '${normalizedStart}' OR issue_date >= '${startDate}' OR issue_date >= '${normalizedStart}')`);
+        }
+        if (endDate) {
+          const normalizedEnd = endDate.replace(/-/g, ".");
+          whereClauses.push(`(작성일자 <= '${endDate}' OR 작성일자 <= '${normalizedEnd}' OR issue_date <= '${endDate}' OR issue_date <= '${normalizedEnd}')`);
+        }
+        if (invoiceType && invoiceType !== "all") {
+          const isSales = invoiceType === 'sales' || invoiceType === '매출';
+          whereClauses.push(`(invoice_type = '${invoiceType}' OR type = '${isSales ? 'SALES' : 'PURCHASE'}' OR invoice_type = '${isSales ? '매출' : '매입'}')`);
+        }
+        
+        if (whereClauses.length > 0) {
+          query += " AND " + whereClauses.join(" AND ");
+        }
+        
+        const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as cnt");
+        const countRes = await executeSQL(countQuery).catch(() => ({ rows: [] }));
+        const totalCount = countRes.rows?.[0]?.cnt || 0;
+        
+        if (totalCount > 0) {
+          total = totalCount;
+          query += ` ORDER BY COALESCE(작성일자, issue_date) DESC, id DESC LIMIT ${limit} OFFSET ${offset}`;
           
           const localInvoicesRes = await executeSQL(query);
-          const localInvoices = localInvoicesRes.rows || [];
+          const localInvoices = (localInvoicesRes.rows || []).filter((r: any) => !r.deleted_at);
           const mappedList = localInvoices.map(mapTaxInvoiceToFrontend).filter(Boolean);
           
           filteredList = searchText
@@ -511,11 +426,9 @@ export async function GET(request: NextRequest) {
                 (inv.itemName || "").includes(searchText)
               )
             : mappedList;
-            
-          total = searchText ? filteredList.length : totalCount;
-        } catch (dbErr: any) {
-          console.warn("⚠️ Local DB hometax-invoice fallback failed:", dbErr.message);
         }
+      } catch (dbErr: any) {
+        console.warn("⚠️ Local DB hometax-invoice query failed:", dbErr.message);
       }
 
       return NextResponse.json({
@@ -527,64 +440,42 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 5. 국세청 홈택스 전자계산서(면세) 조회
+    // 5. 국세청 홈택스 전자계산서(면세) 조회 (해당 테넌트 업로드 실데이터 전용)
     if (tab === "hometax-exempt") {
       let filteredList: any[] = [];
       let total = 0;
 
       try {
-        const exemptInvoices = await queryTaxExemptInvoices({
-          invoiceType: invoiceType === "all" ? undefined : invoiceType,
-          startDate,
-          endDate,
-          limit,
-          offset
-        }).catch(() => ({ invoices: [], total: 0 }));
-
-        const rawList = safeArray(exemptInvoices?.invoices || exemptInvoices);
-        const list = rawList.map(mapTaxInvoiceToFrontend).filter(Boolean);
+        let query = `SELECT * FROM tax_exempt_invoices WHERE tenant_id = '${tenantId}'`;
+        const whereClauses: string[] = [];
         
-        filteredList = searchText
-          ? list.filter((inv: any) =>
-              (inv.supplierName || "").includes(searchText) ||
-              (inv.buyerName || "").includes(searchText) ||
-              (inv.itemName || "").includes(searchText)
-            )
-          : list;
-          
-        total = exemptInvoices?.total || filteredList.length;
-      } catch (e) {}
-
-      // [로컬 DB 실시간 실데이터 폴백] 원격 API 조회 결과가 없거나 부족한 경우 로컬 SQLite DB의 실데이터를 조회하여 대체 및 병합합니다.
-      if (filteredList.length === 0) {
-        try {
-          let query = `SELECT * FROM tax_exempt_invoices WHERE tenant_id = '${tenantId}'`;
-          const whereClauses: string[] = [];
-          
-          if (startDate) {
-            whereClauses.push(`작성일자 >= '${startDate}'`);
-          }
-          if (endDate) {
-            whereClauses.push(`작성일자 <= '${endDate}'`);
-          }
-          if (invoiceType && invoiceType !== "all") {
-            whereClauses.push(`invoice_type = '${invoiceType}'`);
-          }
-          
-          if (whereClauses.length > 0) {
-            query += " AND " + whereClauses.join(" AND ");
-          }
-          
-          // 전체 카운트 구하기
-          const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as cnt");
-          const countRes = await executeSQL(countQuery).catch(() => ({ rows: [] }));
-          const totalCount = countRes.rows?.[0]?.cnt || 0;
-          
-          // 정렬 및 페이징 적용
-          query += ` ORDER BY 작성일자 DESC, id DESC LIMIT ${limit} OFFSET ${offset}`;
+        if (startDate) {
+          const normalizedStart = startDate.replace(/-/g, ".");
+          whereClauses.push(`(작성일자 >= '${startDate}' OR 작성일자 >= '${normalizedStart}' OR issue_date >= '${startDate}' OR issue_date >= '${normalizedStart}')`);
+        }
+        if (endDate) {
+          const normalizedEnd = endDate.replace(/-/g, ".");
+          whereClauses.push(`(작성일자 <= '${endDate}' OR 작성일자 <= '${normalizedEnd}' OR issue_date <= '${endDate}' OR issue_date <= '${normalizedEnd}')`);
+        }
+        if (invoiceType && invoiceType !== "all") {
+          const isSales = invoiceType === 'sales' || invoiceType === '매출';
+          whereClauses.push(`(invoice_type = '${invoiceType}' OR type = '${isSales ? 'SALES' : 'PURCHASE'}' OR invoice_type = '${isSales ? '매출' : '매입'}')`);
+        }
+        
+        if (whereClauses.length > 0) {
+          query += " AND " + whereClauses.join(" AND ");
+        }
+        
+        const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as cnt");
+        const countRes = await executeSQL(countQuery).catch(() => ({ rows: [] }));
+        const totalCount = countRes.rows?.[0]?.cnt || 0;
+        
+        if (totalCount > 0) {
+          total = totalCount;
+          query += ` ORDER BY COALESCE(작성일자, issue_date) DESC, id DESC LIMIT ${limit} OFFSET ${offset}`;
           
           const localExemptsRes = await executeSQL(query);
-          const localExempts = localExemptsRes.rows || [];
+          const localExempts = (localExemptsRes.rows || []).filter((r: any) => !r.deleted_at);
           const mappedList = localExempts.map(mapTaxInvoiceToFrontend).filter(Boolean);
           
           filteredList = searchText
@@ -594,11 +485,9 @@ export async function GET(request: NextRequest) {
                 (inv.itemName || "").includes(searchText)
               )
             : mappedList;
-            
-          total = searchText ? filteredList.length : totalCount;
-        } catch (dbErr: any) {
-          console.warn("⚠️ Local DB hometax-exempt fallback failed:", dbErr.message);
         }
+      } catch (dbErr: any) {
+        console.warn("⚠️ Local DB hometax-exempt query failed:", dbErr.message);
       }
 
       return NextResponse.json({
@@ -610,81 +499,54 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 6. 국세청 홈택스 현금영수증 조회
+    // 6. 국세청 홈택스 현금영수증 조회 (해당 테넌트 업로드 실데이터 전용)
     if (tab === "hometax-cash") {
       const cashPurpose = searchParams.get("cashPurpose") || undefined;
       let filteredList: any[] = [];
       let total = 0;
 
       try {
-        const cashReceipts = await queryCashReceipts({
-          startDate,
-          endDate,
-          limit,
-          offset
-        }).catch(() => ({ receipts: [], total: 0 }));
-
-        const rawList = safeArray(cashReceipts?.receipts || cashReceipts);
-        const list = rawList.map(mapCashReceiptToFrontend).filter(Boolean);
+        let query = `SELECT * FROM cash_receipts WHERE tenant_id = '${tenantId}'`;
+        const whereClauses: string[] = [];
         
-        filteredList = list;
+        if (startDate) {
+          const normalizedStart = startDate.replace(/-/g, ".");
+          whereClauses.push(`(매출일시 >= '${startDate}' OR 매출일시 >= '${normalizedStart}' OR transaction_date >= '${startDate}' OR transaction_date >= '${normalizedStart}')`);
+        }
+        if (endDate) {
+          const normalizedEnd = endDate.replace(/-/g, ".");
+          whereClauses.push(`(매출일시 <= '${endDate}' OR 매출일시 <= '${normalizedEnd}' OR transaction_date <= '${endDate}' OR transaction_date <= '${normalizedEnd}')`);
+        }
         if (cashPurpose && cashPurpose !== "all") {
-          filteredList = filteredList.filter((rcpt: any) => rcpt.purpose === cashPurpose);
-        }
-
-        if (searchText) {
-          filteredList = filteredList.filter((rcpt: any) =>
-            (rcpt.franchiseName || "").includes(searchText) ||
-            (rcpt.approvalNumber || "").includes(searchText)
-          );
+          whereClauses.push(`(용도구분 = '${cashPurpose}' OR purpose = '${cashPurpose}')`);
         }
         
-        total = cashReceipts?.total || filteredList.length;
-      } catch (e) {}
-
-      // [로컬 DB 실시간 실데이터 폴백] 원격 API 조회 결과가 없거나 부족한 경우 로컬 SQLite DB의 실데이터를 조회하여 대체 및 병합합니다.
-      if (filteredList.length === 0) {
-        try {
-          let query = `SELECT * FROM cash_receipts WHERE tenant_id = '${tenantId}'`;
-          const whereClauses: string[] = [];
-          
-          if (startDate) {
-            whereClauses.push(`(매출일시 >= '${startDate}' OR transaction_date >= '${startDate}')`);
-          }
-          if (endDate) {
-            whereClauses.push(`(매출일시 <= '${endDate}' OR transaction_date <= '${endDate}')`);
-          }
-          if (cashPurpose && cashPurpose !== "all") {
-            whereClauses.push(`(용도구분 = '${cashPurpose}' OR purpose = '${cashPurpose}')`);
-          }
-          
-          if (whereClauses.length > 0) {
-            query += " AND " + whereClauses.join(" AND ");
-          }
-          
-          // 전체 카운트 구하기
-          const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as cnt");
-          const countRes = await executeSQL(countQuery).catch(() => ({ rows: [] }));
-          const totalCount = countRes.rows?.[0]?.cnt || 0;
-          
-          // 정렬 및 페이징 적용
-          query += ` ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`;
-          
-          const localCashReceiptsRes = await executeSQL(query);
-          const localCashReceipts = localCashReceiptsRes.rows || [];
-          const mappedList = localCashReceipts.map(mapCashReceiptToFrontend).filter(Boolean);
-          
-          filteredList = searchText
-            ? mappedList.filter((rcpt: any) =>
-                (rcpt.franchiseName || "").includes(searchText) ||
-                (rcpt.approvalNumber || "").includes(searchText)
-              )
-            : mappedList;
-            
-          total = searchText ? filteredList.length : totalCount;
-        } catch (dbErr: any) {
-          console.warn("⚠️ Local DB hometax-cash fallback failed:", dbErr.message);
+        if (whereClauses.length > 0) {
+          query += " AND " + whereClauses.join(" AND ");
         }
+        
+        const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as cnt");
+        const countRes = await executeSQL(countQuery).catch(() => ({ rows: [] }));
+        const totalCount = countRes.rows?.[0]?.cnt || 0;
+        
+        if (totalCount > 0) {
+          total = totalCount;
+          query += ` ORDER BY COALESCE(매출일시, transaction_date) DESC, id DESC LIMIT ${limit} OFFSET ${offset}`;
+          
+          const localCashRes = await executeSQL(query);
+          const localCash = (localCashRes.rows || []).filter((r: any) => !r.deleted_at);
+          const list = localCash.map(mapCashReceiptToFrontend).filter(Boolean);
+          
+          filteredList = list;
+          if (searchText) {
+            filteredList = filteredList.filter((rcpt: any) =>
+              (rcpt.franchiseName || "").includes(searchText) ||
+              (rcpt.approvalNumber || "").includes(searchText)
+            );
+          }
+        }
+      } catch (dbErr: any) {
+        console.warn("⚠️ Local DB hometax-cash query failed:", dbErr.message);
       }
 
       return NextResponse.json({
@@ -696,7 +558,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 7. 동기화 역사 & 홈택스 연결 정보 조회
+    // 7. 동기화 이력 조회
     if (tab === "sync") {
       const [syncHistory, hometaxSync, hometaxConnections] = await Promise.all([
         getSyncHistory(50).catch(() => []),
@@ -714,33 +576,69 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 8. 금융 종합 수치 통계
+    // 8. 금융 종합 수치 통계 (해당 테넌트 계좌 및 거래 실데이터 집계)
     if (tab === "stats") {
-      const stats = await getOverallStats().catch(() => null);
+      let totalBalance = 0;
+      let activeAccounts = 0;
+      let bankCount = 0;
+      let transactionCount = 0;
+
+      try {
+        const [accRes, txRes, cardRes] = await Promise.all([
+          executeSQL(`SELECT * FROM accounts WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] })),
+          executeSQL(`SELECT COUNT(*) as cnt FROM bank_transactions WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] })),
+          executeSQL(`SELECT COUNT(*) as cnt FROM card_transactions WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] }))
+        ]);
+        const validAccounts = (accRes.rows || []).filter((r: any) => !r.deleted_at);
+        activeAccounts = validAccounts.length;
+        totalBalance = validAccounts.reduce((sum: number, acc: any) => sum + (Number(acc.balance) || 0), 0);
+        
+        const distinctBanks = new Set(validAccounts.map((acc: any) => acc.bank_id || acc.bankId).filter(Boolean));
+        bankCount = distinctBanks.size;
+
+        const bankTxCnt = Number(txRes.rows?.[0]?.cnt || 0);
+        const cardTxCnt = Number(cardRes.rows?.[0]?.cnt || 0);
+        transactionCount = bankTxCnt + cardTxCnt;
+      } catch (e: any) {
+        console.warn("⚠️ Stats calculation error:", e.message);
+      }
+
       return NextResponse.json({
         success: true,
-        data: stats || { totalBalance: 0, activeAccounts: 0, bankCount: 0, transactionCount: 0 }
+        data: {
+          totalBalance,
+          activeAccounts,
+          bankCount,
+          transactionCount
+        }
       });
     }
 
-    // 9. 금월/전월/전전월/금년도 카드 및 홈택스 입출 통합 통계
+    // 9. 금월/전월/전전월/금년도 카드 및 홈택스 입출 통합 통계 (해당 테넌트 업로드 실데이터 100% 집계)
     if (tab === "summary") {
       const now = new Date();
       let currentYear = now.getFullYear();
       let currentMonth = now.getMonth(); // 0-indexed (5 = 6월)
 
-      // [스마트 집계 기준일 자동 감지] 로컬 DB 내 신용카드 최신 거래일자를 감지하여 통계 집계의 연도/월로 유동적 동기화합니다.
+      // [스마트 집계 기준일 자동 감지] 해당 테넌트의 신용카드 및 세금계산서 최신 거래일자를 감지하여 통계 기준일 동기화
       try {
-        const latestCardTxRes = await executeSQL("SELECT approval_date FROM card_transactions ORDER BY approval_date DESC LIMIT 1");
-        const latestCardTx = latestCardTxRes.rows?.[0];
-        if (latestCardTx && latestCardTx.approval_date) {
-          const dateParts = latestCardTx.approval_date.replace(/\./g, "-").split("-");
+        const [latestCardTxRes, latestTaxInvRes] = await Promise.all([
+          executeSQL(`SELECT approval_date as dt FROM card_transactions WHERE tenant_id = '${tenantId}' AND approval_date IS NOT NULL AND approval_date != '' ORDER BY approval_date DESC LIMIT 1`).catch(() => ({ rows: [] })),
+          executeSQL(`SELECT COALESCE(작성일자, issue_date) as dt FROM tax_invoices WHERE tenant_id = '${tenantId}' AND COALESCE(작성일자, issue_date) IS NOT NULL ORDER BY dt DESC LIMIT 1`).catch(() => ({ rows: [] }))
+        ]);
+        const cardDate = latestCardTxRes.rows?.[0]?.dt;
+        const invDate = latestTaxInvRes.rows?.[0]?.dt;
+        const latestDate = [cardDate, invDate].filter(Boolean).sort().pop();
+
+        if (latestDate) {
+          const dateParts = String(latestDate).replace(/\./g, "-").split("-");
           if (dateParts.length >= 2) {
             const latestYear = parseInt(dateParts[0], 10);
             const latestMonth = parseInt(dateParts[1], 10) - 1; // 0-indexed
-            console.log(`[Smart Summary Date Detect] 최신 카드 승인일(${latestCardTx.approval_date}) 기준으로 통계 기준일을 유동적 갱신합니다: ${latestYear}년 ${latestMonth + 1}월`);
-            currentYear = latestYear;
-            currentMonth = latestMonth;
+            if (!isNaN(latestYear) && !isNaN(latestMonth) && latestYear > 2000) {
+              currentYear = latestYear;
+              currentMonth = latestMonth;
+            }
           }
         }
       } catch (e: any) {
@@ -752,72 +650,22 @@ export async function GET(request: NextRequest) {
       };
 
       const m0Str = getYearMonthStr(currentYear, currentMonth); // 이번 달
-
       const m1Date = new Date(currentYear, currentMonth - 1, 1);
       const m1Str = getYearMonthStr(m1Date.getFullYear(), m1Date.getMonth()); // 지난달
-
       const m2Date = new Date(currentYear, currentMonth - 2, 1);
       const m2Str = getYearMonthStr(m2Date.getFullYear(), m2Date.getMonth()); // 지지난달
 
-      // 통계 집계를 위한 시작일 계산 (올해 1월 1일과 지지난달 1일 중 더 이른 날짜)
-      const yearStart = `${currentYear}-01-01`;
-      const m2Start = `${m2Date.getFullYear()}-${String(m2Date.getMonth() + 1).padStart(2, '0')}-01`;
-      const startDate = m2Start < yearStart ? m2Start : yearStart;
-
-      // egdesk-helpers 함수들을 사용하여 금융 자료 병렬 조회
       const [cardTxRes, taxInvoiceRes, taxExemptRes, cashReceiptRes] = await Promise.all([
-        queryCardTransactions({ startDate, limit: 10000 }).catch(() => ({ transactions: [], total: 0 })),
-        queryTaxInvoices({ startDate, limit: 10000 }).catch(() => ({ invoices: [], total: 0 })),
-        queryTaxExemptInvoices({ startDate, limit: 10000 }).catch(() => ({ invoices: [], total: 0 })),
-        queryCashReceipts({ startDate, limit: 10000 }).catch(() => ({ receipts: [], total: 0 }))
+        executeSQL(`SELECT * FROM card_transactions WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] })),
+        executeSQL(`SELECT * FROM tax_invoices WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] })),
+        executeSQL(`SELECT * FROM tax_exempt_invoices WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] })),
+        executeSQL(`SELECT * FROM cash_receipts WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] }))
       ]);
 
-      let cardTxList: any[] = [];
-
-      // [로컬 DB 실시간 카드 통계 우선 결합] 로컬 SQLite DB에 카드 거래 내역이 존재하면 원격 데이터 대신 무조건 로컬 실거래 데이터를 기반으로 요약 통계를 집계합니다.
-      try {
-        const localCardTxsRes = await executeSQL("SELECT * FROM card_transactions");
-        const localCardTxs = localCardTxsRes.rows || [];
-        
-        if (localCardTxs.length > 0) {
-          console.log(`[Summary API Fallback] 로컬 DB 카드 거래 ${localCardTxs.length}건을 기반으로 요약 집계를 수행합니다.`);
-          cardTxList = localCardTxs.map((tx: any) => ({
-            id: String(tx.id || ""),
-            cardCompanyName: tx.card_company_id === "shinhan-card" ? "신한카드" :
-                             tx.card_company_id === "kb-card" ? "KB국민카드" :
-                             tx.card_company_id === "nh-card" ? "NH농협카드" :
-                             tx.card_company_id === "bc-card" ? "BC카드" :
-                             tx.card_company_id === "hana-card" ? "하나카드" : "기타카드",
-            cardNumber: tx.card_number || "",
-            amount: Number(tx.amount || 0),
-            date: (tx.approval_date || "").replace(/\./g, "-"),
-            time: tx.time || "",
-            status: tx.is_cancelled ? "취소" : "승인"
-          }));
-        }
-      } catch (dbErr: any) {
-        console.warn("⚠️ Local DB summary fallback error:", dbErr.message);
-      }
-
-      // 만약 로컬 DB에 카드가 없는 클린 상태인 경우에만 원격 데이터를 백업 폴백으로 사용
-      if (cardTxList.length === 0) {
-        cardTxList = safeArray<any>(cardTxRes?.transactions || cardTxRes).map(tx => ({
-          id: String(tx.id || ""),
-          cardCompanyName: tx.cardCompanyName || "기타카드",
-          cardNumber: tx.cardNumber || "",
-          amount: Number(tx.amount || 0),
-          date: tx.date || "",
-          time: tx.time || "",
-          status: tx.status || "승인"
-        }));
-      }
-      const taxInvoiceListRaw = safeArray<any>(taxInvoiceRes?.invoices || taxInvoiceRes);
-      const taxExemptListRaw = safeArray<any>(taxExemptRes?.invoices || taxExemptRes);
-      const cashReceiptListRaw = safeArray<any>(cashReceiptRes?.receipts || cashReceiptRes);
-
-      const taxInvoiceList = taxInvoiceListRaw.map(mapTaxInvoiceToFrontend).filter(Boolean);
-      const taxExemptList = taxExemptListRaw.map(mapTaxInvoiceToFrontend).filter(Boolean);
-      const cashReceiptList = cashReceiptListRaw.map(mapCashReceiptToFrontend).filter(Boolean);
+      const cardTxList = (cardTxRes.rows || []).filter((r: any) => !r.deleted_at).map(mapCardTransactionToFrontend).filter(Boolean);
+      const taxInvoiceList = (taxInvoiceRes.rows || []).filter((r: any) => !r.deleted_at).map(mapTaxInvoiceToFrontend).filter(Boolean);
+      const taxExemptList = (taxExemptRes.rows || []).filter((r: any) => !r.deleted_at).map(mapTaxInvoiceToFrontend).filter(Boolean);
+      const cashReceiptList = (cashReceiptRes.rows || []).filter((r: any) => !r.deleted_at).map(mapCashReceiptToFrontend).filter(Boolean);
 
       // (1) 카드사별/월별 집계
       const cardMap: Record<string, { cardCompanyName: string; cardNumber: string; m0: number; m1: number; m2: number; yTotal: number; lastTxDate: string; lastTxTime: string }> = {};
@@ -905,7 +753,7 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      // 현금영수증 집계 (현금영수증은 전액 발행(매출)로 취급)
+      // 현금영수증 집계
       cashReceiptList.forEach((rcpt) => {
         const target = hometaxSummary.sales;
         const amount = Number(rcpt.supplyAmount) || 0;

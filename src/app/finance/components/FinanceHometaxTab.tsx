@@ -6,6 +6,8 @@ import { HometaxInvoice, HometaxCash, DbExpenseTag } from "../types";
 import { downloadHometaxCashExcel, downloadHometaxInvoiceExcel } from "../utils";
 import TableSkeleton from "./TableSkeleton";
 import PaginationBar from "./PaginationBar";
+import { getSavedGoogleSheetUrl } from "@/lib/google-sheets-storage";
+import { openGoogleSheetsViewer } from "@/lib/excel-export";
 
 interface FinanceHometaxTabProps {
   hometaxSubTab: "invoice" | "exempt" | "cash";
@@ -129,10 +131,19 @@ export default function FinanceHometaxTab({
                   );
                 }
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer mr-2"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               엑셀 다운로드
+            </button>
+            <button
+              type="button"
+              onClick={() => openGoogleSheetsViewer(getSavedGoogleSheetUrl())}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer mr-2"
+              title="연동된 구글 스프레드시트 열람 또는 실시간 시트 화면으로 이동합니다."
+            >
+              <Globe className="w-3.5 h-3.5" />
+              구글시트 조회
             </button>
             {(hometaxSubTab === "invoice" || hometaxSubTab === "exempt") && (
               <div className="flex items-center gap-1">
@@ -205,13 +216,10 @@ export default function FinanceHometaxTab({
                           </td>
                           <td className="p-4">
                             <div className="font-extrabold text-slate-800">
-                              {isSales ? inv.buyerName : inv.supplierName}
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                              사업자등록번호: {inv.id.split("-")[0] || "-"}
+                              {inv.buyerName || "-"} / {inv.supplierName || "-"}
                             </div>
                           </td>
-                          <td className="p-4 font-semibold text-slate-600">{inv.itemName || "종합 광고 수수료"}</td>
+                          <td className="p-4 font-semibold text-slate-600">{inv.itemName || "-"}</td>
                           <td className="p-4 max-w-[150px]">
                             {hasAdminAccess && editingHometaxTxId === inv.id && editingField === "memo" ? (
                               <div className="flex flex-col gap-1.5 p-1 bg-white rounded-2xl border border-slate-100 shadow-lg min-w-[220px]">

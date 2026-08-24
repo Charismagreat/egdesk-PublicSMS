@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Globe, Users, AlertCircle, CheckCircle2, X, Loader2, Sparkles, Building2, Briefcase, RefreshCw, Check 
+  Globe, Users, AlertCircle, CheckCircle2, X, Loader2, Sparkles, Building2, Briefcase, RefreshCw, Check, ShieldCheck, AlertTriangle 
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from "@/lib/google-sheets-storage";
+import { sanitizeDate, sanitizeAmount, sanitizePhoneNumber, sanitizeEmail } from "@/lib/data-validator";
 
 interface HrGoogleSheetsUploadModalProps {
   isOpen: boolean;
@@ -134,16 +135,29 @@ export default function HrGoogleSheetsUploadModal({
         if (!name && rowArr[0]) name = String(rowArr[0]).trim();
         if (!username && rowArr[1]) username = String(rowArr[1]).trim();
 
+        const hireDateSan = sanitizeDate(hire_date);
+        const finalHireDate = hireDateSan.isValid ? hireDateSan.value : (hire_date || new Date().toISOString().split('T')[0]);
+        const phoneSan = sanitizePhoneNumber(phone);
+        const emailSan = sanitizeEmail(email);
+        const rateSan = sanitizeAmount(hourly_rate);
+
+        const warnings: string[] = [];
+        if (hire_date && !hireDateSan.isValid) warnings.push(hireDateSan.warning || '입사일 확인 필요');
+        if (phone && !phoneSan.isValid) warnings.push(phoneSan.warning || '전화번호 확인 필요');
+        if (email && !emailSan.isValid) warnings.push(emailSan.warning || '이메일 확인 필요');
+
+        const isValid = Boolean(name) && (!hire_date || hireDateSan.isValid);
+
         if (name) {
           list.push({
             name,
             username: username || `emp_${Math.floor(1000 + Math.random() * 9000)}`,
-            email: email || `${username || 'user'}@egdesk.cloud`,
-            phone: phone || '',
+            email: emailSan.isValid ? emailSan.value : (email || `${username || 'user'}@egdesk.cloud`),
+            phone: phoneSan.isValid ? phoneSan.formatted : (phone || ''),
             department: department || '미배정',
             position: position || '사원',
-            hire_date: hire_date || new Date().toISOString().split('T')[0],
-            hourly_rate: hourly_rate || 10000,
+            hire_date: finalHireDate,
+            hourly_rate: rateSan.value || 10000,
             weekly_work_hours: weekly_work_hours || 40,
             school,
             major,
@@ -151,7 +165,9 @@ export default function HrGoogleSheetsUploadModal({
             graduation_date,
             career_company,
             career_position,
-            career_reason
+            career_reason,
+            isValid,
+            validationWarning: warnings.length > 0 ? warnings.join(', ') : undefined
           });
         }
       });
@@ -325,9 +341,10 @@ export default function HrGoogleSheetsUploadModal({
               </div>
 
               <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs max-h-72 overflow-y-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="bg-slate-100/80 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
                     <tr>
+                      <th className="py-2.5 px-3 text-center w-16">검증</th>
                       <th className="py-2.5 px-3">성명</th>
                       <th className="py-2.5 px-3">아이디(사번)</th>
                       <th className="py-2.5 px-3">부서</th>
@@ -340,6 +357,19 @@ export default function HrGoogleSheetsUploadModal({
                   <tbody className="divide-y divide-slate-100">
                     {parsedRows.map((emp, i) => (
                       <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2 px-3 text-center whitespace-nowrap">
+                          {emp.isValid !== false ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200" title="성명 및 입사일 정상">
+                              <ShieldCheck className="w-3 h-3 text-teal-600" />
+                              정상
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title={emp.validationWarning || "형식 확인 필요"}>
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              확인
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2 px-3 font-bold text-slate-800">{emp.name}</td>
                         <td className="py-2 px-3 font-mono text-indigo-600">{emp.username}</td>
                         <td className="py-2 px-3 text-slate-600">{emp.department}</td>

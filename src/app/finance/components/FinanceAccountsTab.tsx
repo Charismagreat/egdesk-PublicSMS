@@ -6,6 +6,8 @@ import { Account, Transaction, DbExpenseTag } from "../types";
 import { downloadAccountsExcel } from "../utils";
 import TableSkeleton from "./TableSkeleton";
 import PaginationBar from "./PaginationBar";
+import { getSavedGoogleSheetUrl } from "@/lib/google-sheets-storage";
+import { openGoogleSheetsViewer } from "@/lib/excel-export";
 
 interface FinanceAccountsTabProps {
   accounts: Account[];
@@ -137,10 +139,19 @@ export default function FinanceAccountsTab({
             <button
               type="button"
               onClick={() => downloadAccountsExcel(transactionList)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer mr-2"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               엑셀 다운로드
+            </button>
+            <button
+              type="button"
+              onClick={() => openGoogleSheetsViewer(getSavedGoogleSheetUrl())}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer mr-2"
+              title="연동된 구글 스프레드시트 열람 또는 실시간 시트 화면으로 이동합니다."
+            >
+              <Globe className="w-3.5 h-3.5" />
+              구글시트 조회
             </button>
             <div className="flex items-center gap-1">
               <span className="text-[10px] font-bold text-slate-400">은행사:</span>

@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Globe, Package, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check, Layers 
+  Globe, Package, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check, Layers, ShieldCheck, AlertTriangle 
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from "@/lib/google-sheets-storage";
+import { sanitizeAmount, sanitizeQuantity, sanitizeBarcode } from "@/lib/data-validator";
 
 interface InventoryGoogleSheetsModalProps {
   isOpen: boolean;
@@ -23,6 +24,8 @@ interface ParsedInventoryItem {
   box_quantity: number;
   unit_price: number;
   type: string;
+  isValid?: boolean;
+  validationWarning?: string;
 }
 
 export default function InventoryGoogleSheetsModal({
@@ -136,6 +139,16 @@ export default function InventoryGoogleSheetsModal({
         if (!item_name && rowArr[1]) item_name = String(rowArr[1]).trim();
         if (!barcode && rowArr[2]) barcode = String(rowArr[2]).trim();
 
+        const priceSan = sanitizeAmount(unit_price);
+        const boxSan = sanitizeQuantity(box_quantity);
+        const codeSan = sanitizeBarcode(item_code || barcode);
+
+        const warnings: string[] = [];
+        if (!priceSan.isValid) warnings.push(priceSan.warning || '단가 확인 필요');
+        if (!boxSan.isValid) warnings.push(boxSan.warning || '입수량 확인 필요');
+
+        const isValid = Boolean(item_name) && priceSan.isValid && boxSan.isValid;
+
         if (item_name) {
           list.push({
             item_name,
@@ -144,9 +157,11 @@ export default function InventoryGoogleSheetsModal({
             category: category || "일반품목",
             spec,
             unit: unit || "EA",
-            box_quantity: box_quantity || 1,
-            unit_price: unit_price || 0,
-            type: type || "원자재"
+            box_quantity: Math.max(1, boxSan.value || 1),
+            unit_price: priceSan.value,
+            type: type || "원자재",
+            isValid,
+            validationWarning: warnings.length > 0 ? warnings.join(', ') : undefined
           });
         }
       });
@@ -320,9 +335,10 @@ export default function InventoryGoogleSheetsModal({
               </div>
 
               <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs max-h-72 overflow-y-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="bg-slate-100/80 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
                     <tr>
+                      <th className="py-2.5 px-3 text-center w-16">검증</th>
                       <th className="py-2.5 px-3">No</th>
                       <th className="py-2.5 px-3">구분</th>
                       <th className="py-2.5 px-3">품목명</th>
@@ -336,6 +352,19 @@ export default function InventoryGoogleSheetsModal({
                   <tbody className="divide-y divide-slate-100">
                     {parsedItems.map((item, i) => (
                       <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2 px-3 text-center whitespace-nowrap">
+                          {item.isValid !== false ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200" title="품목명 및 단가 정상">
+                              <ShieldCheck className="w-3 h-3 text-teal-600" />
+                              정상
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title={item.validationWarning || "형식 확인 필요"}>
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              확인
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2 px-3 text-slate-400 font-mono">{i + 1}</td>
                         <td className="py-2 px-3">
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">

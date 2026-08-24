@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { insertRows, queryTable } from '@/lib/egdesk-helpers';
+import { getTenantId } from '@/lib/tenant';
 
 export async function POST(req: Request) {
   try {
+    const tenantId = (await getTenantId()) || 'default';
     const body = await req.json().catch(() => ({}));
     const { transactions = [], cardCompanyId = 'shinhan-card', accountId = 'CARD-IMPORT' } = body;
 
@@ -17,7 +19,7 @@ export async function POST(req: Request) {
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
     // 기존 트랜잭션 조회하여 중복 방지
-    const existingTxRes = await queryTable('excel_card_transactions', {});
+    const existingTxRes = await queryTable('excel_card_transactions', { filters: { tenant_id: tenantId } });
     const existingTxIds = new Set((existingTxRes?.rows || []).map((t: any) => t.id));
 
     const rowsToInsert: any[] = [];
@@ -56,6 +58,7 @@ export async function POST(req: Request) {
           status: status,
           memo: memo,
           category: category,
+          tenant_id: tenantId,
           created_at: now,
           updated_at: now,
           deleted_at: null

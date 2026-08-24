@@ -82,10 +82,7 @@ export default function PartnersDashboard() {
       {/* 백그라운드 퍼플 광채 */}
       <div className="absolute top-0 right-10 w-96 h-96 bg-emerald-600/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
 
-      <Header
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-      />
+      <Header />
 
       <StatsSummary
         partnersCount={partners.length}
@@ -100,6 +97,10 @@ export default function PartnersDashboard() {
       <PartnerTable
         loading={loading}
         activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        totalVendors={totalVendors}
+        totalBuyers={totalBuyers}
+        totalAffiliates={totalAffiliates}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         filteredPartners={filteredPartners}

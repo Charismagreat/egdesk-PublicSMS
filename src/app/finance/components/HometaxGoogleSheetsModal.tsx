@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Globe, Receipt, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check, ArrowDownLeft, ArrowUpRight 
+  Globe, Receipt, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check, ArrowDownLeft, ArrowUpRight, ShieldCheck, AlertTriangle
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from "@/lib/google-sheets-storage";
+import { sanitizeDate, sanitizeAmount, reconcileAmounts, sanitizeBusinessNumber } from "@/lib/data-validator";
 
 interface HometaxGoogleSheetsModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ interface ParsedHometaxInvoice {
   issue_date: string;
   approval_no: string;
   type: 'PURCHASE' | 'SALES';
+  invoice_kind?: 'TAX_INVOICE' | 'TAX_EXEMPT_INVOICE' | 'CASH_RECEIPT';
   supplier_corp_num: string;
   supplier_corp_name: string;
   supplier_ceo_name: string;
@@ -28,6 +30,8 @@ interface ParsedHometaxInvoice {
   total_amount: number;
   item_name: string;
   remark: string;
+  isValid?: boolean;
+  validationWarning?: string;
 }
 
 export default function HometaxGoogleSheetsModal({
@@ -40,6 +44,8 @@ export default function HometaxGoogleSheetsModal({
   const [availableSheets, setAvailableSheets] = useState<string[]>([]);
   const [spreadsheetTitle, setSpreadsheetTitle] = useState<string>("");
   const [parsedInvoices, setParsedInvoices] = useState<ParsedHometaxInvoice[]>([]);
+  const [userTypeSelection, setUserTypeSelection] = useState<"AUTO" | "SALES" | "PURCHASE">("AUTO");
+  const [userKindSelection, setUserKindSelection] = useState<"AUTO" | "TAX_INVOICE" | "TAX_EXEMPT_INVOICE" | "CASH_RECEIPT">("AUTO");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -48,11 +54,40 @@ export default function HometaxGoogleSheetsModal({
     if (isOpen) {
       setSheetUrl(getSavedGoogleSheetUrl());
       setParsedInvoices([]);
+      setUserTypeSelection("AUTO");
+      setUserKindSelection("AUTO");
       setStatusMsg(null);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleTypeSelectionChange = (newType: "AUTO" | "SALES" | "PURCHASE") => {
+    setUserTypeSelection(newType);
+    if (newType !== "AUTO" && parsedInvoices.length > 0) {
+      setParsedInvoices(prev => prev.map(inv => ({ ...inv, type: newType })));
+    }
+  };
+
+  const handleKindSelectionChange = (newKind: "AUTO" | "TAX_INVOICE" | "TAX_EXEMPT_INVOICE" | "CASH_RECEIPT") => {
+    setUserKindSelection(newKind);
+    if (newKind !== "AUTO" && parsedInvoices.length > 0) {
+      setParsedInvoices(prev => prev.map(inv => ({ ...inv, invoice_kind: newKind })));
+    }
+  };
+
+  const toggleRowType = (index: number) => {
+    setParsedInvoices(prev => {
+      const next = [...prev];
+      if (next[index]) {
+        next[index] = {
+          ...next[index],
+          type: next[index].type === 'SALES' ? 'PURCHASE' : 'SALES'
+        };
+      }
+      return next;
+    });
+  };
 
   const handleFetchSheetData = async (overrideSheetName?: string) => {
     if (!sheetUrl.trim()) {
@@ -86,11 +121,15 @@ export default function HometaxGoogleSheetsModal({
       setSpreadsheetTitle(data.spreadsheetTitle || "");
       setAvailableSheets(data.availableSheets || []);
 
-      // 홈택스 탭 자동 매칭
-      let curSheet = data.sheetName;
-      if (!overrideSheetName && !selectedSheetName && data.availableSheets) {
-        const hometaxTab = data.availableSheets.find((s: string) => s.includes("홈택스") || s.includes("세금계산서") || s.includes("매입") || s.includes("매출"));
-        if (hometaxTab && hometaxTab !== data.sheetName) {
+      // 서버에서 gid 또는 요청에 따라 정확히 결정한 시트명을 최우선 사용
+      let curSheet = overrideSheetName || data.sheetName;
+
+      // 만약 URL에 gid가 없고 특정 탭도 선택하지 않은 경우에만 홈택스 관련 탭으로 스마트 추천
+      if (!overrideSheetName && !selectedSheetName && !sheetUrl.includes("gid=") && data.availableSheets) {
+        const hometaxTab = data.availableSheets.find((s: string) => 
+          s.includes("홈택스") || s.includes("세금계산서") || s.includes("계산서") || s.includes("면세") || s.includes("현금영수증") || s.includes("매입") || s.includes("매출")
+        );
+        if (hometaxTab && hometaxTab !== curSheet) {
           setSelectedSheetName(hometaxTab);
           return handleFetchSheetData(hometaxTab);
         }
@@ -105,73 +144,227 @@ export default function HometaxGoogleSheetsModal({
         return;
       }
 
-      // 탭 이름으로 기본 type 추론 (매출 vs 매입)
-      const defaultType: 'PURCHASE' | 'SALES' = curSheet.includes("매출") ? 'SALES' : 'PURCHASE';
+      // 탭 이름으로 기본 구분/유형 추론 (과세 매출/매입, 면세 매출/매입, 현금영수증)
+      const isCash = curSheet.includes("현금영수증") || curSheet.includes("현금");
+      const isExempt = curSheet.includes("면세") || (curSheet.includes("계산서") && !curSheet.includes("세금계산서"));
+      const isPurchase = curSheet.includes("매입");
+      let defaultType: 'PURCHASE' | 'SALES' = isPurchase ? 'PURCHASE' : 'SALES';
+      let defaultKind: 'TAX_INVOICE' | 'TAX_EXEMPT_INVOICE' | 'CASH_RECEIPT' = isCash ? 'CASH_RECEIPT' : (isExempt ? 'TAX_EXEMPT_INVOICE' : 'TAX_INVOICE');
+
+      if (userTypeSelection !== 'AUTO') {
+        defaultType = userTypeSelection;
+      }
+      if (userKindSelection !== 'AUTO') {
+        defaultKind = userKindSelection;
+      }
+
+      // 1. 헤더 및 데이터 행 지정 (백엔드에서 이미 검증 완료된 headers 및 rows 사용)
+      let actualHeaders = headers;
+      let dataRows = rows;
+
+      // 만약 백엔드가 넘겨준 headers가 비어있거나 1개뿐인 비표준 시트일 경우에만 rows의 0번째 행을 헤더로 보정
+      if ((!actualHeaders || actualHeaders.length <= 1) && rows.length > 0) {
+        actualHeaders = (rows[0] || []).map(h => String(h || '').trim());
+        dataRows = rows.slice(1);
+      }
+
+      // 2. 컬럼 인덱스 매핑 (헤더명 매칭 및 중복 헤더 분리)
+      let colIssueDate = -1;
+      let colApprovalNo = -1;
+      let colSupplierNum = -1;
+      let colSupplierName = -1;
+      let colSupplierCeo = -1;
+      let colBuyerNum = -1;
+      let colBuyerName = -1;
+      let colBuyerCeo = -1;
+      let colTotalAmount = -1;
+      let colSupplyAmount = -1;
+      let colTaxAmount = -1;
+      let colItemName = -1;
+      let colRemark = -1;
+      let colType = -1;
+      let colKind = -1;
+
+      // 1단계: 명시적 공급자/공급받는자 및 작성일자 컬럼 탐색
+      actualHeaders.forEach((h, idx) => {
+        const clean = String(h || '').replace(/\s+/g, '').toLowerCase();
+        if (!clean) return;
+
+        if (clean === '작성일자' || (clean.includes('작성일자') && !clean.includes('당초') && colIssueDate === -1)) {
+          colIssueDate = idx;
+        } else if (clean.includes('발급일자') && colIssueDate === -1) {
+          colIssueDate = idx;
+        } else if ((clean === '매출일시' || clean === '거래일자' || clean === '일자') && colIssueDate === -1) {
+          colIssueDate = idx;
+        } else if ((clean === '승인번호' || clean.includes('승인번호')) && !clean.includes('당초') && colApprovalNo === -1) {
+          colApprovalNo = idx;
+        } else if (clean.includes('공급자사업자등록번호') || (clean.includes('공급자') && clean.includes('등록번호'))) {
+          colSupplierNum = idx;
+        } else if (clean.includes('공급자상호') || clean.includes('공급자법인명') || (clean.includes('공급자') && clean.includes('상호'))) {
+          colSupplierName = idx;
+        } else if (clean.includes('공급자대표자') || clean.includes('공급자성명') || (clean.includes('공급자') && (clean.includes('대표') || clean.includes('성명')))) {
+          colSupplierCeo = idx;
+        } else if (clean.includes('공급받는자사업자등록번호') || (clean.includes('공급받는자') && clean.includes('등록번호'))) {
+          colBuyerNum = idx;
+        } else if (clean.includes('공급받는자상호') || clean.includes('공급받는자법인명') || (clean.includes('공급받는자') && clean.includes('상호'))) {
+          colBuyerName = idx;
+        } else if (clean.includes('공급받는자대표자') || clean.includes('공급받는자성명') || (clean.includes('공급받는자') && (clean.includes('대표') || clean.includes('성명')))) {
+          colBuyerCeo = idx;
+        } else if (clean === '합계금액' || clean === '총액' || clean === '총금액' || (clean.includes('합계금액') && !clean.includes('품목'))) {
+          colTotalAmount = idx;
+        } else if ((clean === '공급가액' || clean.includes('공급가액')) && !clean.includes('품목')) {
+          colSupplyAmount = idx;
+        } else if ((clean === '세액' || clean === '부가세' || clean.includes('세액')) && !clean.includes('품목')) {
+          colTaxAmount = idx;
+        } else if (clean.includes('품목명') || clean === '품목' || clean.includes('용도구분')) {
+          if (colItemName === -1 || clean.includes('품목명')) colItemName = idx;
+        } else if (clean === '비고' || clean.includes('비고') || clean === '적요') {
+          colRemark = idx;
+        } else if (clean === '구분' || clean === '유형' || clean === '매출매입' || clean === '거래구분') {
+          colType = idx;
+        } else if (clean.includes('분류') || clean.includes('종류')) {
+          colKind = idx;
+        }
+      });
+
+      // 2단계: 중복 헤더(예: '상호'가 2개인 경우 - 첫번째는 공급자, 두번째는 공급받는자)
+      let businessNumCount = 0;
+      let nameCount = 0;
+      let ceoCount = 0;
+      actualHeaders.forEach((h, idx) => {
+        const clean = String(h || '').replace(/\s+/g, '').toLowerCase();
+        if (clean === '사업자등록번호' || clean === '등록번호' || clean === '사업자번호') {
+          businessNumCount++;
+          if (businessNumCount === 1 && colSupplierNum === -1) colSupplierNum = idx;
+          if (businessNumCount === 2 && colBuyerNum === -1) colBuyerNum = idx;
+        }
+        if (clean === '상호' || clean === '상호(법인명)' || clean === '법인명' || clean === '거래처명' || clean === '가맹점명') {
+          nameCount++;
+          if (nameCount === 1 && colSupplierName === -1) colSupplierName = idx;
+          if (nameCount === 2 && colBuyerName === -1) colBuyerName = idx;
+        }
+        if (clean === '대표자' || clean === '대표자명' || clean === '성명' || clean === '성명(대표자)') {
+          ceoCount++;
+          if (ceoCount === 1 && colSupplierCeo === -1) colSupplierCeo = idx;
+          if (ceoCount === 2 && colBuyerCeo === -1) colBuyerCeo = idx;
+        }
+      });
+
+      // 3단계: 홈택스 엑셀 표준 33컬럼 포지션 폴백
+      if (colIssueDate === -1 && actualHeaders.length >= 17) colIssueDate = 0;
+      if (colApprovalNo === -1 && actualHeaders.length >= 17) colApprovalNo = 1;
+      if (colSupplierNum === -1 && actualHeaders.length >= 17) colSupplierNum = 4;
+      if (colSupplierName === -1 && actualHeaders.length >= 17) colSupplierName = 6;
+      if (colSupplierCeo === -1 && actualHeaders.length >= 17) colSupplierCeo = 7;
+      if (colBuyerNum === -1 && actualHeaders.length >= 17) colBuyerNum = 9;
+      if (colBuyerName === -1 && actualHeaders.length >= 17) colBuyerName = 11;
+      if (colBuyerCeo === -1 && actualHeaders.length >= 17) colBuyerCeo = 12;
+      if (colTotalAmount === -1 && actualHeaders.length >= 17) colTotalAmount = 14;
+      if (colSupplyAmount === -1 && actualHeaders.length >= 17) colSupplyAmount = 15;
+      if (colTaxAmount === -1 && actualHeaders.length >= 17) colTaxAmount = 16;
+      if (colRemark === -1 && actualHeaders.length >= 21) colRemark = 20;
+      if (colItemName === -1 && actualHeaders.length >= 27) colItemName = 26;
+
+      const parseAmount = (val: any): number => {
+        if (typeof val === 'number') return Math.floor(val);
+        if (!val) return 0;
+        const numStr = String(val).replace(/[^0-9.-]/g, '');
+        const parsed = parseFloat(numStr);
+        return isNaN(parsed) ? 0 : Math.floor(parsed);
+      };
 
       const list: ParsedHometaxInvoice[] = [];
 
-      rows.forEach((rowArr) => {
-        let issue_date = "";
-        let approval_no = "";
-        let supplier_corp_num = "";
-        let supplier_corp_name = "";
-        let supplier_ceo_name = "";
-        let buyer_corp_num = "";
-        let buyer_corp_name = "";
-        let buyer_ceo_name = "";
-        let supply_amount = 0;
-        let tax_amount = 0;
-        let total_amount = 0;
-        let item_name = "";
-        let remark = "";
+      dataRows.forEach((rowArr) => {
+        if (!rowArr || !Array.isArray(rowArr) || rowArr.length === 0) return;
 
-        headers.forEach((h, colIdx) => {
-          const cleanH = String(h || "").replace(/\s+/g, "").toLowerCase();
-          const val = String(rowArr[colIdx] || "").trim();
+        const rawIssueDate = colIssueDate !== -1 ? String(rowArr[colIssueDate] || '').trim() : '';
+        const rawApprovalNo = colApprovalNo !== -1 ? String(rowArr[colApprovalNo] || '').trim() : '';
+        const rawSupplierNum = colSupplierNum !== -1 ? String(rowArr[colSupplierNum] || '').trim() : '';
+        const supplier_corp_name = colSupplierName !== -1 ? String(rowArr[colSupplierName] || '').trim() : '';
+        const supplier_ceo_name = colSupplierCeo !== -1 ? String(rowArr[colSupplierCeo] || '').trim() : '';
+        const rawBuyerNum = colBuyerNum !== -1 ? String(rowArr[colBuyerNum] || '').trim() : '';
+        const buyer_corp_name = colBuyerName !== -1 ? String(rowArr[colBuyerName] || '').trim() : '';
+        const buyer_ceo_name = colBuyerCeo !== -1 ? String(rowArr[colBuyerCeo] || '').trim() : '';
+        let item_name = colItemName !== -1 ? String(rowArr[colItemName] || '').trim() : '';
+        let remark = colRemark !== -1 ? String(rowArr[colRemark] || '').trim() : '';
 
-          if (cleanH.includes("작성일자") || cleanH.includes("발급일자")) issue_date = val;
-          else if (cleanH.includes("승인번호")) approval_no = val;
-          else if (cleanH.includes("공급자사업자등록번호") || (cleanH.includes("공급자") && cleanH.includes("등록번호"))) supplier_corp_num = val;
-          else if (cleanH.includes("공급자상호") || cleanH === "상호") supplier_corp_name = val;
-          else if (cleanH.includes("공급자대표자") || cleanH === "대표자명") supplier_ceo_name = val;
-          else if (cleanH.includes("공급받는자사업자등록번호") || (cleanH.includes("공급받는자") && cleanH.includes("등록번호"))) buyer_corp_num = val;
-          else if (cleanH.includes("공급받는자상호")) buyer_corp_name = val;
-          else if (cleanH.includes("공급받는자대표자")) buyer_ceo_name = val;
-          else if (cleanH.includes("공급가액")) supply_amount = parseInt(val.replace(/[^0-9-]/g, "")) || 0;
-          else if (cleanH.includes("세액")) tax_amount = parseInt(val.replace(/[^0-9-]/g, "")) || 0;
-          else if (cleanH.includes("합계금액") || cleanH.includes("총액")) total_amount = parseInt(val.replace(/[^0-9-]/g, "")) || 0;
-          else if (cleanH.includes("품목명") || cleanH.includes("품목")) item_name = val;
-          else if (cleanH.includes("비고")) remark = val;
-        });
-
-        if (!total_amount && supply_amount) {
-          total_amount = supply_amount + tax_amount;
+        // 품목명이 숫자나 기호만으로 들어간 경우 정리
+        if (/^[0-9,.\s]+$/.test(item_name)) {
+          item_name = '';
         }
 
-        if (issue_date || approval_no || supplier_corp_name || buyer_corp_name) {
+        let rowType = defaultType;
+        if (userTypeSelection === 'AUTO' && colType !== -1) {
+          const typeVal = String(rowArr[colType] || '').trim();
+          if (typeVal.includes('매출')) rowType = 'SALES';
+          else if (typeVal.includes('매입')) rowType = 'PURCHASE';
+        } else if (userTypeSelection !== 'AUTO') {
+          rowType = userTypeSelection;
+        }
+
+        let rowKind = defaultKind;
+        if (userKindSelection === 'AUTO' && colKind !== -1) {
+          const kindVal = String(rowArr[colKind] || '').trim();
+          if (kindVal.includes('면세') || (kindVal.includes('계산서') && !kindVal.includes('세금'))) rowKind = 'TAX_EXEMPT_INVOICE';
+        } else if (userKindSelection !== 'AUTO') {
+          rowKind = userKindSelection;
+        }
+
+        // 1. 날짜 정밀 유효성 검사 및 정규화
+        const dateSanitized = sanitizeDate(rawIssueDate);
+        const issueDate = dateSanitized.isValid ? dateSanitized.value : rawIssueDate;
+
+        // 2. 금액 정밀 유효성 검사 및 삼각 대조 보정
+        const supplySanitized = sanitizeAmount(colSupplyAmount !== -1 ? rowArr[colSupplyAmount] : 0);
+        const taxSanitized = sanitizeAmount(colTaxAmount !== -1 ? rowArr[colTaxAmount] : 0);
+        const totalSanitized = sanitizeAmount(colTotalAmount !== -1 ? rowArr[colTotalAmount] : 0);
+
+        const reconciled = reconcileAmounts(supplySanitized.value, taxSanitized.value, totalSanitized.value);
+
+        // 3. 사업자등록번호 검증 및 포맷팅
+        const supplierBn = sanitizeBusinessNumber(rawSupplierNum);
+        const buyerBn = sanitizeBusinessNumber(rawBuyerNum);
+
+        // 유효성 경고 수집
+        const warnings: string[] = [];
+        if (!dateSanitized.isValid && dateSanitized.warning) warnings.push(dateSanitized.warning);
+        if (reconciled.warning) warnings.push(reconciled.warning);
+        if (rawSupplierNum && !supplierBn.isValid && supplierBn.warning) warnings.push(`공급자 ${supplierBn.warning}`);
+        if (rawBuyerNum && !buyerBn.isValid && buyerBn.warning) warnings.push(`공급받는자 ${buyerBn.warning}`);
+
+        const isValid = dateSanitized.isValid && (reconciled.isBalanced || reconciled.total > 0);
+
+        if (rawIssueDate || rawApprovalNo || supplier_corp_name || buyer_corp_name) {
           list.push({
-            issue_date: issue_date || new Date().toISOString().split('T')[0],
-            approval_no: approval_no || `HT-${Math.floor(100000 + Math.random() * 900000)}`,
-            type: defaultType,
-            supplier_corp_num,
+            issue_date: issueDate || new Date().toISOString().split('T')[0],
+            approval_no: rawApprovalNo || `HT-${Math.floor(100000 + Math.random() * 900000)}`,
+            type: rowType,
+            invoice_kind: rowKind,
+            supplier_corp_num: supplierBn.formatted || rawSupplierNum,
             supplier_corp_name,
             supplier_ceo_name,
-            buyer_corp_num,
+            buyer_corp_num: buyerBn.formatted || rawBuyerNum,
             buyer_corp_name,
             buyer_ceo_name,
-            supply_amount,
-            tax_amount,
-            total_amount,
+            supply_amount: reconciled.supply,
+            tax_amount: reconciled.tax,
+            total_amount: reconciled.total,
             item_name,
-            remark
+            remark,
+            isValid,
+            validationWarning: warnings.length > 0 ? warnings.join(', ') : undefined
           });
         }
       });
 
+      const kindLabel = defaultKind === 'CASH_RECEIPT' ? '현금영수증' : (defaultKind === 'TAX_EXEMPT_INVOICE' ? '면세 계산서' : '세금계산서');
+      const typeLabel = defaultType === 'SALES' ? '매출' : '매입';
+
       setParsedInvoices(list);
       setStatusMsg({
         type: 'success',
-        text: `✅ [${data.spreadsheetTitle}] '${curSheet}' 탭에서 총 ${list.length}건 (${defaultType === 'SALES' ? '매출' : '매입'} 세금계산서)을 판독했습니다!`
+        text: `✅ [${data.spreadsheetTitle}] '${curSheet}' 탭에서 총 ${list.length}건 (${typeLabel} ${kindLabel})을 판독했습니다!`
       });
     } catch (err: any) {
       console.error("Hometax Google Sheets error:", err);
@@ -216,7 +409,7 @@ export default function HometaxGoogleSheetsModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-6xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* 헤더 */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-3">
@@ -303,9 +496,93 @@ export default function HometaxGoogleSheetsModal({
                     </option>
                   ))}
                 </select>
-                <span className="text-[11px] text-slate-400">('홈택스매입' 또는 '홈택스매출' 탭 권장)</span>
+                <span className="text-[11px] text-slate-400">('세금계산서(매입)', '세금계산서(매출)' 등 선택 가능)</span>
               </div>
             )}
+
+            {/* 거래 구분 및 증빙 종류 선택 컨트롤 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-200/60">
+              <div className="space-y-1.5">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <ArrowDownLeft className="w-3.5 h-3.5 text-teal-600" />
+                  거래 구분 (매출 / 매입)
+                </span>
+                <div className="flex items-center gap-1 bg-slate-200/60 p-1 rounded-xl text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => handleTypeSelectionChange("AUTO")}
+                    className={`flex-1 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer ${
+                      userTypeSelection === "AUTO" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    🤖 자동 감지
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTypeSelectionChange("SALES")}
+                    className={`flex-1 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer ${
+                      userTypeSelection === "SALES" ? "bg-emerald-600 text-white shadow-xs" : "text-emerald-700 hover:bg-emerald-50"
+                    }`}
+                  >
+                    🟢 매출 (발행)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTypeSelectionChange("PURCHASE")}
+                    className={`flex-1 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer ${
+                      userTypeSelection === "PURCHASE" ? "bg-rose-600 text-white shadow-xs" : "text-rose-700 hover:bg-rose-50"
+                    }`}
+                  >
+                    🔵 매입 (수취)
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <Receipt className="w-3.5 h-3.5 text-teal-600" />
+                  증빙 종류 (과세 / 면세 / 현금)
+                </span>
+                <div className="flex items-center gap-1 bg-slate-200/60 p-1 rounded-xl text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => handleKindSelectionChange("AUTO")}
+                    className={`flex-1 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer ${
+                      userKindSelection === "AUTO" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    🤖 자동
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleKindSelectionChange("TAX_INVOICE")}
+                    className={`flex-1 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer ${
+                      userKindSelection === "TAX_INVOICE" ? "bg-indigo-600 text-white shadow-xs" : "text-indigo-700 hover:bg-indigo-50"
+                    }`}
+                  >
+                    과세
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleKindSelectionChange("TAX_EXEMPT_INVOICE")}
+                    className={`flex-1 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer ${
+                      userKindSelection === "TAX_EXEMPT_INVOICE" ? "bg-teal-600 text-white shadow-xs" : "text-teal-700 hover:bg-teal-50"
+                    }`}
+                  >
+                    면세
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleKindSelectionChange("CASH_RECEIPT")}
+                    className={`flex-1 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer ${
+                      userKindSelection === "CASH_RECEIPT" ? "bg-amber-600 text-white shadow-xs" : "text-amber-700 hover:bg-amber-50"
+                    }`}
+                  >
+                    현금
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           {statusMsg && (
@@ -334,41 +611,67 @@ export default function HometaxGoogleSheetsModal({
                     판독된 세금계산서 목록 미리보기 ({parsedInvoices.length}건)
                   </h4>
                 </div>
+                <span className="text-[11px] text-slate-400">💡 [구분] 뱃지를 클릭하면 개별 매출/매입을 전환할 수 있습니다.</span>
               </div>
 
-              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs max-h-72 overflow-y-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100/80 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
+              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs max-h-80 overflow-y-auto overflow-x-auto">
+                <table className="w-full text-left text-xs whitespace-nowrap">
+                  <thead className="bg-slate-100/90 text-slate-700 font-bold sticky top-0 border-b border-slate-200">
                     <tr>
-                      <th className="py-2.5 px-3">구분</th>
-                      <th className="py-2.5 px-3">작성일자</th>
-                      <th className="py-2.5 px-3">공급자 상호</th>
-                      <th className="py-2.5 px-3">공급받는자 상호</th>
-                      <th className="py-2.5 px-3">공급가액</th>
-                      <th className="py-2.5 px-3">세액</th>
-                      <th className="py-2.5 px-3">합계금액</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap w-16">검증</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">구분</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">종류</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">작성일자</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">공급자 상호</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">공급받는자 상호</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">공급가액</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">세액</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">합계금액</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {parsedInvoices.map((inv, i) => (
                       <tr key={i} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-2 px-3">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            inv.type === 'SALES' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                          }`}>
+                        <td className="py-2 px-3 text-center whitespace-nowrap">
+                          {inv.isValid !== false ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200" title="날짜·금액·사업자번호 검증 완료">
+                              <ShieldCheck className="w-3 h-3 text-teal-600" />
+                              정상
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title={inv.validationWarning || "형식 확인 필요"}>
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              확인
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => toggleRowType(i)}
+                            title="클릭하여 매출/매입 전환"
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all active:scale-90 ${
+                              inv.type === 'SALES' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                            }`}
+                          >
                             {inv.type === 'SALES' ? '매출' : '매입'}
+                          </button>
+                        </td>
+                        <td className="py-2 px-3 text-center whitespace-nowrap">
+                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {inv.invoice_kind === 'CASH_RECEIPT' ? '현금' : (inv.invoice_kind === 'TAX_EXEMPT_INVOICE' ? '면세' : '과세')}
                           </span>
                         </td>
-                        <td className="py-2 px-3 font-mono text-slate-600">{inv.issue_date}</td>
-                        <td className="py-2 px-3 font-bold text-slate-800">{inv.supplier_corp_name || '-'}</td>
-                        <td className="py-2 px-3 text-slate-700">{inv.buyer_corp_name || '-'}</td>
-                        <td className="py-2 px-3 font-mono text-slate-600">
+                        <td className="py-2 px-3 font-mono text-slate-600 whitespace-nowrap">{inv.issue_date}</td>
+                        <td className="py-2 px-3 font-bold text-slate-800 whitespace-nowrap">{inv.supplier_corp_name || '-'}</td>
+                        <td className="py-2 px-3 text-slate-700 whitespace-nowrap">{inv.buyer_corp_name || '-'}</td>
+                        <td className="py-2 px-3 font-mono text-right text-slate-600 whitespace-nowrap">
                           {inv.supply_amount.toLocaleString()}원
                         </td>
-                        <td className="py-2 px-3 font-mono text-slate-500">
+                        <td className="py-2 px-3 font-mono text-right text-slate-500 whitespace-nowrap">
                           {inv.tax_amount.toLocaleString()}원
                         </td>
-                        <td className="py-2 px-3 font-mono font-bold text-indigo-600">
+                        <td className="py-2 px-3 font-mono font-bold text-right text-indigo-600 whitespace-nowrap">
                           {inv.total_amount.toLocaleString()}원
                         </td>
                       </tr>

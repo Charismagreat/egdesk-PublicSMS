@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Globe, Building2, AlertCircle, CheckCircle2, X, Loader2, Sparkles, RefreshCw, Layers, Check, Users 
+  Globe, Building2, AlertCircle, CheckCircle2, X, Loader2, Sparkles, RefreshCw, Layers, Check, Users, ShieldCheck, AlertTriangle 
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from "@/lib/google-sheets-storage";
+import { sanitizeBusinessNumber, sanitizePhoneNumber, sanitizeEmail, sanitizeAmount } from "@/lib/data-validator";
 
 interface PartnerGoogleSheetsImportModalProps {
   isOpen: boolean;
@@ -149,16 +150,28 @@ export default function PartnerGoogleSheetsImportModal({
           }
         }
 
-        if (newRow.credit_limit) {
-          const rawLimit = String(newRow.credit_limit).replace(/[^0-9]/g, "");
-          newRow.credit_limit = parseInt(rawLimit) || 0;
-        } else {
-          newRow.credit_limit = 0;
-        }
+        const creditSan = sanitizeAmount(newRow.credit_limit);
+        newRow.credit_limit = creditSan.value;
 
-        if (newRow.business_number) {
-          newRow.business_number = newRow.business_number.replace(/[^0-9]/g, "");
-        }
+        const bnSan = sanitizeBusinessNumber(newRow.business_number);
+        newRow.business_number = bnSan.isValid ? bnSan.formatted : (newRow.business_number || '');
+
+        const phoneSan = sanitizePhoneNumber(newRow.phone);
+        if (phoneSan.isValid) newRow.phone = phoneSan.formatted;
+
+        const mgrPhoneSan = sanitizePhoneNumber(newRow.manager_phone);
+        if (mgrPhoneSan.isValid) newRow.manager_phone = mgrPhoneSan.formatted;
+
+        const emailSan = sanitizeEmail(newRow.email);
+        const mgrEmailSan = sanitizeEmail(newRow.manager_email);
+
+        const warnings: string[] = [];
+        if (newRow.business_number && !bnSan.isValid && bnSan.warning) warnings.push(bnSan.warning);
+        if (newRow.email && !emailSan.isValid && emailSan.warning) warnings.push(emailSan.warning);
+        if (newRow.manager_email && !mgrEmailSan.isValid && mgrEmailSan.warning) warnings.push(`담당자 ${mgrEmailSan.warning}`);
+
+        newRow.isValid = Boolean(newRow.company_name) && (bnSan.isValid || !newRow.business_number);
+        newRow.validationWarning = warnings.length > 0 ? warnings.join(', ') : undefined;
 
         if (newRow.company_name) {
           mappedList.push(newRow);
@@ -345,9 +358,10 @@ export default function PartnerGoogleSheetsImportModal({
               </div>
 
               <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs max-h-72 overflow-y-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="bg-slate-100/80 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
                     <tr>
+                      <th className="py-2.5 px-3 text-center w-16">검증</th>
                       <th className="py-2.5 px-3">No</th>
                       <th className="py-2.5 px-3">구분</th>
                       <th className="py-2.5 px-3">상호명</th>
@@ -361,6 +375,19 @@ export default function PartnerGoogleSheetsImportModal({
                   <tbody className="divide-y divide-slate-100">
                     {parsedPartners.map((partner, i) => (
                       <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2 px-3 text-center whitespace-nowrap">
+                          {partner.isValid !== false ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200" title="상호명/사업자번호/연락처 정상">
+                              <ShieldCheck className="w-3 h-3 text-teal-600" />
+                              정상
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title={partner.validationWarning || "형식 확인 필요"}>
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              확인
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2 px-3 text-slate-400 font-mono">{i + 1}</td>
                         <td className="py-2 px-3">
                           <span

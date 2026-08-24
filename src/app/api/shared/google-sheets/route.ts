@@ -98,12 +98,23 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!targetSheet && gid && metadata?.sheets) {
-      const matchedMeta = metadata.sheets.find((s: any) => String(s.sheetId) === String(gid));
-      if (matchedMeta) {
-        targetSheet = sheetsData.find(
-          (s: any) => (s.sheetTitle || s.title || s.sheetName) === matchedMeta.title
+    if (!targetSheet && gid) {
+      // 1. sheetsData에서 직접 gid 매칭
+      targetSheet = sheetsData.find(
+        (s: any) => String(s.sheetId ?? s.id ?? s.properties?.sheetId ?? '') === String(gid)
+      );
+
+      // 2. metadata.sheets에서 gid 매칭 후 타이틀로 탐색
+      if (!targetSheet && Array.isArray(metadata?.sheets)) {
+        const matchedMeta = metadata.sheets.find(
+          (s: any) => String(s.sheetId ?? s.id ?? s.properties?.sheetId ?? '') === String(gid)
         );
+        if (matchedMeta) {
+          const title = matchedMeta.properties?.title || matchedMeta.title || matchedMeta.sheetTitle;
+          targetSheet = sheetsData.find(
+            (s: any) => (s.sheetTitle || s.title || s.sheetName) === title
+          );
+        }
       }
     }
 
@@ -143,8 +154,21 @@ export async function POST(req: Request) {
             }
           }
           if (Array.isArray(rangeData) && rangeData.length > 0) {
-            headers = rangeData[0] || headers;
-            allRows = rangeData.slice(1);
+            // 헤더 행 스마트 탐색 (홈택스 표준 6행 또는 일반 1행 탐색)
+            let headerIdx = 0;
+            for (let i = 0; i < Math.min(rangeData.length, 10); i++) {
+              const row = rangeData[i];
+              if (Array.isArray(row)) {
+                const rowStr = row.map(c => String(c || '').replace(/\s+/g, '')).join(' ');
+                const matches = ['작성일자', '승인번호', '공급자', '공급받는자', '합계금액', '공급가액', '거래일자', '거래일시', '적요', '입금', '출금', '잔액', '가맹점', '카드번호', '승인금액'].filter(k => rowStr.includes(k));
+                if (matches.length >= 2) {
+                  headerIdx = i;
+                  break;
+                }
+              }
+            }
+            headers = (rangeData[headerIdx] || []).map(h => String(h || '').trim());
+            allRows = rangeData.slice(headerIdx + 1).filter(r => Array.isArray(r) && r.some(c => c !== null && c !== undefined && String(c).trim() !== ''));
           }
         }
       } catch (err) {

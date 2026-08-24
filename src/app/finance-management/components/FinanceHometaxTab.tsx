@@ -205,13 +205,10 @@ export default function FinanceHometaxTab({
                           </td>
                           <td className="p-4">
                             <div className="font-extrabold text-slate-800">
-                              {isSales ? inv.buyerName : inv.supplierName}
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                              사업자등록번호: {inv.id.split("-")[0] || "-"}
+                              {inv.buyerName || "-"} / {inv.supplierName || "-"}
                             </div>
                           </td>
-                          <td className="p-4 font-semibold text-slate-600">{inv.itemName || "종합 광고 수수료"}</td>
+                          <td className="p-4 font-semibold text-slate-600">{inv.itemName || "-"}</td>
                           <td className="p-4 max-w-[150px]">
                             {hasAdminAccess && editingHometaxTxId === inv.id && editingField === "memo" ? (
                               <div className="flex flex-col gap-1.5 p-1 bg-white rounded-2xl border border-slate-100 shadow-lg min-w-[220px]">

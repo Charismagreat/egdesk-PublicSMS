@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Globe, Landmark, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check, ArrowDownLeft, ArrowUpRight 
+  Globe, Landmark, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check, ArrowDownLeft, ArrowUpRight, ShieldCheck, AlertTriangle
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from "@/lib/google-sheets-storage";
+import { sanitizeDate, sanitizeAmount } from "@/lib/data-validator";
 
 interface BankGoogleSheetsModalProps {
   isOpen: boolean;
@@ -23,6 +24,8 @@ interface ParsedBankTx {
   description: string;
   branch: string;
   memo: string;
+  isValid?: boolean;
+  validationWarning?: string;
 }
 
 export default function BankGoogleSheetsModal({
@@ -87,13 +90,15 @@ export default function BankGoogleSheetsModal({
       setSpreadsheetTitle(data.spreadsheetTitle || "");
       setAvailableSheets(data.availableSheets || []);
 
-      // 은행/통장 탭 자동 매칭
-      let curSheet = data.sheetName;
-      if (!overrideSheetName && !selectedSheetName && data.availableSheets) {
+      // 서버에서 gid 또는 요청에 따라 정확히 결정한 시트명을 최우선 사용
+      let curSheet = overrideSheetName || data.sheetName;
+
+      // 만약 URL에 gid가 없고 특정 탭도 선택하지 않은 경우에만 은행 관련 탭으로 스마트 추천
+      if (!overrideSheetName && !selectedSheetName && !sheetUrl.includes("gid=") && data.availableSheets) {
         const bankTab = data.availableSheets.find((s: string) => 
           s.includes("은행") || s.includes("통장") || s.includes("계좌") || s.includes("입출금") || s.includes("인터넷뱅킹")
         );
-        if (bankTab && bankTab !== data.sheetName) {
+        if (bankTab && bankTab !== curSheet) {
           setSelectedSheetName(bankTab);
           return handleFetchSheetData(bankTab);
         }
@@ -164,16 +169,29 @@ export default function BankGoogleSheetsModal({
           }
         }
 
-        if (rawDate || description || deposit > 0 || withdrawal > 0) {
+        // 유효성 검증
+        const dateSan = sanitizeDate(rawDate);
+        const txDate = dateSan.isValid ? dateSan.value : rawDate;
+        const depSan = sanitizeAmount(deposit);
+        const withSan = sanitizeAmount(withdrawal);
+        const balSan = sanitizeAmount(balance);
+
+        const warnings: string[] = [];
+        if (!dateSan.isValid && dateSan.warning) warnings.push(dateSan.warning);
+        const isValid = dateSan.isValid && (depSan.value > 0 || withSan.value > 0 || balSan.value > 0 || Boolean(description));
+
+        if (rawDate || description || depSan.value > 0 || withSan.value > 0) {
           list.push({
-            transaction_date: rawDate || new Date().toISOString().split("T")[0],
+            transaction_date: txDate || new Date().toISOString().split("T")[0],
             transaction_time: rawTime || "00:00:00",
-            deposit,
-            withdrawal,
-            balance,
+            deposit: depSan.value,
+            withdrawal: withSan.value,
+            balance: balSan.value,
             description: description || "통장 거래내역",
             branch,
-            memo
+            memo,
+            isValid,
+            validationWarning: warnings.length > 0 ? warnings.join(', ') : undefined
           });
         }
       });
@@ -230,7 +248,7 @@ export default function BankGoogleSheetsModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-6xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* 헤더 */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-3">
@@ -368,9 +386,10 @@ export default function BankGoogleSheetsModal({
               </div>
 
               <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs max-h-72 overflow-y-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="bg-slate-100/80 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
                     <tr>
+                      <th className="py-2.5 px-3 text-center w-16">검증</th>
                       <th className="py-2.5 px-3">거래일시</th>
                       <th className="py-2.5 px-3">적요/내용</th>
                       <th className="py-2.5 px-3 text-right">입금액</th>
@@ -382,6 +401,19 @@ export default function BankGoogleSheetsModal({
                   <tbody className="divide-y divide-slate-100">
                     {parsedTxs.map((tx, i) => (
                       <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2 px-3 text-center whitespace-nowrap">
+                          {tx.isValid !== false ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200" title="거래일시 및 입출금액 정상 검증됨">
+                              <ShieldCheck className="w-3 h-3 text-teal-600" />
+                              정상
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title={tx.validationWarning || "날짜/금액 확인 필요"}>
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              확인
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2 px-3 font-mono text-slate-600 whitespace-nowrap">
                           {tx.transaction_date} {tx.transaction_time}
                         </td>

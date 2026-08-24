@@ -8,6 +8,10 @@ import { Partner } from "../types";
 interface PartnerTableProps {
   loading: boolean;
   activeTab: 'VENDOR' | 'BUYER' | 'AFFILIATE';
+  setActiveTab: (tab: 'VENDOR' | 'BUYER' | 'AFFILIATE') => void;
+  totalVendors?: number;
+  totalBuyers?: number;
+  totalAffiliates?: number;
   searchQuery: string;
   setSearchQuery: (val: string) => void;
   filteredPartners: Partner[];
@@ -30,6 +34,10 @@ interface PartnerTableProps {
 export function PartnerTable({
   loading,
   activeTab,
+  setActiveTab,
+  totalVendors = 0,
+  totalBuyers = 0,
+  totalAffiliates = 0,
   searchQuery,
   setSearchQuery,
   filteredPartners,
@@ -130,25 +138,79 @@ export function PartnerTable({
   return (
     <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-5">
       
-      {/* 검색 및 추가/일괄 등록/다운로드 버튼 */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
-          <input 
-            type="text"
-            placeholder="거래처명, 대표명, 담당자명, 번호로 검색..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 focus:border-emerald-500 rounded-xl outline-none text-xs font-semibold text-slate-800"
-          />
+      {/* 검색 및 뱃지형 탭 필터 / 추가 / 일괄 등록 / 다운로드 버튼 */}
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+          {/* 검색창 */}
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
+            <input 
+              type="text"
+              placeholder="거래처명, 대표명, 담당자명, 번호로 검색..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-emerald-500 rounded-xl outline-none text-xs font-semibold text-slate-800 transition-all"
+            />
+          </div>
+
+          {/* 🏷️ 뱃지 형태의 거래처 구분 탭 필터 (Badge Tab Filter) */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80 shrink-0 shadow-inner">
+            <button 
+              onClick={() => setActiveTab("VENDOR")}
+              className={`py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all border-none cursor-pointer whitespace-nowrap ${
+                activeTab === "VENDOR"
+                  ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
+                  : "bg-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60"
+              }`}
+            >
+              <span>공급처 (Vendor)</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === "VENDOR" ? "bg-emerald-800/60 text-white" : "bg-slate-200 text-slate-700"
+              }`}>
+                {totalVendors}
+              </span>
+            </button>
+
+            <button 
+              onClick={() => setActiveTab("BUYER")}
+              className={`py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all border-none cursor-pointer whitespace-nowrap ${
+                activeTab === "BUYER"
+                  ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
+                  : "bg-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60"
+              }`}
+            >
+              <span>바이어 (Buyer)</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === "BUYER" ? "bg-emerald-800/60 text-white" : "bg-slate-200 text-slate-700"
+              }`}>
+                {totalBuyers}
+              </span>
+            </button>
+
+            <button 
+              onClick={() => setActiveTab("AFFILIATE")}
+              className={`py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all border-none cursor-pointer whitespace-nowrap ${
+                activeTab === "AFFILIATE"
+                  ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
+                  : "bg-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60"
+              }`}
+            >
+              <span>🤝 관계사 (Affiliate)</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === "AFFILIATE" ? "bg-emerald-800/60 text-white" : "bg-slate-200 text-slate-700"
+              }`}>
+                {totalAffiliates}
+              </span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* 📥 엑셀 다운로드 버튼 */}
           <button
             onClick={handleExportExcel}
             title="현재 조회된 거래처 목록을 엑셀 파일로 내보냅니다."
-            className="px-4 py-3 bg-white hover:bg-emerald-50 text-emerald-700 text-xs font-black rounded-xl flex items-center gap-1.5 border border-emerald-200 cursor-pointer transition-all shadow-sm active:scale-95"
+            className="px-3.5 py-2.5 bg-white hover:bg-emerald-50 text-emerald-700 text-xs font-black rounded-xl flex items-center gap-1.5 border border-emerald-200 cursor-pointer transition-all shadow-xs active:scale-95 whitespace-nowrap"
           >
             <Download className="w-4 h-4 text-emerald-600" />
             엑셀 다운로드
@@ -157,7 +219,7 @@ export function PartnerTable({
           {/* 📂 엑셀 일괄 등록 버튼 */}
           <button
             onClick={handleBulkImportClick}
-            className="px-4 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-black rounded-xl flex items-center gap-1.5 border border-emerald-100 cursor-pointer transition-all shadow-sm"
+            className="px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-black rounded-xl flex items-center gap-1.5 border border-emerald-100 cursor-pointer transition-all shadow-xs whitespace-nowrap"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             엑셀 일괄 등록
@@ -166,7 +228,7 @@ export function PartnerTable({
           {/* 🌐 구글 시트 연동 버튼 */}
           <button
             onClick={handleGoogleSheetsClick}
-            className="px-4 py-3 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-black rounded-xl flex items-center gap-1.5 border border-teal-200 cursor-pointer transition-all shadow-sm active:scale-95"
+            className="px-3.5 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-black rounded-xl flex items-center gap-1.5 border border-teal-200 cursor-pointer transition-all shadow-xs active:scale-95 whitespace-nowrap"
             title="구글 스프레드시트의 거래처 템플릿과 실시간 연동하여 일괄 등록합니다."
           >
             <Globe className="w-4 h-4 text-teal-600" />
@@ -175,10 +237,10 @@ export function PartnerTable({
 
           <button
             onClick={handleCreateClick}
-            className="px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-slate-900/10 border-none cursor-pointer"
+            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-slate-900/10 border-none cursor-pointer whitespace-nowrap"
           >
             <Plus className="w-4 h-4 text-emerald-400" />
-            신규 {activeTab === 'VENDOR' ? '공급사' : '바이어'} 등록
+            신규 {activeTab === 'VENDOR' ? '공급사' : activeTab === 'BUYER' ? '바이어' : '관계사'} 등록
           </button>
         </div>
       </div>

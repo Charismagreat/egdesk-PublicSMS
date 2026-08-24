@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Globe, AlertCircle, CheckCircle2, X, Loader2, Users, RefreshCw, Check 
+  Globe, AlertCircle, CheckCircle2, X, Loader2, Users, RefreshCw, Check, ShieldCheck, AlertTriangle 
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from "@/lib/google-sheets-storage";
+import { sanitizePhoneNumber } from "@/lib/data-validator";
 
 interface EmployeeGoogleSheetsUploadModalProps {
   isOpen: boolean;
@@ -140,6 +141,9 @@ export default function EmployeeGoogleSheetsUploadModal({
         if (!name && rowArr[1]) name = String(rowArr[1]).trim();
         if (!username && rowArr[2]) username = String(rowArr[2]).trim();
 
+        const phoneSan = sanitizePhoneNumber(phone);
+        const finalPhone = phoneSan.isValid ? phoneSan.formatted : phone;
+
         let isValid = true;
         let errorMsg = "";
 
@@ -149,6 +153,8 @@ export default function EmployeeGoogleSheetsUploadModal({
         } else if (!username) {
           isValid = false;
           errorMsg = "아이디가 누락되었습니다.";
+        } else if (phone && !phoneSan.isValid) {
+          errorMsg = phoneSan.warning;
         }
 
         if (name || username || employee_number) {
@@ -159,7 +165,7 @@ export default function EmployeeGoogleSheetsUploadModal({
             password: password || "1234",
             role,
             department,
-            phone,
+            phone: finalPhone,
             work_start_time: work_start_time || "09:00",
             work_end_time: work_end_time || "18:00",
             isValid,
@@ -342,9 +348,10 @@ export default function EmployeeGoogleSheetsUploadModal({
               </div>
 
               <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs max-h-72 overflow-y-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="bg-slate-100/80 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
                     <tr>
+                      <th className="py-2.5 px-3 text-center w-16">검증</th>
                       <th className="py-2.5 px-3">사원번호</th>
                       <th className="py-2.5 px-3">성명</th>
                       <th className="py-2.5 px-3">아이디</th>
@@ -357,6 +364,19 @@ export default function EmployeeGoogleSheetsUploadModal({
                   <tbody className="divide-y divide-slate-100">
                     {parsedData.map((emp, i) => (
                       <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2 px-3 text-center whitespace-nowrap">
+                          {emp.isValid ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200" title="성명 및 아이디 정상">
+                              <ShieldCheck className="w-3 h-3 text-teal-600" />
+                              정상
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title={emp.errorMsg || "입력값 확인 필요"}>
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              확인
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2 px-3 font-mono text-slate-600">{emp.employee_number}</td>
                         <td className="py-2 px-3 font-bold text-slate-800">{emp.name}</td>
                         <td className="py-2 px-3 font-mono text-indigo-600">{emp.username}</td>

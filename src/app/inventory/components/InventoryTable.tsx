@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Package, TrendingUp, Sliders, MapPin, Building, Edit, FileText, Trash2, Loader2, ArrowUpDown, ArrowUp, ArrowDown, Filter, ChevronDown, Check, MoreHorizontal, Download } from 'lucide-react';
+import { Search, Package, TrendingUp, Sliders, MapPin, Building, Edit, FileText, Trash2, Loader2, ArrowUpDown, ArrowUp, ArrowDown, Filter, ChevronDown, Check, MoreHorizontal, Download, Globe } from 'lucide-react';
 import { InventoryItem, InventoryLog } from '../types';
 import { calculateValuation } from '../utils/valuation';
+import { getSavedGoogleSheetUrl } from '@/lib/google-sheets-storage';
+import { openGoogleSheetsViewer } from '@/lib/excel-export';
 
 interface InventoryTableProps {
   items: InventoryItem[];
@@ -243,7 +245,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
               <button 
                 onClick={onExportExcel}
                 disabled={isExportingExcel}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-2xl border border-emerald-500 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed whitespace-nowrap h-[38px] flex-shrink-0"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl border border-emerald-500 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed whitespace-nowrap h-[38px] flex-shrink-0"
                 title="현재 조회 조건의 전체 대장 리스트를 엑셀 파일로 저장합니다."
               >
                 {isExportingExcel ? (
@@ -254,11 +256,21 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({
                 ) : (
                   <>
                     <Download className="w-3.5 h-3.5 text-emerald-200" />
-                    <span>대장 엑셀 다운로드</span>
+                    <span>엑셀 다운로드</span>
                   </>
                 )}
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => openGoogleSheetsViewer(getSavedGoogleSheetUrl())}
+              className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl border border-teal-500 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap h-[38px] flex-shrink-0"
+              title="연동된 구글 스프레드시트 열람 또는 실시간 시트 화면으로 이동합니다."
+            >
+              <Globe className="w-3.5 h-3.5 text-teal-200" />
+              <span>구글시트 조회</span>
+            </button>
           </div>
 
         </div>
