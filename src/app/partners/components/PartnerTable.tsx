@@ -473,9 +473,9 @@ export function PartnerTable({
                   {/* 6. 우대 등급 / 여신한도 */}
                   <td className="py-4 px-3.5">
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
-                      pt.vip_level === 'VIP'
+                      (pt.vip_level as string) === 'VIP'
                         ? 'bg-amber-100 text-amber-600 border border-amber-200' 
-                        : pt.vip_level === 'VVIP'
+                        : (pt.vip_level as string) === 'VVIP'
                         ? 'bg-rose-100 text-rose-600 border border-rose-200'
                         : 'bg-slate-100 text-slate-500'
                     }`}>
