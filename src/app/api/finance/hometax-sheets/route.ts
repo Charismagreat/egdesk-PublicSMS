@@ -183,13 +183,20 @@ export async function POST(req: Request) {
           deleted_at: null
         });
 
+        const buyerEmail = inv.buyer_email || inv.email || inv.공급받는자이메일1 || inv.공급받는자이메일2 || inv.공급받는자이메일;
+        const buyerAddress = inv.buyer_address || inv.address || inv.공급받는자주소;
+        const supplierEmail = inv.supplier_email || inv.email || inv.공급자이메일;
+        const supplierAddress = inv.supplier_address || inv.address || inv.공급자주소;
+
         if (isSales) {
           if (buyerName || buyerNum) {
             partnerSyncList.push({
               type: 'BUYER',
               companyName: buyerName,
               businessNumber: buyerNum,
-              representative: buyerCeo
+              representative: buyerCeo,
+              address: buyerAddress,
+              email: buyerEmail
             });
           }
         } else {
@@ -198,7 +205,9 @@ export async function POST(req: Request) {
               type: 'VENDOR',
               companyName: supplierName,
               businessNumber: supplierNum,
-              representative: supplierCeo
+              representative: supplierCeo,
+              address: supplierAddress,
+              email: supplierEmail
             });
           }
         }

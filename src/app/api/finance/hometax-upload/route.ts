@@ -318,6 +318,43 @@ export async function POST(request: NextRequest) {
           tenant_id: tenantId
         });
         insertedCount++;
+
+        // 거래처(crm_partners) 동기화 목록 추출 (과세 세금계산서)
+        const supplierName = cleanStr(row[5]);
+        const supplierNum = supplierBn.formatted || cleanStr(row[3]);
+        const supplierCeo = cleanStr(row[6]);
+        const supplierAddr = cleanStr(row[7]);
+        const supplierEmail = cleanStr(row[22]);
+
+        const buyerName = cleanStr(row[10]);
+        const buyerNum = buyerBn.formatted || cleanStr(row[8]);
+        const buyerCeo = cleanStr(row[11]);
+        const buyerAddr = cleanStr(row[12]);
+        const buyerEmail = cleanStr(row[23]) || cleanStr(row[24]);
+
+        if (kind === "sales") {
+          if (buyerName || buyerNum) {
+            partnerSyncList.push({
+              type: 'BUYER',
+              companyName: buyerName,
+              businessNumber: buyerNum,
+              representative: buyerCeo,
+              address: buyerAddr,
+              email: buyerEmail
+            });
+          }
+        } else if (kind === "purchase") {
+          if (supplierName || supplierNum) {
+            partnerSyncList.push({
+              type: 'VENDOR',
+              companyName: supplierName,
+              businessNumber: supplierNum,
+              representative: supplierCeo,
+              address: supplierAddr,
+              email: supplierEmail
+            });
+          }
+        }
       }
 
       if (rowsToInsert.length > 0) {
