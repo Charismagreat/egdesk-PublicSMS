@@ -266,9 +266,6 @@ export default function PartnerGoogleSheetsImportModal({
             <div>
               <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
                 거래처 마스터 구글 스프레드시트 연동
-                <span className="text-[10px] font-extrabold bg-teal-50 text-teal-600 px-2 py-0.5 rounded-full border border-teal-100">
-                  클라우드 실시간 동기화
-                </span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">구글 시트 URL을 통해 바이어 및 공급사 거래처 데이터를 실시간 판독하여 일괄 등록합니다.</p>
             </div>

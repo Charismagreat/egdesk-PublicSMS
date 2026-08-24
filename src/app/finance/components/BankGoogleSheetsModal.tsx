@@ -258,9 +258,6 @@ export default function BankGoogleSheetsModal({
             <div>
               <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
                 인터넷뱅킹 거래내역 구글 스프레드시트 연동
-                <span className="text-[10px] font-extrabold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">
-                  클라우드 실시간 동기화
-                </span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">구글 시트의 은행 거래내역을 실시간으로 읽어와 법인 계좌 입출금 장부에 일괄 적재합니다.</p>
             </div>

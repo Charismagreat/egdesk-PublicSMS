@@ -230,9 +230,6 @@ export default function HrGoogleSheetsUploadModal({
             <div>
               <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
                 HR 인사/근태 종합 구글 스프레드시트 연동 등록
-                <span className="text-[10px] font-extrabold bg-teal-50 text-teal-600 px-2 py-0.5 rounded-full border border-teal-100">
-                  클라우드 실시간 동기화
-                </span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">구글 시트의 HR 종합 서식을 실시간으로 읽어와 임직원 인적사항 및 급여 마스터를 자동 생성합니다.</p>
             </div>
