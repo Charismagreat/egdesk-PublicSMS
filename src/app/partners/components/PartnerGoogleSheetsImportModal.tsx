@@ -352,37 +352,6 @@ export default function PartnerGoogleSheetsImportModal({
               </button>
             </div>
 
-            {/* 최근 연동된 시트 빠른 선택 프리셋 */}
-            {recentSheets.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px]">
-                <span className="text-slate-400 font-bold flex items-center gap-1 shrink-0">
-                  <History className="w-3 h-3" /> 최근 시트:
-                </span>
-                {recentSheets.map((item, idx) => {
-                  const displayTitle = item.title || item.sheetName || (item.url.length > 35 ? `${item.url.slice(0, 32)}...` : item.url);
-                  const isSelected = item.url === sheetUrl;
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        setSheetUrl(item.url);
-                        if (item.sheetName) setSelectedSheetName(item.sheetName);
-                      }}
-                      className={`px-2 py-0.5 rounded-md border text-[11px] font-semibold transition-all cursor-pointer truncate max-w-[220px] ${
-                        isSelected
-                          ? "bg-teal-50 text-teal-700 border-teal-300 font-bold"
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-800"
-                      }`}
-                      title={item.url}
-                    >
-                      {displayTitle}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
             {/* 다중 시트 탭 선택 */}
             {availableSheets.length > 1 && (
               <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 text-xs">
