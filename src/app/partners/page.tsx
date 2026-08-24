@@ -109,6 +109,7 @@ export default function PartnersDashboard() {
         handleCreateClick={handleCreateClick}
         handleDeletePartner={handleDeletePartner}
         openAnalysisPopup={openAnalysisPopup}
+        fetchPartners={fetchPartners}
         // 📂 엑셀 일괄 등록 클릭 트리거
         handleBulkImportClick={() => setIsBulkImportOpen(true)}
         // 🌐 구글 시트 연동 클릭 트리거

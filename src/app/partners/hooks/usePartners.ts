@@ -581,6 +581,7 @@ export function usePartners() {
     handleRunAiAnalysis,
     // 📂 엑셀 일괄 등록
     handleBulkImport,
+    fetchPartners,
     // ⚡ 페이지네이션 관련 프로퍼티 추가
     currentPage,
     setCurrentPage,

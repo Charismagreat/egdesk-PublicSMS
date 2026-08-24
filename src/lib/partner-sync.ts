@@ -99,10 +99,20 @@ export async function smartSyncPartnersFromInvoices(
           needUpdate = true;
         }
 
-        // 사업자번호가 비어있는데 세금계산서에 있으면 보충
-        if (!existing.business_number && item.businessNumber) {
-          updateData.business_number = sanitizeBusinessNumber(item.businessNumber) || item.businessNumber;
+        // 사업자번호가 비어있거나 이상값인 경우 보충
+        if ((!existing.business_number || existing.business_number === '[object Object]') && item.businessNumber) {
+          const resBiz = sanitizeBusinessNumber(item.businessNumber);
+          updateData.business_number = resBiz.isValid ? resBiz.formatted : String(item.businessNumber).trim();
           needUpdate = true;
+        }
+
+        // 이메일이 비어있는데 세금계산서에 있으면 보충
+        if (!existing.email && item.email) {
+          const resEmail = sanitizeEmail(item.email);
+          if (resEmail.isValid) {
+            updateData.email = resEmail.value;
+            needUpdate = true;
+          }
         }
 
         // type 확장 (기존이 BUYER인데 VENDOR가 들어오면 BOTH로 승격)
@@ -115,22 +125,39 @@ export async function smartSyncPartnersFromInvoices(
         }
 
         if (needUpdate) {
-          await updateRows('crm_partners', { id: existing.id }, updateData).catch((e: any) => {
+          await updateRows('crm_partners', updateData, { filters: { id: String(existing.id) } }).catch((e: any) => {
             console.warn(`[Partner Smart Update Warn] ${companyName}:`, e.message);
           });
           updated++;
         }
       } else {
         // [New Insert]: 신규 거래처 등록
-        const formattedBiz = item.businessNumber ? (sanitizeBusinessNumber(item.businessNumber) || item.businessNumber) : null;
+        let formattedBiz: string | null = null;
+        if (item.businessNumber) {
+          const resBiz = sanitizeBusinessNumber(item.businessNumber);
+          formattedBiz = resBiz.isValid ? resBiz.formatted : String(item.businessNumber).trim();
+        }
+
+        let formattedEmail: string | null = null;
+        if (item.email) {
+          const resEmail = sanitizeEmail(item.email);
+          formattedEmail = resEmail.isValid ? resEmail.value : String(item.email).trim();
+        }
+
+        let formattedPhone: string | null = null;
+        if (item.phone) {
+          const resPhone = sanitizePhoneNumber(item.phone);
+          formattedPhone = resPhone.isValid ? resPhone.formatted : String(item.phone).trim();
+        }
+
         const newPartner = {
           type: item.type, // 'BUYER' or 'VENDOR'
           company_name: companyName,
           business_number: formattedBiz,
           representative: item.representative ? item.representative.trim() : null,
           address: item.address ? item.address.trim() : null,
-          email: item.email ? sanitizeEmail(item.email) : null,
-          phone: item.phone ? sanitizePhoneNumber(item.phone) : null,
+          email: formattedEmail,
+          phone: formattedPhone,
           vip_level: 'NORMAL',
           credit_limit: 0,
           created_at: now,

@@ -264,8 +264,9 @@ export function PartnerFormModal({
           <div>
             <label className="text-[10px] text-slate-400 font-bold block mb-1">거래처 구분 (중복 선택 가능)</label>
             <div className="flex gap-2">
-              {(['VENDOR', 'BUYER', 'AFFILIATE'] as const).map((m) => {
+              {(['VENDOR', 'BUYER'] as const).map((m) => {
                 const isSelected = form.type ? form.type.split(',').includes(m) : false;
+                const activeColor = m === 'VENDOR' ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' : 'bg-emerald-600 border-emerald-600 text-white shadow-sm';
                 return (
                   <button
                     key={m}
@@ -284,11 +285,11 @@ export function PartnerFormModal({
                       }
                       setForm(p => ({ ...p, type: nextTypes.join(',') }));
                     }}
-                    className={`flex-1 py-2 rounded-xl text-xs font-black transition-all border border-slate-200 cursor-pointer ${
-                      isSelected ? 'bg-slate-950 border-slate-950 text-white shadow-sm' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all border border-slate-200 cursor-pointer ${
+                      isSelected ? activeColor : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
                     }`}
                   >
-                    {m === 'VENDOR' ? '공급사' : m === 'BUYER' ? '바이어' : '관계사'}
+                    {m === 'VENDOR' ? '공급사 (VENDOR)' : '바이어 (BUYER)'}
                   </button>
                 );
               })}

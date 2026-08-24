@@ -1,9 +1,8 @@
-"use client";
-
-import React from "react";
-import { Search, Plus, Edit2, Trash2, FileSpreadsheet, Download, ChevronLeft, ChevronRight, Globe } from "lucide-react";
+import React, { useState } from "react";
+import { Search, Plus, Edit2, Trash2, FileSpreadsheet, Download, ChevronLeft, ChevronRight, Globe, Tag } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Partner } from "../types";
+import { apiFetch } from "@/lib/api";
 
 interface PartnerTableProps {
   loading: boolean;
@@ -20,6 +19,7 @@ interface PartnerTableProps {
   handleCreateClick: () => void;
   handleDeletePartner: (pt: Partner, e: React.MouseEvent) => void;
   openAnalysisPopup: (pt: Partner, e: React.MouseEvent) => void;
+  fetchPartners?: () => void;
   // 📂 엑셀 일괄 등록 트리거
   handleBulkImportClick: () => void;
   // 🌐 구글 시트 연동 트리거
@@ -46,6 +46,7 @@ export function PartnerTable({
   handleCreateClick,
   handleDeletePartner,
   openAnalysisPopup,
+  fetchPartners,
   handleBulkImportClick,
   handleGoogleSheetsClick,
   // ⚡ 페이지네이션 Props 연동
@@ -104,6 +105,53 @@ export function PartnerTable({
     const todayStr = new Date().toISOString().split("T")[0];
     const fileName = `거래처_목록_대장_${todayStr}.xlsx`;
     XLSX.writeFile(workbook, fileName);
+  };
+
+  // 🏷️ 리스트 내 인라인 태그 직접 편집 상태 관리
+  const [editingTagPartnerId, setEditingTagPartnerId] = useState<string | null>(null);
+  const [inlineTagValue, setInlineTagValue] = useState<string>("");
+  const [isSavingTag, setIsSavingTag] = useState<boolean>(false);
+
+  const handleStartEditTags = (pt: Partner, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingTagPartnerId(pt.id);
+    setInlineTagValue(pt.tags || "");
+  };
+
+  const handleSaveInlineTags = async (partnerId: string, newTags: string) => {
+    setIsSavingTag(true);
+    try {
+      const cleanTags = newTags
+        .split(/[,#\s]+/)
+        .filter(Boolean)
+        .map(t => t.startsWith('#') ? t : `#${t}`)
+        .join(', ');
+
+      const res = await apiFetch('/api/partners', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: partnerId, tags: cleanTags })
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (fetchPartners) fetchPartners();
+      } else {
+        alert(data.error || '태그 수정에 실패했습니다.');
+      }
+    } catch (err) {
+      console.error('태그 저장 에러:', err);
+    } finally {
+      setIsSavingTag(false);
+      setEditingTagPartnerId(null);
+    }
+  };
+
+  const handleRemoveSingleTag = async (pt: Partner, tagToRemove: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const currentList = (pt.tags || '').split(/[,#\s]+/).filter(Boolean);
+    const updatedList = currentList.filter(t => t !== tagToRemove);
+    const newTagsStr = updatedList.map(t => `#${t}`).join(', ');
+    await handleSaveInlineTags(pt.id, newTagsStr);
   };
 
   // 페이지 번호 리스트 계산 (최대 5개씩 묶어서 출력)
@@ -307,26 +355,79 @@ export function PartnerTable({
                       </div>
                     </td>
 
-                  {/* 2. 상호명 / 대표자 / 사업자번호 / 프로젝트 태그 */}
+                  {/* 2. 상호명 / 대표자 / 사업자번호 / 프로젝트 태그 (인라인 직접 편집 지원) */}
                   <td className="py-4 px-3.5">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-extrabold text-slate-800 text-xs">{pt.company_name}</span>
-                      {pt.tags && (
-                        <div className="flex flex-wrap gap-1">
-                          {pt.tags.split(/[,#\s]+/).filter(Boolean).map((tag, tIdx) => (
-                            <button
+                      
+                      {/* 인라인 태그 렌더링 및 편집 영역 */}
+                      {editingTagPartnerId === pt.id ? (
+                        <div className="inline-flex items-center gap-1 my-0.5" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            autoFocus
+                            value={inlineTagValue}
+                            onChange={e => setInlineTagValue(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleSaveInlineTags(pt.id, inlineTagValue);
+                              if (e.key === 'Escape') setEditingTagPartnerId(null);
+                            }}
+                            placeholder="#태그1, #태그2"
+                            className="px-2 py-0.5 text-[10px] font-bold text-slate-800 bg-white border border-indigo-500 rounded-md outline-none shadow-xs w-36"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveInlineTags(pt.id, inlineTagValue)}
+                            disabled={isSavingTag}
+                            className="px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-black cursor-pointer border-none"
+                          >
+                            저장
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingTagPartnerId(null)}
+                            className="px-1 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded text-[9px] font-bold cursor-pointer border-none"
+                          >
+                            취소
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center flex-wrap gap-1">
+                          {pt.tags && pt.tags.split(/[,#\s]+/).filter(Boolean).map((tag, tIdx) => (
+                            <span
                               key={tIdx}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSearchQuery(tag);
-                              }}
-                              title={`'#${tag}' 태그로 즉시 필터링`}
-                              className="inline-flex items-center px-1.5 py-0.2 rounded-md text-[9px] font-black bg-indigo-50 text-indigo-600 border border-indigo-200/80 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all cursor-pointer shadow-2xs"
+                              className="group inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-md text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-2xs"
                             >
-                              #{tag}
-                            </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSearchQuery(tag);
+                                }}
+                                title={`'#${tag}' 태그로 즉시 필터링`}
+                                className="hover:text-indigo-900 border-none bg-transparent p-0 cursor-pointer text-[9px] font-black"
+                              >
+                                #{tag}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => handleRemoveSingleTag(pt, tag, e)}
+                                title="태그 삭제"
+                                className="opacity-40 hover:opacity-100 hover:text-rose-600 border-none bg-transparent p-0 cursor-pointer ml-0.5 text-[10px] leading-none"
+                              >
+                                &times;
+                              </button>
+                            </span>
                           ))}
+                          <button
+                            type="button"
+                            onClick={(e) => handleStartEditTags(pt, e)}
+                            title="태그 직접 추가/수정"
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-md text-[9px] font-bold text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-200/60 hover:border-indigo-200 transition-all cursor-pointer"
+                          >
+                            <Plus className="w-2.5 h-2.5" />
+                            <span>{pt.tags ? '수정' : '태그'}</span>
+                          </button>
                         </div>
                       )}
                     </div>
