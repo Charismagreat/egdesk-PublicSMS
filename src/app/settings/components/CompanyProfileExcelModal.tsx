@@ -112,35 +112,85 @@ export default function CompanyProfileExcelModal({
         if (jsonObjects.length > 0) {
           const firstRow = jsonObjects[0];
 
-          // 컬럼 헤더 매핑 도우미 (유연한 키 검색)
-          const findVal = (keys: string[], defaultIdx: number) => {
-            for (const key of Object.keys(firstRow)) {
-              const cleanKey = key.replace(/\s+/g, "").toLowerCase();
-              if (keys.some(k => cleanKey.includes(k.toLowerCase()))) {
-                const val = firstRow[key];
-                return val !== undefined && val !== null ? String(val).trim() : "";
+          // 컬럼 헤더 매핑 도우미 (정밀 키워드 및 제외어 지원)
+          const cleanKeys = Object.keys(firstRow).map(k => ({
+            original: k,
+            clean: k.replace(/[\s\(\)\[\]\-_]/g, "").toLowerCase()
+          }));
+
+          const findVal = (posKeys: string[], negKeys: string[], defaultIdx: number) => {
+            // 1단계: 완전 일치
+            for (const item of cleanKeys) {
+              if (posKeys.some(pk => item.clean === pk.replace(/[\s\(\)\[\]\-_]/g, "").toLowerCase())) {
+                const val = firstRow[item.original];
+                if (val !== undefined && val !== null && String(val).trim() !== "") {
+                  return String(val).trim();
+                }
               }
             }
-            // 컬럼명이 맞지 않을 경우 인덱스로 폴백
-            if (rows[1] && rows[1][defaultIdx] !== undefined) {
+
+            // 2단계: 부분 일치 (제외어 필터링)
+            for (const item of cleanKeys) {
+              if (negKeys.some(nk => item.clean.includes(nk.replace(/[\s\(\)\[\]\-_]/g, "").toLowerCase()))) {
+                continue;
+              }
+              if (posKeys.some(pk => item.clean.includes(pk.replace(/[\s\(\)\[\]\-_]/g, "").toLowerCase()))) {
+                const val = firstRow[item.original];
+                if (val !== undefined && val !== null && String(val).trim() !== "") {
+                  return String(val).trim();
+                }
+              }
+            }
+
+            // 3단계: 인덱스 폴백
+            if (rows[1] && rows[1][defaultIdx] !== undefined && String(rows[1][defaultIdx]).trim() !== "") {
               return String(rows[1][defaultIdx]).trim();
             }
             return "";
           };
 
+          const rawCompanyName = findVal(["회사명상호", "회사명", "상호명", "상호", "법인명", "업체명"], [], 0);
+          const rawRep = findVal(["대표자성함", "대표자명", "대표자", "대표명", "대표", "성함", "대표이사"], ["전화", "이메일", "연락처"], 1);
+          const rawBizNum = findVal(["사업자등록번호", "사업자번호", "등록번호", "사업자"], [], 2);
+          const rawPhone = findVal(["대표전화번호", "대표전화", "회사전화", "전화번호", "연락처", "고객센터", "유선전화", "전화"], ["팩스", "휴대폰", "이메일", "대표자", "성함"], 3);
+          const rawEmail = findVal(["대표이메일", "이메일주소", "회사이메일", "이메일", "전자우편", "email"], [], 4);
+          const rawHomepage = findVal(["홈페이지주소", "홈페이지", "웹사이트주소", "웹사이트", "웹페이지", "회사홈페이지", "homepage", "url"], [], 5);
+          const rawSidebarMain = findVal(["사이드바메인타이틀", "메인타이틀", "시스템타이틀", "헤더타이틀", "메인명칭"], [], 6);
+          const rawSidebarSub = findVal(["사이드바서브타이틀", "서브타이틀", "시스템설명", "부타이틀", "서브명칭"], [], 7);
+          const rawAddress = findVal(
+            ["본점소재지주소", "본점소재지", "사업장소재지", "사업장주소", "본점주소", "본사주소", "회사주소", "도로명주소", "소재지", "주소", "회사위치"],
+            ["홈페이지", "웹사이트", "이메일", "전자우편", "url", "site", "도메인"],
+            8
+          );
+          const rawBankName = findVal(
+            ["입금은행명", "입금은행", "거래은행명", "거래은행", "은행명", "은행"],
+            ["계좌", "예금주", "번호"],
+            9
+          );
+          const rawAccountNumber = findVal(
+            ["입금계좌번호", "입금계좌", "계좌번호", "통장번호", "계좌"],
+            ["은행명", "예금주"],
+            10
+          );
+          const rawAccountHolder = findVal(
+            ["예금주성명", "예금주명", "예금주", "계좌주"],
+            ["은행", "계좌번호"],
+            11
+          );
+
           profileObj = {
-            companyName: findVal(["회사명", "상호"], 0),
-            representative: findVal(["대표자", "대표명", "대표"], 1),
-            businessNumber: findVal(["사업자등록번호", "사업자번호"], 2),
-            phone: findVal(["대표전화번호", "대표전화", "전화번호", "연락처"], 3),
-            email: findVal(["대표이메일", "이메일"], 4),
-            homepage: findVal(["홈페이지주소", "홈페이지", "웹사이트"], 5),
-            sidebarMainTitle: findVal(["사이드바메인타이틀", "메인타이틀"], 6),
-            sidebarSubTitle: findVal(["사이드바서브타이틀", "서브타이틀"], 7),
-            address: findVal(["본점소재지주소", "본점주소", "소재지", "주소"], 8),
-            bankName: findVal(["입금은행명", "은행명", "입금은행", "은행"], 9),
-            accountNumber: findVal(["계좌번호", "입금계좌"], 10),
-            accountHolder: findVal(["예금주"], 11)
+            companyName: rawCompanyName,
+            representative: rawRep,
+            businessNumber: rawBizNum,
+            phone: rawPhone,
+            email: rawEmail,
+            homepage: rawHomepage,
+            sidebarMainTitle: rawSidebarMain,
+            sidebarSubTitle: rawSidebarSub,
+            address: rawAddress,
+            bankName: rawBankName,
+            accountNumber: rawAccountNumber,
+            accountHolder: rawAccountHolder
           };
         } else if (rows.length >= 2) {
           const dataRow = rows[1];

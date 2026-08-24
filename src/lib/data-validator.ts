@@ -196,12 +196,26 @@ export function sanitizePhoneNumber(raw: any): {
 } {
   if (!raw) return { value: '', formatted: '', isValid: false, warning: '전화번호 없음' };
 
-  const digits = String(raw).replace(/\D/g, '');
+  let digits = String(raw).replace(/\D/g, '');
+  if (!digits) return { value: '', formatted: '', isValid: false, warning: '전화번호 없음' };
+
+  // 엑셀/구글시트에서 맨 앞 0이 숫자로 취급되어 누락된 경우 자동 복원
+  if (!digits.startsWith('0')) {
+    if (digits.length === 10 && (digits.startsWith('10') || digits.startsWith('11') || digits.startsWith('16') || digits.startsWith('17') || digits.startsWith('18') || digits.startsWith('19') || digits.startsWith('70') || digits.startsWith('50'))) {
+      digits = '0' + digits; // 010-xxxx-xxxx, 070-xxxx-xxxx
+    } else if (digits.length === 9) {
+      // 31, 32, 33, 41, 42, 43, 51, 52, 53, 54, 55, 61, 62, 63, 64 등 지역번호 앞 0 복원
+      digits = '0' + digits; // 031-xxx-xxxx
+    } else if (digits.length === 8 && digits.startsWith('2')) {
+      // 2-xxxx-xxxx -> 02-xxxx-xxxx
+      digits = '0' + digits;
+    }
+  }
+
   if (digits.length === 11) {
     const formatted = `${digits.substring(0, 3)}-${digits.substring(3, 7)}-${digits.substring(7, 11)}`;
     return { value: digits, formatted, isValid: true };
   } else if (digits.length === 10) {
-    // 02-XXXX-XXXX or 01X-XXX-XXXX
     if (digits.startsWith('02')) {
       const formatted = `${digits.substring(0, 2)}-${digits.substring(2, 6)}-${digits.substring(6, 10)}`;
       return { value: digits, formatted, isValid: true };
@@ -209,7 +223,14 @@ export function sanitizePhoneNumber(raw: any): {
       const formatted = `${digits.substring(0, 3)}-${digits.substring(3, 6)}-${digits.substring(6, 10)}`;
       return { value: digits, formatted, isValid: true };
     }
-  } else if (digits.length >= 8 && digits.length <= 12) {
+  } else if (digits.length === 9 && digits.startsWith('02')) {
+    const formatted = `${digits.substring(0, 2)}-${digits.substring(2, 5)}-${digits.substring(5, 9)}`;
+    return { value: digits, formatted, isValid: true };
+  } else if (digits.length === 8) {
+    // 15xx, 16xx, 18xx 대표번호
+    const formatted = `${digits.substring(0, 4)}-${digits.substring(4, 8)}`;
+    return { value: digits, formatted, isValid: true };
+  } else if (digits.length >= 7 && digits.length <= 12) {
     return { value: digits, formatted: String(raw).trim(), isValid: true };
   }
 
