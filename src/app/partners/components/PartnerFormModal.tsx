@@ -288,7 +288,7 @@ export function PartnerFormModal({
                       isSelected ? 'bg-slate-950 border-slate-950 text-white shadow-sm' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
                     }`}
                   >
-                    {m === 'VENDOR' ? '공급처 (Vendor)' : m === 'BUYER' ? '바이어 (Buyer)' : '🤝 관계사'}
+                    {m === 'VENDOR' ? '공급사' : m === 'BUYER' ? '바이어' : '관계사'}
                   </button>
                 );
               })}

@@ -98,9 +98,9 @@ export default function PartnersDashboard() {
         loading={loading}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        totalAll={partners.length}
         totalVendors={totalVendors}
         totalBuyers={totalBuyers}
-        totalAffiliates={totalAffiliates}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         filteredPartners={filteredPartners}

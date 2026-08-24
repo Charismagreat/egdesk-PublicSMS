@@ -7,11 +7,11 @@ import { Partner } from "../types";
 
 interface PartnerTableProps {
   loading: boolean;
-  activeTab: 'VENDOR' | 'BUYER' | 'AFFILIATE';
-  setActiveTab: (tab: 'VENDOR' | 'BUYER' | 'AFFILIATE') => void;
+  activeTab: 'ALL' | 'VENDOR' | 'BUYER';
+  setActiveTab: (tab: 'ALL' | 'VENDOR' | 'BUYER') => void;
+  totalAll?: number;
   totalVendors?: number;
   totalBuyers?: number;
-  totalAffiliates?: number;
   searchQuery: string;
   setSearchQuery: (val: string) => void;
   filteredPartners: Partner[];
@@ -35,9 +35,9 @@ export function PartnerTable({
   loading,
   activeTab,
   setActiveTab,
+  totalAll = 0,
   totalVendors = 0,
   totalBuyers = 0,
-  totalAffiliates = 0,
   searchQuery,
   setSearchQuery,
   filteredPartners,
@@ -155,51 +155,54 @@ export function PartnerTable({
 
           {/* 🏷️ 뱃지 형태의 거래처 구분 탭 필터 (Badge Tab Filter) */}
           <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80 shrink-0 shadow-inner">
+            {/* 전체 뱃지 */}
             <button 
-              onClick={() => setActiveTab("VENDOR")}
-              className={`py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all border-none cursor-pointer whitespace-nowrap ${
-                activeTab === "VENDOR"
-                  ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
-                  : "bg-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60"
+              onClick={() => setActiveTab("ALL")}
+              className={`py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all border cursor-pointer whitespace-nowrap ${
+                activeTab === "ALL"
+                  ? "bg-slate-900 border-slate-900 text-white shadow-sm shadow-slate-900/30"
+                  : "bg-slate-50 border-slate-200/70 text-slate-600 hover:text-slate-900 hover:bg-white"
               }`}
             >
-              <span>공급처 (Vendor)</span>
+              <span>전체</span>
               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                activeTab === "VENDOR" ? "bg-emerald-800/60 text-white" : "bg-slate-200 text-slate-700"
+                activeTab === "ALL" ? "bg-slate-700 text-white" : "bg-slate-200 text-slate-700"
+              }`}>
+                {totalAll}
+              </span>
+            </button>
+
+            {/* 공급사 뱃지 (구분 컬럼의 인디고 색상과 일치) */}
+            <button 
+              onClick={() => setActiveTab("VENDOR")}
+              className={`py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all border cursor-pointer whitespace-nowrap ${
+                activeTab === "VENDOR"
+                  ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-600/30"
+                  : "bg-indigo-50/80 border-indigo-200/80 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-900"
+              }`}
+            >
+              <span>공급사</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === "VENDOR" ? "bg-indigo-800/60 text-white" : "bg-indigo-100 text-indigo-800"
               }`}>
                 {totalVendors}
               </span>
             </button>
 
+            {/* 바이어 뱃지 (구분 컬럼의 에메랄드 색상과 일치) */}
             <button 
               onClick={() => setActiveTab("BUYER")}
-              className={`py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all border-none cursor-pointer whitespace-nowrap ${
+              className={`py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all border cursor-pointer whitespace-nowrap ${
                 activeTab === "BUYER"
-                  ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
-                  : "bg-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                  ? "bg-emerald-600 border-emerald-600 text-white shadow-sm shadow-emerald-600/30"
+                  : "bg-emerald-50/80 border-emerald-200/80 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-900"
               }`}
             >
-              <span>바이어 (Buyer)</span>
+              <span>바이어</span>
               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                activeTab === "BUYER" ? "bg-emerald-800/60 text-white" : "bg-slate-200 text-slate-700"
+                activeTab === "BUYER" ? "bg-emerald-800/60 text-white" : "bg-emerald-100 text-emerald-800"
               }`}>
                 {totalBuyers}
-              </span>
-            </button>
-
-            <button 
-              onClick={() => setActiveTab("AFFILIATE")}
-              className={`py-2 px-3.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all border-none cursor-pointer whitespace-nowrap ${
-                activeTab === "AFFILIATE"
-                  ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
-                  : "bg-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60"
-              }`}
-            >
-              <span>🤝 관계사 (Affiliate)</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                activeTab === "AFFILIATE" ? "bg-emerald-800/60 text-white" : "bg-slate-200 text-slate-700"
-              }`}>
-                {totalAffiliates}
               </span>
             </button>
           </div>
@@ -240,7 +243,7 @@ export function PartnerTable({
             className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-slate-900/10 border-none cursor-pointer whitespace-nowrap"
           >
             <Plus className="w-4 h-4 text-emerald-400" />
-            신규 {activeTab === 'VENDOR' ? '공급사' : activeTab === 'BUYER' ? '바이어' : '관계사'} 등록
+            신규 {activeTab === 'VENDOR' ? '공급사' : activeTab === 'BUYER' ? '바이어' : '거래처'} 등록
           </button>
         </div>
       </div>
@@ -269,7 +272,7 @@ export function PartnerTable({
             ) : paginatedPartners.length === 0 ? (
               <tr>
                 <td colSpan={9} className="text-center py-12 text-slate-400">
-                  등록된 {activeTab === 'VENDOR' ? '공급처가' : activeTab === 'BUYER' ? '바이어가' : '관계사가'} 없습니다.
+                  등록된 {activeTab === 'VENDOR' ? '공급사가' : activeTab === 'BUYER' ? '바이어가' : '거래처가'} 없습니다.
                 </td>
               </tr>
             ) : (

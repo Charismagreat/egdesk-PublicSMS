@@ -6,7 +6,7 @@ import { usePersistedState } from "@/hooks/usePersistedState";
 export function usePartners() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<'VENDOR' | 'BUYER' | 'AFFILIATE'>('egdesk_partners_activeTab', 'VENDOR');
+  const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<'ALL' | 'VENDOR' | 'BUYER'>('egdesk_partners_activeTab', 'ALL');
   const [searchQuery, setSearchQuery, isSearchQueryRestored] = usePersistedState("egdesk_partners_searchQuery", "");
   const [currentPage, setCurrentPage, isCurrentPageRestored] = usePersistedState<number>('egdesk_partners_currentPage', 1);
 
@@ -430,7 +430,7 @@ export function usePartners() {
     setEditingId(null);
     setOcrResult(null); // AI 스캔 결과 캐시 초기화
     setForm({
-      type: activeTab,
+      type: (activeTab === 'ALL' ? 'VENDOR' : activeTab) as any,
       company_name: "",
       business_number: "",
       representative: "",
@@ -446,6 +446,7 @@ export function usePartners() {
       credit_limit: 0,
       memo: ""
     });
+    setContacts([]); // 명함 목록 초기화
     setIsModalOpen(true);
   };
 
@@ -490,8 +491,9 @@ export function usePartners() {
   const filteredPartners = partners.filter(pt => {
     const hasSearchQuery = !!searchQuery.trim();
 
-    // 🔍 검색어가 비어있을 때만 선택된 탭(공급처/바이어/관계사) 범위로 제한합니다.
+    // 🔍 검색어가 비어있을 때 선택된 탭(전체/공급사/바이어) 범위로 제한합니다.
     if (!hasSearchQuery) {
+      if (activeTab === 'ALL') return true;
       if (!pt.type || !pt.type.split(',').includes(activeTab)) return false;
       return true;
     }
