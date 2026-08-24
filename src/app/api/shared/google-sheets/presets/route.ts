@@ -192,11 +192,11 @@ export async function POST(req: NextRequest) {
 
     const newJson = JSON.stringify(presets);
 
-    if (rowId) {
+    if (existingRes.rows && existingRes.rows.length > 0) {
       await updateRows('system_settings', {
         value: newJson,
         updated_at: now
-      }, { filters: { id: String(rowId) } });
+      }, { filters: filterObj });
     } else {
       await insertRows('system_settings', [{
         key: settingKey,
