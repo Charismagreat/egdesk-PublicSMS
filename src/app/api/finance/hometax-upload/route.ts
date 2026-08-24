@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import * as xlsx from "xlsx";
-import { queryTable, insertRows, executeSQL } from "../../../../../egdesk-helpers";
+import { queryTable, insertRows, updateRows, executeSQL } from "../../../../../egdesk-helpers";
 import { getTenantId } from "@/lib/tenant";
 import { sanitizeDate, sanitizeAmount, reconcileAmounts, sanitizeBusinessNumber } from "@/lib/data-validator";
 import { smartSyncPartnersFromInvoices, InvoicePartnerInfo } from "@/lib/partner-sync";
@@ -19,6 +19,70 @@ function parseAmount(val: any): number {
 function cleanStr(val: any): string {
   if (val === null || val === undefined) return "";
   return String(val).trim();
+}
+
+function normalizeHeader(str: any): string {
+  if (str === null || str === undefined) return "";
+  return String(str).replace(/\s+/g, "").replace(/·/g, "").replace(/\//g, "").toLowerCase();
+}
+
+// 🧠 지능형 동적 헤더 및 컬럼 위치 분석 헬퍼
+function buildColumnIndexMap(rawRows: any[][]): { headerRowIndex: number; colMap: Record<string, number> } {
+  let headerRowIndex = -1;
+  const colMap: Record<string, number> = {};
+
+  for (let r = 0; r < Math.min(rawRows.length, 15); r++) {
+    const row = rawRows[r];
+    if (!row || !Array.isArray(row)) continue;
+
+    const rowStr = row.map(c => normalizeHeader(c)).join(" ");
+    if (
+      rowStr.includes("작성일자") ||
+      rowStr.includes("승인번호") ||
+      (rowStr.includes("공급자") && rowStr.includes("공급받는자")) ||
+      (rowStr.includes("등록번호") && rowStr.includes("상호")) ||
+      rowStr.includes("합계금액")
+    ) {
+      headerRowIndex = r;
+      row.forEach((cell, idx) => {
+        const norm = normalizeHeader(cell);
+        if (norm) {
+          colMap[norm] = idx;
+        }
+      });
+      break;
+    }
+  }
+
+  if (headerRowIndex === -1) {
+    headerRowIndex = 5; // 국세청 기본 6행 (index 5) 폴백
+  }
+
+  return { headerRowIndex, colMap };
+}
+
+function getColValue(row: any[], colMap: Record<string, number>, possibleKeys: string[], fallbackIdx: number): string {
+  for (const key of possibleKeys) {
+    const normKey = normalizeHeader(key);
+    // 1) 완전 일치 검색
+    if (colMap[normKey] !== undefined && row[colMap[normKey]] !== undefined && row[colMap[normKey]] !== null) {
+      const v = cleanStr(row[colMap[normKey]]);
+      if (v) return v;
+    }
+    // 2) 부분 일치 검색
+    for (const [headerName, idx] of Object.entries(colMap)) {
+      if (headerName.includes(normKey) || normKey.includes(headerName)) {
+        if (row[idx] !== undefined && row[idx] !== null) {
+          const v = cleanStr(row[idx]);
+          if (v) return v;
+        }
+      }
+    }
+  }
+  if (fallbackIdx >= 0 && row[fallbackIdx] !== undefined && row[fallbackIdx] !== null) {
+    return cleanStr(row[fallbackIdx]);
+  }
+  return "";
 }
 
 // 파일명, 셀 내용, 헤더 구조 기반으로 국세청 홈택스 엑셀 종류를 자동 추적 식별하는 헬퍼 함수
@@ -202,13 +266,14 @@ export async function POST(request: NextRequest) {
     let queryPeriodEnd = "";
     const nowStr = new Date().toISOString();
 
-    // 기존 승인번호 리스트 가져오기
-    const existingApprovalNos = new Set<string>();
+    // 1. 기존 DB 내 세금계산서 맵 구축 (중복 방지 및 누락된 주소/이메일 스마트 백필용)
+    const existingInvoices = new Map<string, any>();
     try {
-      const checkRes = await executeSQL(`SELECT 승인번호 FROM ${tableName}`);
+      const checkRes = await queryTable(tableName, { limit: 5000 });
       if (checkRes && checkRes.rows) {
         checkRes.rows.forEach((r: any) => {
-          if (r.승인번호) existingApprovalNos.add(String(r.승인번호).trim());
+          const appNo = (r.승인번호 || r.approval_no || '').trim();
+          if (appNo) existingInvoices.set(appNo, r);
         });
       }
     } catch (err: any) {
@@ -231,120 +296,92 @@ export async function POST(request: NextRequest) {
         businessNumber = extractedBN;
       }
 
-      // 헤더: 6행 (index 5), 데이터: 7행 (index 6+)
-      const headerRowIndex = 5;
+      // 🧠 동적 헤더 및 컬럼 매핑 분석
+      const { headerRowIndex, colMap } = buildColumnIndexMap(rawRows);
       const dataRows = rawRows.slice(headerRowIndex + 1);
       const dates: string[] = [];
       const rowsToInsert: any[] = [];
 
       for (let i = 0; i < dataRows.length; i++) {
         const row = dataRows[i];
-        if (!row || !Array.isArray(row) || row.length < 5) continue;
-        
-        const approvalNo = cleanStr(row[1]);
+        if (!row || !Array.isArray(row) || row.length < 3) continue;
+
+        const approvalNo = getColValue(row, colMap, ["승인번호", "국세청승인번호", "승인No"], 1);
         if (!approvalNo) continue;
 
-        if (existingApprovalNos.has(approvalNo)) {
-          duplicateCount++;
-          continue;
-        }
-
-        const dateStr = cleanStr(row[0]);
+        const dateStr = getColValue(row, colMap, ["작성일자", "작성일", "일자"], 0);
         const dateSan = sanitizeDate(dateStr);
         const formattedDate = dateSan.isValid ? dateSan.value : (dateStr.replace(/\./g, "-") || nowStr.substring(0, 10));
         dates.push(formattedDate);
 
-        const supplyAmt = parseAmount(row[13]);
-        const taxAmt = parseAmount(row[14]);
-        const totalAmt = parseAmount(row[15]);
+        const supplierBnRaw = getColValue(row, colMap, ["공급자등록번호", "공급자사업자등록번호", "공급자사업자번호"], 3);
+        const buyerBnRaw = getColValue(row, colMap, ["공급받는자등록번호", "공급받는자사업자등록번호", "공급받는자사업자번호"], 8);
+        const supplierBn = sanitizeBusinessNumber(supplierBnRaw);
+        const buyerBn = sanitizeBusinessNumber(buyerBnRaw);
+
+        const supplierNum = supplierBn.formatted || supplierBnRaw;
+        const supplierBranch = getColValue(row, colMap, ["공급자종사업장번호", "공급자종사업장"], 4);
+        const supplierName = getColValue(row, colMap, ["공급자상호", "공급자상호(법인명)", "공급자회사명", "공급자상호명"], 5);
+        const supplierCeo = getColValue(row, colMap, ["공급자성명", "공급자대표자명", "공급자대표자", "공급자대표"], 6);
+        const supplierAddr = getColValue(row, colMap, ["공급자사업장주소", "공급자주소", "공급자사업장", "공급자소재지"], 7);
+        const supplierEmail = getColValue(row, colMap, ["공급자이메일", "공급자이메일주소", "공급자전자우편", "공급자Email", "공급자이메일1"], 22);
+
+        const buyerNum = buyerBn.formatted || buyerBnRaw;
+        const buyerBranch = getColValue(row, colMap, ["공급받는자종사업장번호", "공급받는자종사업장"], 9);
+        const buyerName = getColValue(row, colMap, ["공급받는자상호", "공급받는자상호(법인명)", "공급받는자회사명", "공급받는자상호명"], 10);
+        const buyerCeo = getColValue(row, colMap, ["공급받는자성명", "공급받는자대표자명", "공급받는자대표자", "공급받는자대표"], 11);
+        const buyerAddr = getColValue(row, colMap, ["공급받는자사업장주소", "공급받는자주소", "공급받는자사업장", "공급받는자소재지"], 12);
+        const buyerEmail1 = getColValue(row, colMap, ["공급받는자이메일1", "공급받는자이메일", "공급받는자전자우편1", "공급받는자Email1"], 23);
+        const buyerEmail2 = getColValue(row, colMap, ["공급받는자이메일2", "공급받는자전자우편2", "공급받는자Email2"], 24);
+
+        const supplyAmt = parseAmount(getColValue(row, colMap, ["공급가액", "공급금액"], 13));
+        const taxAmt = parseAmount(getColValue(row, colMap, ["세액", "부가가치세", "부가세"], 14));
+        const totalAmt = parseAmount(getColValue(row, colMap, ["합계금액", "합계", "총금액"], 15));
         const reconciled = reconcileAmounts(supplyAmt, taxAmt, totalAmt);
 
-        const supplierBn = sanitizeBusinessNumber(row[3]);
-        const buyerBn = sanitizeBusinessNumber(row[8]);
+        const sendDate = getColValue(row, colMap, ["발급일자", "전송일자"], 2);
+        const invoiceCategory = getColValue(row, colMap, ["전자세금계산서분류", "세금계산서분류", "분류"], 17);
+        const invoiceKind = getColValue(row, colMap, ["전자세금계산서종류", "세금계산서종류", "종류"], 18);
+        const issueType = getColValue(row, colMap, ["발급유형"], 19);
+        const remark = getColValue(row, colMap, ["비고", "적요"], 20);
+        const receiptType = getColValue(row, colMap, ["영수청구구분", "영수/청구", "영수청구"], 21);
 
-        rowsToInsert.push({
-          business_number: businessNumber,
-          issue_date: formattedDate,
-          작성일자: formattedDate,
-          발급일자: cleanStr(row[2]),
-          전송일자: cleanStr(row[2]),
-          approval_no: approvalNo,
-          승인번호: approvalNo,
-          invoice_type: kind, // 'sales' or 'purchase'
-          type: kind === 'sales' ? 'SALES' : 'PURCHASE',
-          invoice_kind: 'TAX_INVOICE',
-          supplier_corp_num: supplierBn.formatted || cleanStr(row[3]),
-          공급자사업자등록번호: supplierBn.formatted || cleanStr(row[3]),
-          공급자종사업장번호: cleanStr(row[4]),
-          supplier_corp_name: cleanStr(row[5]),
-          공급자상호: cleanStr(row[5]),
-          supplier_ceo_name: cleanStr(row[6]),
-          공급자대표자명: cleanStr(row[6]),
-          공급자주소: cleanStr(row[7]),
-          buyer_corp_num: buyerBn.formatted || cleanStr(row[8]),
-          공급받는자사업자등록번호: buyerBn.formatted || cleanStr(row[8]),
-          공급받는자종사업장번호: cleanStr(row[9]),
-          buyer_corp_name: cleanStr(row[10]),
-          공급받는자상호: cleanStr(row[10]),
-          buyer_ceo_name: cleanStr(row[11]),
-          공급받는자대표자명: cleanStr(row[11]),
-          공급받는자주소: cleanStr(row[12]),
-          total_amount: reconciled.total,
-          합계금액: reconciled.total,
-          공급가액: reconciled.supply,
-          supply_amount: reconciled.supply,
-          세액: reconciled.tax,
-          tax_amount: reconciled.tax,
-          전자세금계산서분류: cleanStr(row[17]),
-          전자세금계산서종류: cleanStr(row[18]),
-          발급유형: cleanStr(row[19]),
-          비고: cleanStr(row[20]),
-          remark: cleanStr(row[20]),
-          영수청구구분: cleanStr(row[21]),
-          공급자이메일: cleanStr(row[22]),
-          공급받는자이메일1: cleanStr(row[23]),
-          공급받는자이메일2: cleanStr(row[24]),
-          품목일자: cleanStr(row[25]),
-          품목명: cleanStr(row[26]),
-          item_name: cleanStr(row[26]),
-          품목규격: cleanStr(row[27]),
-          품목수량: cleanStr(row[28]),
-          품목단가: cleanStr(row[29]),
-          품목공급가액: parseAmount(row[30]),
-          품목세액: parseAmount(row[31]),
-          품목비고: cleanStr(row[32]),
-          excel_file_path: file.name,
-          status: 'CONFIRMED',
-          tenant_id: tenantId
-        });
-        insertedCount++;
+        const itemDate = getColValue(row, colMap, ["품목일자", "일자"], 25);
+        const itemName = getColValue(row, colMap, ["품목명", "품목", "품목(규격)"], 26);
+        const itemSpec = getColValue(row, colMap, ["품목규격", "규격"], 27);
+        const itemQty = getColValue(row, colMap, ["품목수량", "수량"], 28);
+        const itemPrice = getColValue(row, colMap, ["품목단가", "단가"], 29);
+        const itemSupply = parseAmount(getColValue(row, colMap, ["품목공급가액", "품목공급금액"], 30));
+        const itemTax = parseAmount(getColValue(row, colMap, ["품목세액", "품목부가세"], 31));
+        const itemRemark = getColValue(row, colMap, ["품목비고"], 32);
 
-        // 거래처(crm_partners) 동기화 목록 추출 (과세 세금계산서)
-        const supplierName = cleanStr(row[5]);
-        const supplierNum = supplierBn.formatted || cleanStr(row[3]);
-        const supplierCeo = cleanStr(row[6]);
-        const supplierAddr = cleanStr(row[7]);
-        const supplierEmail = cleanStr(row[22]);
+        // 🛡️ 중복 레코드 판별 및 스마트 백필 (Smart Upsert)
+        if (existingInvoices.has(approvalNo)) {
+          duplicateCount++;
+          const existing = existingInvoices.get(approvalNo);
 
-        const buyerName = cleanStr(row[10]);
-        const buyerNum = buyerBn.formatted || cleanStr(row[8]);
-        const buyerCeo = cleanStr(row[11]);
-        const buyerAddr = cleanStr(row[12]);
-        const buyerEmail = cleanStr(row[23]) || cleanStr(row[24]);
+          // 기존 DB에 주소나 이메일이 없는데 엑셀에 들어온 경우 보정 업데이트
+          const patchUpdates: Record<string, any> = {};
+          if (!existing.공급자주소 && supplierAddr) patchUpdates.공급자주소 = supplierAddr;
+          if (!existing.공급자이메일 && supplierEmail) patchUpdates.공급자이메일 = supplierEmail;
+          if (!existing.공급받는자주소 && buyerAddr) patchUpdates.공급받는자주소 = buyerAddr;
+          if (!existing.공급받는자이메일1 && (buyerEmail1 || buyerEmail2)) patchUpdates.공급받는자이메일1 = buyerEmail1 || buyerEmail2;
 
-        if (kind === "sales") {
-          if (buyerName || buyerNum) {
+          if (Object.keys(patchUpdates).length > 0) {
+            await updateRows(tableName, patchUpdates, { filters: { id: String(existing.id) } });
+          }
+
+          // 거래처 대장 동기화 큐에도 포함하여 거래처 대장의 주소/이메일 백필
+          if (kind === "sales" && (buyerName || buyerNum)) {
             partnerSyncList.push({
               type: 'BUYER',
               companyName: buyerName,
               businessNumber: buyerNum,
               representative: buyerCeo,
               address: buyerAddr,
-              email: buyerEmail
+              email: buyerEmail1 || buyerEmail2
             });
-          }
-        } else if (kind === "purchase") {
-          if (supplierName || supplierNum) {
+          } else if (kind === "purchase" && (supplierName || supplierNum)) {
             partnerSyncList.push({
               type: 'VENDOR',
               companyName: supplierName,
@@ -354,6 +391,85 @@ export async function POST(request: NextRequest) {
               email: supplierEmail
             });
           }
+          continue;
+        }
+
+        // 신규 레코드 삽입
+        rowsToInsert.push({
+          business_number: businessNumber,
+          issue_date: formattedDate,
+          작성일자: formattedDate,
+          발급일자: sendDate,
+          전송일자: sendDate,
+          approval_no: approvalNo,
+          승인번호: approvalNo,
+          invoice_type: kind,
+          type: kind === 'sales' ? 'SALES' : 'PURCHASE',
+          invoice_kind: 'TAX_INVOICE',
+          supplier_corp_num: supplierNum,
+          공급자사업자등록번호: supplierNum,
+          공급자종사업장번호: supplierBranch,
+          supplier_corp_name: supplierName,
+          공급자상호: supplierName,
+          supplier_ceo_name: supplierCeo,
+          공급자대표자명: supplierCeo,
+          공급자주소: supplierAddr,
+          buyer_corp_num: buyerNum,
+          공급받는자사업자등록번호: buyerNum,
+          공급받는자종사업장번호: buyerBranch,
+          buyer_corp_name: buyerName,
+          공급받는자상호: buyerName,
+          buyer_ceo_name: buyerCeo,
+          공급받는자대표자명: buyerCeo,
+          공급받는자주소: buyerAddr,
+          total_amount: reconciled.total,
+          합계금액: reconciled.total,
+          공급가액: reconciled.supply,
+          supply_amount: reconciled.supply,
+          세액: reconciled.tax,
+          tax_amount: reconciled.tax,
+          전자세금계산서분류: invoiceCategory,
+          전자세금계산서종류: invoiceKind,
+          발급유형: issueType,
+          비고: remark,
+          remark: remark,
+          영수청구구분: receiptType,
+          공급자이메일: supplierEmail,
+          공급받는자이메일1: buyerEmail1,
+          공급받는자이메일2: buyerEmail2,
+          품목일자: itemDate,
+          품목명: itemName,
+          item_name: itemName,
+          품목규격: itemSpec,
+          품목수량: itemQty,
+          품목단가: itemPrice,
+          품목공급가액: itemSupply,
+          품목세액: itemTax,
+          품목비고: itemRemark,
+          excel_file_path: file.name,
+          status: 'CONFIRMED',
+          tenant_id: tenantId
+        });
+        insertedCount++;
+
+        if (kind === "sales" && (buyerName || buyerNum)) {
+          partnerSyncList.push({
+            type: 'BUYER',
+            companyName: buyerName,
+            businessNumber: buyerNum,
+            representative: buyerCeo,
+            address: buyerAddr,
+            email: buyerEmail1 || buyerEmail2
+          });
+        } else if (kind === "purchase" && (supplierName || supplierNum)) {
+          partnerSyncList.push({
+            type: 'VENDOR',
+            companyName: supplierName,
+            businessNumber: supplierNum,
+            representative: supplierCeo,
+            address: supplierAddr,
+            email: supplierEmail
+          });
         }
       }
 
@@ -371,7 +487,6 @@ export async function POST(request: NextRequest) {
     // B. 면세 전자계산서 (면세 매출/매입)
     // ==========================================
     else if (kind === "tax-exempt-sales" || kind === "tax-exempt-purchase") {
-      // 메타데이터 행(1행 index 0)에서 사업자등록번호 백필용 추출
       const metaRow = rawRows[0];
       let extractedBN = "";
       if (metaRow && Array.isArray(metaRow) && metaRow[1]) {
@@ -381,16 +496,7 @@ export async function POST(request: NextRequest) {
         businessNumber = extractedBN;
       }
 
-      // 헤더 자동 감지 (작성일자가 첫 번째 열인 행 검색, fallback index 5)
-      let headerRowIndex = 5;
-      for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
-        const rRow = rawRows[r];
-        if (rRow && rRow[0] === "작성일자" && rRow[1] === "승인번호") {
-          headerRowIndex = r;
-          break;
-        }
-      }
-
+      const { headerRowIndex, colMap } = buildColumnIndexMap(rawRows);
       const dataRows = rawRows.slice(headerRowIndex + 1);
       const dates: string[] = [];
       const invoiceType = kind === "tax-exempt-sales" ? "sales" : "purchase";
@@ -398,32 +504,71 @@ export async function POST(request: NextRequest) {
 
       for (const row of dataRows) {
         if (!row || !Array.isArray(row) || row.length < 2) continue;
-        
-        const rawWritingDate = cleanStr(row[0]);
-        const approvalNo = cleanStr(row[1]);
+
+        const approvalNo = getColValue(row, colMap, ["승인번호", "국세청승인번호", "승인No"], 1);
+        const rawWritingDate = getColValue(row, colMap, ["작성일자", "작성일", "일자"], 0);
         if (!rawWritingDate && !approvalNo) continue;
 
         const dateRes = sanitizeDate(rawWritingDate);
         const formattedDate = dateRes.isValid ? dateRes.value : (rawWritingDate || new Date().toISOString().split('T')[0]);
         dates.push(formattedDate);
 
-        if (existingApprovalNos.has(approvalNo)) {
+        const supplierBnRaw = getColValue(row, colMap, ["공급자등록번호", "공급자사업자등록번호", "공급자사업자번호"], 4);
+        const buyerBnRaw = getColValue(row, colMap, ["공급받는자등록번호", "공급받는자사업자등록번호", "공급받는자사업자번호"], 9);
+        const supplierBn = sanitizeBusinessNumber(supplierBnRaw);
+        const buyerBn = sanitizeBusinessNumber(buyerBnRaw);
+        const supplierNum = supplierBn.formatted || supplierBnRaw;
+        const buyerNum = buyerBn.formatted || buyerBnRaw;
+
+        const supplierName = getColValue(row, colMap, ["공급자상호", "공급자상호(법인명)", "공급자회사명"], 6);
+        const supplierCeo = getColValue(row, colMap, ["공급자성명", "공급자대표자명", "공급자대표"], 7);
+        const supplierAddr = getColValue(row, colMap, ["공급자사업장주소", "공급자주소"], 8);
+        const supplierEmail = getColValue(row, colMap, ["공급자이메일", "공급자전자우편"], 21);
+
+        const buyerName = getColValue(row, colMap, ["공급받는자상호", "공급받는자상호(법인명)", "공급받는자회사명"], 11);
+        const buyerCeo = getColValue(row, colMap, ["공급받는자성명", "공급받는자대표자명", "공급받는자대표"], 12);
+        const buyerAddr = getColValue(row, colMap, ["공급받는자사업장주소", "공급받는자주소"], 13);
+        const buyerEmail1 = getColValue(row, colMap, ["공급받는자이메일1", "공급받는자이메일"], 22);
+        const buyerEmail2 = getColValue(row, colMap, ["공급받는자이메일2"], 23);
+
+        const supplySan = sanitizeAmount(getColValue(row, colMap, ["공급가액", "공급금액"], 15));
+        const totalSan = sanitizeAmount(getColValue(row, colMap, ["합계금액", "합계"], 14));
+        const finalAmt = supplySan.value || totalSan.value || 0;
+
+        if (existingInvoices.has(approvalNo)) {
           duplicateCount++;
+          const existing = existingInvoices.get(approvalNo);
+          const patchUpdates: Record<string, any> = {};
+          if (!existing.공급자주소 && supplierAddr) patchUpdates.공급자주소 = supplierAddr;
+          if (!existing.공급자이메일 && supplierEmail) patchUpdates.공급자이메일 = supplierEmail;
+          if (!existing.공급받는자주소 && buyerAddr) patchUpdates.공급받는자주소 = buyerAddr;
+          if (!existing.공급받는자이메일1 && (buyerEmail1 || buyerEmail2)) patchUpdates.공급받는자이메일1 = buyerEmail1 || buyerEmail2;
+
+          if (Object.keys(patchUpdates).length > 0) {
+            await updateRows(tableName, patchUpdates, { filters: { id: String(existing.id) } });
+          }
+
+          if (invoiceType === "sales" && (buyerName || buyerNum)) {
+            partnerSyncList.push({
+              type: 'BUYER',
+              companyName: buyerName,
+              businessNumber: buyerNum,
+              representative: buyerCeo,
+              address: buyerAddr,
+              email: buyerEmail1 || buyerEmail2
+            });
+          } else if (invoiceType === "purchase" && (supplierName || supplierNum)) {
+            partnerSyncList.push({
+              type: 'VENDOR',
+              companyName: supplierName,
+              businessNumber: supplierNum,
+              representative: supplierCeo,
+              address: supplierAddr,
+              email: supplierEmail
+            });
+          }
           continue;
         }
-
-        const supplierBn = sanitizeBusinessNumber(row[4]);
-        const buyerBn = sanitizeBusinessNumber(row[9]);
-        const supplierNum = supplierBn.formatted || cleanStr(row[4]);
-        const buyerNum = buyerBn.formatted || cleanStr(row[9]);
-        const supplierName = cleanStr(row[6]);
-        const supplierCeo = cleanStr(row[7]);
-        const buyerName = cleanStr(row[11]);
-        const buyerCeo = cleanStr(row[12]);
-
-        const supplySan = sanitizeAmount(row[15]);
-        const totalSan = sanitizeAmount(row[14]);
-        const finalAmt = supplySan.value || totalSan.value || 0;
 
         rowsToInsert.push({
           business_number: businessNumber,
@@ -434,77 +579,72 @@ export async function POST(request: NextRequest) {
           issue_date: formattedDate,
           승인번호: approvalNo,
           approval_no: approvalNo,
-          발급일자: cleanStr(row[2]),
-          전송일자: cleanStr(row[3]),
+          발급일자: getColValue(row, colMap, ["발급일자"], 2),
+          전송일자: getColValue(row, colMap, ["전송일자"], 3),
           공급자사업자등록번호: supplierNum,
           supplier_corp_num: supplierNum,
-          공급자종사업장번호: cleanStr(row[5]),
+          공급자종사업장번호: getColValue(row, colMap, ["공급자종사업장번호"], 5),
           공급자상호: supplierName,
           supplier_corp_name: supplierName,
           공급자대표자명: supplierCeo,
           supplier_ceo_name: supplierCeo,
-          공급자주소: cleanStr(row[8]),
+          공급자주소: supplierAddr,
           공급받는자사업자등록번호: buyerNum,
           buyer_corp_num: buyerNum,
-          공급받는자종사업장번호: cleanStr(row[10]),
+          공급받는자종사업장번호: getColValue(row, colMap, ["공급받는자종사업장번호"], 10),
           공급받는자상호: buyerName,
           buyer_corp_name: buyerName,
           공급받는자대표자명: buyerCeo,
           buyer_ceo_name: buyerCeo,
-          공급받는자주소: cleanStr(row[13]),
+          공급받는자주소: buyerAddr,
           합계금액: finalAmt,
           total_amount: finalAmt,
           공급가액: finalAmt,
           supply_amount: finalAmt,
-          세액: 0, // 면세 강제 0
+          세액: 0,
           tax_amount: 0,
-          전자세금계산서분류: cleanStr(row[16]),
-          전자세금계산서종류: cleanStr(row[17]),
-          발급유형: cleanStr(row[18]),
-          비고: cleanStr(row[19]),
-          remark: cleanStr(row[19]),
-          영수청구구분: cleanStr(row[20]),
-          공급자이메일: cleanStr(row[21]),
-          공급받는자이메일1: cleanStr(row[22]),
-          공급받는자이메일2: cleanStr(row[23]),
-          품목일자: cleanStr(row[24]),
-          품목명: cleanStr(row[25]),
-          item_name: cleanStr(row[25]),
-          품목규격: cleanStr(row[26]),
-          품목수량: cleanStr(row[27]),
-          품목단가: cleanStr(row[28]),
-          품목공급가액: parseAmount(row[29]),
+          전자세금계산서분류: getColValue(row, colMap, ["전자세금계산서분류"], 16),
+          전자세금계산서종류: getColValue(row, colMap, ["전자세금계산서종류"], 17),
+          발급유형: getColValue(row, colMap, ["발급유형"], 18),
+          비고: getColValue(row, colMap, ["비고"], 19),
+          remark: getColValue(row, colMap, ["비고"], 19),
+          영수청구구분: getColValue(row, colMap, ["영수청구구분"], 20),
+          공급자이메일: supplierEmail,
+          공급받는자이메일1: buyerEmail1,
+          공급받는자이메일2: buyerEmail2,
+          품목일자: getColValue(row, colMap, ["품목일자"], 24),
+          품목명: getColValue(row, colMap, ["품목명"], 25),
+          item_name: getColValue(row, colMap, ["품목명"], 25),
+          품목규격: getColValue(row, colMap, ["품목규격"], 26),
+          품목수량: getColValue(row, colMap, ["품목수량"], 27),
+          품목단가: getColValue(row, colMap, ["품목단가"], 28),
+          품목공급가액: parseAmount(getColValue(row, colMap, ["품목공급가액"], 29)),
           품목세액: 0,
-          품목비고: cleanStr(row[30]),
+          품목비고: getColValue(row, colMap, ["품목비고"], 30),
           excel_file_path: file.name,
           status: 'CONFIRMED',
           tenant_id: tenantId
         });
         insertedCount++;
 
-        // 거래처(crm_partners) 동기화 목록 추출 (면세 계산서)
-        if (invoiceType === "sales") {
-          if (buyerName || buyerNum) {
-            partnerSyncList.push({
-              type: 'BUYER',
-              companyName: buyerName,
-              businessNumber: buyerNum,
-              representative: buyerCeo,
-              address: cleanStr(row[13]),
-              email: cleanStr(row[22]) || cleanStr(row[23])
-            });
-          }
-        } else if (invoiceType === "purchase") {
-          if (supplierName || supplierNum) {
-            partnerSyncList.push({
-              type: 'VENDOR',
-              companyName: supplierName,
-              businessNumber: supplierNum,
-              representative: supplierCeo,
-              address: cleanStr(row[8]),
-              email: cleanStr(row[21])
-            });
-          }
+        if (invoiceType === "sales" && (buyerName || buyerNum)) {
+          partnerSyncList.push({
+            type: 'BUYER',
+            companyName: buyerName,
+            businessNumber: buyerNum,
+            representative: buyerCeo,
+            address: buyerAddr,
+            email: buyerEmail1 || buyerEmail2
+          });
+        } else if (invoiceType === "purchase" && (supplierName || supplierNum)) {
+          partnerSyncList.push({
+            type: 'VENDOR',
+            companyName: supplierName,
+            businessNumber: supplierNum,
+            representative: supplierCeo,
+            address: supplierAddr,
+            email: supplierEmail
+          });
         }
       }
 

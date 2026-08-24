@@ -51,7 +51,7 @@ export default function UploadHometaxModal({
       fd.append("kind", useSmartDetection ? "" : hometaxKind);
       fd.append("businessNumber", useSmartDetection ? "" : hometaxBusinessNumber);
 
-      const res = await apiFetch("/api/finance-excel/hometax-upload", {
+      const res = await apiFetch("/api/finance/hometax-upload", {
         method: "POST",
         body: fd
       });
