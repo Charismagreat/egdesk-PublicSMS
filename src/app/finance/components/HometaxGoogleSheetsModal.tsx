@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
 import { 
-  Globe, Receipt, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check, ArrowDownLeft, ArrowUpRight, ShieldCheck, AlertTriangle
+  Globe, Receipt, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check, ArrowDownLeft, ArrowUpRight, ShieldCheck, AlertTriangle, Bookmark, History, Sparkles
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from "@/lib/google-sheets-storage";
+import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, loadSavedGoogleSheetConfig } from "@/lib/google-sheets-storage";
 import { sanitizeDate, sanitizeAmount, reconcileAmounts, sanitizeBusinessNumber } from "@/lib/data-validator";
 
 interface HometaxGoogleSheetsModalProps {
@@ -47,6 +46,7 @@ export default function HometaxGoogleSheetsModal({
   const [selectedSheetName, setSelectedSheetName] = useState<string>("");
   const [availableSheets, setAvailableSheets] = useState<string[]>([]);
   const [spreadsheetTitle, setSpreadsheetTitle] = useState<string>("");
+  const [recentSheets, setRecentSheets] = useState<Array<{ url: string; sheetName?: string; title?: string }>>([]);
   const [parsedInvoices, setParsedInvoices] = useState<ParsedHometaxInvoice[]>([]);
   const [userTypeSelection, setUserTypeSelection] = useState<"AUTO" | "SALES" | "PURCHASE">("AUTO");
   const [userKindSelection, setUserKindSelection] = useState<"AUTO" | "TAX_INVOICE" | "TAX_EXEMPT_INVOICE" | "CASH_RECEIPT">("AUTO");
@@ -56,11 +56,22 @@ export default function HometaxGoogleSheetsModal({
 
   useEffect(() => {
     if (isOpen) {
-      setSheetUrl(getSavedGoogleSheetUrl());
+      // 1. 로컬 캐시 즉시 복원 (0ms)
+      const cachedUrl = getSavedGoogleSheetUrl('hometax_inbound_sheet_url') || getSavedGoogleSheetUrl();
+      setSheetUrl(cachedUrl);
       setParsedInvoices([]);
       setUserTypeSelection("AUTO");
       setUserKindSelection("AUTO");
       setStatusMsg(null);
+
+      // 2. 서버 system_settings에서 전사 저장된 최신 시트 설정 비동기 로드
+      loadSavedGoogleSheetConfig('hometax').then((cfg) => {
+        if (cfg.url) {
+          setSheetUrl(cfg.url);
+          if (cfg.sheetName) setSelectedSheetName(cfg.sheetName);
+          if (cfg.recentSheets) setRecentSheets(cfg.recentSheets);
+        }
+      }).catch(() => {});
     }
   }, [isOpen]);
 
@@ -104,7 +115,7 @@ export default function HometaxGoogleSheetsModal({
     setParsedInvoices([]);
 
     try {
-      setSavedGoogleSheetUrl(sheetUrl);
+      setSavedGoogleSheetUrl('hometax_inbound_sheet_url', sheetUrl, overrideSheetName || selectedSheetName);
 
       const res = await apiFetch("/api/shared/google-sheets", {
         method: "POST",
@@ -492,10 +503,19 @@ export default function HometaxGoogleSheetsModal({
         {/* 본문 */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm text-slate-600">
           <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
-            <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-teal-600" />
-              구글 스프레드시트 URL 또는 Spreadsheet ID
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-teal-600" />
+                구글 스프레드시트 URL 또는 Spreadsheet ID
+              </label>
+              {sheetUrl && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-100/80 px-2 py-0.5 rounded-md border border-teal-200/60">
+                  <Bookmark className="w-3 h-3 text-teal-600 fill-teal-600" />
+                  전사 기본 시트로 자동 저장됨
+                </span>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <input
                 type="text"
@@ -533,6 +553,37 @@ export default function HometaxGoogleSheetsModal({
                 )}
               </button>
             </div>
+
+            {/* 최근 연동된 시트 빠른 선택 프리셋 */}
+            {recentSheets.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px]">
+                <span className="text-slate-400 font-bold flex items-center gap-1 shrink-0">
+                  <History className="w-3 h-3" /> 최근 시트:
+                </span>
+                {recentSheets.map((item, idx) => {
+                  const displayTitle = item.title || item.sheetName || (item.url.length > 35 ? `${item.url.slice(0, 32)}...` : item.url);
+                  const isSelected = item.url === sheetUrl;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setSheetUrl(item.url);
+                        if (item.sheetName) setSelectedSheetName(item.sheetName);
+                      }}
+                      className={`px-2 py-0.5 rounded-md border text-[11px] font-semibold transition-all cursor-pointer truncate max-w-[220px] ${
+                        isSelected
+                          ? "bg-teal-50 text-teal-700 border-teal-300 font-bold"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-800"
+                      }`}
+                      title={item.url}
+                    >
+                      {displayTitle}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {availableSheets.length > 1 && (
               <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 text-xs">
