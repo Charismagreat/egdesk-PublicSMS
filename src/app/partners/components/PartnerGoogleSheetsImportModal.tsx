@@ -514,6 +514,8 @@ export default function PartnerGoogleSheetsImportModal({
         domain="partners"
         currentUrl={sheetUrl}
         currentSheetName={selectedSheetName}
+        availableSheets={availableSheets}
+        spreadsheetTitle={spreadsheetTitle}
         initialMode={presetModalMode}
         onSelectPreset={(preset) => {
           setSheetUrl(preset.url);

@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { queryTable, insertRows, updateRows } from '@/../egdesk-helpers';
+import { queryTable, insertRows, updateRows, executeSQL } from '@/../egdesk-helpers';
 import { getTenantId } from '@/lib/tenant';
 
 export interface GoogleSheetPreset {
@@ -10,6 +10,7 @@ export interface GoogleSheetPreset {
   url: string;
   sheetName?: string;
   isDefault?: boolean;
+  domain?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -24,8 +25,42 @@ export async function GET(req: NextRequest) {
     const tenantId = await getTenantId() || 'default';
     const { searchParams } = new URL(req.url);
     const domain = searchParams.get('domain') || 'default';
-    const settingKey = getSettingKey(domain);
 
+    if (domain === 'all') {
+      // 전사 모든 도메인의 프리셋 일괄 조회
+      let sql = "SELECT * FROM system_settings WHERE key LIKE 'google_sheet_presets_%'";
+      const params: any[] = [];
+      if (tenantId && tenantId !== 'all') {
+        sql += " AND (tenant_id = ? OR tenant_id IS NULL)";
+        params.push(tenantId);
+      }
+
+      const res = await executeSQL(sql, params).catch(() => ({ rows: [] }));
+      const allPresets: Record<string, GoogleSheetPreset[]> = {};
+      const flatPresets: Array<GoogleSheetPreset & { domain: string }> = [];
+
+      for (const row of res.rows || []) {
+        const dom = row.key.replace('google_sheet_presets_', '');
+        try {
+          const parsed = JSON.parse(row.value);
+          if (Array.isArray(parsed)) {
+            allPresets[dom] = parsed;
+            parsed.forEach(p => {
+              flatPresets.push({ ...p, domain: dom });
+            });
+          }
+        } catch {}
+      }
+
+      return NextResponse.json({
+        success: true,
+        domain: 'all',
+        allPresets,
+        flatPresets
+      });
+    }
+
+    const settingKey = getSettingKey(domain);
     const filterObj: Record<string, string> = { key: settingKey };
     if (tenantId && tenantId !== 'all') {
       filterObj.tenant_id = tenantId;
@@ -94,18 +129,25 @@ export async function POST(req: NextRequest) {
 
       const id = preset.id || `preset-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const isDefault = Boolean(preset.isDefault);
+      const targetSheetName = (preset.sheetName || '').trim();
 
       if (isDefault) {
         presets.forEach(p => { p.isDefault = false; });
       }
 
-      const existingIndex = presets.findIndex(p => p.id === id || p.url.trim() === preset.url.trim());
+      // 동일 ID이거나, [동일 URL + 동일 탭]인 경우 갱신, 아니면 신규 탭 프리셋으로 추가!
+      const existingIndex = presets.findIndex(p => 
+        p.id === id || 
+        (p.url.trim() === preset.url.trim() && (p.sheetName || '').trim() === targetSheetName)
+      );
+
       if (existingIndex >= 0) {
         presets[existingIndex] = {
           ...presets[existingIndex],
           title: preset.title.trim(),
           url: preset.url.trim(),
-          sheetName: preset.sheetName || '',
+          sheetName: targetSheetName,
+          domain,
           isDefault: isDefault || (presets.length === 1 ? true : presets[existingIndex].isDefault),
           updatedAt: now
         };
@@ -114,7 +156,8 @@ export async function POST(req: NextRequest) {
           id,
           title: preset.title.trim(),
           url: preset.url.trim(),
-          sheetName: preset.sheetName || '',
+          sheetName: targetSheetName,
+          domain,
           isDefault: isDefault || presets.length === 0,
           createdAt: now,
           updatedAt: now

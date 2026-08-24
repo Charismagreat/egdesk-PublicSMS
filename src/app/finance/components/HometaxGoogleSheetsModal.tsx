@@ -827,6 +827,8 @@ export default function HometaxGoogleSheetsModal({
         domain="hometax"
         currentUrl={sheetUrl}
         currentSheetName={selectedSheetName}
+        availableSheets={availableSheets}
+        spreadsheetTitle={spreadsheetTitle}
         initialMode={presetModalMode}
         onSelectPreset={(preset) => {
           setSheetUrl(preset.url);

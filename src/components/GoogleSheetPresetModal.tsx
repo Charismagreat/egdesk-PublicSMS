@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Globe, Bookmark, Star, Trash2, Edit2, Check, X, Plus, ExternalLink, Loader2, List, Save, Sparkles 
+  Globe, Bookmark, Star, Trash2, Edit2, Check, X, Plus, ExternalLink, Loader2, List, Save, Sparkles, Layers, FileSpreadsheet
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
@@ -12,6 +12,7 @@ export interface GoogleSheetPreset {
   url: string;
   sheetName?: string;
   isDefault?: boolean;
+  domain?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,6 +23,8 @@ interface GoogleSheetPresetModalProps {
   domain: string;
   currentUrl?: string;
   currentSheetName?: string;
+  availableSheets?: string[];
+  spreadsheetTitle?: string;
   initialMode?: "save" | "list";
   onSelectPreset: (preset: { url: string; sheetName?: string; title: string }) => void;
   onPresetsUpdated?: (presets: GoogleSheetPreset[]) => void;
@@ -33,6 +36,8 @@ export default function GoogleSheetPresetModal({
   domain = "default",
   currentUrl = "",
   currentSheetName = "",
+  availableSheets = [],
+  spreadsheetTitle = "",
   initialMode = "save",
   onSelectPreset,
   onPresetsUpdated
@@ -73,16 +78,31 @@ export default function GoogleSheetPresetModal({
     if (isOpen) {
       setActiveTab(initialMode);
       setInputUrl(currentUrl || "");
-      setInputSheetName(currentSheetName || "");
-      setInputTitle("");
+      const initialTab = currentSheetName || (availableSheets.length > 0 ? availableSheets[0] : "");
+      setInputSheetName(initialTab);
+      
+      const defaultTitle = spreadsheetTitle && initialTab 
+        ? `${spreadsheetTitle} (${initialTab})` 
+        : initialTab 
+        ? `${initialTab} 데이터 대장` 
+        : "";
+      setInputTitle(defaultTitle);
+      
       setInputIsDefault(false);
       setStatusMsg(null);
       setEditingId(null);
       fetchPresets();
     }
-  }, [isOpen, initialMode, currentUrl, currentSheetName]);
+  }, [isOpen, initialMode, currentUrl, currentSheetName, availableSheets, spreadsheetTitle]);
 
   if (!isOpen) return null;
+
+  const handleTabChange = (newTab: string) => {
+    setInputSheetName(newTab);
+    if (!inputTitle || (spreadsheetTitle && inputTitle.startsWith(spreadsheetTitle))) {
+      setInputTitle(spreadsheetTitle ? `${spreadsheetTitle} (${newTab})` : `${newTab} 대장`);
+    }
+  };
 
   const handleSavePreset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +138,7 @@ export default function GoogleSheetPresetModal({
       if (data.success) {
         setPresets(data.presets || []);
         if (onPresetsUpdated) onPresetsUpdated(data.presets || []);
-        setStatusMsg({ type: "success", text: `'[${inputTitle.trim()}]' 시트가 성공적으로 저장되었습니다.` });
+        setStatusMsg({ type: "success", text: `'[${inputTitle.trim()}]' 탭 프리셋이 성공적으로 저장되었습니다.` });
         setTimeout(() => {
           setActiveTab("list");
           setStatusMsg(null);
@@ -193,18 +213,18 @@ export default function GoogleSheetPresetModal({
 
   return (
     <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
         {/* 모달 헤더 */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-teal-100 text-teal-700 rounded-2xl">
-              <Bookmark className="w-5 h-5" />
+              <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
-                구글 스프레드시트 주소록 관리자
+                구글 스프레드시트 탭(Tab)별 주소록 관리자
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">자주 사용하는 구글 시트 링크를 이름을 지정하여 저장하고 손쉽게 전환합니다.</p>
+              <p className="text-xs text-slate-500 mt-0.5">자주 사용하는 특정 시트의 탭(Worksheet)을 이름과 함께 1:1로 등록하여 0초 만에 전환합니다.</p>
             </div>
           </div>
           <button
@@ -227,7 +247,7 @@ export default function GoogleSheetPresetModal({
             }`}
           >
             <Plus className="w-4 h-4" />
-            새 시트 주소 저장
+            새 탭 프리셋 저장
           </button>
           <button
             type="button"
@@ -239,7 +259,7 @@ export default function GoogleSheetPresetModal({
             }`}
           >
             <List className="w-4 h-4" />
-            저장된 목록 ({presets.length})
+            등록된 탭 목록 ({presets.length})
           </button>
         </div>
 
@@ -258,20 +278,6 @@ export default function GoogleSheetPresetModal({
             <form onSubmit={handleSavePreset} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-black text-slate-700 flex items-center gap-1">
-                  <Bookmark className="w-3.5 h-3.5 text-teal-600" /> 시트 별칭 / 이름 (필수)
-                </label>
-                <input
-                  type="text"
-                  value={inputTitle}
-                  onChange={(e) => setInputTitle(e.target.value)}
-                  placeholder="예: 2026년 상반기 매입 세금계산서, 본사 거래처 마스터"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-bold text-slate-800"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1">
                   <Globe className="w-3.5 h-3.5 text-teal-600" /> 구글 스프레드시트 URL (필수)
                 </label>
                 <input
@@ -284,16 +290,55 @@ export default function GoogleSheetPresetModal({
                 />
               </div>
 
+              {/* 대상 탭(Worksheet) 선택 - 감지된 탭 드롭다운 지원 */}
               <div className="space-y-1.5">
                 <label className="text-xs font-black text-slate-700 flex items-center gap-1">
-                  기본 선택 대상 탭 이름 (선택)
+                  <Layers className="w-3.5 h-3.5 text-teal-600" /> 연동 대상 시트 탭 (Worksheet)
+                </label>
+                {availableSheets && availableSheets.length > 0 ? (
+                  <div className="flex gap-2">
+                    <select
+                      value={inputSheetName}
+                      onChange={(e) => handleTabChange(e.target.value)}
+                      className="flex-1 px-3.5 py-2.5 bg-teal-50/60 border border-teal-200 rounded-xl text-xs font-bold text-teal-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    >
+                      {availableSheets.map((s) => (
+                        <option key={s} value={s}>
+                          📑 {s}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={inputSheetName}
+                      onChange={(e) => handleTabChange(e.target.value)}
+                      placeholder="탭 이름 직접입력"
+                      className="w-1/3 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800"
+                    />
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={inputSheetName}
+                    onChange={(e) => handleTabChange(e.target.value)}
+                    placeholder="예: 7월 매입, 거래처목록 (미입력 시 첫 번째 탭 자동)"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800 font-bold"
+                  />
+                )}
+                <p className="text-[11px] text-slate-400">하나의 구글 시트 파일 안에 있는 서로 다른 탭들을 각각 독립된 별칭으로 저장할 수 있습니다.</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-slate-700 flex items-center gap-1">
+                  <Bookmark className="w-3.5 h-3.5 text-teal-600" /> 탭 프리셋 별칭 / 이름 (필수)
                 </label>
                 <input
                   type="text"
-                  value={inputSheetName}
-                  onChange={(e) => setInputSheetName(e.target.value)}
-                  placeholder="예: 7월 매입, 거래처목록 (미입력 시 첫 번째 탭 자동)"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800"
+                  value={inputTitle}
+                  onChange={(e) => setInputTitle(e.target.value)}
+                  placeholder="예: 2026년 7월 매입 세금계산서, 신한은행 법인계좌 입출금"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-bold text-slate-800"
+                  required
                 />
               </div>
 
@@ -305,7 +350,7 @@ export default function GoogleSheetPresetModal({
                     onChange={(e) => setInputIsDefault(e.target.checked)}
                     className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500"
                   />
-                  <span>이 시트를 해당 화면의 대표 기본 시트로 지정 (모달 열 때 자동 채움)</span>
+                  <span>이 탭을 해당 업무의 대표 기본 시트로 지정 (팝업 열 때 자동 선택)</span>
                 </label>
               </div>
 
@@ -330,7 +375,7 @@ export default function GoogleSheetPresetModal({
                   ) : (
                     <>
                       <Save className="w-4 h-4" />
-                      <span>시트 주소 저장</span>
+                      <span>탭 프리셋 저장</span>
                     </>
                   )}
                 </button>
@@ -341,19 +386,19 @@ export default function GoogleSheetPresetModal({
               {isLoading ? (
                 <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
                   <Loader2 className="w-6 h-6 animate-spin text-teal-600" />
-                  <span className="text-xs">저장된 시트 목록을 불러오는 중...</span>
+                  <span className="text-xs">저장된 탭 목록을 불러오는 중...</span>
                 </div>
               ) : presets.length === 0 ? (
                 <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2 border-2 border-dashed border-slate-200 rounded-2xl">
-                  <Bookmark className="w-8 h-8 text-slate-300" />
-                  <p className="text-xs font-bold text-slate-500">등록된 시트가 없습니다.</p>
-                  <p className="text-[11px] text-slate-400">'새 시트 주소 저장' 탭에서 자주 쓰는 시트를 등록해 보세요.</p>
+                  <FileSpreadsheet className="w-8 h-8 text-slate-300" />
+                  <p className="text-xs font-bold text-slate-500">등록된 탭 프리셋이 없습니다.</p>
+                  <p className="text-[11px] text-slate-400">'새 탭 프리셋 저장' 탭에서 자주 쓰는 탭을 등록해 보세요.</p>
                   <button
                     type="button"
                     onClick={() => setActiveTab("save")}
                     className="mt-2 px-3 py-1.5 bg-teal-50 text-teal-700 border border-teal-200 rounded-lg text-xs font-black hover:bg-teal-100 cursor-pointer"
                   >
-                    + 첫 시트 등록하기
+                    + 첫 탭 프리셋 등록하기
                   </button>
                 </div>
               ) : (
@@ -365,7 +410,7 @@ export default function GoogleSheetPresetModal({
                         key={preset.id}
                         className={`p-4 rounded-2xl border transition-all flex flex-col gap-2 ${
                           preset.isDefault 
-                            ? "bg-teal-50/40 border-teal-200" 
+                            ? "bg-teal-50/40 border-teal-200 shadow-xs" 
                             : "bg-white border-slate-200 hover:border-slate-300"
                         }`}
                       >
@@ -406,9 +451,15 @@ export default function GoogleSheetPresetModal({
                                 <h4 className="text-xs font-black text-slate-800 truncate">
                                   {preset.title}
                                 </h4>
+                                {preset.sheetName && (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-800 bg-teal-100/90 px-2 py-0.5 rounded-md border border-teal-200 shrink-0">
+                                    <Layers className="w-3 h-3 text-teal-600" />
+                                    탭: {preset.sheetName}
+                                  </span>
+                                )}
                                 {preset.isDefault && (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-black bg-teal-600 text-white px-2 py-0.5 rounded-full shrink-0">
-                                    <Star className="w-2.5 h-2.5 fill-white" /> 기본 시트
+                                    <Star className="w-2.5 h-2.5 fill-white" /> 기본 지정
                                   </span>
                                 )}
                               </>
@@ -435,7 +486,7 @@ export default function GoogleSheetPresetModal({
                                     type="button"
                                     onClick={() => handleSetDefault(preset.id)}
                                     className="p-1 text-amber-500 hover:bg-amber-50 rounded-md cursor-pointer"
-                                    title="기본 시트로 지정"
+                                    title="기본 탭으로 지정"
                                   >
                                     <Star className="w-3.5 h-3.5" />
                                   </button>
@@ -453,16 +504,11 @@ export default function GoogleSheetPresetModal({
                           </div>
                         </div>
 
-                        {/* URL 및 탭 정보 */}
-                        <div className="text-[11px] text-slate-500 flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
-                          <div className="truncate flex-1 font-mono">
+                        {/* URL 및 탭 선택 액션 */}
+                        <div className="text-[11px] text-slate-500 flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100">
+                          <div className="truncate flex-1 font-mono text-[10.5px]">
                             <span className="text-slate-400">URL: </span>
                             {preset.url}
-                            {preset.sheetName && (
-                              <span className="ml-2 font-sans font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded">
-                                탭: {preset.sheetName}
-                              </span>
-                            )}
                           </div>
                           <button
                             type="button"
@@ -474,9 +520,10 @@ export default function GoogleSheetPresetModal({
                               });
                               onClose();
                             }}
-                            className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shrink-0 shadow-xs cursor-pointer active:scale-95 transition-all"
+                            className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shrink-0 shadow-xs cursor-pointer active:scale-95 transition-all flex items-center gap-1"
                           >
-                            이 시트 선택
+                            <span>이 탭 선택</span>
+                            <span className="text-[10px]">➔</span>
                           </button>
                         </div>
                       </div>
