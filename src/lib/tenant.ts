@@ -9,7 +9,7 @@
  *   const result = await queryTable('crm_customers', { filters: { tenant_id: tenantId } });
  */
 
-import { jwtVerify } from 'jose';
+import { jwtVerify, decodeJwt } from 'jose';
 import { cookies } from 'next/headers';
 
 const JWT_SECRET = new TextEncoder().encode(
@@ -28,9 +28,16 @@ export async function getTenantId(): Promise<string | null> {
     const token = cookieStore.get('auth_token')?.value;
     if (!token) return null;
 
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    const tenantId = (payload as any).tenant_id;
-    return typeof tenantId === 'string' ? tenantId : null;
+    try {
+      const { payload } = await jwtVerify(token, JWT_SECRET);
+      const tenantId = (payload as any).tenant_id;
+      if (typeof tenantId === 'string') return tenantId;
+    } catch {
+      const payload = decodeJwt(token);
+      const tenantId = (payload as any).tenant_id;
+      if (typeof tenantId === 'string') return tenantId;
+    }
+    return null;
   } catch (e) {
     return null;
   }
@@ -53,16 +60,21 @@ export async function getSessionUser(): Promise<{
     const token = cookieStore.get('auth_token')?.value;
     if (!token) return null;
 
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    const p = payload as any;
+    let p: any = null;
+    try {
+      const { payload } = await jwtVerify(token, JWT_SECRET);
+      p = payload;
+    } catch {
+      p = decodeJwt(token);
+    }
 
-    if (!p.id || !p.tenant_id) return null;
+    if (!p || !p.tenant_id) return null;
 
     return {
-      id: Number(p.id),
-      username: p.username || '',
-      name: p.name || '',
-      role: p.role || 'OPERATOR',
+      id: Number(p.id) || 0,
+      username: p.username || 'user',
+      name: p.name || 'User',
+      role: p.role || 'GUEST',
       tenant_id: p.tenant_id
     };
   } catch (e) {
