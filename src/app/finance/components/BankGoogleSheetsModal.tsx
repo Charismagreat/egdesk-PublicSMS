@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Globe, Landmark, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check, ArrowDownLeft, ArrowUpRight, ShieldCheck, AlertTriangle
+  Globe, Landmark, AlertCircle, CheckCircle2, X, Loader2, RefreshCw, Check, ArrowDownLeft, ArrowUpRight, ShieldCheck, AlertTriangle, Bookmark, List
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from "@/lib/google-sheets-storage";
 import { sanitizeDate, sanitizeAmount } from "@/lib/data-validator";
+import GoogleSheetPresetModal, { GoogleSheetPreset } from "@/components/GoogleSheetPresetModal";
 
 interface BankGoogleSheetsModalProps {
   isOpen: boolean;
@@ -40,16 +41,35 @@ export default function BankGoogleSheetsModal({
   const [spreadsheetTitle, setSpreadsheetTitle] = useState<string>("");
   const [bankId, setBankId] = useState<string>("shinhan");
   const [accountId, setAccountId] = useState<string>("");
+  const [presets, setPresets] = useState<GoogleSheetPreset[]>([]);
+  const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
+  const [presetModalMode, setPresetModalMode] = useState<"save" | "list">("save");
   const [parsedTxs, setParsedTxs] = useState<ParsedBankTx[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const fetchPresetsList = async () => {
+    try {
+      const res = await apiFetch("/api/shared/google-sheets/presets?domain=bank");
+      const data = await res.json();
+      if (data.success && data.presets) {
+        setPresets(data.presets);
+        if (data.defaultPreset && !sheetUrl) {
+          setSheetUrl(data.defaultPreset.url);
+          if (data.defaultPreset.sheetName) setSelectedSheetName(data.defaultPreset.sheetName);
+        }
+      }
+    } catch (e) {}
+  };
 
   useEffect(() => {
     if (isOpen) {
       setSheetUrl(getSavedGoogleSheetUrl());
       setParsedTxs([]);
       setStatusMsg(null);
+      setIsPresetModalOpen(false);
+      fetchPresetsList();
       if (accounts.length > 0 && !accountId) {
         setAccountId(accounts[0].id);
       }
@@ -273,10 +293,38 @@ export default function BankGoogleSheetsModal({
         {/* 본문 */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm text-slate-600">
           <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
-            <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-blue-600" />
-              구글 스프레드시트 URL 또는 Spreadsheet ID
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-blue-600" />
+                구글 스프레드시트 URL 또는 Spreadsheet ID
+              </label>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPresetModalMode("save");
+                    setIsPresetModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+                  title="현재 입력된 구글 시트 주소를 이름과 함께 저장합니다."
+                >
+                  <Bookmark className="w-3.5 h-3.5 text-blue-600" />
+                  <span>시트 주소 저장</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPresetModalMode("list");
+                    setIsPresetModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+                  title="저장된 구글 시트 목록을 조회하고 선택합니다."
+                >
+                  <List className="w-3.5 h-3.5 text-slate-500" />
+                  <span>저장 목록 ({presets.length})</span>
+                </button>
+              </div>
+            </div>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -467,6 +515,27 @@ export default function BankGoogleSheetsModal({
           </button>
         </div>
       </div>
+
+      {/* 구글 시트 프리셋 저장/목록 모달 */}
+      <GoogleSheetPresetModal
+        isOpen={isPresetModalOpen}
+        onClose={() => setIsPresetModalOpen(false)}
+        domain="bank"
+        currentUrl={sheetUrl}
+        currentSheetName={selectedSheetName}
+        initialMode={presetModalMode}
+        onSelectPreset={(preset) => {
+          setSheetUrl(preset.url);
+          if (preset.sheetName) setSelectedSheetName(preset.sheetName);
+          setIsPresetModalOpen(false);
+          setTimeout(() => {
+            handleFetchSheetData(preset.sheetName);
+          }, 100);
+        }}
+        onPresetsUpdated={(updatedPresets) => {
+          setPresets(updatedPresets);
+        }}
+      />
     </div>
   );
 }
