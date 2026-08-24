@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Globe, Building2, AlertCircle, CheckCircle2, X, Loader2, Sparkles, RefreshCw, Layers, Check, Users, ShieldCheck, AlertTriangle, Bookmark, History
+  Globe, Building2, AlertCircle, CheckCircle2, X, Loader2, Sparkles, RefreshCw, Layers, Check, Users, ShieldCheck, AlertTriangle, Bookmark, History, List
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, loadSavedGoogleSheetConfig } from "@/lib/google-sheets-storage";
