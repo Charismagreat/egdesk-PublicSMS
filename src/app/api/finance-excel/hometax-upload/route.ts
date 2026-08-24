@@ -121,7 +121,13 @@ function detectHometaxKindFromExcel(fileName: string, rawRows: any[][]): string 
   return "sales";
 }
 
-export async function POST(request: NextRequest) {
+import { POST as financeHometaxUploadPOST } from '@/app/api/finance/hometax-upload/route';
+
+export async function POST(req: NextRequest) {
+  return financeHometaxUploadPOST(req);
+}
+
+export async function POST_INTERNAL(request: NextRequest) {
   try {
     const { isAuthorized, tenantId, username } = await verifyUserRole();
     if (!isAuthorized) {
