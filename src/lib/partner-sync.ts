@@ -1,4 +1,4 @@
-import { executeSQL, insertRows, updateRows } from "../../egdesk-helpers";
+import { queryTable, executeSQL, insertRows, updateRows } from "../../egdesk-helpers";
 import { sanitizeBusinessNumber, sanitizePhoneNumber, sanitizeEmail } from "./data-validator";
 
 export interface InvoicePartnerInfo {
