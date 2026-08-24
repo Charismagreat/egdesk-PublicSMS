@@ -389,14 +389,27 @@ export default function HometaxGoogleSheetsModal({
 
       const data = await res.json();
       if (data.success) {
+        const inserted = data.insertedCount || 0;
+        const duplicate = data.duplicateCount || 0;
+        const partnerAdded = data.partnerSync?.added || 0;
+        const partnerUpdated = data.partnerSync?.updated || 0;
+
+        let msg = `🎉 총 ${parsedInvoices.length}건 중 신규 ${inserted}건 적재 완료`;
+        if (duplicate > 0) {
+          msg += ` (기존 중복 ${duplicate}건 건너뜀)`;
+        }
+        if (partnerUpdated > 0 || partnerAdded > 0) {
+          msg += ` [거래처: 신규 ${partnerAdded}개사, 갱신 ${partnerUpdated}개사]`;
+        }
+
         setStatusMsg({
           type: 'success',
-          text: `🎉 총 ${data.insertedCount || parsedInvoices.length}건의 홈택스 세금계산서가 성공적으로 일괄 등록되었습니다.`
+          text: msg
         });
         setTimeout(() => {
           onSuccess();
           onClose();
-        }, 1200);
+        }, 1600);
       } else {
         setStatusMsg({ type: 'error', text: `등록 실패: ${data.error || '오류 발생'}` });
       }
