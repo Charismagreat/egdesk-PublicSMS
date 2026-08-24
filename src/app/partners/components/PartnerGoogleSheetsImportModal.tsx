@@ -29,6 +29,9 @@ const HEADER_MAPPING: Record<string, string> = {
   "담당자이메일": "manager_email",
   "우대등급": "vip_level",
   "여신한도": "credit_limit",
+  "프로젝트태그": "tags",
+  "태그": "tags",
+  "tags": "tags",
   "비고": "memo"
 };
 

@@ -360,6 +360,7 @@ export const COLUMN_DEFINITIONS = {
     { name: 'vip_level', type: 'TEXT', defaultValue: 'NORMAL' },
     { name: 'credit_limit', type: 'INTEGER', defaultValue: 0 },
     { name: 'business_license_url', type: 'TEXT' },
+    { name: 'tags', type: 'TEXT' },
     { name: 'memo', type: 'TEXT' },
     { name: 'created_at', type: 'TEXT', notNull: true },
     { name: 'uuid', type: 'TEXT' },

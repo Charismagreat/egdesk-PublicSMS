@@ -367,6 +367,18 @@ export function PartnerDetailModal({
             <span>{selectedPartner.company_name}</span>
             <span className="text-xs font-bold text-slate-400">({selectedPartner.representative || '대표자 미기입'} 대표)</span>
           </h3>
+          {selectedPartner.tags && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {selectedPartner.tags.split(/[,#\s]+/).filter(Boolean).map((tag: string, tIdx: number) => (
+                <span
+                  key={tIdx}
+                  className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/80"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 📊 서브 탭 스위처 */}

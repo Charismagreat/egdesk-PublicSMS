@@ -26,6 +26,9 @@ const HEADER_MAPPING: Record<string, string> = {
   "담당자이메일": "manager_email",
   "우대등급": "vip_level",
   "여신한도": "credit_limit",
+  "프로젝트태그": "tags",
+  "태그": "tags",
+  "tags": "tags",
   "비고": "memo"
 };
 
@@ -236,10 +239,11 @@ export function PartnerBulkImportModal({ isOpen, onClose, onImport }: PartnerBul
       "담당자이메일": "chulsoo@eztech.com",
       "우대등급": "VIP",
       "여신한도": "50,000,000",
+      "프로젝트태그": "#스마트공장, #2026과제",
       "비고": "협력사 코드 99번"
     };
 
-    const ws = XLSX.utils.json_to_sheet([sampleRow], { header: headers });
+    const ws = XLSX.utils.json_to_sheet([sampleRow], { header: ["상호명", "거래처구분", "사업자번호", "대표자명", "대표번호", "팩스번호", "계산서이메일", "주소", "대표담당자", "담당자직급", "담당자연락처", "담당자이메일", "우대등급", "여신한도", "프로젝트태그", "비고"] });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "거래처 일괄등록 템플릿");
     XLSX.writeFile(wb, "거래처_일괄등록_양식.xlsx");

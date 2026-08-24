@@ -14,6 +14,7 @@ export interface Partner {
   address: string;
   vip_level: 'NORMAL' | 'VIP';
   credit_limit: number;
+  tags?: string;
   memo: string;
   created_at: string;
   total_performance?: number;
@@ -35,6 +36,7 @@ export interface PartnerForm {
   address: string;
   vip_level: 'NORMAL' | 'VIP';
   credit_limit: number;
+  tags?: string;
   memo: string;
 }
 

@@ -31,6 +31,7 @@ export function usePartners() {
     address: "",
     vip_level: 'NORMAL',
     credit_limit: 0,
+    tags: "",
     memo: ""
   });
 
@@ -419,6 +420,7 @@ export function usePartners() {
       address: pt.address || "",
       vip_level: pt.vip_level || 'NORMAL',
       credit_limit: pt.credit_limit || 0,
+      tags: pt.tags || "",
       memo: pt.memo || ""
     });
     setIsModalOpen(true);
@@ -444,6 +446,7 @@ export function usePartners() {
       address: "",
       vip_level: 'NORMAL',
       credit_limit: 0,
+      tags: "",
       memo: ""
     });
     setContacts([]); // 명함 목록 초기화
@@ -504,7 +507,9 @@ export function usePartners() {
       (pt.representative && pt.representative.toLowerCase().includes(query)) ||
       (pt.manager_name && pt.manager_name.toLowerCase().includes(query)) ||
       (pt.phone && pt.phone.includes(query)) ||
-      (pt.manager_phone && pt.manager_phone.includes(query))
+      (pt.manager_phone && pt.manager_phone.includes(query)) ||
+      (pt.tags && pt.tags.toLowerCase().includes(query)) ||
+      (pt.business_number && pt.business_number.includes(query))
     );
   });
 

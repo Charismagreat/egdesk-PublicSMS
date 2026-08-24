@@ -589,6 +589,7 @@ export async function POST(req: Request) {
       vip_level = 'NORMAL', 
       credit_limit = 0, 
       business_license_url = '', 
+      tags = '',
       memo = '' 
     } = body;
 
@@ -616,6 +617,7 @@ export async function POST(req: Request) {
       vip_level,
       credit_limit: parseInt(credit_limit as any) || 0,
       business_license_url,
+      tags,
       memo,
       created_at: nowStr,
       tenant_id: tenantId
@@ -655,6 +657,7 @@ export async function PUT(req: Request) {
       vip_level, 
       custom_vip_rate,
       credit_limit, 
+      tags,
       memo 
     } = body;
 
@@ -678,6 +681,7 @@ export async function PUT(req: Request) {
     if (address !== undefined) updates.address = address;
     if (vip_level !== undefined) updates.vip_level = vip_level;
     if (credit_limit !== undefined) updates.credit_limit = parseInt(credit_limit as any) || 0;
+    if (tags !== undefined) updates.tags = tags;
     if (memo !== undefined) updates.memo = memo;
 
     await updateRows('crm_partners', updates, { filters: { id } });

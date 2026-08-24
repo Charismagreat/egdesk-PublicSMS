@@ -91,6 +91,7 @@ export function PartnerTable({
         "우대등급": pt.vip_level || "NORMAL",
         "여신한도": pt.credit_limit ? pt.credit_limit.toLocaleString() + "원" : "0원",
         "누적거래실적": pt.total_performance ? pt.total_performance.toLocaleString() + "원" : "0원",
+        "프로젝트태그": pt.tags || "",
         "비고": pt.memo || "",
         "등록일시": pt.created_at || ""
       };
@@ -306,9 +307,29 @@ export function PartnerTable({
                       </div>
                     </td>
 
-                  {/* 2. 상호명 / 대표자 / 사업자번호 */}
+                  {/* 2. 상호명 / 대표자 / 사업자번호 / 프로젝트 태그 */}
                   <td className="py-4 px-3.5">
-                    <span className="font-extrabold text-slate-800 block text-xs">{pt.company_name}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-extrabold text-slate-800 text-xs">{pt.company_name}</span>
+                      {pt.tags && (
+                        <div className="flex flex-wrap gap-1">
+                          {pt.tags.split(/[,#\s]+/).filter(Boolean).map((tag, tIdx) => (
+                            <button
+                              key={tIdx}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchQuery(tag);
+                              }}
+                              title={`'#${tag}' 태그로 즉시 필터링`}
+                              className="inline-flex items-center px-1.5 py-0.2 rounded-md text-[9px] font-black bg-indigo-50 text-indigo-600 border border-indigo-200/80 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all cursor-pointer shadow-2xs"
+                            >
+                              #{tag}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <span className="text-[10px] text-slate-450 block mt-1">
                       대표: <span className="text-slate-600 font-bold">{pt.representative || '미기입'}</span>
                       <span className="mx-1 text-slate-200">|</span>

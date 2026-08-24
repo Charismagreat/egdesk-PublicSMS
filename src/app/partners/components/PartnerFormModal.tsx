@@ -467,6 +467,35 @@ export function PartnerFormModal({
             </div>
           </div>
 
+          {/* 🏷️ 프로젝트 & 관리 태그 (손익 분석 연계용) */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-slate-400 font-bold block">
+                🏷️ 프로젝트 & 관리 태그 (손익 분석 연계용)
+              </label>
+              <span className="text-[10px] text-slate-400">쉼표(,) 또는 #으로 구분 입력</span>
+            </div>
+            <input 
+              type="text" 
+              value={form.tags || ''}
+              onChange={e => setForm(p => ({ ...p, tags: e.target.value }))}
+              placeholder="예: #스마트공장, #2026정부과제, #신사옥현장, #R&D사업부"
+              className="w-full p-2.5 bg-slate-50 border border-slate-100 focus:border-indigo-500 rounded-xl text-xs font-bold bg-white text-slate-800 transition-all"
+            />
+            {form.tags && form.tags.trim() && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {form.tags.split(/[,#\s]+/).filter(Boolean).map((t, idx) => (
+                  <span 
+                    key={idx}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200"
+                  >
+                    <span>#{t}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="text-[10px] text-slate-400 font-bold block mb-1">회사 주소</label>
             <input 
