@@ -8,6 +8,8 @@ import { apiFetch } from "@/lib/api";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, loadSavedGoogleSheetConfig } from "@/lib/google-sheets-storage";
 import { sanitizeDate, sanitizeAmount, reconcileAmounts, sanitizeBusinessNumber } from "@/lib/data-validator";
 
+import GoogleSheetPresetModal, { GoogleSheetPreset } from "@/components/GoogleSheetPresetModal";
+
 interface HometaxGoogleSheetsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -47,7 +49,9 @@ export default function HometaxGoogleSheetsModal({
   const [selectedSheetName, setSelectedSheetName] = useState<string>("");
   const [availableSheets, setAvailableSheets] = useState<string[]>([]);
   const [spreadsheetTitle, setSpreadsheetTitle] = useState<string>("");
-  const [recentSheets, setRecentSheets] = useState<Array<{ url: string; sheetName?: string; title?: string }>>([]);
+  const [presets, setPresets] = useState<GoogleSheetPreset[]>([]);
+  const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
+  const [presetModalMode, setPresetModalMode] = useState<"save" | "list">("save");
   const [parsedInvoices, setParsedInvoices] = useState<ParsedHometaxInvoice[]>([]);
   const [userTypeSelection, setUserTypeSelection] = useState<"AUTO" | "SALES" | "PURCHASE">("AUTO");
   const [userKindSelection, setUserKindSelection] = useState<"AUTO" | "TAX_INVOICE" | "TAX_EXEMPT_INVOICE" | "CASH_RECEIPT">("AUTO");
@@ -55,24 +59,30 @@ export default function HometaxGoogleSheetsModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const fetchPresetsList = async () => {
+    try {
+      const res = await apiFetch("/api/shared/google-sheets/presets?domain=hometax");
+      const data = await res.json();
+      if (data.success && data.presets) {
+        setPresets(data.presets);
+        if (data.defaultPreset && !sheetUrl) {
+          setSheetUrl(data.defaultPreset.url);
+          if (data.defaultPreset.sheetName) setSelectedSheetName(data.defaultPreset.sheetName);
+        }
+      }
+    } catch (e) {}
+  };
+
   useEffect(() => {
     if (isOpen) {
-      // 1. 로컬 캐시 즉시 복원 (0ms)
       const cachedUrl = getSavedGoogleSheetUrl('hometax_inbound_sheet_url') || getSavedGoogleSheetUrl();
       setSheetUrl(cachedUrl);
       setParsedInvoices([]);
       setUserTypeSelection("AUTO");
       setUserKindSelection("AUTO");
       setStatusMsg(null);
-
-      // 2. 서버 system_settings에서 전사 저장된 최신 시트 설정 비동기 로드
-      loadSavedGoogleSheetConfig('hometax').then((cfg) => {
-        if (cfg.url) {
-          setSheetUrl(cfg.url);
-          if (cfg.sheetName) setSelectedSheetName(cfg.sheetName);
-          if (cfg.recentSheets) setRecentSheets(cfg.recentSheets);
-        }
-      }).catch(() => {});
+      setIsPresetModalOpen(false);
+      fetchPresetsList();
     }
   }, [isOpen]);
 
@@ -509,12 +519,32 @@ export default function HometaxGoogleSheetsModal({
                 <Globe className="w-3.5 h-3.5 text-teal-600" />
                 구글 스프레드시트 URL 또는 Spreadsheet ID
               </label>
-              {sheetUrl && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-700 bg-teal-100/80 px-2 py-0.5 rounded-md border border-teal-200/60">
-                  <Bookmark className="w-3 h-3 text-teal-600 fill-teal-600" />
-                  전사 기본 시트로 자동 저장됨
-                </span>
-              )}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPresetModalMode("save");
+                    setIsPresetModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 bg-white hover:bg-teal-50 text-teal-700 border border-teal-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+                  title="현재 입력된 구글 시트 주소를 이름과 함께 저장합니다."
+                >
+                  <Bookmark className="w-3.5 h-3.5 text-teal-600" />
+                  <span>시트 주소 저장</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPresetModalMode("list");
+                    setIsPresetModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+                  title="저장된 구글 시트 목록을 조회하고 선택합니다."
+                >
+                  <List className="w-3.5 h-3.5 text-slate-500" />
+                  <span>저장 목록 ({presets.length})</span>
+                </button>
+              </div>
             </div>
 
             <div className="flex gap-2">
@@ -554,37 +584,6 @@ export default function HometaxGoogleSheetsModal({
                 )}
               </button>
             </div>
-
-            {/* 최근 연동된 시트 빠른 선택 프리셋 */}
-            {recentSheets.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px]">
-                <span className="text-slate-400 font-bold flex items-center gap-1 shrink-0">
-                  <History className="w-3 h-3" /> 최근 시트:
-                </span>
-                {recentSheets.map((item, idx) => {
-                  const displayTitle = item.title || item.sheetName || (item.url.length > 35 ? `${item.url.slice(0, 32)}...` : item.url);
-                  const isSelected = item.url === sheetUrl;
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        setSheetUrl(item.url);
-                        if (item.sheetName) setSelectedSheetName(item.sheetName);
-                      }}
-                      className={`px-2 py-0.5 rounded-md border text-[11px] font-semibold transition-all cursor-pointer truncate max-w-[220px] ${
-                        isSelected
-                          ? "bg-teal-50 text-teal-700 border-teal-300 font-bold"
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-800"
-                      }`}
-                      title={item.url}
-                    >
-                      {displayTitle}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
 
             {availableSheets.length > 1 && (
               <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 text-xs">
@@ -823,6 +822,28 @@ export default function HometaxGoogleSheetsModal({
           </button>
         </div>
       </div>
+
+      {/* 구글 시트 프리셋 저장/목록 모달 */}
+      <GoogleSheetPresetModal
+        isOpen={isPresetModalOpen}
+        onClose={() => setIsPresetModalOpen(false)}
+        domain="hometax"
+        currentUrl={sheetUrl}
+        currentSheetName={selectedSheetName}
+        initialMode={presetModalMode}
+        onSelectPreset={(preset) => {
+          setSheetUrl(preset.url);
+          if (preset.sheetName) setSelectedSheetName(preset.sheetName);
+          setIsPresetModalOpen(false);
+          // 선택 후 즉시 데이터 조회 가동
+          setTimeout(() => {
+            handleFetchSheetData(preset.sheetName);
+          }, 100);
+        }}
+        onPresetsUpdated={(updatedPresets) => {
+          setPresets(updatedPresets);
+        }}
+      />
     </div>
   );
 }
