@@ -458,17 +458,20 @@ export async function POST(req: Request) {
   - memo (TEXT): 상세 적요 및 입금 계좌 정보
 
 [Tax Invoices Table (tax_invoices)]
-- Description: 국세청 전자세금계산서 발행 및 수취 내역 테이블입니다.
+- Description: 국세청 전자세금계산서 발행 및 수취 내역 테이블입니다. "매입처", "최대 매입처", "매입 금액", "매출처", "최대 매출처", "매출액", "세금계산서" 관련 질의 시 가장 정확하고 방대한 실물 거래 데이터가 들어있는 최우선 핵심 테이블입니다!
 - Columns:
   - id (INTEGER PRIMARY KEY): 세금계산서 고유 ID
-  - supplier_corp_name (TEXT): 공급자 상호 (매입 시 매입처명)
+  - supplier_corp_name (TEXT): 공급자 상호 (매입 거래 시 매입처명)
   - supplier_corp_num (TEXT): 공급자 사업자등록번호
-  - buyer_corp_name (TEXT): 공급받는자 상호 (매출 시 고객사명)
-  - total_amount (INTEGER): 세금계산서 총 합계금액
-  - supply_amount (INTEGER): 공급가액
-  - tax_amount (INTEGER): 세액
+  - buyer_corp_name (TEXT): 공급받는자 상호 (매출 거래 시 고객사/매출처명)
+  - buyer_corp_num (TEXT): 공급받는자 사업자등록번호
+  - total_amount (INTEGER): 세금계산서 총 합계금액 (원)
+  - supply_amount (INTEGER): 공급가액 (원)
+  - tax_amount (INTEGER): 세액 (원)
   - issue_date (TEXT): 작성/발행일자 (YYYY-MM-DD)
-  - type (TEXT): 매입/매출 구분 ('BUY': 매입 세금계산서, 'SELL': 매출 세금계산서)
+  - type (TEXT): 매입/매출 구분 ('PURCHASE': 매입 세금계산서, 'SALES': 매출 세금계산서)
+  - invoice_type (TEXT): 'purchase' 또는 'sales'
+  - item_name (TEXT): 주요 품목명
 
 [Estimates / Orders Master Table (crm_estimates)]
 - Description: 견적서(ESTIMATE), 발주서(PURCHASE_ORDER), 수주서(SALES_ORDER) 대장 테이블입니다.
@@ -480,14 +483,28 @@ export async function POST(req: Request) {
   - issue_date (TEXT): 발행일자
 
 💡 주요 질의별 표준 SQL 예시:
-- 최대 매입처 질의 시 (crm_partners와 crm_expenses 조인 집계):
-  SELECT p.company_name, p.representative, p.phone, p.type,
-         COALESCE(SUM(e.amount), 0) AS total_expense_amount
-  FROM crm_partners p
-  LEFT JOIN crm_expenses e ON e.title LIKE '%' || p.company_name || '%'
-  WHERE p.type = 'VENDOR'
-  GROUP BY p.id, p.company_name
-  ORDER BY total_expense_amount DESC, p.id ASC;
+- 최대 매입처 / 매입 순위 질의 시 (세금계산서 매입 집계 최우선 권장):
+  SELECT supplier_corp_name AS company_name, supplier_corp_num AS business_number,
+         COUNT(*) AS invoice_count,
+         SUM(total_amount) AS total_amount,
+         SUM(supply_amount) AS supply_amount,
+         SUM(tax_amount) AS tax_amount
+  FROM tax_invoices
+  WHERE type = 'PURCHASE' OR invoice_type = 'purchase'
+  GROUP BY supplier_corp_name, supplier_corp_num
+  ORDER BY total_amount DESC
+  LIMIT 10;
+
+- 최대 매출처 / 고객사 순위 질의 시:
+  SELECT buyer_corp_name AS company_name, buyer_corp_num AS business_number,
+         COUNT(*) AS invoice_count,
+         SUM(total_amount) AS total_amount,
+         SUM(supply_amount) AS supply_amount
+  FROM tax_invoices
+  WHERE type = 'SALES' OR invoice_type = 'sales'
+  GROUP BY buyer_corp_name, buyer_corp_num
+  ORDER BY total_amount DESC
+  LIMIT 10;
 `;
     dbTablesInfo += "\n" + partnerAndExpenseTablesInfo;
 
@@ -873,9 +890,13 @@ Your mission is to understand the user's natural language inquiry, determine if 
 [🚨 CORE PRINCIPLES]
 1. Intent Over UI Context: Focus directly on the semantics of the user's inquiry. If the user asks about business metrics, company data, partners, vendors, expenses, sales, inventory, customers, or employees, always generate the analytical SQL query regardless of client UI states or current URL.
 2. Domain Entity to Database Mapping:
-   - Vendors / Suppliers / Expenses: Query \`crm_partners\` (type='VENDOR') and/or \`crm_expenses\` (join or group by vendor/title to aggregate amounts).
-   - Customers / Sales / Orders: Query \`crm_customers\`, \`crm_orders\`, \`crm_sales_orders\`.
-   - Inventory / Products: Query \`inventory_items\`, \`crm_inventory\`, \`products\`.
+   - Vendors / Purchases / Suppliers (매입처, 매입액, 최대 매입처, 공급업체, 세금계산서): 
+     * PRIMARY: Query \`tax_invoices\` grouping by \`supplier_corp_name\`, \`supplier_corp_num\` (e.g. \`SELECT supplier_corp_name, supplier_corp_num, COUNT(*) AS invoice_count, SUM(total_amount) AS total_amount, SUM(supply_amount) AS supply_amount, SUM(tax_amount) AS tax_amount FROM tax_invoices GROUP BY supplier_corp_name, supplier_corp_num ORDER BY total_amount DESC LIMIT 10;\`). This contains official tax invoice purchase records.
+     * MASTER / FALLBACK: Query \`crm_partners\` (type='VENDOR') and \`crm_expenses\`.
+   - Customers / Sales / Revenue (매출처, 매출액, 최대 매출처, 고객사): 
+     * PRIMARY: Query \`tax_invoices\` grouping by \`buyer_corp_name\`, \`buyer_corp_num\` (e.g. \`SELECT buyer_corp_name, buyer_corp_num, COUNT(*) AS invoice_count, SUM(total_amount) AS total_amount, SUM(supply_amount) AS supply_amount FROM tax_invoices GROUP BY buyer_corp_name, buyer_corp_num ORDER BY total_amount DESC LIMIT 10;\`).
+     * MASTER / ORDERS: Query \`crm_customers\`, \`crm_orders\`, \`crm_estimates\` (type='SALES_ORDER').
+   - Inventory / Products: Query \`inventory_items\`, \`crm_inventory_inbounds\`, \`crm_inventory_inbound_items\`.
    - Attendance / Staff / Tasks: Query \`crm_attendance\` (join \`crm_operators\` on CAST(a.operator_id AS TEXT) = CAST(o.id AS TEXT)), \`crm_snaptasks\`.
 3. Safe Query Standards: Generate valid SQLite SELECT queries. The backend firewall automatically handles soft delete filters; never include forbidden keywords like DELETE or CREATE.
 4. Classification:
