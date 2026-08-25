@@ -2,7 +2,7 @@ export const maxDuration = 300; // 로컬 AI 대용량 연산 지연 대기 허�
 import { fetchGeminiWithFallback } from '../../../lib/gemini-fallback';
 import { unwrapAiResponseText } from '../../../lib/ai-router';
 import { NextResponse } from 'next/server';
-import { queryTable, executeSQL, listTables, insertRows, createTable, getGeminiApiKey, AI_KEY_NAMES } from '../../../../egdesk-helpers';
+import { queryTable, executeSQL, listTables, insertRows, createTable, getGeminiApiKey, AI_KEY_NAMES, callAiCaller } from '../../../../egdesk-helpers';
 import fs from 'fs';
 import path from 'path';
 import { cookies } from 'next/headers';
@@ -302,37 +302,24 @@ export async function POST(req: Request) {
     let initialData: any = null;
 
     if (isActionPrompt) {
-      // 액션 키워드 포착 시에만 도구 호출 감색 구동 (지연 시간 70% 단축)
-      const initialResponse = await fetchGeminiWithFallback(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: "당신은 이지봇이며, 최고관리자의 업무 대행이 가능한 자율 액션 에이전트입니다. 사용자가 문자 발송, 고객 등록, 지출 승인 등을 요구하면 선언된 적절한 도구(tool)를 호출해야 합니다. 단순 데이터 조회, 검색, 현황 파악, 통계 등은 도구를 사용하지 않고 텍스트로만 응답해 주십시오. 정의되지 않은 임의의 도구명을 만들어 호출하지 마십시오." }] },
-          contents: [
-            ...chatHistory.slice(-4).map((msg: any) => ({
-              role: msg.role === 'user' ? 'user' : 'model',
-              parts: [{ text: msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content }]
-            })),
-            { role: 'user', parts: [{ text: prompt }] }
-          ],
-          tools: [{ functionDeclarations: toolDeclarations }]
-        })
-      });
+      try {
+        const callerRes = await callAiCaller(prompt, {
+          systemPrompt: "당신은 이지봇이며, 최고관리자의 업무 대행이 가능한 자율 액션 에이전트입니다. 사용자가 문자 발송, 고객 등록, 지출 승인 등을 요구하면 선언된 적절한 도구(tool)를 호출해야 합니다. 단순 데이터 조회, 검색, 현황 파악, 통계 등은 도구를 사용하지 마십시오.",
+          tools: toolDeclarations as any,
+          keyName: (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct',
+          caller: 'easybot-action-detector'
+        });
 
-      if (initialResponse.ok) {
-        initialData = await initialResponse.json();
-        candidate = initialData.candidates?.[0];
-        const parts = candidate?.content?.parts || [];
-        const functionCallPart = parts.find((p: any) => p.functionCall);
-
-        if (functionCallPart) {
-          name = functionCallPart.functionCall.name;
-          args = functionCallPart.functionCall.args;
+        if (callerRes.functionCalls && callerRes.functionCalls.length > 0) {
+          name = callerRes.functionCalls[0].name;
+          args = callerRes.functionCalls[0].args;
           const validTools = ['send_sms', 'register_customer', 'approve_expense', 'toggle_ocr_receiver_bypass'];
           if (validTools.includes(name)) {
             executeAction = true;
           }
         }
+      } catch (e: any) {
+        console.warn('Action detection callAiCaller error:', e.message);
       }
     }
 
@@ -404,40 +391,20 @@ export async function POST(req: Request) {
         ? { success: false, error: actionError }
         : { success: true, result: actionResult };
 
-      const secondResponse = await fetchGeminiWithFallback(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: "당신은 이지봇입니다. 방금 실행한 도구(tool)의 실행 결과 데이터(toolOutput)를 참고하여, 사용자에게 업무 처리가 어떻게 완료되었거나 실패했는지를 밝고 신뢰감 주는 말투로 한글로 정성껏 응답해 주세요." }] },
-          contents: [
-            ...chatHistory.map((msg: any) => ({
-              role: msg.role === 'user' ? 'user' : 'model',
-              parts: [{ text: msg.content }]
-            })),
-            { role: 'user', parts: [{ text: prompt }] },
-            candidate.content,
-            {
-              role: 'function',
-              parts: [
-                {
-                  functionResponse: {
-                    name: name,
-                    response: { output: toolOutput }
-                  }
-                }
-              ]
-            }
-          ]
-        })
-      });
-
-      if (!secondResponse.ok) {
-        const err = await secondResponse.json();
-        throw new Error(err.error?.message || 'Gemini Second API 호출 중 오류가 발생했습니다.');
+      let finalAnswer = "업무 대행 처리를 완료했습니다.";
+      try {
+        const secondCallerRes = await callAiCaller(
+          `사용자 요청: "${prompt}"\n도구 실행 결과: ${JSON.stringify(toolOutput)}`,
+          {
+            systemPrompt: "당신은 이지봇입니다. 방금 실행한 도구(tool)의 실행 결과 데이터를 참고하여, 사용자에게 업무 처리가 어떻게 완료되었거나 실패했는지를 밝고 신뢰감 주는 말투로 한글로 정성껏 응답해 주세요.",
+            keyName: (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct',
+            caller: 'easybot-action-response'
+          }
+        );
+        finalAnswer = secondCallerRes.content || finalAnswer;
+      } catch (secErr: any) {
+        console.error('Action second response callAiCaller error:', secErr.message);
       }
-
-      const secondData = await secondResponse.json();
-      const finalAnswer = secondData.candidates?.[0]?.content?.parts?.[0]?.text || "업무 대행 처리를 완료했으나 안내 응답을 생성하지 못했습니다.";
 
       // 🕒 토큰 사용량 기록 (1차 + 2차 합산 기록)
       const t1 = initialData.usageMetadata || {};
@@ -901,28 +868,18 @@ If the user is asking about how to use the system, menus, manuals, guides, or tr
 }
 `;
 
-    const step1Response = await fetchGeminiWithFallback(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: step1SystemPrompt }] },
-        contents: [
-          { role: 'user', parts: [{ text: prompt }] }
-        ],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.1 // SQL 생성의 정확성을 극대화하기 위해 낮은 온도로 설정
-        }
-      })
-    });
-
-    if (!step1Response.ok) {
-      const err = await step1Response.json();
-      throw new Error(err.error?.message || 'Gemini Step-1 API 호출 중 오류가 발생했습니다.');
+    let step1Text = "{}";
+    try {
+      const step1CallerRes = await callAiCaller(prompt, {
+        systemPrompt: step1SystemPrompt,
+        keyName: (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct',
+        caller: 'easybot-step1-sql-planner',
+        temperature: 0.1
+      });
+      step1Text = step1CallerRes.content || "{}";
+    } catch (step1Err: any) {
+      console.error('Step 1 callAiCaller 실패:', step1Err.message);
     }
-
-    const step1Data = await step1Response.json();
-    const step1Text = step1Data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     
     // 🕒 Step 1 토큰 사용량 로깅
     if (step1Data.usageMetadata) {
@@ -1133,31 +1090,19 @@ ${JSON.stringify(localStorageContext, null, 2)}
 ${secondaryDiscoveryContext}
 `;
 
-    const step2Response = await fetchGeminiWithFallback(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: step2SystemPrompt }] },
-        contents: [
-          ...chatHistory.slice(-4).map((msg: any) => ({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: [{ text: msg.content.length > 800 ? msg.content.slice(0, 800) + '...' : msg.content }]
-          })),
-          { role: 'user', parts: [{ text: prompt }] }
-        ],
-        generationConfig: {
-          temperature: 0.5
-        }
-      })
-    });
-
-    if (!step2Response.ok) {
-      const err = await step2Response.json();
-      throw new Error(err.error?.message || 'Gemini Step-2 API 호출 중 오류가 발생했습니다.');
+    let finalAnswer = "답변을 생성하지 못했습니다.";
+    try {
+      const step2CallerRes = await callAiCaller(prompt, {
+        systemPrompt: step2SystemPrompt,
+        keyName: (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct',
+        caller: 'easybot-step2-synthesizer',
+        temperature: 0.3
+      });
+      finalAnswer = step2CallerRes.content || "답변을 생성하지 못했습니다.";
+    } catch (step2Err: any) {
+      console.error('Step 2 callAiCaller 실패:', step2Err.message);
+      finalAnswer = `죄송합니다. AI 응답 생성 중 오류가 발생했습니다: ${step2Err.message}`;
     }
-
-    const step2Data = await step2Response.json();
-    let finalAnswer = unwrapAiResponseText(step2Data.candidates?.[0]?.content?.parts?.[0]?.text || step2Data) || "답변을 생성하는 데 실패했습니다.";
 
     // [REDIRECT:경로] 태그 감지 및 추출, 그리고 마크다운 링크로 치환
     let redirectUrl: string | null = null;
