@@ -357,11 +357,7 @@ export default function GoogleSheetPresetModal({
                     return (
                       <div
                         key={preset.id}
-                        className={`p-4 rounded-2xl border transition-all flex flex-col gap-2 ${
-                          preset.isDefault 
-                            ? "bg-teal-50/40 border-teal-200 shadow-xs" 
-                            : "bg-white border-slate-200 hover:border-slate-300"
-                        }`}
+                        className="p-4 rounded-2xl border border-slate-200 hover:border-slate-300 bg-white hover:shadow-xs transition-all flex flex-col gap-2"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -406,11 +402,6 @@ export default function GoogleSheetPresetModal({
                                     탭: {preset.sheetName}
                                   </span>
                                 )}
-                                {preset.isDefault && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-black bg-teal-600 text-white px-2 py-0.5 rounded-full shrink-0">
-                                    <Star className="w-2.5 h-2.5 fill-white" /> 기본 지정
-                                  </span>
-                                )}
                               </>
                             )}
                           </div>
@@ -430,16 +421,6 @@ export default function GoogleSheetPresetModal({
                                 >
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </button>
-                                {!preset.isDefault && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSetDefault(preset.id)}
-                                    className="p-1 text-amber-500 hover:bg-amber-50 rounded-md cursor-pointer"
-                                    title="기본 탭으로 지정"
-                                  >
-                                    <Star className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
                                 <button
                                   type="button"
                                   onClick={() => handleDelete(preset.id, preset.title)}

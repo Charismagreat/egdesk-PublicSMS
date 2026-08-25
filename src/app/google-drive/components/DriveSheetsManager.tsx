@@ -183,7 +183,7 @@ export default function DriveSheetsManager() {
   };
 
   const activeDomainsCount = new Set(flatPresets.map(p => p.domain)).size;
-  const defaultPresetsCount = flatPresets.filter(p => p.isDefault).length;
+  const uniqueSpreadsheetsCount = new Set(flatPresets.map(p => p.url)).size;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -214,13 +214,13 @@ export default function DriveSheetsManager() {
         </div>
 
         <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
-            <Star className="w-6 h-6 fill-amber-500 text-amber-500" />
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+            <FileSpreadsheet className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xs text-slate-400 font-bold">대표 기본 지정 탭</div>
+            <div className="text-xs text-slate-400 font-bold">연동 스프레드시트 파일</div>
             <div className="text-2xl font-black text-slate-800 tracking-tight mt-0.5 font-mono">
-              {defaultPresetsCount} <span className="text-xs font-bold text-slate-400 font-sans">개 지정됨</span>
+              {uniqueSpreadsheetsCount} <span className="text-xs font-bold text-slate-400 font-sans">개 문서</span>
             </div>
           </div>
         </div>
@@ -365,14 +365,10 @@ export default function DriveSheetsManager() {
                 return (
                   <div
                     key={preset.id}
-                    className={`p-5 rounded-3xl border transition-all flex flex-col justify-between gap-3 ${
-                      preset.isDefault
-                        ? "bg-teal-50/30 border-teal-200 shadow-sm"
-                        : "bg-white border-slate-200/90 hover:border-slate-300 hover:shadow-xs"
-                    }`}
+                    className="p-5 rounded-3xl border border-slate-200/90 bg-white hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between gap-3"
                   >
                     <div className="space-y-2">
-                      {/* 상단 도메인 뱃지 & 기본 태그 */}
+                      {/* 상단 도메인 뱃지 & 탭 태그 */}
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-lg border ${domainMeta.badgeColor}`}>
@@ -385,20 +381,6 @@ export default function DriveSheetsManager() {
                             </span>
                           )}
                         </div>
-
-                        {preset.isDefault ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-black bg-teal-600 text-white px-2 py-0.5 rounded-full shrink-0">
-                            <Star className="w-2.5 h-2.5 fill-white" /> 대표 기본
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleSetDefault(preset.domain, preset.id)}
-                            className="text-[10px] font-bold text-slate-400 hover:text-amber-600 hover:bg-amber-50 px-2 py-0.5 rounded-md border border-transparent hover:border-amber-200 transition-all cursor-pointer"
-                          >
-                            ⭐ 기본 지정
-                          </button>
-                        )}
                       </div>
 
                       {/* 제목 (별칭) */}
