@@ -300,29 +300,6 @@ export function CustomerGoogleSheetsImportModal({
             </p>
           </div>
 
-          {/* 시트 탭 목록 (탭이 2개 이상일 때) */}
-          {availableSheets.length > 1 && (
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-bold text-slate-500 block">워크시트 선택</span>
-              <div className="flex flex-wrap gap-2">
-                {availableSheets.map((sName) => (
-                  <button
-                    key={sName}
-                    type="button"
-                    onClick={() => handleSheetTabChange(sName)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
-                      selectedSheetName === sName
-                        ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    {sName}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* 상태 메시지 배너 */}
           {statusMsg && (
             <div className={`p-3.5 rounded-2xl border flex items-center gap-2 text-xs font-bold ${

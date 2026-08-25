@@ -958,23 +958,6 @@ export default function InboundStatementOcrModal({
                 </div>
 
                 {/* 📑 스프레드시트 내 탭 선택기 (시트가 2개 이상일 때) */}
-                {availableSheets.length > 1 && (
-                  <div className="flex items-center gap-2 bg-white/90 p-2.5 rounded-2xl border border-blue-100 text-left">
-                    <span className="text-[11px] font-bold text-slate-600 shrink-0">시트 탭:</span>
-                    <select
-                      value={selectedSheetName}
-                      onChange={(e) => {
-                        setSelectedSheetName(e.target.value);
-                        handleFetchGoogleSheet(e.target.value);
-                      }}
-                      className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold text-blue-700 focus:outline-none focus:border-blue-500 flex-1"
-                    >
-                      {availableSheets.map(sheetName => (
-                        <option key={sheetName} value={sheetName}>{sheetName}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">

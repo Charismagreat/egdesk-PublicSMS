@@ -245,25 +245,6 @@ export default function CompanyProfileGoogleSheetsModal({
           </div>
 
           {/* 탭(시트) 선택 옵션 (여러 탭이 있는 경우) */}
-          {availableSheets.length > 1 && (
-            <div className="flex items-center gap-2 text-xs bg-slate-50 p-3 rounded-xl border border-slate-200/80">
-              <span className="font-bold text-slate-700 shrink-0">대상 탭 선택:</span>
-              <select
-                value={selectedSheetName}
-                onChange={(e) => {
-                  setSelectedSheetName(e.target.value);
-                  handleFetchSheetData(e.target.value);
-                }}
-                className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              >
-                {availableSheets.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
 
           {/* 상태 알림 메시지 */}
           {statusMsg && (

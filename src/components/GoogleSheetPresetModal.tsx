@@ -299,6 +299,25 @@ export default function GoogleSheetPresetModal({
                 />
               </div>
 
+              {availableSheets.length > 1 && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-slate-700 flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5 text-teal-600" /> 저장할 대상 시트 탭 (선택)
+                  </label>
+                  <select
+                    value={inputSheetName}
+                    onChange={(e) => handleTabChange(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-bold text-slate-800"
+                  >
+                    {availableSheets.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <label className="text-xs font-black text-slate-700 flex items-center gap-1">
                   <Bookmark className="w-3.5 h-3.5 text-teal-600" /> 탭 프리셋 별칭 / 이름 (필수)

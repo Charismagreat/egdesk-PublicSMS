@@ -328,27 +328,6 @@ export default function InventoryGoogleSheetsModal({
                 )}
               </button>
             </div>
-
-            {availableSheets.length > 1 && (
-              <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 text-xs">
-                <span className="font-bold text-slate-600 shrink-0">대상 시트(탭):</span>
-                <select
-                  value={selectedSheetName}
-                  onChange={(e) => {
-                    setSelectedSheetName(e.target.value);
-                    handleFetchSheetData(e.target.value);
-                  }}
-                  className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-teal-500"
-                >
-                  {availableSheets.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-[11px] text-slate-400">('재고일괄등록_샘플서식' 탭 권장)</span>
-              </div>
-            )}
           </div>
 
           {statusMsg && (

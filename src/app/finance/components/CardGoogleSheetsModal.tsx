@@ -361,26 +361,6 @@ export default function CardGoogleSheetsModal({
                   <option value="hyundai-card">현대카드</option>
                 </select>
               </div>
-
-              {availableSheets.length > 1 && (
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-600 shrink-0">대상 탭:</span>
-                  <select
-                    value={selectedSheetName}
-                    onChange={(e) => {
-                      setSelectedSheetName(e.target.value);
-                      handleFetchSheetData(e.target.value);
-                    }}
-                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-amber-500 flex-1"
-                  >
-                    {availableSheets.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
             </div>
           </div>
 
