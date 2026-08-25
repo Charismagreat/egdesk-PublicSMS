@@ -68,7 +68,7 @@ export function useEasyBotChat({
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'bot',
-      content: '반갑습니다! 무엇을 도와드릴까요?\n- **"AI 브리핑 분석해줘"** 라고 하시면 시각 통계를 분석합니다.\n- 📤 하단의 **업로드 아이콘**을 클릭해 명함 또는 영수증 파일을 전송하시면 자동으로 명함첩에 똑똑하게 등록해 드립니다!',
+      content: '반갑습니다! 무엇을 도와드릴까요?\n\n📊 사내 업무 규정(Wiki) 검색부터 실시간 매입·매출 집계까지 무엇이든 질문해 보세요.\n📄 하단의 첨부(📎) 아이콘으로 각종 파일을 전송하시면 AI가 판독하여 자동 입력해 드립니다!',
       timestamp: '방금 전'
     }
   ]);
