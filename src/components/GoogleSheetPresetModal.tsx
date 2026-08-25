@@ -290,42 +290,18 @@ export default function GoogleSheetPresetModal({
                 />
               </div>
 
-              {/* 대상 탭(Worksheet) 선택 - 감지된 탭 드롭다운 지원 */}
+              {/* 대상 탭(Worksheet) - 현재 선택된 탭 1:1 고정 표시 */}
               <div className="space-y-1.5">
                 <label className="text-xs font-black text-slate-700 flex items-center gap-1">
                   <Layers className="w-3.5 h-3.5 text-teal-600" /> 연동 대상 시트 탭 (Worksheet)
                 </label>
-                {availableSheets && availableSheets.length > 0 ? (
-                  <div className="flex gap-2">
-                    <select
-                      value={inputSheetName}
-                      onChange={(e) => handleTabChange(e.target.value)}
-                      className="flex-1 px-3.5 py-2.5 bg-teal-50/60 border border-teal-200 rounded-xl text-xs font-bold text-teal-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    >
-                      {availableSheets.map((s) => (
-                        <option key={s} value={s}>
-                          📑 {s}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={inputSheetName}
-                      onChange={(e) => handleTabChange(e.target.value)}
-                      placeholder="탭 이름 직접입력"
-                      className="w-1/3 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800"
-                    />
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={inputSheetName}
-                    onChange={(e) => handleTabChange(e.target.value)}
-                    placeholder="예: 7월 매입, 거래처목록 (미입력 시 첫 번째 탭 자동)"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800 font-bold"
-                  />
-                )}
-                <p className="text-[11px] text-slate-400">하나의 구글 시트 파일 안에 있는 서로 다른 탭들을 각각 독립된 별칭으로 저장할 수 있습니다.</p>
+                <div className="flex items-center gap-2 px-3.5 py-2.5 bg-teal-50/80 border border-teal-200 rounded-xl text-xs font-black text-teal-900 shadow-3xs">
+                  <Layers className="w-4 h-4 text-teal-600 shrink-0" />
+                  <span className="truncate">{inputSheetName || "첫 번째 시트 탭 (기본)"}</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  현재 화면에서 확인 중인 탭({inputSheetName || "기본 탭"})이 1:1로 고정 저장됩니다.
+                </p>
               </div>
 
               <div className="space-y-1.5">
