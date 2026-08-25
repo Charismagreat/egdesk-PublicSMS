@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>EGDESK Server Edition - B2B Sales One-Pager</title>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      width: 210mm;
+      height: 297mm;
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 14mm 14mm 10mm 14mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+
+    /* Top Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1.5px solid #334155;
+      padding-bottom: 10px;
+    }
+    .logo-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 20px;
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+    }
+    .logo-text h1 {
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .badge-edition {
+      font-size: 10px;
+      background: #312e81;
+      color: #a5b4fc;
+      padding: 2px 7px;
+      border-radius: 99px;
+      font-weight: 700;
+      border: 1px solid #4338ca;
+    }
+    .logo-text p {
+      font-size: 10.5px;
+      color: #94a3b8;
+      margin-top: 1px;
+    }
+    .header-badge {
+      text-align: right;
+    }
+    .tag-hot {
+      display: inline-block;
+      font-size: 10.5px;
+      font-weight: 800;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    /* Main Hero Punchline */
+    .hero {
+      margin-top: 10px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.95) 100%);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .hero-sub {
+      font-size: 11px;
+      font-weight: 700;
+      color: #818cf8;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .hero-title {
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1.35;
+      color: #ffffff;
+      margin-top: 3px;
+    }
+    .hero-title span {
+      color: #38bdf8;
+    }
+    .hero-desc {
+      font-size: 10.8px;
+      color: #cbd5e1;
+      margin-top: 4px;
+      line-height: 1.4;
+      letter-spacing: -0.2px;
+    }
+
+    /* 3-Pillar Appliance Structure */
+    .section-title {
+      font-size: 12.5px;
+      font-weight: 800;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      margin-bottom: 6px;
+    }
+    .section-title::before {
+      content: '';
+      display: inline-block;
+      width: 3px;
+      height: 12px;
+      background: #4f46e5;
+      border-radius: 2px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 9px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11.5px;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 6px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #334155;
+      white-space: nowrap;
+    }
+    .card ul {
+      list-style: none;
+      font-size: 9.8px;
+      color: #cbd5e1;
+      line-height: 1.45;
+      letter-spacing: -0.35px;
+    }
+    .card ul li {
+      position: relative;
+      padding-left: 10px;
+      margin-bottom: 3.5px;
+      white-space: nowrap;
+      word-break: keep-all;
+    }
+    .card ul li::before {
+      content: '✔';
+      position: absolute;
+      left: 0;
+      color: #38bdf8;
+      font-size: 8px;
+      top: 1px;
+    }
+    .card-highlight {
+      border: 1.5px solid #6366f1;
+      background: linear-gradient(145deg, #1e1b4b 0%, #1e293b 100%);
+    }
+
+    /* Core Features Matrix */
+    .features-box {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 9px 12px;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .feat-item {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 7px;
+      padding: 6px 8px;
+    }
+    .feat-item h4 {
+      font-size: 11px;
+      font-weight: 800;
+      color: #a5b4fc;
+      margin-bottom: 2px;
+    }
+    .feat-item p {
+      font-size: 9.5px;
+      color: #94a3b8;
+      line-height: 1.35;
+    }
+
+    /* ROI & Value Comparison */
+    .roi-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .roi-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 9px 12px;
+    }
+    .roi-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .stat-label {
+      font-size: 10.5px;
+      color: #94a3b8;
+    }
+    .stat-val {
+      font-size: 15px;
+      font-weight: 900;
+      color: #34d399;
+    }
+
+    /* Package & Government Voucher */
+    .packages-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+      background: #1e293b;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #334155;
+    }
+    .packages-table th, .packages-table td {
+      padding: 5px 8px;
+      text-align: left;
+      border-bottom: 1px solid #334155;
+    }
+    .packages-table th {
+      background: #0f172a;
+      color: #cbd5e1;
+      font-weight: 700;
+      font-size: 10px;
+    }
+    .packages-table td {
+      color: #f1f5f9;
+    }
+    .badge-pop {
+      background: #4f46e5;
+      color: #ffffff;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 8.5px;
+      font-weight: 800;
+      margin-left: 4px;
+    }
+
+    .voucher-banner {
+      background: linear-gradient(90deg, #065f46 0%, #047857 100%);
+      border: 1px solid #10b981;
+      border-radius: 8px;
+      padding: 6px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+    }
+    .voucher-banner strong {
+      font-size: 11px;
+      color: #ffffff;
+    }
+    .voucher-banner p {
+      font-size: 10px;
+      color: #d1fae5;
+    }
+
+    /* Footer */
+    .footer {
+      border-top: 1.5px solid #334155;
+      padding-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9.5px;
+      color: #94a3b8;
+    }
+    .company-info strong {
+      color: #e2e8f0;
+      font-size: 10.5px;
+    }
+    .cta-button-box {
+      text-align: right;
+    }
+    .cta-tel {
+      font-size: 14px;
+      font-weight: 900;
+      color: #38bdf8;
+    }
+    .cta-sub {
+      font-size: 9px;
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Header -->
+  <div class="header">
+    <div class="logo-box">
+      <div class="logo-icon">E</div>
+      <div class="logo-text">
+        <h1>EGDESK <span class="badge-edition">SERVER EDITION</span></h1>
+        <p>우리 회사만을 위한 완제품형 프라이빗 온프레미스 AI 시스템</p>
+      </div>
+    </div>
+    <div class="header-badge">
+      <span class="tag-hot">⚡ 2주 만에 사내 AI 100% 가동</span>
+      <p style="font-size: 9px; color: #64748b; margin-top: 2px;">(주)쿠스 공식 B2B 엔터프라이즈 솔루션</p>
+    </div>
+  </div>
+
+  <!-- 2. Hero Box -->
+  <div class="hero">
+    <div class="hero-sub">Enterprise Private AI Appliance Model</div>
+    <h2 class="hero-title">
+      전원만 꽂으면 <span>수기 입력 0초 사내 AI ERP &amp; MES</span>가 가동됩니다
+    </h2>
+    <p class="hero-desc">
+      개발자 채용이나 데이터 유출 걱정 없이, [전용 고성능 서버 + 30종 사내 AI 플랫폼 + 2주 현장 FDE 파견]을 올인원으로 제공합니다.
+    </p>
+  </div>
+
+  <!-- 3. 3-Pillar Appliance Structure -->
+  <div>
+    <div class="section-title">EGDESK 3-in-1 올인원 AI 어플라이언스 구성</div>
+    <div class="grid-3">
+      
+      <!-- H/W -->
+      <div class="card">
+        <div>
+          <div class="card-header" style="color: #38bdf8;">
+            🖥️ 1. 전용 하드웨어 인프라
+          </div>
+          <ul>
+            <li><strong>100% 프라이빗 (외부 유출 차단)</strong></li>
+            <li><strong>AMD EPYC 4585PX 탑재 AI PC</strong></li>
+            <li><strong>자가치유 Zero-Config 사내 DB</strong></li>
+            <li><strong>7종 엔터프라이즈 감사 거버넌스</strong></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- S/W -->
+      <div class="card card-highlight">
+        <div>
+          <div class="card-header" style="color: #a5b4fc;">
+            📦 2. 사내 AI 앱스토어 (30+종)
+          </div>
+          <ul>
+            <li><strong>수기 0초 차세대 AI ERP &amp; MES</strong></li>
+            <li><strong>프라이빗 데이터 레이크</strong> (통합 집결)</li>
+            <li><strong>AI Vision OCR</strong> (견적·발주 자동화)</li>
+            <li><strong>현장 스냅태스크 &amp; 모바일 포털</strong></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Human FDE -->
+      <div class="card">
+        <div>
+          <div class="card-header" style="color: #f472b6;">
+            👨‍💻 3. 전담 FDE 2주 현장 파견
+          </div>
+          <ul>
+            <li><strong>팔란티어 방식 전담 엔지니어 밀착</strong></li>
+            <li><strong>기존 엑셀·도면·회계 데이터 연동</strong></li>
+            <li><strong>맞춤형 사내 AI 규칙 현장 빌드</strong></li>
+            <li><strong>전 임직원 실무 온보딩 100% 완수</strong></li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 4. Core Features Showcase -->
+  <div>
+    <div class="section-title">중소기업 핵심 병목을 해결하는 4대 킬러 솔루션</div>
+    <div class="features-box">
+      <div class="features-grid">
+        <div class="feat-item">
+          <h4>🗄️ 사내 데이터 레이크</h4>
+          <p>임직원 PC에 흩어진 엑셀, 영수증, 도면을 단일 집결하고 RAG AI로 즉시 검색·답변</p>
+        </div>
+        <div class="feat-item">
+          <h4>🏢 AI ERP & MES 대체</h4>
+          <p>복잡한 수기 입력 완전 폐지. 견적서 스캔 3초 만에 발주-재고-생산-결재 원패스 처리</p>
+        </div>
+        <div class="feat-item">
+          <h4>📸 현장 스냅태스크</h4>
+          <p>카톡 지시 대신 현장 사진 한 장으로 시공·품질·납기 관제 및 모바일 결재 연동</p>
+        </div>
+        <div class="feat-item">
+          <h4>🛡️ 철벽 보안 & 감사</h4>
+          <p>데이터 삭제/수정 7종 감사 로그 자동 기록. 클라우드 종속 없는 100% 사내 데이터 주권</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. ROI & Comparison -->
+  <div>
+    <div class="section-title">검증된 도입 효과 & 2주 무위험 실증 (Risk-Free PoC)</div>
+    <div class="roi-grid">
+      <div class="roi-card">
+        <div class="roi-stat">
+          <span class="stat-label">월간 서류·전표 입력 시간</span>
+          <span class="stat-val" style="color: #38bdf8;">90% 단축</span>
+        </div>
+        <p style="font-size: 9.5px; color: #94a3b8;">월 120시간 ➔ 월 12시간 (야근 및 단순 반복 업무 소멸)</p>
+        <div class="roi-stat" style="margin-top: 6px;">
+          <span class="stat-label">연간 예상 비용 절감액</span>
+          <span class="stat-val" style="color: #34d399;">약 6,840만 원</span>
+        </div>
+        <p style="font-size: 9.5px; color: #94a3b8;">(임직원 20인 기준 인건비 및 레거시 ERP 구독료 절감)</p>
+      </div>
+
+      <div class="roi-card" style="border-color: #6366f1;">
+        <div style="font-size: 11px; font-weight: 800; color: #a5b4fc; margin-bottom: 3px;">
+          ⭐ 100% 무위험 2주 실증 보증제 (PoC)
+        </div>
+        <p style="font-size: 10px; color: #cbd5e1; line-height: 1.4;">
+          실제 고객사 견적서·영수증 데이터로 <strong>2주간 현장 실증</strong>을 진행합니다. 업무 시간 50% 이상 단축을 직접 체감하지 못하시면 <strong>100% 무상 철거</strong>해 드립니다.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Packages & Voucher -->
+  <div>
+    <div class="section-title">패키지별 도입 가격</div>
+    <table class="packages-table">
+      <thead>
+        <tr>
+          <th>패키지</th>
+          <th>대상 기업</th>
+          <th>제공 구성</th>
+          <th>FDE 파견</th>
+          <th>도입 방식</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Standard</strong></td>
+          <td>5~20인 소기업 / 유통</td>
+          <td>AI Server 표준형 + 데이터레이크 + 모바일</td>
+          <td>1주일 온보딩</td>
+          <td>일시불 2,400만 원 (월 90만 원)</td>
+        </tr>
+        <tr style="background: rgba(99, 102, 241, 0.15);">
+          <td><strong>Pro ⭐</strong> <span class="badge-pop">주력</span></td>
+          <td><strong>20~50인 강소 제조/IT/무역</strong></td>
+          <td><strong>AMD AI PC EPYC 4585PX + AI ERP/MES</strong></td>
+          <td><strong>2주 현장 밀착</strong></td>
+          <td><strong>일시불 4,500만 원 (월 150만 원)</strong></td>
+        </tr>
+        <tr>
+          <td><strong>Enterprise</strong></td>
+          <td>50인 이상 중견/공장</td>
+          <td>AMD AI PC EPYC 4585PX + 전사 맞춤 파인튜닝</td>
+          <td>1개월 전담</td>
+          <td>맞춤 견적</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="voucher-banner">
+      <div>
+        <strong>💡 중기부/NIPA AI 바우처 & 스마트공장 지원사업 연계</strong>
+        <p>정부지원금 선정 시 <strong>최대 80~90% 국비 지원</strong>으로 자부담 최소화 가능 (도입 컨설팅 무상 제공)</p>
+      </div>
+      <div style="font-size: 11px; font-weight: 800; color: #ffffff; background: rgba(0,0,0,0.25); padding: 4px 8px; border-radius: 6px;">
+        자부담 10%~
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Footer -->
+  <div class="footer">
+    <div class="company-info">
+      <strong>(주)쿠스 (QUUS Inc.)</strong> | 대표자: 차민수 | 사업자등록번호: 731-81-02023<br>
+      본사: 경기도 시흥시 서울대학로 59-69 배곧테크노밸리 609호 | 솔루션 포털: <strong>https://egdesk.cloud</strong>
+    </div>
+    <div class="cta-button-box">
+      <div class="cta-sub">도입 상담 & 무상 2주 실증(PoC) 신청</div>
+      <div class="cta-tel">010-7216-5884 / 010-2412-7674</div>
+      <div style="font-size: 8.5px; color: #38bdf8;">이메일: chachogreat@gmail.com</div>
+    </div>
+  </div>
+
+</body>
+</html>
