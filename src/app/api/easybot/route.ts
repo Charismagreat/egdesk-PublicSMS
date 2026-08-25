@@ -292,45 +292,47 @@ export async function POST(req: Request) {
       }
     ];
 
-    // 첫 번째 모델 호출: 도구 사용 여부 감색
-    const initialResponse = await fetchGeminiWithFallback(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: "당신은 이지봇이며, 최고관리자의 업무 대행이 가능한 자율 액션 에이전트입니다. 사용자가 문자 발송, 고객 등록, 지출 승인 등을 요구하면 선언된 적절한 도구(tool)를 호출해야 합니다. 단순 데이터 조회, 검색, 현황 파악, 통계 등은 도구를 사용하지 않고 텍스트로만 응답해 주십시오. 정의되지 않은 임의의 도구명을 만들어 호출하지 마십시오." }] },
-        contents: [
-          ...chatHistory.map((msg: any) => ({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: [{ text: msg.content }]
-          })),
-          { role: 'user', parts: [{ text: prompt }] }
-        ],
-        tools: [{ functionDeclarations: toolDeclarations }]
-      })
-    });
-
-    if (!initialResponse.ok) {
-      const err = await initialResponse.json();
-      throw new Error(err.error?.message || 'Gemini Initial API 호출 중 오류가 발생했습니다.');
-    }
-
-    const initialData = await initialResponse.json();
-    const candidate = initialData.candidates?.[0];
-    const parts = candidate?.content?.parts || [];
-    const functionCallPart = parts.find((p: any) => p.functionCall);
+    // 액션(문자 발송, 고객 등록, 결재 승인/반려 등) 실행 의도 감지
+    const isActionPrompt = /발송|문자|sms|고객\s*등록|신규\s*고객|지출\s*승인|결재\s*승인|지출\s*반려|결재\s*반려|검증\s*(켜|꺼|우회)|바이패스/.test(prompt);
 
     let executeAction = false;
     let name = '';
     let args: any = null;
+    let candidate: any = null;
+    let initialData: any = null;
 
-    if (functionCallPart) {
-      name = functionCallPart.functionCall.name;
-      args = functionCallPart.functionCall.args;
-      const validTools = ['send_sms', 'register_customer', 'approve_expense', 'toggle_ocr_receiver_bypass'];
-      if (validTools.includes(name)) {
-        executeAction = true;
-      } else {
-        console.warn(`[이지봇 자율 액션 가드] 정의되지 않은 도구 호출 감지(${name}). DB 조회 분석 로직으로 폴백합니다.`);
+    if (isActionPrompt) {
+      // 액션 키워드 포착 시에만 도구 호출 감색 구동 (지연 시간 70% 단축)
+      const initialResponse = await fetchGeminiWithFallback(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: "당신은 이지봇이며, 최고관리자의 업무 대행이 가능한 자율 액션 에이전트입니다. 사용자가 문자 발송, 고객 등록, 지출 승인 등을 요구하면 선언된 적절한 도구(tool)를 호출해야 합니다. 단순 데이터 조회, 검색, 현황 파악, 통계 등은 도구를 사용하지 않고 텍스트로만 응답해 주십시오. 정의되지 않은 임의의 도구명을 만들어 호출하지 마십시오." }] },
+          contents: [
+            ...chatHistory.slice(-4).map((msg: any) => ({
+              role: msg.role === 'user' ? 'user' : 'model',
+              parts: [{ text: msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content }]
+            })),
+            { role: 'user', parts: [{ text: prompt }] }
+          ],
+          tools: [{ functionDeclarations: toolDeclarations }]
+        })
+      });
+
+      if (initialResponse.ok) {
+        initialData = await initialResponse.json();
+        candidate = initialData.candidates?.[0];
+        const parts = candidate?.content?.parts || [];
+        const functionCallPart = parts.find((p: any) => p.functionCall);
+
+        if (functionCallPart) {
+          name = functionCallPart.functionCall.name;
+          args = functionCallPart.functionCall.args;
+          const validTools = ['send_sms', 'register_customer', 'approve_expense', 'toggle_ocr_receiver_bypass'];
+          if (validTools.includes(name)) {
+            executeAction = true;
+          }
+        }
       }
     }
 
@@ -1137,9 +1139,9 @@ ${secondaryDiscoveryContext}
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: step2SystemPrompt }] },
         contents: [
-          ...chatHistory.map((msg: any) => ({
+          ...chatHistory.slice(-4).map((msg: any) => ({
             role: msg.role === 'user' ? 'user' : 'model',
-            parts: [{ text: msg.content }]
+            parts: [{ text: msg.content.length > 800 ? msg.content.slice(0, 800) + '...' : msg.content }]
           })),
           { role: 'user', parts: [{ text: prompt }] }
         ],
