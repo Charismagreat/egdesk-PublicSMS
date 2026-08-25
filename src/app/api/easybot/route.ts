@@ -430,6 +430,67 @@ export async function POST(req: Request) {
       console.warn('테이블 목록 조회 실패 (에이전트에 스키마 가이드 제한됨):', e);
     }
 
+    // 💡 [Partners & Expenses & Tax Invoices] 거래처(매입처/매출처), 지출 대장, 세금계산서, 발주서 스키마 힌트 주입
+    const partnerAndExpenseTablesInfo = `
+[Partners Master Table (crm_partners)]
+- Description: 회사의 모든 매입처(VENDOR), 매출처/고객사(CUSTOMER) 마스터 정보가 등록된 핵심 거래처 대장 테이블입니다. "매입처 목록", "최대 매입처", "거래처 정보" 등의 질문 시 반드시 이 테이블을 조회해야 합니다.
+- Columns:
+  - id (INTEGER PRIMARY KEY): 거래처 고유 ID
+  - company_name (TEXT): 거래처 회사명 / 상호 (예: '원일상공', '현대초경연마')
+  - representative (TEXT): 대표자명
+  - business_number (TEXT): 사업자등록번호
+  - type (TEXT): 거래처 유형 ('VENDOR': 매입처/공급처, 'CUSTOMER': 매출처/고객사)
+  - phone (TEXT): 대표 전화번호
+  - email (TEXT): 이메일 주소
+  - address (TEXT): 사업장 주소
+  - memo (TEXT): 메모 / 업태 / 종목
+  - tags (TEXT): 태그
+
+[Expenses Table (crm_expenses)]
+- Description: 회사의 모든 지출 결재 및 경비 집행 내역이 기록되는 지출 대장 테이블입니다. (주의: vendor 컬럼은 존재하지 않으며, 거래처명은 title에 포함되어 있습니다)
+- Columns:
+  - id (TEXT PRIMARY KEY): 지출 전표 고유 ID (예: 'exp-1783782006491')
+  - title (TEXT): 지출 내역명 / 거래처명 / 적요 (예: '한국무역보험공사 - 환변동보험 이익금회수', '소모품 구매' 등)
+  - category (TEXT): 계정과목 / 비용 구분 (예: '외환차손', '소모품비', '식대' 등)
+  - amount (INTEGER): 지출 금액 (원)
+  - expense_date (TEXT): 지출 일자 (YYYY-MM-DD)
+  - payment_method (TEXT): 결제 수단 ('계좌송금', '법인카드', '현금' 등)
+  - memo (TEXT): 상세 적요 및 입금 계좌 정보
+
+[Tax Invoices Table (tax_invoices)]
+- Description: 국세청 전자세금계산서 발행 및 수취 내역 테이블입니다.
+- Columns:
+  - id (INTEGER PRIMARY KEY): 세금계산서 고유 ID
+  - supplier_corp_name (TEXT): 공급자 상호 (매입 시 매입처명)
+  - supplier_corp_num (TEXT): 공급자 사업자등록번호
+  - buyer_corp_name (TEXT): 공급받는자 상호 (매출 시 고객사명)
+  - total_amount (INTEGER): 세금계산서 총 합계금액
+  - supply_amount (INTEGER): 공급가액
+  - tax_amount (INTEGER): 세액
+  - issue_date (TEXT): 작성/발행일자 (YYYY-MM-DD)
+  - type (TEXT): 매입/매출 구분 ('BUY': 매입 세금계산서, 'SELL': 매출 세금계산서)
+
+[Estimates / Orders Master Table (crm_estimates)]
+- Description: 견적서(ESTIMATE), 발주서(PURCHASE_ORDER), 수주서(SALES_ORDER) 대장 테이블입니다.
+- Columns:
+  - id (TEXT PRIMARY KEY): 문서 번호
+  - partner_name (TEXT): 거래처 상호
+  - estimate_type (TEXT): 문서 종류 ('PURCHASE_ORDER': 발주서, 'SALES_ORDER': 수주서, 'ESTIMATE': 견적서)
+  - total_amount (INTEGER): 총 금액
+  - issue_date (TEXT): 발행일자
+
+💡 주요 질의별 표준 SQL 예시:
+- 최대 매입처 질의 시 (crm_partners와 crm_expenses 조인 집계):
+  SELECT p.company_name, p.representative, p.phone, p.type,
+         COALESCE(SUM(e.amount), 0) AS total_expense_amount
+  FROM crm_partners p
+  LEFT JOIN crm_expenses e ON e.title LIKE '%' || p.company_name || '%'
+  WHERE p.type = 'VENDOR'
+  GROUP BY p.id, p.company_name
+  ORDER BY total_expense_amount DESC, p.id ASC;
+`;
+    dbTablesInfo += "\n" + partnerAndExpenseTablesInfo;
+
     // 💡 [FinanceHub] 보유계좌 잔액 및 금융 내역 스키마 힌트를 AI 모델에 직접 추가 인입
     const financeHubTablesInfo = `
 [FinanceHub Accounts Table (accounts)]
