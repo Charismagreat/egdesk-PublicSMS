@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Building2, Plus, MapPin, Edit2, Trash2, CheckCircle2, ShieldCheck, Loader2, RefreshCw, X, AlertCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
@@ -256,7 +257,7 @@ export function WorkplaceSettingsCard() {
       )}
 
       {/* 사업장 추가/수정 모달 */}
-      {isModalOpen && (
+      {mounted && isModalOpen && createPortal(
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4 text-left animate-scale-in">
             <div className="flex items-center justify-between border-b border-slate-150 pb-3">
@@ -373,7 +374,8 @@ export function WorkplaceSettingsCard() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

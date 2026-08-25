@@ -615,8 +615,6 @@ export default function CompanySettingsCard() {
 
         </div>
 
-        {/* 🏢 테넌트 사업장 / 현장 마스터 관리 카드 */}
-        <WorkplaceSettingsCard />
 
         {/* 🏢 회사 도장 이미지 관리 (최대 3개) */}
         <div className="bg-slate-50/50 border border-slate-100 p-4.5 rounded-2xl space-y-3 shrink-0">
@@ -721,6 +719,11 @@ export default function CompanySettingsCard() {
         )}
 
       </form>
+
+      {/* 🏢 테넌트 사업장 / 현장 마스터 관리 카드 */}
+      <div className="border-t border-slate-100 p-6">
+        <WorkplaceSettingsCard />
+      </div>
 
       {/* 📊 본사 재무제표 AI 관리 패널 */}
       <div className="border-t border-slate-100 bg-slate-50/20 p-6 space-y-6">
