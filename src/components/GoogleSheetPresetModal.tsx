@@ -289,20 +289,6 @@ export default function GoogleSheetPresetModal({
                 />
               </div>
 
-              {/* 대상 탭(Worksheet) - 현재 선택된 탭 1:1 고정 표시 */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-black text-slate-700 flex items-center gap-1">
-                  <Layers className="w-3.5 h-3.5 text-teal-600" /> 연동 대상 시트 탭 (Worksheet)
-                </label>
-                <div className="flex items-center gap-2 px-3.5 py-2.5 bg-teal-50/80 border border-teal-200 rounded-xl text-xs font-black text-teal-900 shadow-3xs">
-                  <Layers className="w-4 h-4 text-teal-600 shrink-0" />
-                  <span className="truncate">{inputSheetName || "첫 번째 시트 탭 (기본)"}</span>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  현재 화면에서 확인 중인 탭({inputSheetName || "기본 탭"})이 1:1로 고정 저장됩니다.
-                </p>
-              </div>
-
               <div className="space-y-1.5">
                 <label className="text-xs font-black text-slate-700 flex items-center gap-1">
                   <Bookmark className="w-3.5 h-3.5 text-teal-600" /> 탭 프리셋 별칭 / 이름 (필수)
@@ -315,18 +301,6 @@ export default function GoogleSheetPresetModal({
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-bold text-slate-800"
                   required
                 />
-              </div>
-
-              <div className="pt-2">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none">
-                  <input
-                    type="checkbox"
-                    checked={inputIsDefault}
-                    onChange={(e) => setInputIsDefault(e.target.checked)}
-                    className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500"
-                  />
-                  <span>이 탭을 해당 업무의 대표 기본 시트로 지정 (팝업 열 때 자동 선택)</span>
-                </label>
               </div>
 
               <div className="pt-4 flex justify-end gap-2">
