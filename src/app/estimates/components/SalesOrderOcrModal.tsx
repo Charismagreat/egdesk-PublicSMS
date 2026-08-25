@@ -1,7 +1,7 @@
 "use client";
 
 import { apiFetch } from '@/lib/api';
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { 
   Upload, 
   X, 
@@ -17,11 +17,25 @@ import {
   Layers, 
   ChevronDown, 
   ChevronUp, 
-  PackageCheck
+  PackageCheck,
+  Bookmark,
+  List,
+  Save,
+  ShieldCheck,
+  AlertTriangle,
+  FileCheck
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import ProcessingOverlay from "../../../components/ProcessingOverlay";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, SAMPLE_SALES_ORDER_GOOGLE_SHEET_URL } from "../../../lib/google-sheets-storage";
+import GoogleSheetPresetModal, { GoogleSheetPreset } from "@/components/GoogleSheetPresetModal";
+import { 
+  sanitizeDate, 
+  sanitizeAmount, 
+  sanitizeBusinessNumber, 
+  sanitizePhoneNumber, 
+  sanitizeQuantity 
+} from "@/lib/data-validator";
 
 interface SalesOrderOcrModalProps {
   isOpen: boolean;
@@ -45,6 +59,8 @@ export interface ParsedSalesOrderGroup {
   approvers?: string[];
   originalTotalAmount: number;
   originalTotalQuantity: number;
+  isValid?: boolean;
+  validationWarnings?: string[];
   items: Array<{
     item_code?: string;
     product_name: string;
@@ -54,6 +70,8 @@ export interface ParsedSalesOrderGroup {
     delivery_date?: string;
     validItemCode?: string;
     valid_item_code?: string;
+    isValid?: boolean;
+    warning?: string;
   }>;
   file_url?: string;
 }
@@ -77,9 +95,15 @@ export default function SalesOrderOcrModal({
   const [forceBypass, setForceBypass] = useState<boolean>(false);
   const [bypassReason, setBypassReason] = useState<string>("");
 
-  // 🌐 구글 시트 URL 상태
+  // 🌐 구글 시트 프리셋 및 탭 상태
   const [googleSheetUrl, setGoogleSheetUrl] = useState<string>("");
   const [isFetchingSheet, setIsFetchingSheet] = useState<boolean>(false);
+  const [presets, setPresets] = useState<GoogleSheetPreset[]>([]);
+  const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
+  const [presetModalMode, setPresetModalMode] = useState<"save" | "list">("save");
+  const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [selectedSheetName, setSelectedSheetName] = useState<string>("");
+  const [spreadsheetTitle, setSpreadsheetTitle] = useState<string>("");
 
   // 📦 다중 발주서 그룹 배열 상태
   const [parsedGroups, setParsedGroups] = useState<ParsedSalesOrderGroup[]>([]);
@@ -102,13 +126,34 @@ export default function SalesOrderOcrModal({
     document_memo: "",
     approvers: [],
     originalTotalAmount: 0,
-    originalTotalQuantity: 0
+    originalTotalQuantity: 0,
+    isValid: true,
+    validationWarnings: []
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
 
-  React.useEffect(() => {
+  // 구글 시트 프리셋 목록 조회
+  const fetchPresetsList = async () => {
+    try {
+      const res = await apiFetch("/api/shared/google-sheets/presets?domain=sales_order");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.presets)) {
+        setPresets(data.presets);
+        if (data.defaultPreset && !googleSheetUrl) {
+          setGoogleSheetUrl(data.defaultPreset.url);
+          if (data.defaultPreset.sheetName) {
+            setSelectedSheetName(data.defaultPreset.sheetName);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("구글 시트 프리셋 목록 조회 실패:", e);
+    }
+  };
+
+  useEffect(() => {
     async function fetchUserRole() {
       try {
         const res = await apiFetch("/api/auth/me");
@@ -123,18 +168,17 @@ export default function SalesOrderOcrModal({
     }
     if (isOpen) {
       fetchUserRole();
+      fetchPresetsList();
       const savedUrl = getSavedGoogleSheetUrl('sales_order_inbound_sheet_url');
       if (savedUrl) setGoogleSheetUrl(savedUrl);
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const resetOcrState = () => {
-    setOcrScanning(false);
-    setOcrScanStep("");
     setOcrSuccess(false);
     setOcrFilename("");
+    setOcrScanning(false);
+    setOcrScanStep("");
     setReceiverMatched(true);
     setForceBypass(false);
     setBypassReason("");
@@ -156,7 +200,9 @@ export default function SalesOrderOcrModal({
       document_memo: "",
       approvers: [],
       originalTotalAmount: 0,
-      originalTotalQuantity: 0
+      originalTotalQuantity: 0,
+      isValid: true,
+      validationWarnings: []
     });
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (excelInputRef.current) excelInputRef.current.value = "";
@@ -266,20 +312,20 @@ export default function SalesOrderOcrModal({
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "수주등록");
-      XLSX.writeFile(wb, "이지데스크-표준- 받은 발주서(수주) 등록 양식.xlsx");
+      XLSX.writeFile(wb, "이지데스크-표준-받은 발주서(수주) 등록 양식.xlsx");
     } catch (err: any) {
       alert("표준 엑셀 양식 다운로드 중 오류: " + err.message);
     }
   };
 
-  // 📊 2차원 테이블 데이터 다중 바이어 자동 그룹핑 파서 엔진
+  // 📊 2차원 테이블 데이터 다중 바이어 자동 그룹핑 및 데이터 유효성 검증 엔진
   const parseTableDataToSalesOrder = async (rawRows: any[][], sourceTitle: string) => {
     if (!rawRows || rawRows.length < 2) {
       throw new Error("유효한 데이터 행이 부족합니다. 최소 1개 이상의 헤더와 데이터가 필요합니다.");
     }
 
     setOcrScanning(true);
-    setOcrScanStep("테이블 데이터를 정밀 분석하여 바이어별 발주서를 자동 분류 중...");
+    setOcrScanStep("테이블 데이터를 정밀 분석하여 바이어별 발주서를 자동 분류 및 유효성 검증 중...");
     setOcrFilename(sourceTitle);
 
     let headerIdx = -1;
@@ -343,7 +389,7 @@ export default function SalesOrderOcrModal({
     }
 
     // 마스터 품목 연동
-    let masterProducts: any[] = [];
+    let masterProducts = [];
     try {
       const prodRes = await apiFetch("/api/inventory?action=list");
       const prodData = await prodRes.json();
@@ -354,7 +400,7 @@ export default function SalesOrderOcrModal({
       console.warn("마스터 품목 로드 건너뜀:", e);
     }
 
-    const groupsMap = new Map<string, ParsedSalesOrderGroup>();
+    const groupsMap = new Map();
     let fallbackPartner = sourceTitle.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ").trim() || "바이어";
 
     for (let r = headerIdx + 1; r < rawRows.length; r++) {
@@ -376,6 +422,18 @@ export default function SalesOrderOcrModal({
       const rowDlvDate = dlvDateIdx >= 0 ? String(row[dlvDateIdx] || '').trim() : '';
       const rowMemo = memoIdx >= 0 ? String(row[memoIdx] || '').trim() : '';
 
+      // 🛡️ 중앙 검증 엔진(data-validator)을 통한 정규화 및 가드
+      const dateSan = sanitizeDate(rowDate);
+      const dlvDateSan = sanitizeDate(rowDlvDate);
+      const bizSan = sanitizeBusinessNumber(rowBizNo);
+      const phoneSan = sanitizePhoneNumber(rowPhone);
+
+      const groupWarnings = [];
+      if (!dateSan.isValid && rowDate) groupWarnings.push(`발주일자 (${dateSan.warning})`);
+      if (!dlvDateSan.isValid && rowDlvDate) groupWarnings.push(`납기일자 (${dlvDateSan.warning})`);
+      if (!bizSan.isValid && rowBizNo) groupWarnings.push(`사업자번호 (${bizSan.warning})`);
+      if (!phoneSan.isValid && rowPhone) groupWarnings.push(`연락처 (${phoneSan.warning})`);
+
       const currentPartnerName = rowPartner || fallbackPartner;
       const groupKey = `${currentPartnerName}_${rowDocNo || 'DEFAULT'}`;
 
@@ -383,42 +441,51 @@ export default function SalesOrderOcrModal({
         groupsMap.set(groupKey, {
           id: groupKey,
           partner_name: currentPartnerName,
-          partner_phone: rowPhone || "",
+          partner_phone: phoneSan.value || rowPhone || "",
           partner_manager: rowMgr || "",
-          business_number: rowBizNo || "",
+          business_number: bizSan.value || rowBizNo || "",
           representative: rowRep || "",
           address: "",
           document_number: rowDocNo || `PO-${new Date().toISOString().substring(0, 10).replace(/-/g, '')}-${String(groupsMap.size + 1).padStart(3, '0')}`,
-          document_date: rowDate || new Date().toISOString().substring(0, 10),
-          delivery_date: rowDlvDate || new Date(Date.now() + 7 * 86400000).toISOString().substring(0, 10),
+          document_date: (dateSan.isValid ? dateSan.value : rowDate) || new Date().toISOString().substring(0, 10),
+          delivery_date: (dlvDateSan.isValid ? dlvDateSan.value : rowDlvDate) || new Date(Date.now() + 7 * 86400000).toISOString().substring(0, 10),
           document_memo: rowMemo || "바이어 발주서 연동 등록",
           approvers: [],
           originalTotalAmount: 0,
           originalTotalQuantity: 0,
+          isValid: groupWarnings.length === 0,
+          validationWarnings: groupWarnings,
           items: []
         });
       }
 
-      const targetGroup = groupsMap.get(groupKey)!;
+      const targetGroup = groupsMap.get(groupKey);
 
+      // 수량 & 단가 유효성 검증
       let rawQty = 1;
       if (qtyIdx >= 0) {
         const parsedQ = parseFloat(String(row[qtyIdx] || '').replace(/[^0-9.-]/g, ''));
         if (!isNaN(parsedQ) && parsedQ > 0) rawQty = parsedQ;
       }
+      const qtySan = sanitizeQuantity(rawQty);
 
       let rawPrice = 0;
       if (priceIdx >= 0) {
         const parsedP = parseFloat(String(row[priceIdx] || '').replace(/[^0-9.-]/g, ''));
         if (!isNaN(parsedP)) rawPrice = parsedP;
       }
+      const priceSan = sanitizeAmount(rawPrice);
+
+      const itemWarnings = [];
+      if (!qtySan.isValid) itemWarnings.push(`수량 이상 (${qtySan.warning})`);
+      if (!priceSan.isValid) itemWarnings.push(`단가 이상 (${priceSan.warning})`);
 
       let rawSpec = specIdx >= 0 ? String(row[specIdx] || '').trim() : '';
       const rawCode = codeIdx >= 0 ? String(row[codeIdx] || '').trim() : '';
 
       let validItemCode = rawCode;
       if (masterProducts.length > 0) {
-        const matched = masterProducts.find((mp: any) => 
+        const matched = masterProducts.find((mp) => 
           mp.name?.trim().toLowerCase() === prodCell.toLowerCase() ||
           (rawCode && mp.barcode === rawCode)
         );
@@ -427,19 +494,28 @@ export default function SalesOrderOcrModal({
         }
       }
 
+      const finalQty = qtySan.value || rawQty;
+      const finalPrice = priceSan.value || rawPrice;
+
       targetGroup.items.push({
         product_name: prodCell,
         spec: rawSpec,
-        quantity: rawQty,
-        unit_price: rawPrice,
-        delivery_date: rowDlvDate || targetGroup.delivery_date,
+        quantity: finalQty,
+        unit_price: finalPrice,
+        delivery_date: (dlvDateSan.isValid ? dlvDateSan.value : rowDlvDate) || targetGroup.delivery_date,
         item_code: rawCode,
         validItemCode: validItemCode,
-        valid_item_code: validItemCode
+        valid_item_code: validItemCode,
+        isValid: itemWarnings.length === 0,
+        warning: itemWarnings.join(', ')
       });
 
-      targetGroup.originalTotalAmount += (rawQty * rawPrice);
-      targetGroup.originalTotalQuantity += rawQty;
+      targetGroup.originalTotalAmount += (finalQty * finalPrice);
+      targetGroup.originalTotalQuantity += finalQty;
+      if (itemWarnings.length > 0) {
+        targetGroup.isValid = false;
+        targetGroup.validationWarnings = [...(targetGroup.validationWarnings || []), ...itemWarnings];
+      }
     }
 
     const groups = Array.from(groupsMap.values()).filter(g => g.items.length > 0);
@@ -460,54 +536,65 @@ export default function SalesOrderOcrModal({
     setOcrSuccess(true);
   };
 
-  // 📁 엑셀 파일 업로드 핸들러
-  const handleExcelFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 📂 엑셀 파일 업로드 핸들러
+  const handleExcelFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     try {
-      setOcrScanning(true);
       const XLSX = await import("xlsx");
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: "array" });
       
-      let combinedRows: any[][] = [];
+      let combinedRows = [];
       for (const sheetName of workbook.SheetNames) {
         const sheet = workbook.Sheets[sheetName];
-        const sheetRows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+        const sheetRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
         if (sheetRows && sheetRows.length > 0) {
           combinedRows = combinedRows.concat(sheetRows);
         }
       }
 
       await parseTableDataToSalesOrder(combinedRows, file.name);
-    } catch (err: any) {
+    } catch (err) {
       setOcrScanning(false);
       alert("엑셀 파일 파싱 오류: " + err.message);
     }
   };
 
-  // 📊 구글 스프레드시트 실시간 불러오기 핸들러
-  const handleFetchGoogleSheet = async () => {
+  // 📊 구글 스프레드시트 실시간 불러오기 핸들러 (프리셋 & 탭 선택 대응)
+  const handleFetchGoogleSheet = async (overrideSheetName) => {
     if (!googleSheetUrl.trim()) return;
     try {
       setIsFetchingSheet(true);
       setOcrScanning(true);
-      setSavedGoogleSheetUrl('sales_order_inbound_sheet_url', googleSheetUrl.trim());
+      const sheetNameToUse = overrideSheetName || selectedSheetName || undefined;
+      setSavedGoogleSheetUrl('sales_order_inbound_sheet_url', googleSheetUrl.trim(), sheetNameToUse);
+      
       const res = await apiFetch("/api/shared/google-sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: googleSheetUrl.trim(),
           sheetUrl: googleSheetUrl.trim(),
+          sheetName: sheetNameToUse,
           fetchAllRows: true
         })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "구글 시트 데이터를 가져오지 못했습니다.");
       
+      setSpreadsheetTitle(data.spreadsheetTitle || "구글 스프레드시트");
+      if (data.availableSheets && Array.isArray(data.availableSheets)) {
+        setAvailableSheets(data.availableSheets);
+        if (!selectedSheetName && !overrideSheetName && data.availableSheets.length > 0) {
+          setSelectedSheetName(data.sheetName || data.availableSheets[0]);
+        }
+      }
+
       const rawRows = data.data || (data.headers ? [data.headers, ...(data.rows || [])] : data.rows || []);
       await parseTableDataToSalesOrder(rawRows, data.spreadsheetTitle || "구글 스프레드시트 연동");
-    } catch (err: any) {
+    } catch (err) {
       setOcrScanning(false);
       alert("연동 실패: " + err.message);
     } finally {
@@ -516,14 +603,14 @@ export default function SalesOrderOcrModal({
   };
 
   // 이미지/PDF AI OCR 파일 변경 핸들러
-  const handleOcrFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleOcrFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setOcrScanning(true);
     setOcrFilename(file.name);
     const reader = new FileReader();
     reader.onload = async () => {
-      let base64Data = reader.result as string;
+      let base64Data = reader.result;
       try {
         const res = await apiFetch("/api/estimates/ocr-sales-order?action=analyze", {
           method: "POST",
@@ -532,23 +619,52 @@ export default function SalesOrderOcrModal({
         });
         const data = await res.json();
         if (data.success) {
-          const singleGroup: ParsedSalesOrderGroup = {
+          // 데이터 정규화 및 검증
+          const dateSan = sanitizeDate(data.document_date);
+          const dlvDateSan = sanitizeDate(data.delivery_date);
+          const bizSan = sanitizeBusinessNumber(data.business_number);
+          const phoneSan = sanitizePhoneNumber(data.partner_phone);
+
+          const warnings = [];
+          if (!dateSan.isValid && data.document_date) warnings.push(`발주일자 (${dateSan.warning})`);
+          if (!dlvDateSan.isValid && data.delivery_date) warnings.push(`납기일자 (${dlvDateSan.warning})`);
+          if (!bizSan.isValid && data.business_number) warnings.push(`사업자번호 (${bizSan.warning})`);
+          if (!phoneSan.isValid && data.partner_phone) warnings.push(`연락처 (${phoneSan.warning})`);
+
+          const validatedItems = (data.items || []).map((it) => {
+            const qtySan = sanitizeQuantity(it.quantity || 1);
+            const priceSan = sanitizeAmount(it.unit_price || 0);
+            const itemWarns = [];
+            if (!qtySan.isValid) itemWarns.push(`수량 이상 (${qtySan.warning})`);
+            if (!priceSan.isValid) itemWarns.push(`단가 이상 (${priceSan.warning})`);
+            return {
+              ...it,
+              quantity: qtySan.value || it.quantity || 1,
+              unit_price: priceSan.value || it.unit_price || 0,
+              isValid: itemWarns.length === 0,
+              warning: itemWarns.join(', ')
+            };
+          });
+
+          const singleGroup = {
             id: 'single_ocr',
             partner_name: data.partner_name || "바이어",
-            partner_phone: data.partner_phone || "",
+            partner_phone: phoneSan.value || data.partner_phone || "",
             partner_manager: data.partner_manager || "",
-            items: data.items || [],
+            items: validatedItems,
             file_url: data.file_url || base64Data,
-            business_number: data.business_number || "",
+            business_number: bizSan.value || data.business_number || "",
             representative: data.representative || "",
             address: data.address || "",
             document_number: data.document_number || "",
-            document_date: data.document_date || "",
-            delivery_date: data.delivery_date || "",
+            document_date: (dateSan.isValid ? dateSan.value : data.document_date) || "",
+            delivery_date: (dlvDateSan.isValid ? dlvDateSan.value : data.delivery_date) || "",
             document_memo: data.document_memo || "",
             approvers: data.approvers || [],
             originalTotalAmount: data.originalTotalAmount || 0,
-            originalTotalQuantity: data.originalTotalQuantity || 0
+            originalTotalQuantity: data.originalTotalQuantity || 0,
+            isValid: warnings.length === 0,
+            validationWarnings: warnings
           };
           setParsedGroups([singleGroup]);
           setExpandedGroupIds(new Set([singleGroup.id]));
@@ -572,6 +688,8 @@ export default function SalesOrderOcrModal({
   // 전체 그룹 총액 및 총수량 종합 계산
   const grandTotalAmount = parsedGroups.reduce((sum, g) => sum + g.originalTotalAmount, 0);
   const grandTotalItemsCount = parsedGroups.reduce((sum, g) => sum + g.items.length, 0);
+  const validGroupsCount = parsedGroups.filter(g => g.isValid !== false && (!g.validationWarnings || g.validationWarnings.length === 0)).length;
+  const warningGroupsCount = parsedGroups.length - validGroupsCount;
 
   // 🚀 다중/단일 발주서 일괄 수주 대장 등록 실행
   const handleSaveAllSalesOrders = async () => {
@@ -581,6 +699,15 @@ export default function SalesOrderOcrModal({
     }] : []);
 
     if (groupsToSave.length === 0) return;
+
+    // 🛡️ 유효성 검증 경고가 있는 경우 최종 확인 컨펌 가드
+    const groupsWithWarnings = groupsToSave.filter(g => g.validationWarnings && g.validationWarnings.length > 0);
+    if (groupsWithWarnings.length > 0) {
+      const confirmProceed = window.confirm(
+        `⚠️ ${groupsWithWarnings.length}건의 발주서에 서식 확인 필요 항목(${groupsWithWarnings.map(g => g.partner_name).join(', ')})이 감지되었습니다.\n정말 그대로 수주 등록을 승인하시겠습니까?`
+      );
+      if (!confirmProceed) return;
+    }
 
     try {
       setIsProcessing(true);
@@ -665,15 +792,16 @@ export default function SalesOrderOcrModal({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto pt-4 space-y-4 pr-1">
+        {/* 바디 콘텐츠 스크롤 영역 */}
+        <div className="mt-4 flex-1 overflow-y-auto space-y-4 pr-1">
           
           {/* 1. OCR 채널 */}
           {activeImportTab === 'ocr' && !ocrSuccess && (
-            <div className="border-2 border-dashed border-slate-200 rounded-3xl p-8 text-center flex flex-col items-center justify-center min-h-[220px]">
+            <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50 hover:bg-slate-50/80 rounded-3xl p-8 text-center transition-all flex flex-col items-center justify-center min-h-[190px]">
               {ocrScanning ? (
                 <div className="space-y-3">
-                  <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                  <p className="text-xs font-extrabold text-indigo-700 animate-pulse">{ocrScanStep || "바이어 발주서 이미지 정밀 분석 중..."}</p>
+                  <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-xs font-black text-indigo-700 animate-pulse">발주서 AI OCR 분석 중...</p>
                   <p className="text-[10px] text-slate-400 font-semibold">{ocrFilename}</p>
                 </div>
               ) : (
@@ -742,7 +870,7 @@ export default function SalesOrderOcrModal({
             </div>
           )}
 
-          {/* 3. 구글 시트 채널 */}
+          {/* 3. 구글 시트 채널 (프리셋 목록 관리 및 탭 선택 탑재) */}
           {activeImportTab === 'sheets' && !ocrSuccess && (
             <div className="space-y-4 text-left">
               <div className="bg-blue-50/60 border border-blue-200/80 p-4 rounded-3xl space-y-3.5">
@@ -777,6 +905,80 @@ export default function SalesOrderOcrModal({
                   </div>
                 </div>
 
+                {/* 📋 저장된 구글 시트 프리셋 목록 및 관리 버튼 */}
+                <div className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-2xl border border-blue-100">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-[11px] font-bold text-slate-600 shrink-0 flex items-center gap-1">
+                      <Bookmark className="w-3.5 h-3.5 text-blue-600" /> 프리셋:
+                    </span>
+                    <select
+                      value={presets.find(p => p.url === googleSheetUrl)?.id || ""}
+                      onChange={(e) => {
+                        const selected = presets.find(p => p.id === e.target.value);
+                        if (selected) {
+                          setGoogleSheetUrl(selected.url);
+                          if (selected.sheetName) setSelectedSheetName(selected.sheetName);
+                        }
+                      }}
+                      className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 focus:outline-none focus:border-blue-500 truncate flex-1"
+                    >
+                      <option value="">-- 저장된 프리셋 선택 --</option>
+                      {presets.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.isDefault ? "⭐ " : ""}{p.title} {p.sheetName ? `(${p.sheetName})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPresetModalMode("save");
+                        setIsPresetModalOpen(true);
+                      }}
+                      disabled={!googleSheetUrl.trim()}
+                      className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-black transition-all flex items-center gap-1 cursor-pointer disabled:opacity-40 shadow-3xs active:scale-95"
+                      title="현재 입력된 구글 시트 URL을 프리셋으로 저장"
+                    >
+                      <Save className="w-3 h-3" />
+                      <span>프리셋 저장</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPresetModalMode("list");
+                        setIsPresetModalOpen(true);
+                      }}
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer shadow-3xs active:scale-95"
+                      title="저장된 구글 시트 목록을 관리합니다."
+                    >
+                      <List className="w-3 h-3" />
+                      <span>목록 관리 ({presets.length})</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 📑 스프레드시트 내 탭 선택기 (시트가 2개 이상일 때) */}
+                {availableSheets.length > 1 && (
+                  <div className="flex items-center gap-2 bg-white/90 p-2.5 rounded-2xl border border-blue-100 text-left">
+                    <span className="text-[11px] font-bold text-slate-600 shrink-0">시트 탭:</span>
+                    <select
+                      value={selectedSheetName}
+                      onChange={(e) => {
+                        setSelectedSheetName(e.target.value);
+                        handleFetchGoogleSheet(e.target.value);
+                      }}
+                      className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold text-blue-700 focus:outline-none focus:border-blue-500 flex-1"
+                    >
+                      {availableSheets.map(sheetName => (
+                        <option key={sheetName} value={sheetName}>{sheetName}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-bold text-slate-700 block">구글 시트 공유 링크 (URL) *</label>
@@ -800,7 +1002,7 @@ export default function SalesOrderOcrModal({
                     />
                     <button
                       type="button"
-                      onClick={handleFetchGoogleSheet}
+                      onClick={() => handleFetchGoogleSheet()}
                       disabled={isFetchingSheet || ocrScanning || !googleSheetUrl.trim()}
                       className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-40 shadow-sm cursor-pointer active:scale-95"
                     >
@@ -828,28 +1030,42 @@ export default function SalesOrderOcrModal({
           {ocrSuccess && (
             <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100 space-y-4 animate-scale-up">
               
-              {/* 상단 완료 배너 */}
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+              {/* 상단 완료 배너 & 유효성 검증 카운터 뱃지 */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded text-[10px] font-black">
                     {activeImportTab === 'excel' ? '📁 엑셀 파싱 완료' : activeImportTab === 'sheets' ? '📊 구글 시트 연동 완료' : '📸 OCR 판독 완료'}
                   </span>
                   <span className="text-xs font-bold text-slate-600 truncate max-w-[280px]">{ocrFilename}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={resetOcrState}
-                  className="text-[10px] font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-1 cursor-pointer"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  <span>다시 불러오기</span>
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[10px] font-black flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                    정상: {validGroupsCount}건
+                  </span>
+                  {warningGroupsCount > 0 && (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-black flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-600" />
+                      확인 필요: {warningGroupsCount}건
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={resetOcrState}
+                    className="text-[10px] font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-1 cursor-pointer ml-1"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>다시 불러오기</span>
+                  </button>
+                </div>
               </div>
 
               {/* 수신자 불일치 경고 */}
               {!receiverMatched && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-left text-xs font-bold text-amber-800">
-                  ⚠️ 수신자 불일치: 발주서의 수신자가 '{myCompanyName}'과 다를 수 있습니다. 확인 후 등록하세요.
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-left text-xs font-bold text-amber-800 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>수신자 불일치: 발주서의 수신자가 '{myCompanyName}'과 다를 수 있습니다. 확인 후 등록하세요.</span>
                 </div>
               )}
 
@@ -878,6 +1094,7 @@ export default function SalesOrderOcrModal({
                   {parsedGroups.map((group, gIdx) => {
                     const isExpanded = expandedGroupIds.has(group.id);
                     const calcGroupTotal = group.items.reduce((s, it) => s + (it.quantity * it.unit_price), 0);
+                    const isGroupValid = group.isValid !== false && (!group.validationWarnings || group.validationWarnings.length === 0);
 
                     return (
                       <div key={group.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all">
@@ -891,11 +1108,20 @@ export default function SalesOrderOcrModal({
                               {gIdx + 1}
                             </span>
                             <div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <h5 className="text-xs font-black text-slate-800">{group.partner_name}</h5>
                                 {group.document_number && (
                                   <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-mono font-bold">
                                     {group.document_number}
+                                  </span>
+                                )}
+                                {isGroupValid ? (
+                                  <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[9px] font-black flex items-center gap-0.5">
+                                    <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" /> 정상
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-[9px] font-black flex items-center gap-0.5" title={group.validationWarnings?.join(', ')}>
+                                    <AlertTriangle className="w-2.5 h-2.5 text-amber-600" /> 확인 필요
                                   </span>
                                 )}
                               </div>
@@ -924,6 +1150,13 @@ export default function SalesOrderOcrModal({
                               <div><span className="text-slate-400 font-bold">연락처:</span> <span className="font-semibold">{group.partner_phone || '-'}</span></div>
                               <div><span className="text-slate-400 font-bold">담당자:</span> <span className="font-semibold">{group.partner_manager || '-'}</span></div>
                             </div>
+
+                            {group.validationWarnings && group.validationWarnings.length > 0 && (
+                              <div className="p-2 bg-amber-50 rounded-xl border border-amber-200 text-[10px] text-amber-800 font-bold flex items-center gap-1.5">
+                                <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                                <span>확인 필요: {group.validationWarnings.join(' · ')}</span>
+                              </div>
+                            )}
 
                             <div className="space-y-1.5">
                               <span className="text-[10px] font-bold text-slate-500 block">발주 품목 리스트</span>
@@ -955,6 +1188,13 @@ export default function SalesOrderOcrModal({
               ) : (
                 /* 단일 바이어 발주서인 경우 상세 폼 */
                 <div className="space-y-4">
+                  {ocrForm.validationWarnings && ocrForm.validationWarnings.length > 0 && (
+                    <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 font-bold flex items-center gap-1.5 text-left">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>서식 확인 필요: {ocrForm.validationWarnings.join(' · ')}</span>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-3 text-left">
                     <div>
                       <label className="text-[10px] text-slate-400 font-bold block mb-1">바이어명</label>
@@ -1051,6 +1291,25 @@ export default function SalesOrderOcrModal({
           </button>
         </div>
       </div>
+
+      {/* 📋 구글 시트 프리셋 저장 및 목록 관리 통합 모달 */}
+      <GoogleSheetPresetModal
+        isOpen={isPresetModalOpen}
+        onClose={() => setIsPresetModalOpen(false)}
+        domain="sales_order"
+        currentUrl={googleSheetUrl}
+        currentSheetName={selectedSheetName}
+        availableSheets={availableSheets}
+        spreadsheetTitle={spreadsheetTitle}
+        initialMode={presetModalMode}
+        onSelectPreset={(preset) => {
+          setGoogleSheetUrl(preset.url);
+          if (preset.sheetName) setSelectedSheetName(preset.sheetName);
+        }}
+        onPresetsUpdated={(updatedList) => {
+          setPresets(updatedList);
+        }}
+      />
     </div>,
     document.body
   ) : null;
