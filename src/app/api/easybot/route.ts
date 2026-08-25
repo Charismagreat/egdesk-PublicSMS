@@ -2,7 +2,7 @@ export const maxDuration = 300; // 로컬 AI 대용량 연산 지연 대기 허�
 import { fetchGeminiWithFallback } from '../../../lib/gemini-fallback';
 import { unwrapAiResponseText } from '../../../lib/ai-router';
 import { NextResponse } from 'next/server';
-import { queryTable, executeSQL, listTables, insertRows, createTable, getGeminiApiKey, AI_KEY_NAMES, callAiCaller } from '../../../../egdesk-helpers';
+import { queryTable, executeSQL, listTables, insertRows, createTable, getGeminiApiKey, AI_KEY_NAMES, callAiCaller, searchKnowledgeWiki } from '../../../../egdesk-helpers';
 import fs from 'fs';
 import path from 'path';
 import { cookies } from 'next/headers';
@@ -880,7 +880,24 @@ export async function POST(req: Request) {
     } catch (certRagErr) {
       console.warn('태스크 폴더 AI 리포트 RAG 빌드 실패:', certRagErr);
     }
-    dbTablesInfo += "\n" + certPatentTaskFolderRAG;
+    // 💡 [Knowledge Wiki MCP] 사내 지식 위키(Obsidian 579개 노트) 실시간 시맨틱 검색 연동
+    let knowledgeWikiContext = '';
+    try {
+      const wikiRes = await searchKnowledgeWiki(prompt, { limit: 3 });
+      if (wikiRes && Array.isArray(wikiRes) && wikiRes.length > 0) {
+        knowledgeWikiContext = '\n============================\n[사내 Knowledge Wiki 지식 베이스 (Obsidian 실시간 검색)]\n';
+        for (const note of wikiRes) {
+          knowledgeWikiContext += `### [문서: ${note.title || note.path || '사내 지식'}]\n`;
+          if (note.snippet || note.content) {
+            knowledgeWikiContext += `${(note.snippet || note.content).slice(0, 1000)}\n\n`;
+          }
+        }
+        knowledgeWikiContext += '============================\n';
+        console.log(`[이지봇 Knowledge Wiki 연동] ${wikiRes.length}건의 사내 지식 노트 주입 성공`);
+      }
+    } catch (wikiErr: any) {
+      console.warn('Knowledge Wiki 검색 예외 (무시):', wikiErr.message);
+    }
 
     // 3. STEP 1: 사용자의 질문을 분석하여 DB 조회가 필요한지 확인하고 SELECT 쿼리 생성
     const step1SystemPrompt = `
@@ -891,10 +908,10 @@ Your mission is to understand the user's natural language inquiry, determine if 
 1. Intent Over UI Context: Focus directly on the semantics of the user's inquiry. If the user asks about business metrics, company data, partners, vendors, expenses, sales, inventory, customers, or employees, always generate the analytical SQL query regardless of client UI states or current URL.
 2. Domain Entity to Database Mapping:
    - Vendors / Purchases / Suppliers (매입처, 매입액, 최대 매입처, 공급업체, 세금계산서): 
-     * PRIMARY: Query \`tax_invoices\` grouping by \`supplier_corp_name\`, \`supplier_corp_num\` (e.g. \`SELECT supplier_corp_name, supplier_corp_num, COUNT(*) AS invoice_count, SUM(total_amount) AS total_amount, SUM(supply_amount) AS supply_amount, SUM(tax_amount) AS tax_amount FROM tax_invoices GROUP BY supplier_corp_name, supplier_corp_num ORDER BY total_amount DESC LIMIT 10;\`). This contains official tax invoice purchase records.
+     * PRIMARY: Query \`tax_invoices\` WHERE type = 'PURCHASE' OR invoice_type = 'purchase' grouping by \`supplier_corp_name\`, \`supplier_corp_num\` (e.g. \`SELECT supplier_corp_name, supplier_corp_num, COUNT(*) AS invoice_count, SUM(total_amount) AS total_amount, SUM(supply_amount) AS supply_amount, SUM(tax_amount) AS tax_amount FROM tax_invoices WHERE type = 'PURCHASE' OR invoice_type = 'purchase' GROUP BY supplier_corp_name, supplier_corp_num ORDER BY total_amount DESC LIMIT 10;\`). This contains official tax invoice purchase records.
      * MASTER / FALLBACK: Query \`crm_partners\` (type='VENDOR') and \`crm_expenses\`.
    - Customers / Sales / Revenue (매출처, 매출액, 최대 매출처, 고객사): 
-     * PRIMARY: Query \`tax_invoices\` grouping by \`buyer_corp_name\`, \`buyer_corp_num\` (e.g. \`SELECT buyer_corp_name, buyer_corp_num, COUNT(*) AS invoice_count, SUM(total_amount) AS total_amount, SUM(supply_amount) AS supply_amount FROM tax_invoices GROUP BY buyer_corp_name, buyer_corp_num ORDER BY total_amount DESC LIMIT 10;\`).
+     * PRIMARY: Query \`tax_invoices\` WHERE type = 'SALES' OR invoice_type = 'sales' grouping by \`buyer_corp_name\`, \`buyer_corp_num\` (e.g. \`SELECT buyer_corp_name, buyer_corp_num, COUNT(*) AS invoice_count, SUM(total_amount) AS total_amount, SUM(supply_amount) AS supply_amount FROM tax_invoices WHERE type = 'SALES' OR invoice_type = 'sales' GROUP BY buyer_corp_name, buyer_corp_num ORDER BY total_amount DESC LIMIT 10;\`).
      * MASTER / ORDERS: Query \`crm_customers\`, \`crm_orders\`, \`crm_estimates\` (type='SALES_ORDER').
    - Inventory / Products: Query \`inventory_items\`, \`crm_inventory_inbounds\`, \`crm_inventory_inbound_items\`.
    - Attendance / Staff / Tasks: Query \`crm_attendance\` (join \`crm_operators\` on CAST(a.operator_id AS TEXT) = CAST(o.id AS TEXT)), \`crm_snaptasks\`.
@@ -903,6 +920,8 @@ Your mission is to understand the user's natural language inquiry, determine if 
    - Set "requiresQuery": true, "requiresManual": false whenever the inquiry seeks business data, entities, or calculations.
    - Set "requiresManual": true, "requiresQuery": false only when the user explicitly asks for system operation manuals or software guides (e.g. "이지데스크 사용법", "메뉴얼").
    - Set "requiresQuery": false, "requiresManual": false for pure basic conversational greetings (e.g. "안녕", "hello").
+
+${knowledgeWikiContext}
 
 Available Database Tables Info:
 ${dbTablesInfo}
@@ -1124,6 +1143,7 @@ ${JSON.stringify(localStorageContext, null, 2)}
 - 쿼리 실행 결과: ${sqlQueryResult ? JSON.stringify(sqlQueryResult, null, 2) : '결과 없음'}
 - 쿼리 에러 내용: ${sqlError || '에러 없음'}
 ${secondaryDiscoveryContext}
+${knowledgeWikiContext}
 `;
 
     let finalAnswer = "답변을 생성하지 못했습니다.";
