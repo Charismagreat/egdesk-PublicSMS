@@ -27,29 +27,24 @@ export async function GET(req: NextRequest) {
     const domain = searchParams.get('domain') || 'default';
 
     if (domain === 'all') {
-      // 전사 모든 도메인의 프리셋 일괄 조회
-      let sql = "SELECT * FROM system_settings WHERE key LIKE 'google_sheet_presets_%'";
-      const params: any[] = [];
-      if (tenantId && tenantId !== 'all') {
-        sql += " AND (tenant_id = ? OR tenant_id IS NULL)";
-        params.push(tenantId);
-      }
-
-      const res = await executeSQL(sql, params).catch(() => ({ rows: [] }));
+      // 전사 모든 도메인의 프리셋 일괄 조회 (표준 queryTable 경유)
+      const res = await queryTable('system_settings', {}).catch(() => ({ rows: [] }));
       const allPresets: Record<string, GoogleSheetPreset[]> = {};
       const flatPresets: Array<GoogleSheetPreset & { domain: string }> = [];
 
       for (const row of res.rows || []) {
-        const dom = row.key.replace('google_sheet_presets_', '');
-        try {
-          const parsed = JSON.parse(row.value);
-          if (Array.isArray(parsed)) {
-            allPresets[dom] = parsed;
-            parsed.forEach(p => {
-              flatPresets.push({ ...p, domain: dom });
-            });
-          }
-        } catch {}
+        if (row.key && typeof row.key === 'string' && row.key.startsWith('google_sheet_presets_')) {
+          const dom = row.key.replace('google_sheet_presets_', '');
+          try {
+            const parsed = JSON.parse(row.value);
+            if (Array.isArray(parsed)) {
+              allPresets[dom] = parsed;
+              parsed.forEach(p => {
+                flatPresets.push({ ...p, domain: dom });
+              });
+            }
+          } catch {}
+        }
       }
 
       return NextResponse.json({
