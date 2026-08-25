@@ -98,6 +98,7 @@ export default function SalesOrderOcrModal({
   // 🌐 구글 시트 프리셋 및 탭 상태
   const [googleSheetUrl, setGoogleSheetUrl] = useState<string>("");
   const [isFetchingSheet, setIsFetchingSheet] = useState<boolean>(false);
+  const [mounted, setMounted] = useState(false);
   const [presets, setPresets] = useState<GoogleSheetPreset[]>([]);
   const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
   const [presetModalMode, setPresetModalMode] = useState<"save" | "list">("save");
@@ -152,6 +153,10 @@ export default function SalesOrderOcrModal({
       console.warn("구글 시트 프리셋 목록 조회 실패:", e);
     }
   };
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     async function fetchUserRole() {
@@ -740,7 +745,9 @@ export default function SalesOrderOcrModal({
     }
   };
 
-  return typeof window !== "undefined" ? createPortal(
+  if (!mounted || !isOpen) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
       <ProcessingOverlay isVisible={isProcessing} message="바이어 발주서를 수주 대장에 일괄 적재 중입니다..." />
 
@@ -1312,5 +1319,5 @@ export default function SalesOrderOcrModal({
       />
     </div>,
     document.body
-  ) : null;
+  );
 }
