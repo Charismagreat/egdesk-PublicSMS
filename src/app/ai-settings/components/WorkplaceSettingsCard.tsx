@@ -18,10 +18,15 @@ interface Workplace {
 }
 
 export function WorkplaceSettingsCard() {
+  const [mounted, setMounted] = useState(false);
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingWorkplace, setEditingWorkplace] = useState<Workplace | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // 폼 입력 상태
   const [formName, setFormName] = useState("");
