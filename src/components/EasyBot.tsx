@@ -542,6 +542,84 @@ export default function EasyBot() {
     window.addEventListener('mouseup', handleMouseUp);
   };
 
+  // 📍 자유로운 대화창 위치 이동 (X, Y 마우스 드래그 & LocalStorage 위치 저장)
+  const [position, setPosition] = useState<{ x: number | null; y: number | null }>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedX = localStorage.getItem('easybot_pos_x');
+        const savedY = localStorage.getItem('easybot_pos_y');
+        if (savedX !== null && savedY !== null) {
+          const parsedX = parseInt(savedX, 10);
+          const parsedY = parseInt(savedY, 10);
+          if (!isNaN(parsedX) && !isNaN(parsedY)) {
+            return {
+              x: Math.max(12, Math.min(window.innerWidth - 320, parsedX)),
+              y: Math.max(12, Math.min(window.innerHeight - 150, parsedY))
+            };
+          }
+        }
+      } catch (e) {}
+    }
+    return { x: null, y: null };
+  });
+
+  const [isDragging, setIsDragging] = useState(false);
+
+  const startDragging = (e: React.MouseEvent) => {
+    // 버튼, 폼 요소 등 클릭 시 드래그 무시
+    if ((e.target as HTMLElement).closest('button, input, textarea, a, select, svg')) {
+      return;
+    }
+    if (isMaximized) return;
+
+    e.preventDefault();
+    setIsDragging(true);
+
+    const panelEl = document.querySelector('[data-easybot-widget="panel"]') as HTMLElement | null;
+    const rect = panelEl ? panelEl.getBoundingClientRect() : {
+      left: window.innerWidth - dimensions.width - 24,
+      top: window.innerHeight - dimensions.height - 96
+    };
+
+    const startMouseX = e.clientX;
+    const startMouseY = e.clientY;
+    const initialLeft = rect.left;
+    const initialTop = rect.top;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startMouseX;
+      const deltaY = moveEvent.clientY - startMouseY;
+
+      const currentW = panelEl?.offsetWidth || dimensions.width;
+      const currentH = panelEl?.offsetHeight || dimensions.height;
+
+      // 브라우저 뷰포트 내부로 위치 제한
+      const newX = Math.max(8, Math.min(window.innerWidth - currentW - 8, initialLeft + deltaX));
+      const newY = Math.max(8, Math.min(window.innerHeight - currentH - 8, initialTop + deltaY));
+
+      setPosition({ x: newX, y: newY });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+
+      setPosition(prev => {
+        if (prev.x !== null && prev.y !== null) {
+          try {
+            localStorage.setItem('easybot_pos_x', String(prev.x));
+            localStorage.setItem('easybot_pos_y', String(prev.y));
+          } catch (e) {}
+        }
+        return prev;
+      });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
   const isSuperAdmin = userRole ? ['SUPER_ADMIN', 'PRESIDENT', 'SYSTEM_ADMIN', 'TENANT_ADMIN'].includes(userRole.toUpperCase()) : false;
   const isMobilePath = pathname.startsWith('/m');
 
@@ -608,15 +686,23 @@ export default function EasyBot() {
                 : {
                     width: `${dimensions.width}px`,
                     height: `${dimensions.height}px`,
-                    maxWidth: 'calc(100vw - 48px)',
-                    maxHeight: 'calc(100vh - 120px)'
+                    maxWidth: 'calc(100vw - 24px)',
+                    maxHeight: 'calc(100vh - 24px)',
+                    ...(position.x !== null && position.y !== null
+                      ? {
+                          left: `${position.x}px`,
+                          top: `${position.y}px`,
+                          right: 'auto',
+                          bottom: 'auto'
+                        }
+                      : {})
                   }
             }
-            className={`ignore-capture fixed right-6 bottom-24 z-40 flex flex-col overflow-hidden border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md transition-all print:hidden ${
-              isResizing ? 'select-none transition-none' : 'duration-150'
+            className={`ignore-capture fixed ${position.x === null ? 'right-6 bottom-24' : ''} z-40 flex flex-col overflow-hidden border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md transition-all print:hidden ${
+              (isResizing || isDragging) ? 'select-none transition-none' : 'duration-150'
             } ${
               isMaximized 
-                ? 'left-6 top-6 !w-auto !h-auto rounded-3xl' 
+                ? '!left-6 !top-6 !right-6 !bottom-6 !w-auto !h-auto rounded-3xl' 
                 : 'rounded-3xl'
             }`}
           >
@@ -661,10 +747,15 @@ export default function EasyBot() {
               </div>
             )}
 
-            {/* 헤더 바 */}
+            {/* 헤더 바 (드래그로 위치 이동 가능) */}
             <div 
-              className="bg-white border-b border-slate-50 px-5 py-4.5 flex justify-between items-center shrink-0"
+              onMouseDown={startDragging}
+              onDoubleClick={() => setIsMaximized(!isMaximized)}
+              className={`bg-white border-b border-slate-50 px-5 py-4.5 flex justify-between items-center shrink-0 ${
+                isMaximized ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+              }`}
               style={{ userSelect: 'none' }}
+              title={isMaximized ? undefined : "헤더를 드래그하여 원하는 위치로 이동 (더블클릭: 최대화)"}
             >
               <div className="flex items-center gap-3.5">
                 <div 
