@@ -26,17 +26,25 @@ export default function FAQHelpCenterPage() {
       const question = faq.question.toLowerCase();
       const answer = faq.answer.toLowerCase();
 
-      const matchesConsonants = (str: string, q: string) => {
+            const matchesConsonants = (str: string, q: string) => {
         if (q === "ㅇㅌㅍ" && str.includes("otp")) return true;
         if (q === "ㅁㅈ" && (str.includes("문자") || str.includes("메시지"))) return true;
         if (q === "ㅂㄹㄱ" && str.includes("블로그")) return true;
         if (q === "ㅈㄹ" && str.includes("적립")) return true;
         if (q === "ㅋㅍ" && str.includes("쿠폰")) return true;
-        if (q === "ㅅㅇㅈ" && (str.includes("사업자") || str.includes("등록증"))) return true;
+        if (q === "ㅅㅇㅈ" && (str.includes("사업자") || str.includes("등록증") || str.includes("사업장"))) return true;
         if (q === "ㅇㅈㅂ" && str.includes("이지봇")) return true;
         if (q === "ㄱㅌ" && str.includes("근태")) return true;
         if (q === "ㄱㅇ" && str.includes("급여")) return true;
         if (q === "ㅇㅅ" && str.includes("인사")) return true;
+        if (q === "ㄱㄱㅅㅌ" && (str.includes("구글") || str.includes("시트"))) return true;
+        if (q === "ㅅㅌ" && (str.includes("시트") || str.includes("스프레드시트"))) return true;
+        if (q === "ㅍㄹㅅ" && str.includes("프리셋")) return true;
+        if (q === "ㅈㅅㄹ" && str.includes("주소록")) return true;
+        if (q === "ㅁㅇㄷㅂ" && str.includes("my db")) return true;
+        if (q === "ㄱㅈㅅ" && str.includes("견적서")) return true;
+        if (q === "ㅂㅈㅅ" && str.includes("발주서")) return true;
+        if (q === "ㅁㅅㅅ" && str.includes("명세서")) return true;
         return false;
       };
 

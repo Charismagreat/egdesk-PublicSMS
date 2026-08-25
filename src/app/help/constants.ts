@@ -1,16 +1,18 @@
 import { 
-  BookOpen, MessageSquare, Bot, Coins, Ticket, Zap, TrendingUp, CalendarDays 
+  BookOpen, MessageSquare, Bot, Coins, Ticket, Zap, TrendingUp, CalendarDays, Sheet, Database, Building2, ShieldCheck, Sparkles 
 } from "lucide-react";
 import { FAQItem, CategoryConfig } from "./types";
 
 // 핵심 주제별 카테고리 정의
 export const CATEGORIES: CategoryConfig[] = [
   { id: "all", label: "전체 가이드 📖", icon: BookOpen, color: "text-slate-400" },
+  { id: "sheets", label: "구글 시트 & 3-Way 적재 📊", icon: Sheet, color: "text-emerald-500" },
+  { id: "order", label: "견적/수주/명세서 접수 AI 🪐", icon: Zap, color: "text-cyan-400" },
+  { id: "system", label: "사업장 & MY DB AI ⚙️", icon: Database, color: "text-blue-500" },
   { id: "sms", label: "무료문자 & 자동화 💬", icon: MessageSquare, color: "text-indigo-400" },
   { id: "rpa", label: "AI 자율 마케팅 & RPA 🤖", icon: Bot, color: "text-purple-400" },
   { id: "point", label: "단골적립 & 지출관리 AI 🪙", icon: Coins, color: "text-amber-400" },
   { id: "coupon", label: "쿠폰 & 주문/예약 📦", icon: Ticket, color: "text-rose-400" },
-  { id: "order", label: "전사 협업 & 견적/수주 AI 🪐", icon: Zap, color: "text-cyan-400" },
   { id: "price", label: "가격 & 마진 추적 AI 📈", icon: TrendingUp, color: "text-pink-400" },
   { id: "hr", label: "근태 & 급여/인사 AI 📅", icon: CalendarDays, color: "text-indigo-600" }
 ];
@@ -804,5 +806,65 @@ export const FAQ_DATABASE: FAQItem[] = [
     category: "point",
     question: "엑셀 업로드 시 기존 서식이 맞지 않을 때 표준 엑셀 양식을 다운로드할 수 있나요?",
     answer: "네! [은행거래내역 업로드(엑셀)], [신용카드내역 업로드(엑셀)], [세금계산서내역 업로드(엑셀)] 팝업창 상단에 위치한 [📥 표준 엑셀 양식 다운로드] 버튼을 누르시면 각 거래 내역에 최적화된 표준 템플릿(.xlsx) 파일이 즉시 다운로드됩니다. 해당 양식에 기존 데이터를 붙여넣기만 하면 100% 오류 없이 안전하게 적재하실 수 있습니다."
-  }
+  },
+  // 💡 최신 구글 스프레드시트 주소록 및 3-Way 데이터 적재 가이드
+  {
+    id: "sheets-1",
+    category: "sheets",
+    question: "구글 스프레드시트 주소록(프리셋) 관리자 기능은 어떻게 사용하며 어떤 장점이 있나요?",
+    answer: "각 업무 대장(받은 발주서, 견적서, 거래명세서, 고객 관리, 거래처, 재고, 금융, 인사 등)의 구글 시트 연동 팝업창에서 [시트 주소 저장] 버튼을 누르시면, 구글 시트 URL과 저장할 대상 탭(Sheet Tab)을 묶어 '별칭(예: 2026년 매입 세금계산서, 신한은행 입출금)'으로 프리셋에 저장할 수 있습니다. 등록된 시트는 [저장 목록]에서 클릭 한 번으로 URL과 탭이 1초 만에 자동 대입되어, 복잡한 탭 선택이나 URL 복사 붙여넣기 없이 신속하고 안전하게 데이터를 불러오실 수 있습니다."
+  },
+  {
+    id: "sheets-2",
+    category: "sheets",
+    question: "데이터 미리보기 테이블 맨 좌측의 [🛡️ 정상]과 [⚠️ 확인] 뱃지는 무엇을 의미하나요?",
+    answer: "이지데스크의 중앙 유효성 검증 엔진(@/lib/data-validator.ts)이 실시간으로 데이터 무결성을 검증한 결과입니다. 날짜(YYYY-MM-DD), 사업자등록번호(000-00-00000), 전화번호(010-XXXX-XXXX) 표준화와 금액 삼각 교차 대조(공급가액 + 세액 = 합계금액)를 통과한 행은 [🛡️ 정상](초록 뱃지)으로 표시되며, 서식 이상 또는 금액 불일치 행은 [⚠️ 확인](주황 뱃지)으로 표시됩니다. 마우스 호버 시 상세 원인이 툴팁으로 제공되며, 백엔드 DB 적재 시에도 이중 가드가 작동하여 오염된 데이터의 유입을 원천 차단합니다."
+  },
+  {
+    id: "sheets-3",
+    category: "sheets",
+    question: "이지데스크 전사 대장의 '3-Way 데이터 적재 표준(Data Ingestion Triad)'이란 무엇인가요?",
+    answer: "사용자 편의와 부서 간 협업을 극대화하기 위해 전사의 모든 마스터 대장(금융, 인사, 재고, 거래처, 고객, CRM 등)에 다음 3종 데이터 적재 인터페이스가 기본 제공됩니다: (1) [✍️ 단건 직접 등록], (2) [📊 표준 엑셀 파일(.xlsx) 일괄 업로드], (3) [🌐 구글 스프레드시트 실시간 연동]. 또한 [📥 표준 서식 다운로드]와 중복 방지 키(사업자번호, 바코드, 승인번호 등)가 탑재되어 누구나 실수 없이 대량 데이터를 안전하게 적재할 수 있습니다."
+  },
+  {
+    id: "sheets-4",
+    category: "sheets",
+    question: "구글 시트 연동 시 [공유] 권한은 어떻게 설정해야 하나요?",
+    answer: "연동하려는 구글 스프레드시트 우측 상단의 [공유] 버튼을 누르신 후, 일반 액세스 항목을 '링크가 있는 모든 사용자' ➔ '뷰어(보기 권한)'로 설정해 주시면 됩니다. 시스템은 읽기 전용 보안 채널을 통해 시트의 원본을 절대 훼손하지 않고 안전하게 데이터를 판독합니다."
+  },
+
+  // 💡 최신 스마트 접수 AI (발주서/견적서/거래명세서) 가이드
+  {
+    id: "smart-ocr-1",
+    category: "order",
+    question: "받은 발주서/견적서/거래명세서 스마트 접수 시 실물 수치 대조 및 이중 컨펌 가드는 무엇인가요?",
+    answer: "거래처로부터 수신한 발주서, 견적서, 거래명세서 이미지나 PDF 문서를 업로드하면, AI OCR 엔진이 문서에 인쇄된 실물 총금액과 실물 총수량을 자동으로 추출하여 입력란에 오토필(대입)합니다. 이후 품목별 계산 합계액과 실물 총액의 일치 여부를 실시간 뱃지로 안내하며, 불일치 상태에서 저장을 시도할 경우 확인 팝업을 거치도록 하는 이중 가드가 작동하여 회계 및 경리 상의 오기입 사고를 100% 예방합니다."
+  },
+  {
+    id: "smart-ocr-2",
+    category: "order",
+    question: "받은 발주서/견적서/거래명세서를 구글 시트로 일괄 접수할 수도 있나요?",
+    answer: "네! 각 스마트 접수 팝업창 상단의 [🌐 구글 시트 연동] 탭을 누르시면 거래처나 본사에서 공유한 구글 시트 링크를 통해 수십 건의 품목과 금액 데이터를 단 1초 만에 분석하여 접수 대장에 원클릭으로 일괄 적재하실 수 있습니다. 자주 사용하는 시트는 [시트 주소 저장] 주소록에 등록하여 재사용할 수 있습니다."
+  },
+
+  // 💡 최신 사업장 관리 & MY DB AI 가이드
+  {
+    id: "system-1",
+    category: "system",
+    question: "시스템 설정의 [사업장 관리]에서 복수 사업장 등록 및 GPS 좌표 자동 추출은 어떻게 하나요?",
+    answer: "[시스템 설정] 페이지의 [사업장 관리] 카드에서 [+ 신규 사업장 등록] 버튼을 클릭하신 후 사업장명과 주소를 입력하고 [좌표 추출] 버튼을 누르시면 됩니다. 시스템 지오코딩 엔진이 주소에 해당하는 위도(Latitude)와 경도(Longitude)를 즉시 자동 산출합니다. 이후 해당 사업장의 출퇴근 인정 반경(50m~5000m)을 지정하고 대표 본사 여부를 선택하여 저장하시면 임직원 모바일 GPS 출퇴근 인증에 실시간 반영됩니다."
+  },
+  {
+    id: "system-2",
+    category: "system",
+    question: "MY DB 페이지의 AI 자연어 SQLite3 쿼리 번역 및 '쿼리 즉시 실행하기'는 어떻게 작동하나요?",
+    answer: "사용자가 '이번 달 매출 상위 거래처 10곳 조회해줘' 또는 '재고 부족 품목 리스트 보여줘'와 같이 일상 언어로 질문을 입력하면, AI 엔진이 시스템 내부의 최신 DB 스키마 지식과 소프트 삭제(deleted_at IS NULL) 규칙을 준수하는 안전한 SQLite3 쿼리를 실시간 생성합니다. [쿼리 즉시 실행하기] 버튼을 누르면 권한 검증을 거쳐 실시간 DB를 안전하게 조회하고 테이블 대장 및 시각화 차트로 즉각 변환하여 보여줍니다."
+  },
+  {
+    id: "system-3",
+    category: "system",
+    question: "MY DB에서 AI 시각화 차트 분석 실패 시 자동 복구 및 폴백 메커니즘은 어떻게 동작하나요?",
+    answer: "Google AI Gemini 모델의 일시적 트래픽 집중(503 Service Unavailable 등)이나 네트워크 지연 발생 시, 시스템이 자동으로 백엔드 라우터와 다이렉트 폴백 엔진을 다단계로 가동하여 끊김 없는 시각화 분석을 보장합니다. 또한 사용자는 직접 쿼리 실행을 통해 원시 데이터를 언제든 즉각 확보할 수 있습니다."
+  },
+
 ];
