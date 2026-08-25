@@ -224,7 +224,6 @@ export default function GoogleSheetPresetModal({
               <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
                 구글 스프레드시트 탭(Tab)별 주소록 관리자
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">자주 사용하는 특정 시트의 탭(Worksheet)을 이름과 함께 1:1로 등록하여 0초 만에 전환합니다.</p>
             </div>
           </div>
           <button
