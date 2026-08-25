@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Globe, Bookmark, Star, Trash2, Edit2, Check, X, Plus, ExternalLink, Loader2, List, Save, Sparkles, Layers, FileSpreadsheet
 } from "lucide-react";
+import { createPortal } from "react-dom";
 import { apiFetch } from "@/lib/api";
 
 export interface GoogleSheetPreset {
@@ -42,6 +43,7 @@ export default function GoogleSheetPresetModal({
   onSelectPreset,
   onPresetsUpdated
 }: GoogleSheetPresetModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<"save" | "list">(initialMode);
   const [presets, setPresets] = useState<GoogleSheetPreset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -57,6 +59,12 @@ export default function GoogleSheetPresetModal({
   // Editing State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+
+  const prevIsOpenRef = useRef(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fetchPresets = async () => {
     setIsLoading(true);
@@ -74,8 +82,9 @@ export default function GoogleSheetPresetModal({
     }
   };
 
+  // 🛡️ 모달이 처음 열리는 시점(false -> true)에만 폼 상태를 1회 초기화
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       setActiveTab(initialMode);
       setInputUrl(currentUrl || "");
       const initialTab = currentSheetName || (availableSheets.length > 0 ? availableSheets[0] : "");
@@ -93,9 +102,10 @@ export default function GoogleSheetPresetModal({
       setEditingId(null);
       fetchPresets();
     }
-  }, [isOpen, initialMode, currentUrl, currentSheetName, availableSheets, spreadsheetTitle]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!mounted || !isOpen) return null;
 
   const handleTabChange = (newTab: string) => {
     setInputSheetName(newTab);
@@ -211,7 +221,7 @@ export default function GoogleSheetPresetModal({
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
         {/* 모달 헤더 */}
@@ -465,6 +475,7 @@ export default function GoogleSheetPresetModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
