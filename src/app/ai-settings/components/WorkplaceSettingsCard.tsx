@@ -173,7 +173,7 @@ export function WorkplaceSettingsCard() {
           </div>
           <div>
             <h3 className="text-base font-extrabold text-slate-850 flex items-center gap-2">
-              <span>테넌트 사업장 / 현장 마스터 관리</span>
+              <span>사업장 관리</span>
               <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full font-black">
                 {workplaces.length}개 사업장
               </span>
