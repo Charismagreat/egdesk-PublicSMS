@@ -860,13 +860,18 @@ Your task is to analyze the user's inquiry and determine if it requires querying
 
 [🚨 UNIVERSAL ENTITY-DRIVEN & INTENT-FIRST PROTOCOL]
 1. [🚨 CRITICAL - USER QUESTION PRIORITY]: Always prioritize the user's natural language question above any client UI state, current URL, or local storage. If the user asks a business question (e.g., "우리회사의 최대 매입처는 어디인가요?", "매출 1위 고객은?", "재고 현황", "지출 내역", "직원 근태", "가장 거래가 많은 협력사는?"), DO NOT get distracted by /my-db console variables or temporary SQL editor queries in LocalStorage. You MUST generate an analytical SQL query against the relevant business tables!
-2. Business Entity to Table Mapping:
+2. [🚨 CRITICAL - '어디인가요' / '누구인가요' / '얼마인가요' BUSINESS DATA DIRECTIVE]:
+   - Questions like "우리회사의 최대 매입처는 어디인가요?", "매출 1위 거래처는 어디인가요?", "가장 지출이 많은 부서는?", "재고가 부족한 품목은?" are 100% asking for REAL BUSINESS DATA (company names, figures, entity details) from the database!
+   - You MUST set "requiresQuery": true, "requiresManual": false, and generate the SQL query!
+   - NEVER classify these business questions as system manuals or UI guides.
+   - ONLY set "requiresManual": true when the user explicitly asks how to operate the software or software menus (e.g. "이지데스크 사용 매뉴얼 알려줘", "이 버튼 어떻게 눌러?").
+3. Business Entity to Table Mapping:
    - 매입처/공급사/지출처/협력사 (Suppliers/Vendors): query \`crm_partners\` (where type='VENDOR' or related) and/or \`crm_expenses\` (e.g., \`SELECT title, category, SUM(amount) as total_amount, COUNT(*) as count FROM crm_expenses GROUP BY title ORDER BY total_amount DESC LIMIT 5;\` or \`SELECT p.company_name, p.representative, p.phone, p.type, COALESCE(SUM(e.amount), 0) as total_expense FROM crm_partners p LEFT JOIN crm_expenses e ON e.title LIKE '%' || p.company_name || '%' WHERE p.type = 'VENDOR' OR p.type IS NULL GROUP BY p.id ORDER BY total_expense DESC LIMIT 10;\`)
    - 매출/고객/주문 (Sales/Customers/Orders): query \`crm_orders\`, \`crm_customers\`, \`crm_sales_orders\`
    - 재고/품목/자재 (Inventory/Items): query \`inventory_items\`, \`crm_inventory\`
    - 직원/근태/출퇴근 (Staff/Attendance): query \`crm_attendance\` join \`crm_operators\` on CAST(a.operator_id AS TEXT) = CAST(o.id AS TEXT)
-3. [🚨 CRITICAL] NEVER include columns containing the words "DELETE" or "CREATE" (such as "deleted_at", "created_at") in your query. The backend firewall blocks queries containing these words as substrings. Do not add soft-delete filtering to the query; the backend system handles this automatically.
-4. Only set "requiresQuery": false if the inquiry is a pure basic greeting (e.g., "hi", "hello", "안녕") without any business entity, or explicitly asking for system user manuals.
+4. [🚨 CRITICAL] NEVER include columns containing the words "DELETE" or "CREATE" (such as "deleted_at", "created_at") in your query. The backend firewall blocks queries containing these words as substrings. Do not add soft-delete filtering to the query; the backend system handles this automatically.
+5. Only set "requiresQuery": false if the inquiry is a pure basic greeting (e.g., "hi", "hello", "안녕") without any business entity.
 
 Available Database Tables Info:
 ${dbTablesInfo}
@@ -902,10 +907,6 @@ If the user is asking about how to use the system, menus, manuals, guides, or tr
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: step1SystemPrompt }] },
         contents: [
-          ...chatHistory.map((msg: any) => ({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: [{ text: msg.content }]
-          })),
           { role: 'user', parts: [{ text: prompt }] }
         ],
         generationConfig: {
