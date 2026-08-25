@@ -406,24 +406,6 @@ export async function POST(req: Request) {
         console.error('Action second response callAiCaller error:', secErr.message);
       }
 
-      // 🕒 토큰 사용량 기록 (1차 + 2차 합산 기록)
-      const t1 = initialData.usageMetadata || {};
-      const t2 = secondData.usageMetadata || {};
-      try {
-        const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
-        await insertRows('ai_token_usage_logs', [{
-          id: `TKA-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          model: selectedModel,
-          purpose: 'easybot-action-execution',
-          prompt_tokens: (t1.promptTokenCount || 0) + (t2.promptTokenCount || 0),
-          completion_tokens: (t1.candidatesTokenCount || 0) + (t2.candidatesTokenCount || 0),
-          total_tokens: (t1.totalTokenCount || 0) + (t2.totalTokenCount || 0),
-          created_at: nowStr
-        }]);
-      } catch (logErr) {
-        console.error('Action 토큰 로깅 실패:', logErr);
-      }
-
       return NextResponse.json({
         success: true,
         answer: finalAnswer,
@@ -881,38 +863,6 @@ If the user is asking about how to use the system, menus, manuals, guides, or tr
       console.error('Step 1 callAiCaller 실패:', step1Err.message);
     }
     
-    // 🕒 Step 1 토큰 사용량 로깅
-    if (step1Data.usageMetadata) {
-      try {
-        const u = step1Data.usageMetadata;
-        const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
-        
-        await insertRows('ai_token_usage_logs', [{
-          id: `TK1-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          model: selectedModel,
-          purpose: 'easybot-sql-generation',
-          prompt_tokens: u.promptTokenCount || 0,
-          completion_tokens: u.candidatesTokenCount || 0,
-          total_tokens: u.totalTokenCount || 0,
-          created_at: nowStr
-        }]);
-      } catch (logErr: any) {
-        console.error('Step 1 토큰 로깅 실패:', logErr);
-        try {
-          const fs = require('fs');
-          const path = require('path');
-          const logDir = path.join(process.cwd(), 'scratch');
-          if (!fs.existsSync(logDir)) {
-            fs.mkdirSync(logDir, { recursive: true });
-          }
-          fs.appendFileSync(
-            path.join(logDir, 'easybot_error.log'),
-            `[${new Date().toISOString()}] Step 1 토큰 로깅 실패: ${logErr.message}\nStack: ${logErr.stack}\n\n`
-          );
-        } catch (e) {}
-      }
-    }
-    
     let sqlPlan = { requiresQuery: false, sql: null as string | null, reason: "", requiresManual: false };
     try {
       const cleanJson = step1Text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
@@ -1180,26 +1130,6 @@ ${secondaryDiscoveryContext}
 
       // 최종 답변 본문에서 개발용 트리거 태그 깔끔히 소거
       finalAnswer = finalAnswer.replace(/\[FEEDBACK:.*?\]/g, '').trim();
-    }
-
-    // 🕒 Step 2 토큰 사용량 로깅
-    if (step2Data.usageMetadata) {
-      try {
-        const u = step2Data.usageMetadata;
-        const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
-        
-        await insertRows('ai_token_usage_logs', [{
-          id: `TK2-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          model: selectedModel,
-          purpose: 'easybot-response',
-          prompt_tokens: u.promptTokenCount || 0,
-          completion_tokens: u.candidatesTokenCount || 0,
-          total_tokens: u.totalTokenCount || 0,
-          created_at: nowStr
-        }]);
-      } catch (logErr) {
-        console.error('Step 2 토큰 로깅 실패:', logErr);
-      }
     }
 
     return NextResponse.json({
