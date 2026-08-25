@@ -478,6 +478,70 @@ export default function EasyBot() {
     }
   }, [chat.messages]);
 
+  // 📐 자유로운 대화창 크기 조절 (가로/세로 마우스 드래그 리사이징 & LocalStorage 크기 저장)
+  const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedW = localStorage.getItem('easybot_custom_width');
+        const savedH = localStorage.getItem('easybot_custom_height');
+        if (savedW && savedH) {
+          return {
+            width: Math.max(360, Math.min(window.innerWidth - 48, parseInt(savedW, 10))),
+            height: Math.max(450, Math.min(window.innerHeight - 120, parseInt(savedH, 10)))
+          };
+        }
+      } catch (e) {}
+    }
+    return { width: 420, height: 660 };
+  });
+
+  const [isResizing, setIsResizing] = useState(false);
+
+  const startResizing = (direction: 'top' | 'left' | 'top-left') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startWidth = dimensions.width;
+    const startHeight = dimensions.height;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = startX - moveEvent.clientX; // 왼쪽으로 당길수록 가로폭 증가
+      const deltaY = startY - moveEvent.clientY; // 위로 당길수록 세로높이 증가
+
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+
+      if (direction === 'left' || direction === 'top-left') {
+        newWidth = Math.max(360, Math.min(window.innerWidth - 48, startWidth + deltaX));
+      }
+      if (direction === 'top' || direction === 'top-left') {
+        newHeight = Math.max(450, Math.min(window.innerHeight - 120, startHeight + deltaY));
+      }
+
+      setDimensions({ width: newWidth, height: newHeight });
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+
+      setDimensions(prev => {
+        try {
+          localStorage.setItem('easybot_custom_width', String(prev.width));
+          localStorage.setItem('easybot_custom_height', String(prev.height));
+        } catch (e) {}
+        return prev;
+      });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
   const isSuperAdmin = userRole ? ['SUPER_ADMIN', 'PRESIDENT', 'SYSTEM_ADMIN', 'TENANT_ADMIN'].includes(userRole.toUpperCase()) : false;
   const isMobilePath = pathname.startsWith('/m');
 
@@ -538,12 +602,51 @@ export default function EasyBot() {
             animate={{ opacity: widgetOpacity, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 45, scale: 0.95 }}
             transition={{ duration: 0.24, ease: 'easeOut' }}
-            className={`ignore-capture fixed right-6 z-40 flex flex-col overflow-hidden border border-slate-100 bg-white/95 shadow-2xl backdrop-blur-md transition-all duration-200 print:hidden ${
+            style={
+              isMaximized
+                ? undefined
+                : {
+                    width: `${dimensions.width}px`,
+                    height: `${dimensions.height}px`,
+                    maxWidth: 'calc(100vw - 48px)',
+                    maxHeight: 'calc(100vh - 120px)'
+                  }
+            }
+            className={`ignore-capture fixed right-6 bottom-24 z-40 flex flex-col overflow-hidden border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md transition-all print:hidden ${
+              isResizing ? 'select-none transition-none' : 'duration-150'
+            } ${
               isMaximized 
-                ? 'bottom-24 left-6 top-6 rounded-3xl' 
-                : 'bottom-24 h-[640px] max-h-[82vh] w-[390px] rounded-3xl'
+                ? 'left-6 top-6 !w-auto !h-auto rounded-3xl' 
+                : 'rounded-3xl'
             }`}
           >
+            {/* ↖ 상단-좌측 모서리 리사이즈 드래그 핸들 (가로/세로 동시 조절) */}
+            {!isMaximized && (
+              <>
+                <div
+                  onMouseDown={startResizing('top-left')}
+                  className="absolute top-0 left-0 w-6 h-6 cursor-nwse-resize z-50 group flex items-start justify-start p-1 select-none"
+                  title="드래그하여 대화창 크기 자유 조절"
+                >
+                  <div className="w-2.5 h-2.5 border-t-2 border-l-2 border-slate-300 group-hover:border-indigo-500 rounded-tl transition-colors" />
+                </div>
+
+                {/* ⬆ 상단 테두리 리사이즈 드래그 핸들 (높이 조절) */}
+                <div
+                  onMouseDown={startResizing('top')}
+                  className="absolute top-0 left-6 right-6 h-2 cursor-ns-resize z-50 hover:bg-indigo-400/20 transition-colors select-none"
+                  title="위아래로 드래그하여 높이 조절"
+                />
+
+                {/* ⬅ 좌측 테두리 리사이즈 드래그 핸들 (가로 폭 조절) */}
+                <div
+                  onMouseDown={startResizing('left')}
+                  className="absolute top-6 left-0 bottom-6 w-2 cursor-ew-resize z-50 hover:bg-indigo-400/20 transition-colors select-none"
+                  title="좌우로 드래그하여 가로폭 조절"
+                />
+              </>
+            )}
+
             {/* 💡 AI 쿼터/크레딧 소진 시 상단 긴급 안내 띠 */}
             {aiQuotaExceeded && (
               <div className="bg-rose-600 text-white px-4 py-2 text-[11px] font-extrabold flex items-center justify-between shadow-xs shrink-0">
