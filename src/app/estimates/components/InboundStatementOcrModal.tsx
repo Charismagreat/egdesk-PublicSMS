@@ -1,7 +1,7 @@
 "use client";
 
 import { apiFetch } from '@/lib/api';
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { 
   Upload, 
   X, 
@@ -18,9 +18,25 @@ import {
   ChevronDown, 
   ChevronUp, 
   Database,
-  Receipt
+  Receipt,
+  Bookmark,
+  List,
+  Save,
+  ShieldCheck,
+  AlertTriangle,
+  FileCheck
 } from "lucide-react";
+import { createPortal } from "react-dom";
+import ProcessingOverlay from "../../../components/ProcessingOverlay";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, SAMPLE_STATEMENT_GOOGLE_SHEET_URL } from "../../../lib/google-sheets-storage";
+import GoogleSheetPresetModal, { GoogleSheetPreset } from "@/components/GoogleSheetPresetModal";
+import { 
+  sanitizeDate, 
+  sanitizeAmount, 
+  sanitizeBusinessNumber, 
+  sanitizePhoneNumber, 
+  sanitizeQuantity 
+} from "@/lib/data-validator";
 
 interface InboundStatementOcrModalProps {
   isOpen: boolean;
@@ -43,6 +59,8 @@ export interface ParsedStatementGroup {
   purchase_order_number?: string;
   originalTotalAmount: number;
   originalTotalQuantity: number;
+  isValid?: boolean;
+  validationWarnings?: string[];
   items: Array<{
     item_code?: string;
     product_name: string;
@@ -51,6 +69,8 @@ export interface ParsedStatementGroup {
     unit_price: number;
     validItemCode?: string;
     valid_item_code?: string;
+    isValid?: boolean;
+    warning?: string;
   }>;
   file_url?: string;
 }
@@ -60,7 +80,7 @@ export default function InboundStatementOcrModal({
   onClose,
   onSuccess
 }: InboundStatementOcrModalProps) {
-  // 채널 탭: 'ocr' | 'excel' | 'sheets'
+  const [mounted, setMounted] = useState(false);
   const [activeImportTab, setActiveImportTab] = useState<'ocr' | 'excel' | 'sheets'>('ocr');
   const [ocrScanning, setOcrScanning] = useState(false);
   const [ocrScanStep, setOcrScanStep] = useState("");
@@ -73,9 +93,15 @@ export default function InboundStatementOcrModal({
   const [forceBypass, setForceBypass] = useState<boolean>(false);
   const [bypassReason, setBypassReason] = useState<string>("");
 
-  // 🌐 구글 시트 URL 상태
+  // 🌐 구글 시트 프리셋 및 탭 상태
   const [googleSheetUrl, setGoogleSheetUrl] = useState<string>("");
   const [isFetchingSheet, setIsFetchingSheet] = useState<boolean>(false);
+  const [presets, setPresets] = useState<GoogleSheetPreset[]>([]);
+  const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
+  const [presetModalMode, setPresetModalMode] = useState<"save" | "list">("save");
+  const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [selectedSheetName, setSelectedSheetName] = useState<string>("");
+  const [spreadsheetTitle, setSpreadsheetTitle] = useState<string>("");
 
   // 📦 다중 명세서 그룹 배열 상태
   const [parsedGroups, setParsedGroups] = useState<ParsedStatementGroup[]>([]);
@@ -97,13 +123,37 @@ export default function InboundStatementOcrModal({
     document_memo: "",
     purchase_order_number: "",
     originalTotalAmount: 0,
-    originalTotalQuantity: 0
+    originalTotalQuantity: 0,
+    isValid: true,
+    validationWarnings: []
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
 
-  React.useEffect(() => {
+  const fetchPresetsList = async () => {
+    try {
+      const res = await apiFetch("/api/shared/google-sheets/presets?domain=inbound_statement");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.presets)) {
+        setPresets(data.presets);
+        if (data.defaultPreset && !googleSheetUrl) {
+          setGoogleSheetUrl(data.defaultPreset.url);
+          if (data.defaultPreset.sheetName) {
+            setSelectedSheetName(data.defaultPreset.sheetName);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("구글 시트 프리셋 목록 조회 실패:", e);
+    }
+  };
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     async function fetchUserRole() {
       try {
         const res = await apiFetch("/api/auth/me");
@@ -118,12 +168,13 @@ export default function InboundStatementOcrModal({
     }
     if (isOpen) {
       fetchUserRole();
+      fetchPresetsList();
       const savedUrl = getSavedGoogleSheetUrl('statement_inbound_sheet_url');
       if (savedUrl) setGoogleSheetUrl(savedUrl);
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!mounted || !isOpen) return null;
 
   const resetOcrState = () => {
     setOcrScanning(false);
@@ -150,7 +201,9 @@ export default function InboundStatementOcrModal({
       document_memo: "",
       purchase_order_number: "",
       originalTotalAmount: 0,
-      originalTotalQuantity: 0
+      originalTotalQuantity: 0,
+      isValid: true,
+      validationWarnings: []
     });
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (excelInputRef.current) excelInputRef.current.value = "";
@@ -161,7 +214,6 @@ export default function InboundStatementOcrModal({
     onClose();
   };
 
-  // 아코디언 카드 토글
   const toggleGroupAccordion = (groupId: string) => {
     setExpandedGroupIds(prev => {
       const next = new Set(prev);
@@ -254,26 +306,26 @@ export default function InboundStatementOcrModal({
       
       ws['!cols'] = [
         { wch: 16 }, { wch: 15 }, { wch: 12 }, { wch: 14 }, { wch: 12 },
-        { wch: 20 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 22 },
-        { wch: 16 }, { wch: 8 },  { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 26 }
+        { wch: 18 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 22 },
+        { wch: 16 }, { wch: 8 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 24 }
       ];
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "거래명세서");
-      XLSX.writeFile(wb, "이지데스크-표준- 받은 거래명세서 등록 양식.xlsx");
+      XLSX.writeFile(wb, "이지데스크-표준-받은 거래명세서 등록 양식.xlsx");
     } catch (err: any) {
       alert("표준 엑셀 양식 다운로드 중 오류: " + err.message);
     }
   };
 
-  // 📊 2차원 테이블 데이터 다중 거래처 자동 그룹핑 파서 엔진
+  // 📊 2차원 테이블 데이터 다중 거래처 자동 그룹핑 및 데이터 유효성 검증 엔진
   const parseTableDataToStatement = async (rawRows: any[][], sourceTitle: string) => {
     if (!rawRows || rawRows.length < 2) {
       throw new Error("유효한 데이터 행이 부족합니다. 최소 1개 이상의 헤더와 데이터가 필요합니다.");
     }
 
     setOcrScanning(true);
-    setOcrScanStep("테이블 데이터를 정밀 분석하여 거래처별 명세서를 자동 분류 중...");
+    setOcrScanStep("테이블 데이터를 정밀 분석하여 거래처별 명세서를 자동 분류 및 유효성 검증 중...");
     setOcrFilename(sourceTitle);
 
     let headerIdx = -1;
@@ -288,8 +340,9 @@ export default function InboundStatementOcrModal({
     let phoneIdx = -1;
     let mgrIdx = -1;
     let docNoIdx = -1;
-    let dateIdx = -1;
     let poNoIdx = -1;
+    let dateIdx = -1;
+    let memoIdx = -1;
 
     for (let i = 0; i < Math.min(rawRows.length, 15); i++) {
       const row = rawRows[i];
@@ -298,7 +351,7 @@ export default function InboundStatementOcrModal({
       const strRow = row.map(c => String(c || '').trim().toLowerCase().replace(/\s+/g, ''));
       
       const pIdx = strRow.findIndex(c => 
-        (c.includes('품목명') || c.includes('품명') || c.includes('상품명') || c.includes('자재명') || c.includes('규격및품명') || c.includes('description') || c.includes('itemname')) &&
+        (c.includes('품목명') || c.includes('품명') || c.includes('상품명') || c.includes('규격및품명') || c.includes('description') || c.includes('itemname')) &&
         !c.includes('품목코드') && !c.includes('품번') && !c.includes('바코드')
       );
       
@@ -307,7 +360,7 @@ export default function InboundStatementOcrModal({
       );
       
       const prIdx = strRow.findIndex(c => 
-        c.includes('단가') || c.includes('unitprice') || c.includes('공급단가') || c.includes('단가(원)') || c.includes('금액') || c.includes('price') || c.includes('amount')
+        c.includes('단가') || c.includes('unitprice') || c.includes('단가(원)') || c.includes('금액') || c.includes('price') || c.includes('amount')
       );
 
       if (pIdx >= 0 && (qIdx >= 0 || prIdx >= 0)) {
@@ -318,14 +371,15 @@ export default function InboundStatementOcrModal({
         
         specIdx = strRow.findIndex(c => c.includes('규격') || c.includes('사양') || c.includes('spec') || c.includes('dimension') || c.includes('모델명'));
         codeIdx = strRow.findIndex(c => c.includes('품목코드') || c.includes('코드') || c.includes('품번') || c.includes('바코드') || c.includes('itemcode') || c.includes('partno'));
-        partnerIdx = strRow.findIndex(c => c.includes('거래처') || c.includes('공급처') || c.includes('상호') || c.includes('회사명') || c.includes('업체명') || c.includes('partner') || c.includes('supplier'));
+        partnerIdx = strRow.findIndex(c => c.includes('거래처') || c.includes('공급처') || c.includes('상호') || c.includes('회사명') || c.includes('partner') || c.includes('supplier'));
         bizNoIdx = strRow.findIndex(c => c.includes('사업자') || c.includes('등록번호') || c.includes('bizno'));
         repIdx = strRow.findIndex(c => c.includes('대표자') || c.includes('대표') || c.includes('대표명') || c.includes('ceo'));
         phoneIdx = strRow.findIndex(c => c.includes('연락처') || c.includes('전화') || c.includes('tel') || c.includes('phone') || c.includes('핸드폰'));
-        mgrIdx = strRow.findIndex(c => c.includes('담당자') || c.includes('담당') || c.includes('manager') || c.includes('작성자'));
-        docNoIdx = strRow.findIndex(c => c.includes('명세서번호') || c.includes('문서번호') || c.includes('전표번호') || c.includes('no') || c.includes('docno'));
-        dateIdx = strRow.findIndex(c => c.includes('거래일자') || c.includes('일자') || c.includes('발행일') || c.includes('거래일') || c.includes('date'));
-        poNoIdx = strRow.findIndex(c => c.includes('발주번호') || c.includes('연계발주') || c.includes('pono'));
+        mgrIdx = strRow.findIndex(c => c.includes('담당자') || c.includes('담당') || c.includes('manager'));
+        docNoIdx = strRow.findIndex(c => c.includes('명세서번호') || c.includes('문서번호') || c.includes('거래번호') || c.includes('statementno') || c.includes('no'));
+        poNoIdx = strRow.findIndex(c => c.includes('발주번호') || c.includes('주문번호') || c.includes('po') || c.includes('pono'));
+        dateIdx = strRow.findIndex(c => c.includes('거래일자') || c.includes('명세서일자') || c.includes('일자') || c.includes('발행일') || c.includes('date'));
+        memoIdx = strRow.findIndex(c => c.includes('비고') || c.includes('메모') || c.includes('특이사항') || c.includes('memo') || c.includes('remark'));
         break;
       }
     }
@@ -334,7 +388,6 @@ export default function InboundStatementOcrModal({
       throw new Error("품목명(상품명) 또는 수량/단가 헤더 열을 찾을 수 없습니다.");
     }
 
-    // 마스터 품목 연동
     let masterProducts: any[] = [];
     try {
       const prodRes = await apiFetch("/api/inventory?action=list");
@@ -364,8 +417,19 @@ export default function InboundStatementOcrModal({
       const rowPhone = phoneIdx >= 0 ? String(row[phoneIdx] || '').trim() : '';
       const rowMgr = mgrIdx >= 0 ? String(row[mgrIdx] || '').trim() : '';
       const rowDocNo = docNoIdx >= 0 ? String(row[docNoIdx] || '').trim() : '';
-      const rowDate = dateIdx >= 0 ? String(row[dateIdx] || '').trim() : '';
       const rowPoNo = poNoIdx >= 0 ? String(row[poNoIdx] || '').trim() : '';
+      const rowDate = dateIdx >= 0 ? String(row[dateIdx] || '').trim() : '';
+      const rowMemo = memoIdx >= 0 ? String(row[memoIdx] || '').trim() : '';
+
+      // 🛡️ 유효성 검증 정규화
+      const dateSan = sanitizeDate(rowDate);
+      const bizSan = sanitizeBusinessNumber(rowBizNo);
+      const phoneSan = sanitizePhoneNumber(rowPhone);
+
+      const groupWarnings: string[] = [];
+      if (!dateSan.isValid && rowDate) groupWarnings.push(`거래일자 (${dateSan.warning})`);
+      if (!bizSan.isValid && rowBizNo) groupWarnings.push(`사업자번호 (${bizSan.warning})`);
+      if (!phoneSan.isValid && rowPhone) groupWarnings.push(`연락처 (${phoneSan.warning})`);
 
       const currentPartnerName = rowPartner || fallbackPartner;
       const groupKey = `${currentPartnerName}_${rowDocNo || 'DEFAULT'}`;
@@ -374,17 +438,19 @@ export default function InboundStatementOcrModal({
         groupsMap.set(groupKey, {
           id: groupKey,
           partner_name: currentPartnerName,
-          partner_phone: rowPhone || "",
+          partner_phone: phoneSan.value || rowPhone || "",
           partner_manager: rowMgr || "",
-          business_number: rowBizNo || "",
+          business_number: bizSan.value || rowBizNo || "",
           representative: rowRep || "",
           address: "",
           document_number: rowDocNo || `STM-${new Date().toISOString().substring(0, 10).replace(/-/g, '')}-${String(groupsMap.size + 1).padStart(3, '0')}`,
-          document_date: rowDate || new Date().toISOString().substring(0, 10),
-          document_memo: "거래명세서 연동 등록",
+          document_date: (dateSan.isValid ? dateSan.value : rowDate) || new Date().toISOString().substring(0, 10),
+          document_memo: rowMemo || "거래명세서 연동 등록",
           purchase_order_number: rowPoNo || "",
           originalTotalAmount: 0,
           originalTotalQuantity: 0,
+          isValid: groupWarnings.length === 0,
+          validationWarnings: groupWarnings,
           items: []
         });
       }
@@ -396,12 +462,18 @@ export default function InboundStatementOcrModal({
         const parsedQ = parseFloat(String(row[qtyIdx] || '').replace(/[^0-9.-]/g, ''));
         if (!isNaN(parsedQ) && parsedQ > 0) rawQty = parsedQ;
       }
+      const qtySan = sanitizeQuantity(rawQty);
 
       let rawPrice = 0;
       if (priceIdx >= 0) {
         const parsedP = parseFloat(String(row[priceIdx] || '').replace(/[^0-9.-]/g, ''));
         if (!isNaN(parsedP)) rawPrice = parsedP;
       }
+      const priceSan = sanitizeAmount(rawPrice);
+
+      const itemWarnings: string[] = [];
+      if (!qtySan.isValid) itemWarnings.push(`수량 이상 (${qtySan.warning})`);
+      if (!priceSan.isValid) itemWarnings.push(`단가 이상 (${priceSan.warning})`);
 
       let rawSpec = specIdx >= 0 ? String(row[specIdx] || '').trim() : '';
       const rawCode = codeIdx >= 0 ? String(row[codeIdx] || '').trim() : '';
@@ -417,18 +489,27 @@ export default function InboundStatementOcrModal({
         }
       }
 
+      const finalQty = qtySan.value || rawQty;
+      const finalPrice = priceSan.value || rawPrice;
+
       targetGroup.items.push({
         product_name: prodCell,
         spec: rawSpec,
-        quantity: rawQty,
-        unit_price: rawPrice,
+        quantity: finalQty,
+        unit_price: finalPrice,
         item_code: rawCode,
         validItemCode: validItemCode,
-        valid_item_code: validItemCode
+        valid_item_code: validItemCode,
+        isValid: itemWarnings.length === 0,
+        warning: itemWarnings.join(', ')
       });
 
-      targetGroup.originalTotalAmount += (rawQty * rawPrice);
-      targetGroup.originalTotalQuantity += rawQty;
+      targetGroup.originalTotalAmount += (finalQty * finalPrice);
+      targetGroup.originalTotalQuantity += finalQty;
+      if (itemWarnings.length > 0) {
+        targetGroup.isValid = false;
+        targetGroup.validationWarnings = [...(targetGroup.validationWarnings || []), ...itemWarnings];
+      }
     }
 
     const groups = Array.from(groupsMap.values()).filter(g => g.items.length > 0);
@@ -440,7 +521,6 @@ export default function InboundStatementOcrModal({
     setParsedGroups(groups);
     setExpandedGroupIds(new Set(groups.map(g => g.id)));
 
-    // 단일 그룹인 경우 기본 폼에도 동기화
     if (groups.length === 1) {
       setOcrForm(groups[0]);
     }
@@ -449,12 +529,12 @@ export default function InboundStatementOcrModal({
     setOcrSuccess(true);
   };
 
-  // 📁 엑셀 파일 업로드 핸들러
+  // 📂 엑셀 파일 업로드 핸들러
   const handleExcelFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     try {
-      setOcrScanning(true);
       const XLSX = await import("xlsx");
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: "array" });
@@ -475,25 +555,36 @@ export default function InboundStatementOcrModal({
     }
   };
 
-  // 📊 구글 스프레드시트 실시간 불러오기 핸들러
-  const handleFetchGoogleSheet = async () => {
+  // 📊 구글 스프레드시트 실시간 불러오기 핸들러 (프리셋 & 탭 선택 대응)
+  const handleFetchGoogleSheet = async (overrideSheetName?: string) => {
     if (!googleSheetUrl.trim()) return;
     try {
       setIsFetchingSheet(true);
       setOcrScanning(true);
-      setSavedGoogleSheetUrl('statement_inbound_sheet_url', googleSheetUrl.trim());
+      const sheetNameToUse = overrideSheetName || selectedSheetName || undefined;
+      setSavedGoogleSheetUrl('statement_inbound_sheet_url', googleSheetUrl.trim(), sheetNameToUse);
+      
       const res = await apiFetch("/api/shared/google-sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: googleSheetUrl.trim(),
           sheetUrl: googleSheetUrl.trim(),
+          sheetName: sheetNameToUse,
           fetchAllRows: true
         })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "구글 시트 데이터를 가져오지 못했습니다.");
       
+      setSpreadsheetTitle(data.spreadsheetTitle || "구글 스프레드시트");
+      if (data.availableSheets && Array.isArray(data.availableSheets)) {
+        setAvailableSheets(data.availableSheets);
+        if (!selectedSheetName && !overrideSheetName && data.availableSheets.length > 0) {
+          setSelectedSheetName(data.sheetName || data.availableSheets[0]);
+        }
+      }
+
       const rawRows = data.data || (data.headers ? [data.headers, ...(data.rows || [])] : data.rows || []);
       await parseTableDataToStatement(rawRows, data.spreadsheetTitle || "구글 스프레드시트 연동");
     } catch (err: any) {
@@ -521,21 +612,47 @@ export default function InboundStatementOcrModal({
         });
         const data = await res.json();
         if (data.success) {
+          const dateSan = sanitizeDate(data.document_date);
+          const bizSan = sanitizeBusinessNumber(data.partner_business_number);
+          const phoneSan = sanitizePhoneNumber(data.partner_phone);
+
+          const warnings: string[] = [];
+          if (!dateSan.isValid && data.document_date) warnings.push(`거래일자 (${dateSan.warning})`);
+          if (!bizSan.isValid && data.partner_business_number) warnings.push(`사업자번호 (${bizSan.warning})`);
+          if (!phoneSan.isValid && data.partner_phone) warnings.push(`연락처 (${phoneSan.warning})`);
+
+          const validatedItems = (data.items || []).map((it: any) => {
+            const qtySan = sanitizeQuantity(it.quantity || 1);
+            const priceSan = sanitizeAmount(it.unit_price || 0);
+            const itemWarns: string[] = [];
+            if (!qtySan.isValid) itemWarns.push(`수량 이상 (${qtySan.warning})`);
+            if (!priceSan.isValid) itemWarns.push(`단가 이상 (${priceSan.warning})`);
+            return {
+              ...it,
+              quantity: qtySan.value || it.quantity || 1,
+              unit_price: priceSan.value || it.unit_price || 0,
+              isValid: itemWarns.length === 0,
+              warning: itemWarns.join(', ')
+            };
+          });
+
           const singleGroup: ParsedStatementGroup = {
             id: 'single_ocr',
             partner_name: data.partner_name || "공급사",
-            partner_phone: data.partner_phone || "",
+            partner_phone: phoneSan.value || data.partner_phone || "",
             partner_manager: data.partner_manager || "",
-            items: data.items || [],
+            items: validatedItems,
             file_url: base64Data,
-            business_number: data.partner_business_number || "",
+            business_number: bizSan.value || data.partner_business_number || "",
             representative: data.partner_representative || "",
             address: data.partner_address || "",
             document_number: data.document_number || "",
-            document_date: data.document_date || "",
+            document_date: (dateSan.isValid ? dateSan.value : data.document_date) || "",
             document_memo: data.document_memo || "",
             originalTotalAmount: data.originalTotalAmount || 0,
-            originalTotalQuantity: data.originalTotalQuantity || 0
+            originalTotalQuantity: data.originalTotalQuantity || 0,
+            isValid: warnings.length === 0,
+            validationWarnings: warnings
           };
           setParsedGroups([singleGroup]);
           setExpandedGroupIds(new Set([singleGroup.id]));
@@ -551,11 +668,12 @@ export default function InboundStatementOcrModal({
     reader.readAsDataURL(file);
   };
 
-  // 전체 그룹 총액 및 총수량 종합 계산
   const grandTotalAmount = parsedGroups.reduce((sum, g) => sum + g.originalTotalAmount, 0);
   const grandTotalItemsCount = parsedGroups.reduce((sum, g) => sum + g.items.length, 0);
+  const validGroupsCount = parsedGroups.filter(g => g.isValid !== false && (!g.validationWarnings || g.validationWarnings.length === 0)).length;
+  const warningGroupsCount = parsedGroups.length - validGroupsCount;
 
-  // 🚀 다중/단일 거래명세서 일괄 대장 등록 실행
+  // 🚀 다중/단일 명세서 일괄 대장 등록 실행
   const handleSaveAllStatements = async () => {
     const groupsToSave = parsedGroups.length > 0 ? parsedGroups : (ocrForm.partner_name ? [{
       ...ocrForm,
@@ -564,54 +682,64 @@ export default function InboundStatementOcrModal({
 
     if (groupsToSave.length === 0) return;
 
+    // 🛡️ 유효성 검증 경고 컨펌 가드
+    const groupsWithWarnings = groupsToSave.filter(g => g.validationWarnings && g.validationWarnings.length > 0);
+    if (groupsWithWarnings.length > 0) {
+      const confirmProceed = window.confirm(
+        `⚠️ ${groupsWithWarnings.length}건의 거래명세서에 서식 확인 필요 항목(${groupsWithWarnings.map(g => g.partner_name).join(', ')})이 감지되었습니다.\n정말 그대로 거래명세서 등록을 승인하시겠습니까?`
+      );
+      if (!confirmProceed) return;
+    }
+
     try {
-      let successCount = 0;
+      setOcrScanning(true);
+      setOcrScanStep(`총 ${groupsToSave.length}건의 거래명세서를 대장에 일괄 저장 중...`);
+
+      let savedCount = 0;
       for (const group of groupsToSave) {
-        const tagsObj = {
+        const payload = {
+          partner_name: group.partner_name,
+          partner_phone: group.partner_phone,
+          partner_manager: group.partner_manager,
           business_number: group.business_number,
           representative: group.representative,
           address: group.address,
           document_number: group.document_number,
           document_date: group.document_date,
           document_memo: group.document_memo,
-          is_statement: true
+          purchase_order_number: group.purchase_order_number,
+          total_amount: group.originalTotalAmount,
+          items: group.items,
+          file_url: group.file_url || "",
+          receiver_matched: receiverMatched,
+          force_bypass: forceBypass,
+          bypass_reason: bypassReason,
+          approver_name: userName || "시스템운영자",
+          approver_role: userRole
         };
 
-        const res = await apiFetch("/api/estimates", {
+        const res = await apiFetch("/api/estimates/save-ocr-statement", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "INBOUND",
-            partner_name: group.partner_name,
-            partner_phone: group.partner_phone,
-            partner_manager: group.partner_manager,
-            items: group.items,
-            file_url: group.file_url,
-            tags: JSON.stringify(tagsObj),
-            direction_status: "RECEIVED",
-            ai_parsed: 1,
-            import_source: activeImportTab === 'excel' ? 'EXCEL_FILE' : activeImportTab === 'sheets' ? 'GOOGLE_SHEETS' : 'OCR_SCAN',
-            originalTotalAmount: group.originalTotalAmount,
-            originalTotalQuantity: group.originalTotalQuantity
-          })
+          body: JSON.stringify(payload)
         });
 
         const data = await res.json();
-        if (data.success) {
-          successCount++;
-        }
+        if (data.success) savedCount++;
       }
 
-      alert(`🎉 총 ${successCount}건의 거래명세서가 대장에 성공적으로 등록되었습니다!`);
+      alert(`🎉 총 ${savedCount}건의 거래명세서가 대장에 성공적으로 등록되었습니다!`);
       resetOcrState();
       onSuccess();
       onClose();
-    } catch (e) {
-      alert("거래명세서 일괄 등록 중 오류가 발생했습니다.");
+    } catch (e: any) {
+      alert("일괄 저장 처리 중 오류: " + e.message);
+    } finally {
+      setOcrScanning(false);
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-100 flex flex-col max-h-[92vh]">
         
@@ -624,7 +752,7 @@ export default function InboundStatementOcrModal({
             <div>
               <h3 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
                 <span>받은 거래명세서 스마트 접수</span>
-                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-lg">다중 거래처 지원</span>
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-black rounded-lg">다중 거래처 지원</span>
               </h3>
               <p className="text-xs text-slate-400 font-semibold mt-0.5">실물 스캔, 엑셀, 구글 시트를 통해 단일 또는 다중 거래명세서를 한 번에 등록합니다.</p>
             </div>
@@ -640,7 +768,7 @@ export default function InboundStatementOcrModal({
             <button 
               type="button"
               onClick={() => setActiveImportTab('ocr')} 
-              className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${activeImportTab === 'ocr' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${activeImportTab === 'ocr' ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               📸 실물 스캔 (AI OCR)
             </button>
@@ -661,23 +789,24 @@ export default function InboundStatementOcrModal({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto pt-4 space-y-4 pr-1">
+        {/* 바디 콘텐츠 스크롤 영역 */}
+        <div className="mt-4 flex-1 overflow-y-auto space-y-4 pr-1">
           
           {/* 1. OCR 채널 */}
           {activeImportTab === 'ocr' && !ocrSuccess && (
-            <div className="border-2 border-dashed border-slate-200 rounded-3xl p-8 text-center flex flex-col items-center justify-center min-h-[220px]">
+            <div className="border-2 border-dashed border-slate-200 hover:border-amber-400 bg-slate-50 hover:bg-slate-50/80 rounded-3xl p-8 text-center transition-all flex flex-col items-center justify-center min-h-[190px]">
               {ocrScanning ? (
                 <div className="space-y-3">
-                  <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                  <p className="text-xs font-extrabold text-indigo-700 animate-pulse">{ocrScanStep || "거래명세서 이미지 분석 중..."}</p>
+                  <div className="w-10 h-10 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-xs font-black text-amber-700 animate-pulse">거래명세서 AI OCR 분석 중...</p>
                   <p className="text-[10px] text-slate-400 font-semibold">{ocrFilename}</p>
                 </div>
               ) : (
                 <>
-                  <Upload className="w-8 h-8 text-indigo-400 mb-4" />
-                  <p className="text-xs font-bold text-slate-600">거래명세서 이미지 또는 PDF 업로드</p>
-                  <p className="text-[10px] text-slate-400 mt-1">공급사 거래명세서 원본 사진이나 스캔 문서를 선택하세요.</p>
-                  <label className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition-colors shadow-sm">
+                  <Upload className="w-8 h-8 text-amber-500 mb-4" />
+                  <p className="text-xs font-bold text-slate-600">받은 거래명세서 이미지 또는 PDF 업로드</p>
+                  <p className="text-[10px] text-slate-400 mt-1">공급사로부터 받은 명세서 원본 사진이나 스캔 문서를 선택하세요.</p>
+                  <label className="mt-4 px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-700 transition-colors shadow-sm">
                     파일 선택
                     <input ref={fileInputRef} type="file" accept="image/*,application/pdf" onChange={handleOcrFileChange} className="hidden" />
                   </label>
@@ -710,7 +839,7 @@ export default function InboundStatementOcrModal({
                 {ocrScanning ? (
                   <div className="space-y-3">
                     <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                    <p className="text-xs font-extrabold text-emerald-700 animate-pulse">{ocrScanStep || "엑셀 데이터 분석 중..."}</p>
+                    <p className="text-xs font-extrabold text-emerald-700 animate-pulse">{ocrScanStep || "거래명세서 엑셀 데이터 분석 중..."}</p>
                     <p className="text-[10px] text-slate-400 font-semibold">{ocrFilename}</p>
                   </div>
                 ) : (
@@ -719,7 +848,7 @@ export default function InboundStatementOcrModal({
                       <FileSpreadsheet className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-slate-700">거래명세서 엑셀(.xlsx, .xls, .csv) 파일을 선택하세요</p>
+                      <p className="text-xs font-bold text-slate-700">받은 거래명세서 엑셀(.xlsx, .xls, .csv) 파일을 선택하세요</p>
                       <p className="text-[10px] text-slate-400 mt-1">한 파일 안에 여러 거래처나 복수의 명세서가 포함되어 있어도 자동 분할됩니다.</p>
                     </div>
                     <label className="inline-flex items-center justify-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm">
@@ -738,7 +867,7 @@ export default function InboundStatementOcrModal({
             </div>
           )}
 
-          {/* 3. 구글 시트 채널 */}
+          {/* 3. 구글 시트 채널 (프리셋 목록 관리 및 탭 선택 탑재) */}
           {activeImportTab === 'sheets' && !ocrSuccess && (
             <div className="space-y-4 text-left">
               <div className="bg-blue-50/60 border border-blue-200/80 p-4 rounded-3xl space-y-3.5">
@@ -773,6 +902,80 @@ export default function InboundStatementOcrModal({
                   </div>
                 </div>
 
+                {/* 📋 저장된 구글 시트 프리셋 목록 및 관리 버튼 */}
+                <div className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-2xl border border-blue-100">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-[11px] font-bold text-slate-600 shrink-0 flex items-center gap-1">
+                      <Bookmark className="w-3.5 h-3.5 text-blue-600" /> 프리셋:
+                    </span>
+                    <select
+                      value={presets.find(p => p.url === googleSheetUrl)?.id || ""}
+                      onChange={(e) => {
+                        const selected = presets.find(p => p.id === e.target.value);
+                        if (selected) {
+                          setGoogleSheetUrl(selected.url);
+                          if (selected.sheetName) setSelectedSheetName(selected.sheetName);
+                        }
+                      }}
+                      className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 focus:outline-none focus:border-blue-500 truncate flex-1"
+                    >
+                      <option value="">-- 저장된 프리셋 선택 --</option>
+                      {presets.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.isDefault ? "⭐ " : ""}{p.title} {p.sheetName ? `(${p.sheetName})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPresetModalMode("save");
+                        setIsPresetModalOpen(true);
+                      }}
+                      disabled={!googleSheetUrl.trim()}
+                      className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-black transition-all flex items-center gap-1 cursor-pointer disabled:opacity-40 shadow-3xs active:scale-95"
+                      title="현재 입력된 구글 시트 URL을 프리셋으로 저장"
+                    >
+                      <Save className="w-3 h-3" />
+                      <span>프리셋 저장</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPresetModalMode("list");
+                        setIsPresetModalOpen(true);
+                      }}
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer shadow-3xs active:scale-95"
+                      title="저장된 구글 시트 목록을 관리합니다."
+                    >
+                      <List className="w-3 h-3" />
+                      <span>목록 관리 ({presets.length})</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 📑 스프레드시트 내 탭 선택기 (시트가 2개 이상일 때) */}
+                {availableSheets.length > 1 && (
+                  <div className="flex items-center gap-2 bg-white/90 p-2.5 rounded-2xl border border-blue-100 text-left">
+                    <span className="text-[11px] font-bold text-slate-600 shrink-0">시트 탭:</span>
+                    <select
+                      value={selectedSheetName}
+                      onChange={(e) => {
+                        setSelectedSheetName(e.target.value);
+                        handleFetchGoogleSheet(e.target.value);
+                      }}
+                      className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold text-blue-700 focus:outline-none focus:border-blue-500 flex-1"
+                    >
+                      {availableSheets.map(sheetName => (
+                        <option key={sheetName} value={sheetName}>{sheetName}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-bold text-slate-700 block">구글 시트 공유 링크 (URL) *</label>
@@ -796,7 +999,7 @@ export default function InboundStatementOcrModal({
                     />
                     <button
                       type="button"
-                      onClick={handleFetchGoogleSheet}
+                      onClick={() => handleFetchGoogleSheet()}
                       disabled={isFetchingSheet || ocrScanning || !googleSheetUrl.trim()}
                       className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-40 shadow-sm cursor-pointer active:scale-95"
                     >
@@ -824,23 +1027,44 @@ export default function InboundStatementOcrModal({
           {ocrSuccess && (
             <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100 space-y-4 animate-scale-up">
               
-              {/* 상단 완료 배너 */}
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+              {/* 상단 완료 배너 & 유효성 검증 카운터 뱃지 */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] font-black">
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded text-[10px] font-black">
                     {activeImportTab === 'excel' ? '📁 엑셀 파싱 완료' : activeImportTab === 'sheets' ? '📊 구글 시트 연동 완료' : '📸 OCR 판독 완료'}
                   </span>
                   <span className="text-xs font-bold text-slate-600 truncate max-w-[280px]">{ocrFilename}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={resetOcrState}
-                  className="text-[10px] font-bold text-slate-400 hover:text-amber-600 flex items-center gap-1 cursor-pointer"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  <span>다시 불러오기</span>
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[10px] font-black flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                    정상: {validGroupsCount}건
+                  </span>
+                  {warningGroupsCount > 0 && (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-black flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-600" />
+                      확인 필요: {warningGroupsCount}건
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={resetOcrState}
+                    className="text-[10px] font-bold text-slate-400 hover:text-amber-700 flex items-center gap-1 cursor-pointer ml-1"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>다시 불러오기</span>
+                  </button>
+                </div>
               </div>
+
+              {/* 수신자 불일치 경고 */}
+              {!receiverMatched && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-left text-xs font-bold text-amber-800 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>수신자 불일치: 명세서의 공급받는 자가 '{myCompanyName}'과 다를 수 있습니다. 확인 후 등록하세요.</span>
+                </div>
+              )}
 
               {/* 다중 거래처 요약 헤더 (2건 이상일 때) */}
               {parsedGroups.length > 1 && (
@@ -850,13 +1074,13 @@ export default function InboundStatementOcrModal({
                       <Layers className="w-4 h-4" />
                     </span>
                     <div className="text-left">
-                      <h4 className="text-xs font-black text-amber-950">총 {parsedGroups.length}건의 거래처 명세서가 자동 분할되었습니다!</h4>
+                      <h4 className="text-xs font-black text-amber-950">총 {parsedGroups.length}건의 거래명세서가 자동 분할되었습니다!</h4>
                       <p className="text-[10px] text-amber-800 font-medium">거래처별 개별 명세서로 분리되어 대장에 일괄 적재됩니다.</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] text-slate-500 font-bold block">전체 총액 (총 {grandTotalItemsCount}개 품목)</span>
-                    <span className="text-sm font-black text-amber-700 font-mono">{grandTotalAmount.toLocaleString()}원</span>
+                    <span className="text-[10px] text-slate-500 font-bold block">전체 거래 총액 (총 {grandTotalItemsCount}개 품목)</span>
+                    <span className="text-sm font-black text-amber-800 font-mono">{grandTotalAmount.toLocaleString()}원</span>
                   </div>
                 </div>
               )}
@@ -867,6 +1091,7 @@ export default function InboundStatementOcrModal({
                   {parsedGroups.map((group, gIdx) => {
                     const isExpanded = expandedGroupIds.has(group.id);
                     const calcGroupTotal = group.items.reduce((s, it) => s + (it.quantity * it.unit_price), 0);
+                    const isGroupValid = group.isValid !== false && (!group.validationWarnings || group.validationWarnings.length === 0);
 
                     return (
                       <div key={group.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all">
@@ -876,26 +1101,40 @@ export default function InboundStatementOcrModal({
                           className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50/80 transition-colors"
                         >
                           <div className="flex items-center gap-3 text-left">
-                            <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-xs font-black flex items-center justify-center shrink-0">
+                            <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-800 text-xs font-black flex items-center justify-center shrink-0">
                               {gIdx + 1}
                             </span>
                             <div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <h5 className="text-xs font-black text-slate-800">{group.partner_name}</h5>
                                 {group.document_number && (
                                   <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-mono font-bold">
                                     {group.document_number}
                                   </span>
                                 )}
+                                {group.purchase_order_number && (
+                                  <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-mono font-bold">
+                                    발주: {group.purchase_order_number}
+                                  </span>
+                                )}
+                                {isGroupValid ? (
+                                  <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[9px] font-black flex items-center gap-0.5">
+                                    <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" /> 정상
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-[9px] font-black flex items-center gap-0.5" title={group.validationWarnings?.join(', ')}>
+                                    <AlertTriangle className="w-2.5 h-2.5 text-amber-600" /> 확인 필요
+                                  </span>
+                                )}
                               </div>
                               <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                                {group.document_date} · {group.items.length}개 품목
+                                거래일자: {group.document_date} · {group.items.length}개 품목
                               </p>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-3">
-                            <span className="text-xs font-black text-amber-700 font-mono">
+                            <span className="text-xs font-black text-amber-800 font-mono">
                               {calcGroupTotal.toLocaleString()}원
                             </span>
                             <span className="p-1 text-slate-400 hover:text-slate-600">
@@ -914,8 +1153,15 @@ export default function InboundStatementOcrModal({
                               <div><span className="text-slate-400 font-bold">담당자:</span> <span className="font-semibold">{group.partner_manager || '-'}</span></div>
                             </div>
 
+                            {group.validationWarnings && group.validationWarnings.length > 0 && (
+                              <div className="p-2 bg-amber-50 rounded-xl border border-amber-200 text-[10px] text-amber-800 font-bold flex items-center gap-1.5">
+                                <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                                <span>확인 필요: {group.validationWarnings.join(' · ')}</span>
+                              </div>
+                            )}
+
                             <div className="space-y-1.5">
-                              <span className="text-[10px] font-bold text-slate-500 block">품목 명세 리스트</span>
+                              <span className="text-[10px] font-bold text-slate-500 block">명세서 품목 리스트</span>
                               <div className="space-y-1 max-h-[160px] overflow-y-auto">
                                 {group.items.map((it, iIdx) => (
                                   <div key={iIdx} className="bg-white p-2.5 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs font-semibold">
@@ -942,11 +1188,18 @@ export default function InboundStatementOcrModal({
                   })}
                 </div>
               ) : (
-                /* 단일 거래처 명세서인 경우 상세 폼 */
+                /* 단일 거래처 명세서 상세 폼 */
                 <div className="space-y-4">
+                  {ocrForm.validationWarnings && ocrForm.validationWarnings.length > 0 && (
+                    <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 font-bold flex items-center gap-1.5 text-left">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>서식 확인 필요: {ocrForm.validationWarnings.join(' · ')}</span>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-3 text-left">
                     <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">공급처명</label>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">공급 거래처명</label>
                       <input 
                         type="text" 
                         value={ocrForm.partner_name}
@@ -965,18 +1218,9 @@ export default function InboundStatementOcrModal({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 text-left">
+                  <div className="grid grid-cols-3 gap-3 text-left">
                     <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">사업자번호</label>
-                      <input 
-                        type="text" 
-                        value={ocrForm.business_number}
-                        onChange={e => setOcrForm(prev => ({ ...prev, business_number: e.target.value }))}
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">명세서번호</label>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">명세서 번호</label>
                       <input 
                         type="text" 
                         value={ocrForm.document_number}
@@ -984,10 +1228,29 @@ export default function InboundStatementOcrModal({
                         className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                       />
                     </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">거래일자</label>
+                      <input 
+                        type="date" 
+                        value={ocrForm.document_date}
+                        onChange={e => setOcrForm(prev => ({ ...prev, document_date: e.target.value }))}
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-bold block mb-1">연계 발주번호</label>
+                      <input 
+                        type="text" 
+                        value={ocrForm.purchase_order_number || ""}
+                        onChange={e => setOcrForm(prev => ({ ...prev, purchase_order_number: e.target.value }))}
+                        placeholder="PO-..."
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2 text-left">
-                    <label className="text-[10px] text-slate-400 font-bold block">상세 품목 리스트 ({ocrForm.items.length}개)</label>
+                    <label className="text-[10px] text-slate-400 font-bold block">상세 품목 ({ocrForm.items.length}개)</label>
                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                       {ocrForm.items.map((item, idx) => (
                         <div key={idx} className="bg-white p-3 rounded-2xl border border-slate-200 flex items-center justify-between text-xs font-semibold">
@@ -1004,7 +1267,7 @@ export default function InboundStatementOcrModal({
                           </div>
                           <div className="text-right">
                             <span className="font-bold text-slate-700">{item.quantity}개 × {item.unit_price.toLocaleString()}원</span>
-                            <span className="text-xs font-black text-amber-700 block mt-0.5">{(item.quantity * item.unit_price).toLocaleString()}원</span>
+                            <span className="text-xs font-black text-amber-800 block mt-0.5">{(item.quantity * item.unit_price).toLocaleString()}원</span>
                           </div>
                         </div>
                       ))}
@@ -1013,8 +1276,8 @@ export default function InboundStatementOcrModal({
 
                   {/* 총액 패널 */}
                   <div className="p-4 bg-amber-50/40 rounded-2xl border border-amber-100 flex items-center justify-between text-left">
-                    <span className="text-xs font-extrabold text-slate-600">명세서 등록 총액 (총 {ocrForm.items.length}개 품목)</span>
-                    <span className="text-lg font-black text-amber-700 font-mono">
+                    <span className="text-xs font-extrabold text-slate-600">거래명세서 등록 총액 (총 {ocrForm.items.length}개 품목)</span>
+                    <span className="text-lg font-black text-amber-800 font-mono">
                       {ocrForm.items.reduce((sum, it) => sum + (it.quantity * it.unit_price), 0).toLocaleString()}원
                     </span>
                   </div>
@@ -1040,6 +1303,26 @@ export default function InboundStatementOcrModal({
           </button>
         </div>
       </div>
-    </div>
+
+      {/* 📋 구글 시트 프리셋 저장 및 목록 관리 통합 모달 */}
+      <GoogleSheetPresetModal
+        isOpen={isPresetModalOpen}
+        onClose={() => setIsPresetModalOpen(false)}
+        domain="inbound_statement"
+        currentUrl={googleSheetUrl}
+        currentSheetName={selectedSheetName}
+        availableSheets={availableSheets}
+        spreadsheetTitle={spreadsheetTitle}
+        initialMode={presetModalMode}
+        onSelectPreset={(preset) => {
+          setGoogleSheetUrl(preset.url);
+          if (preset.sheetName) setSelectedSheetName(preset.sheetName);
+        }}
+        onPresetsUpdated={(updatedList) => {
+          setPresets(updatedList);
+        }}
+      />
+    </div>,
+    document.body
   );
 }
