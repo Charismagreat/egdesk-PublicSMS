@@ -56,6 +56,11 @@ export default function GovernanceDetailModal({
   const [saveAutoRuleOnExecute, setSaveAutoRuleOnExecute] = useState(false);
   const [matchedSmsAction, setMatchedSmsAction] = useState<any | null>(null);
 
+  // 🤖 자연어 지시 기반 AI 자율 조치 생성 상태
+  const [naturalPrompt, setNaturalPrompt] = useState("");
+  const [isParsingNatural, setIsParsingNatural] = useState(false);
+  const [customActionPayloads, setCustomActionPayloads] = useState<{ [key: string]: any }>({});
+
   // 📱 1회성 맞춤 문자 추가 상태
   const [allOperators, setAllOperators] = useState<any[]>([]);
   const [isAddingAdhocSms, setIsAddingAdhocSms] = useState(false);
@@ -356,6 +361,47 @@ export default function GovernanceDetailModal({
     setCustomActions((prev) => [...prev, newSmsAction]);
     setSelectedActions((prev) => [...prev, newCode]);
     setIsAddingAdhocSms(false);
+  };
+
+  // 🤖 자연어 지시 기반 AI 자율 조치 생성 핸들러
+  const handleGenerateNaturalAction = async (promptToUse?: string) => {
+    const query = promptToUse || naturalPrompt;
+    if (!query.trim()) {
+      alert("원하시는 작업 지시를 자연어로 입력해 주세요.");
+      return;
+    }
+    setIsParsingNatural(true);
+    try {
+      const res = await apiFetch("/api/governance?action=parse_natural_action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          natural_prompt: query.trim(),
+          event_info: selectedEvent,
+          operators: allOperators
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.actions && data.actions.length > 0) {
+        const newActions = data.actions;
+        setCustomActions((prev) => [...prev, ...newActions]);
+        setSelectedActions((prev) => [...prev, ...newActions.map((a: any) => a.code)]);
+        
+        const newPayloads: any = {};
+        newActions.forEach((a: any) => {
+          newPayloads[a.code] = a;
+        });
+        setCustomActionPayloads((prev) => ({ ...prev, ...newPayloads }));
+        setNaturalPrompt("");
+        setIsAddingAction(false);
+      } else {
+        alert("AI 작업 분석 실패: " + (data.error || "결과를 생성하지 못했습니다."));
+      }
+    } catch (err: any) {
+      alert("AI 통신 오류: " + err.message);
+    } finally {
+      setIsParsingNatural(false);
+    }
   };
 
   const displayTitle = (selectedEvent.title || '')
@@ -842,38 +888,83 @@ export default function GovernanceDetailModal({
               </div>
             )}
 
-            {/* 최고관리자 커스텀 추천 작업 인라인 작성 폼 */}
+            {/* 🤖 ✨ 최고관리자 자연어 스마트 AI 자율 조치 생성 폼 */}
             {isAddingAction && (
-              <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-2xl p-3.5 space-y-2.5 animate-fade-in">
-                <span className="text-xs font-black text-indigo-900 block">✨ 최고관리자 전용 추천 작업 항목 추가</span>
-                <input
-                  type="text"
-                  value={customActionTitle}
-                  onChange={(e) => setCustomActionTitle(e.target.value)}
-                  placeholder="예: 협력업체 긴급 실사 및 비상 연락망 가동"
-                  className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <input
-                  type="text"
-                  value={customActionDesc}
-                  onChange={(e) => setCustomActionDesc(e.target.value)}
-                  placeholder="작업 설명 (선택 사항: 담당자 지정 또는 세부 안내)"
-                  className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <div className="flex justify-end gap-2 pt-1">
+              <div className="bg-gradient-to-br from-indigo-50/90 via-slate-50 to-white border border-indigo-200 rounded-2xl p-4 space-y-3.5 animate-fade-in shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
+                    <span>✨ AI 자연어 스마트 자율 조치 생성기</span>
+                  </span>
+                  <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full border border-indigo-200">
+                    이메일 / 지식 / 태스크 / 재고 자동 생성
+                  </span>
+                </div>
+
+                {/* 빠른 추천 예시 지시 칩 */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-700 block">💡 빠른 예시 지시문 클릭:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setNaturalPrompt("생산팀과 자재팀에 이번 수주 취소 공문 이메일을 정중하게 발송해줘.")}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white text-indigo-700 border border-indigo-200 hover:bg-indigo-50 transition-all cursor-pointer text-left shadow-2xs"
+                    >
+                      📧 생산·자재팀 취소 공문 이메일
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNaturalPrompt("이번 취소 사유와 고객사 클레임 내용을 지식관리에 '수주 취소 재발방지 가이드'로 등록해줘.")}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50 transition-all cursor-pointer text-left shadow-2xs"
+                    >
+                      🧠 지식관리에 재발방지 가이드 등록
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNaturalPrompt("영업부 담당자에게 거래처 방문 및 고객 사후 관리 스냅태스크를 배정해줘.")}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white text-amber-700 border border-amber-200 hover:bg-amber-50 transition-all cursor-pointer text-left shadow-2xs"
+                    >
+                      📋 영업부 사후 관리 태스크 배정
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold text-slate-700 block">✍️ 원하시는 지시를 자연어로 입력하세요:</span>
+                  <textarea
+                    value={naturalPrompt}
+                    onChange={(e) => setNaturalPrompt(e.target.value)}
+                    rows={3}
+                    placeholder="예: 생산팀에 취소 공문 이메일 보내고, 이 건의 취소 사유를 지식관리에 '수주 취소 사례'로 등록해줘."
+                    className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed"
+                  />
+                </div>
+
+                <div className="flex justify-between items-center pt-1">
                   <button
                     type="button"
                     onClick={() => setIsAddingAction(false)}
-                    className="px-3 py-1 text-slate-500 hover:bg-slate-200/60 rounded-lg text-xs font-bold transition-all border-none bg-transparent cursor-pointer"
+                    className="px-3 py-1.5 text-slate-500 hover:bg-slate-200/60 rounded-xl text-xs font-bold transition-all border-none bg-transparent cursor-pointer"
                   >
                     취소
                   </button>
                   <button
                     type="button"
-                    onClick={handleAddCustomAction}
-                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-black transition-all cursor-pointer shadow-xs"
+                    onClick={() => handleGenerateNaturalAction()}
+                    disabled={isParsingNatural || !naturalPrompt.trim()}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
                   >
-                    목록에 추가
+                    {isParsingNatural ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>AI 의도 분석 및 작업 카드 생성 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>AI 자율 액션 카드 생성 ✨</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -884,6 +975,9 @@ export default function GovernanceDetailModal({
                 const isSelected = selectedActions.includes(act.code);
                 const isCustom = act.code.startsWith("CUSTOM_");
                 const isSms = act.isSmsAction;
+                const isEmail = act.isEmailAction;
+                const isKnowledge = act.isKnowledgeAction;
+                const isTask = act.isTaskAction;
 
                 return (
                   <div
@@ -894,10 +988,22 @@ export default function GovernanceDetailModal({
                       );
                     }}
                     className={`rounded-2xl border transition-all cursor-pointer overflow-hidden ${
-                      isSms
+                      isEmail
                         ? isSelected
-                          ? "bg-gradient-to-br from-indigo-50/90 to-purple-50/70 border-indigo-300 shadow-sm"
+                          ? "bg-gradient-to-br from-blue-50/90 to-indigo-50/70 border-indigo-300 shadow-sm"
                           : "bg-slate-50/60 border-slate-200 opacity-70 hover:opacity-100"
+                        : isKnowledge
+                          ? isSelected
+                            ? "bg-gradient-to-br from-emerald-50/90 to-teal-50/70 border-emerald-300 shadow-sm"
+                            : "bg-slate-50/60 border-slate-200 opacity-70 hover:opacity-100"
+                        : isTask
+                          ? isSelected
+                            ? "bg-gradient-to-br from-amber-50/90 to-orange-50/70 border-amber-300 shadow-sm"
+                            : "bg-slate-50/60 border-slate-200 opacity-70 hover:opacity-100"
+                        : isSms
+                          ? isSelected
+                            ? "bg-gradient-to-br from-purple-50/90 to-indigo-50/70 border-purple-300 shadow-sm"
+                            : "bg-slate-50/60 border-slate-200 opacity-70 hover:opacity-100"
                         : act.isDeleteAction
                           ? isSelected
                             ? "bg-gradient-to-br from-rose-50/90 to-amber-50/70 border-rose-300 shadow-sm"
@@ -911,7 +1017,122 @@ export default function GovernanceDetailModal({
                             : "bg-slate-50/50 border-slate-200/60 opacity-60 hover:opacity-100 p-3.5"
                     }`}
                   >
-                    {act.isDeleteAction ? (
+                    {act.isEmailAction ? (
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <button type="button" className="text-indigo-600 border-none bg-transparent cursor-pointer p-0">
+                              {isSelected ? <CheckSquare className="w-4.5 h-4.5" /> : <Square className="w-4.5 h-4.5 text-slate-400" />}
+                            </button>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-xs font-black ${isSelected ? "text-indigo-950" : "text-slate-700"}`}>
+                                {act.label}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-black border border-blue-200">
+                                📧 비즈니스 공문 이메일
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black border border-indigo-200">
+                                AI 자동 정중 작성
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleRemoveAction(e, act.code)}
+                            className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all border-none bg-transparent cursor-pointer shrink-0"
+                            title="해당 작업 항목 제거/해제"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="ml-7 bg-white/90 border border-indigo-150 rounded-xl p-3 shadow-2xs space-y-1.5">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-indigo-900 border-b border-indigo-50 pb-1">
+                            <span>수신: {act.to || act.description}</span>
+                            <span className="text-[10px] text-slate-400 font-normal">제목: {act.subject || '공문 안내'}</span>
+                          </div>
+                          <p className="text-xs text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
+                            {act.body || act.description}
+                          </p>
+                        </div>
+                      </div>
+                    ) : act.isKnowledgeAction ? (
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <button type="button" className="text-emerald-600 border-none bg-transparent cursor-pointer p-0">
+                              {isSelected ? <CheckSquare className="w-4.5 h-4.5" /> : <Square className="w-4.5 h-4.5 text-slate-400" />}
+                            </button>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-xs font-black ${isSelected ? "text-emerald-950" : "text-slate-700"}`}>
+                                {act.label}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black border border-emerald-200">
+                                🧠 사내 지식 RAG 영구 색인
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-black border border-teal-200">
+                                재발방지 아카이빙
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleRemoveAction(e, act.code)}
+                            className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all border-none bg-transparent cursor-pointer shrink-0"
+                            title="해당 작업 항목 제거/해제"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="ml-7 bg-white/90 border border-emerald-150 rounded-xl p-3 shadow-2xs space-y-1.5">
+                          <span className="text-[11px] font-bold text-emerald-900 block border-b border-emerald-50 pb-1">
+                            문서 제목: {act.title || act.label}
+                          </span>
+                          <p className="text-xs text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
+                            {act.content || act.description}
+                          </p>
+                        </div>
+                      </div>
+                    ) : act.isTaskAction ? (
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <button type="button" className="text-amber-600 border-none bg-transparent cursor-pointer p-0">
+                              {isSelected ? <CheckSquare className="w-4.5 h-4.5" /> : <Square className="w-4.5 h-4.5 text-slate-400" />}
+                            </button>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-xs font-black ${isSelected ? "text-amber-950" : "text-slate-700"}`}>
+                                {act.label}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black border border-amber-200">
+                                📋 모바일 스냅태스크 배정
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 text-[10px] font-black border border-orange-200">
+                                담당: {act.assignee || '담당자'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleRemoveAction(e, act.code)}
+                            className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all border-none bg-transparent cursor-pointer shrink-0"
+                            title="해당 작업 항목 제거/해제"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="ml-7 bg-white/90 border border-amber-150 rounded-xl p-3 shadow-2xs space-y-1">
+                          <p className="text-xs text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
+                            {act.content || act.description}
+                          </p>
+                        </div>
+                      </div>
+                    ) : act.isDeleteAction ? (
                       <div className="p-4 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2.5">
@@ -1199,7 +1420,8 @@ export default function GovernanceDetailModal({
                 handleExecuteActions({ 
                   saveAutoRule: saveAutoRuleOnExecute,
                   smsPayload: selectedActions.includes('SMS_AUTO_NOTIFY') ? matchedSmsAction?.smsPayload : undefined,
-                  smsPayloadList: smsPayloadList
+                  smsPayloadList: smsPayloadList,
+                  customActionPayloads: customActionPayloads
                 });
               }}
               disabled={isExecuting || selectedActions.length === 0}

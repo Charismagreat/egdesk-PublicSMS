@@ -285,7 +285,7 @@ export default function GovernanceDashboard() {
   };
 
   // 자율 액션 실행 및 동일 유형 AI 자율 자동 실행 규칙 등록
-  const handleExecuteActions = async (options?: { saveAutoRule?: boolean; smsPayload?: any; smsPayloadList?: any[] }) => {
+  const handleExecuteActions = async (options?: { saveAutoRule?: boolean; smsPayload?: any; smsPayloadList?: any[]; customActionPayloads?: any }) => {
     if (!selectedEvent || selectedActions.length === 0) return;
     setIsExecuting(true);
     try {
@@ -302,7 +302,8 @@ export default function GovernanceDashboard() {
           originalData: selectedEvent.data,
           actions: selectedActions,
           smsPayload: options?.smsPayload,
-          smsPayloadList: options?.smsPayloadList
+          smsPayloadList: options?.smsPayloadList,
+          customActionPayloads: options?.customActionPayloads
         })
       });
       const data = await res.json();
