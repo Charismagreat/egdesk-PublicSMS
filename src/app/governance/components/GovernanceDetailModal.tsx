@@ -48,6 +48,7 @@ export default function GovernanceDetailModal({
   handleOpenDocumentModal,
   loadData,
 }: GovernanceDetailModalProps) {
+  const isResolved = selectedEvent?.status === 'RESOLVED';
   const [customActionTitle, setCustomActionTitle] = useState("");
   const [customActionDesc, setCustomActionDesc] = useState("");
   const [isAddingAction, setIsAddingAction] = useState(false);
