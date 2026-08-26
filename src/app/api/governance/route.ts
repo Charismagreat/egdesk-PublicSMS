@@ -2246,20 +2246,34 @@ export async function POST(request: Request) {
             }
           }
 
-          else if (act === 'SMS_AUTO_NOTIFY' || act === 'NOTIFY_USER') {
+          else if (act === 'SMS_AUTO_NOTIFY' || act === 'NOTIFY_USER' || act.startsWith('SMS_ADHOC_')) {
             try {
               const tenantId = originalData?.tenant_id || originalData?.tenantId || await resolveTenantId() || 'default';
-              const smsPayload = body.smsPayload;
+              
+              // smsPayloadList 에서 현재 액션에 매칭되는 페이로드 추출 시도
+              let smsPayload = body.smsPayload;
+              if (Array.isArray(body.smsPayloadList)) {
+                if (act.startsWith('SMS_ADHOC_')) {
+                  const adhocIdx = body.actions.filter((a: string) => a.startsWith('SMS_ADHOC_')).indexOf(act);
+                  const adhocList = body.smsPayloadList.filter((p: any) => p.templateTitle === '1회성 맞춤 공유');
+                  if (adhocList[adhocIdx]) {
+                    smsPayload = adhocList[adhocIdx];
+                  }
+                } else if (act === 'SMS_AUTO_NOTIFY') {
+                  smsPayload = body.smsPayloadList.find((p: any) => p.templateTitle !== '1회성 맞춤 공유') || body.smsPayload;
+                }
+              }
+
               let targetPhones: string[] = [];
               let recipientNames: string[] = [];
               let finalMsg = '';
-              let templateTitle = '기본 알림';
+              let templateTitle = act.startsWith('SMS_ADHOC_') ? '1회성 맞춤 알림' : '기본 알림';
 
               if (smsPayload && smsPayload.phones && smsPayload.phones.length > 0) {
                 targetPhones = smsPayload.phones;
                 recipientNames = smsPayload.operatorNames || targetPhones;
                 finalMsg = smsPayload.message || '업무 관제 이벤트가 발생했습니다.';
-                templateTitle = smsPayload.templateTitle || '자동 발송 규칙';
+                templateTitle = smsPayload.templateTitle || (act.startsWith('SMS_ADHOC_') ? '1회성 맞춤 공유' : '자동 발송 규칙');
               } else {
                 // DB에서 automation_rules 및 templates 조회하여 자동 매칭
                 const settingRes = await queryTable('system_settings', { filters: { key: 'automation_rules' } }).catch(() => ({ rows: [] }));

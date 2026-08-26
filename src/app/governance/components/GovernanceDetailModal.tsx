@@ -56,7 +56,14 @@ export default function GovernanceDetailModal({
   const [saveAutoRuleOnExecute, setSaveAutoRuleOnExecute] = useState(false);
   const [matchedSmsAction, setMatchedSmsAction] = useState<any | null>(null);
 
-  // 📱 문자 관제 활성 자동 발송 규칙 실시간 매칭
+  // 📱 1회성 맞춤 문자 추가 상태
+  const [allOperators, setAllOperators] = useState<any[]>([]);
+  const [isAddingAdhocSms, setIsAddingAdhocSms] = useState(false);
+  const [adhocSelectedOpIds, setAdhocSelectedOpIds] = useState<string[]>([]);
+  const [adhocCustomPhone, setAdhocCustomPhone] = useState("");
+  const [adhocMessage, setAdhocMessage] = useState("");
+
+  // 📱 문자 관제 활성 자동 발송 규칙 실시간 매칭 (상시 기본 탑재)
   useEffect(() => {
     if (!selectedEvent) return;
 
@@ -72,6 +79,7 @@ export default function GovernanceDetailModal({
         let rules = autoRes?.rules || {};
         const templates = tmplRes?.templates || [];
         const operators = opRes?.operators || [];
+        if (isMounted) setAllOperators(operators);
 
         const title = selectedEvent.title || '';
         const docTitle = selectedEvent.data?.doc_title || '';
@@ -81,83 +89,103 @@ export default function GovernanceDetailModal({
           title.includes('삭제') || title.includes('취소') || 
           docTitle.includes('삭제') || docTitle.includes('취소');
 
-        // 💡 삭제/취소 건인 경우 신규 수주 확정 문자를 매칭하지 않음
+        // 거래처명 및 상신자명 추출
+        let partnerName = '엘에스';
+        const titleMatch = title.match(/\[상신\]\s*([^\s]+)/i);
+        if (titleMatch && titleMatch[1]) {
+          partnerName = titleMatch[1];
+        } else if (selectedEvent.data?.partner_name || selectedEvent.data?.customer_name) {
+          partnerName = selectedEvent.data.partner_name || selectedEvent.data.customer_name;
+        }
+        const submitterName = selectedEvent.created_by || selectedEvent.data?.operator || '이주용';
+        const docIdText = selectedEvent.data?.doc_id || selectedEvent.doc_id || selectedEvent.id || '';
+
+        let templateTitle = '수주등록';
+        let finalMessage = '';
+        let targetRuleTitle = 'B2B 수주 확정 알림';
+        let targetRecipients: { name: string; phone: string; dept?: string }[] = [];
+
         if (isDeleteOrHold) {
-          if (isMounted) {
-            setMatchedSmsAction(null);
+          // 🗑️ 삭제/취소 승인 건 전용 기본 문자 구성
+          targetRuleTitle = '데이터 삭제/취소 승인 완료 알림';
+          templateTitle = '삭제/취소 승인 통보';
+          finalMessage = `[이지데스크] ${partnerName} 건(${docIdText})의 삭제/취소 요청이 최고관리자에 의해 최종 승인 완료되었습니다.`;
+          
+          // 수신자: 상신자/요청자 우선 매칭 + 주요 관리자
+          const matchedOp = operators.find((o: any) => o.name === submitterName || o.username === submitterName);
+          if (matchedOp && matchedOp.phone) {
+            targetRecipients.push({ name: matchedOp.name, phone: matchedOp.phone, dept: matchedOp.department });
           }
-          return;
+          operators.filter((o: any) => o.name !== submitterName).slice(0, 2).forEach((o: any) => {
+            if (o.phone) targetRecipients.push({ name: o.name, phone: o.phone, dept: o.department });
+          });
+        } else {
+          // 📦 신규 수주/상신 건 전용 기본 문자 구성
+          const isSales = title.includes('수주') || title.includes('발주') || docTitle.includes('수주') || docTitle.includes('발주');
+          const ruleKey = isSales ? 'sales_order_confirmed' : Object.keys(rules)[0] || 'sales_order_confirmed';
+          const targetRule = rules[ruleKey] || Object.values(rules).find((r: any) => r.enabled);
+
+          if (targetRule && targetRule.enabled) {
+            const tmpl = templates.find((t: any) => String(t.id) === String(targetRule.templateId)) || templates[0];
+            templateTitle = tmpl?.title || '수주등록';
+            const templateRawContent = tmpl?.content || '새로운 수주가 들어왔습니다. {거래처명}';
+            targetRuleTitle = targetRule.title || 'B2B 수주 확정 알림';
+
+            finalMessage = templateRawContent
+              .replace(/{거래처명}/g, partnerName)
+              .replace(/{상호}/g, partnerName)
+              .replace(/{상신자명}/g, submitterName)
+              .replace(/{담당자명}/g, submitterName);
+
+            const targetOpIds = targetRule.targetOperatorIds || (targetRule.targetOperatorId ? [String(targetRule.targetOperatorId)] : []);
+            if (targetRule.targetType === 'ALL_OPERATORS') {
+              targetRecipients = operators.map((o: any) => ({ name: o.name, phone: o.phone, dept: o.department }));
+            } else if ((targetRule.targetType === 'OPERATORS' || targetRule.targetType === 'OPERATOR') && targetOpIds.length > 0) {
+              targetRecipients = operators
+                .filter((o: any) => targetOpIds.map(String).includes(String(o.id)))
+                .map((o: any) => ({ name: o.name, phone: o.phone, dept: o.department }));
+            } else if (targetRule.targetType === 'CUSTOM' && targetRule.targetPhone) {
+              targetRecipients = targetRule.targetPhone.split(',').map((p: string) => ({ name: '직접입력', phone: p.trim() }));
+            }
+          }
         }
 
-        const isSales = title.includes('수주') || title.includes('발주') || docTitle.includes('수주') || docTitle.includes('발주');
+        if (targetRecipients.length === 0 && operators.length > 0) {
+          targetRecipients = operators.slice(0, 2).map((o: any) => ({ name: o.name, phone: o.phone, dept: o.department }));
+        }
 
-        const ruleKey = isSales ? 'sales_order_confirmed' : Object.keys(rules)[0] || 'sales_order_confirmed';
-        const targetRule = rules[ruleKey] || Object.values(rules).find((r: any) => r.enabled);
+        if (!finalMessage) {
+          finalMessage = `[이지데스크] ${partnerName} 업무 건에 대한 최고관리자의 관제 조치가 완료되었습니다.`;
+        }
 
-        if (targetRule && targetRule.enabled) {
-          const tmpl = templates.find((t: any) => String(t.id) === String(targetRule.templateId)) || templates[0];
-          const templateTitle = tmpl?.title || '수주등록';
-          const templateRawContent = tmpl?.content || '새로운 수주가 들어왔습니다. {거래처명}';
-
-          // 거래처명 및 상신자명 추출
-          let partnerName = '엘에스';
-          const titleMatch = title.match(/\[상신\]\s*([^\s]+)/i);
-          if (titleMatch && titleMatch[1]) {
-            partnerName = titleMatch[1];
-          } else if (selectedEvent.data?.partner_name) {
-            partnerName = selectedEvent.data.partner_name;
-          }
-          const submitterName = selectedEvent.created_by || selectedEvent.data?.operator || '이주용';
-
-          const finalMessage = templateRawContent
-            .replace(/{거래처명}/g, partnerName)
-            .replace(/{상호}/g, partnerName)
-            .replace(/{상신자명}/g, submitterName)
-            .replace(/{담당자명}/g, submitterName);
-
-          // 수신자 명단 및 번호 추출
-          let targetRecipients: { name: string; phone: string; dept?: string }[] = [];
-          const targetOpIds = targetRule.targetOperatorIds || (targetRule.targetOperatorId ? [String(targetRule.targetOperatorId)] : []);
-
-          if (targetRule.targetType === 'ALL_OPERATORS') {
-            targetRecipients = operators.map((o: any) => ({ name: o.name, phone: o.phone, dept: o.department }));
-          } else if ((targetRule.targetType === 'OPERATORS' || targetRule.targetType === 'OPERATOR') && targetOpIds.length > 0) {
-            targetRecipients = operators
-              .filter((o: any) => targetOpIds.map(String).includes(String(o.id)))
-              .map((o: any) => ({ name: o.name, phone: o.phone, dept: o.department }));
-          } else if (targetRule.targetType === 'CUSTOM' && targetRule.targetPhone) {
-            targetRecipients = targetRule.targetPhone.split(',').map((p: string) => ({ name: '직접입력', phone: p.trim() }));
-          } else if (targetRule.targetOperatorId) {
-            const op = operators.find((o: any) => String(o.id) === String(targetRule.targetOperatorId));
-            if (op) targetRecipients = [{ name: op.name, phone: op.phone, dept: op.department }];
-          }
-
-          if (targetRecipients.length === 0 && operators.length > 0) {
-            targetRecipients = operators.slice(0, 2).map((o: any) => ({ name: o.name, phone: o.phone, dept: o.department }));
-          }
-
-          if (isMounted) {
-            const newSmsAction = {
-              code: "SMS_AUTO_NOTIFY",
-              label: `[📱 AI 자동 문자 발송] ${targetRule.title || 'B2B 수주 확정 알림'}`,
-              description: `템플릿: '${templateTitle}' · 수신: ${targetRecipients.map(r => r.name).join(', ')} (총 ${targetRecipients.length}명)`,
-              isSmsAction: true,
+        if (isMounted) {
+          const newSmsAction = {
+            code: "SMS_AUTO_NOTIFY",
+            label: `[📱 AI 자동 문자 발송] ${targetRuleTitle}`,
+            description: `템플릿: '${templateTitle}' · 수신: ${targetRecipients.map(r => r.name).join(', ')} (총 ${targetRecipients.length}명)`,
+            isSmsAction: true,
+            templateTitle,
+            finalMessage,
+            targetRecipients,
+            smsPayload: {
               templateTitle,
-              finalMessage,
-              targetRecipients,
-              smsPayload: {
-                templateTitle,
-                message: finalMessage,
-                phones: targetRecipients.map(r => r.phone).filter(Boolean),
-                operatorNames: targetRecipients.map(r => r.name)
-              }
-            };
-            setMatchedSmsAction(newSmsAction);
-            setSelectedActions(prev => {
-              const withoutNotify = prev.filter(c => c !== "NOTIFY_USER");
-              return withoutNotify.includes("SMS_AUTO_NOTIFY") ? withoutNotify : ["SMS_AUTO_NOTIFY", ...withoutNotify];
-            });
-          }
+              message: finalMessage,
+              phones: targetRecipients.map(r => r.phone).filter(Boolean),
+              operatorNames: targetRecipients.map(r => r.name)
+            }
+          };
+          setMatchedSmsAction(newSmsAction);
+          setSelectedActions(prev => {
+            const withoutNotify = prev.filter(c => c !== "NOTIFY_USER");
+            return withoutNotify.includes("SMS_AUTO_NOTIFY") ? withoutNotify : ["SMS_AUTO_NOTIFY", ...withoutNotify];
+          });
+
+          // 1회성 문자 기본 추천 문구 프리필
+          setAdhocMessage(
+            isDeleteOrHold
+              ? `[긴급 공유] ${partnerName} 수주 건(${docIdText})이 최고관리자 승인으로 취소/삭제되었습니다. 연관 부서는 생산 및 출하 준비를 중단 바랍니다.`
+              : `[업무 공유] ${partnerName} 관련 관제 조치 사항을 전사 유관 부서에 전달드립니다.`
+          );
         }
       } catch (err) {
         console.error("SMS auto rule matching error:", err);
@@ -281,6 +309,53 @@ export default function GovernanceDetailModal({
     setCustomActionTitle("");
     setCustomActionDesc("");
     setIsAddingAction(false);
+  };
+
+  // 📱 1회성 맞춤 문자 추가 핸들러
+  const handleAddAdhocSms = () => {
+    if (!adhocMessage.trim()) {
+      alert("발송할 알림 문자 메시지 내용을 입력해 주세요.");
+      return;
+    }
+    
+    let targetRecipients: { name: string; phone: string; dept?: string }[] = [];
+    const selectedOps = allOperators.filter((o: any) => adhocSelectedOpIds.includes(String(o.id)));
+    selectedOps.forEach((o: any) => {
+      if (o.phone) targetRecipients.push({ name: o.name, phone: o.phone, dept: o.department });
+    });
+
+    if (adhocCustomPhone.trim()) {
+      adhocCustomPhone.split(',').map(p => p.trim()).filter(Boolean).forEach(p => {
+        targetRecipients.push({ name: '직접입력', phone: p });
+      });
+    }
+
+    if (targetRecipients.length === 0) {
+      alert("문자를 수신할 부서/담당자 또는 전화번호를 최소 1개 이상 선택해 주세요.");
+      return;
+    }
+
+    const newCode = `SMS_ADHOC_${Date.now()}`;
+    const newSmsAction = {
+      code: newCode,
+      label: `[📱 1회성 추가 문자 발송] ${targetRecipients.map(r => r.name).slice(0, 3).join(', ')}${targetRecipients.length > 3 ? ` 외 ${targetRecipients.length - 3}명` : ''}`,
+      description: `수신: ${targetRecipients.map(r => r.name).join(', ')} (총 ${targetRecipients.length}명)`,
+      isSmsAction: true,
+      isAdhocSms: true,
+      templateTitle: '1회성 맞춤 공유',
+      finalMessage: adhocMessage.trim(),
+      targetRecipients,
+      smsPayload: {
+        templateTitle: '1회성 맞춤 공유',
+        message: adhocMessage.trim(),
+        phones: targetRecipients.map(r => r.phone).filter(Boolean),
+        operatorNames: targetRecipients.map(r => r.name)
+      }
+    };
+
+    setCustomActions((prev) => [...prev, newSmsAction]);
+    setSelectedActions((prev) => [...prev, newCode]);
+    setIsAddingAdhocSms(false);
   };
 
   const displayTitle = (selectedEvent.title || '')
@@ -620,10 +695,24 @@ export default function GovernanceDetailModal({
                 <ListTodo className="w-4 h-4 text-indigo-650" />
                 <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">AI 권장 자율 대행 조치 시나리오</h4>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => setIsAddingAction((prev) => !prev)}
+                  onClick={() => {
+                    setIsAddingAdhocSms((prev) => !prev);
+                    setIsAddingAction(false);
+                  }}
+                  className="inline-flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-extrabold text-[11px] px-2.5 py-1 rounded-lg border border-purple-200 transition-all cursor-pointer shadow-2xs"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-purple-600" />
+                  <span>+ 1회성 문자 추가</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingAction((prev) => !prev);
+                    setIsAddingAdhocSms(false);
+                  }}
                   className="inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] px-2.5 py-1 rounded-lg border border-indigo-200 transition-all cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5 text-indigo-600" />
@@ -634,6 +723,124 @@ export default function GovernanceDetailModal({
                 </span>
               </div>
             </div>
+
+            {/* 📱 1회성 맞춤 알림 문자 인라인 작성 폼 */}
+            {isAddingAdhocSms && (
+              <div className="bg-gradient-to-br from-purple-50/90 via-indigo-50/60 to-white border border-purple-200 rounded-2xl p-4 space-y-3.5 animate-fade-in shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-purple-950 flex items-center gap-1.5">
+                    <MessageSquare className="w-4 h-4 text-purple-600" />
+                    <span>📱 1회성 맞춤 문자 추가 발송 설정</span>
+                  </span>
+                  <span className="text-[10px] bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full border border-purple-200">
+                    0원 무료 SMS 연동
+                  </span>
+                </div>
+
+                {/* 부서 원클릭 다중 선택 칩 */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-700 block">👥 수신 부서/팀 원클릭 선택:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Array.from(new Set(allOperators.map((o: any) => o.department || '기타'))).map((dept) => {
+                      const deptOps = allOperators.filter((o: any) => (o.department || '기타') === dept);
+                      const isDeptAllSelected = deptOps.length > 0 && deptOps.every((o: any) => adhocSelectedOpIds.includes(String(o.id)));
+
+                      return (
+                        <button
+                          key={dept}
+                          type="button"
+                          onClick={() => {
+                            const deptOpIds = deptOps.map((o: any) => String(o.id));
+                            if (isDeptAllSelected) {
+                              setAdhocSelectedOpIds((prev) => prev.filter((id) => !deptOpIds.includes(id)));
+                            } else {
+                              setAdhocSelectedOpIds((prev) => Array.from(new Set([...prev, ...deptOpIds])));
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                            isDeptAllSelected
+                              ? 'bg-purple-600 text-white border-purple-700 shadow-2xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-purple-50 hover:text-purple-700'
+                          }`}
+                        >
+                          {dept} ({deptOps.length}명)
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 개별 임직원 선택 칩 */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-700 block">👤 개별 담당자 선택:</span>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-white/80 rounded-xl border border-slate-200">
+                    {allOperators.map((op: any) => {
+                      const isSelected = adhocSelectedOpIds.includes(String(op.id));
+                      return (
+                        <button
+                          key={op.id}
+                          type="button"
+                          onClick={() => {
+                            setAdhocSelectedOpIds((prev) =>
+                              isSelected ? prev.filter((id) => id !== String(op.id)) : [...prev, String(op.id)]
+                            );
+                          }}
+                          className={`px-2 py-0.8 rounded-md text-[11px] font-bold transition-all border cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-2xs'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {op.name} {op.department ? `(${op.department})` : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 직접 전화번호 입력 */}
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold text-slate-700 block">📞 직접 번호 입력 (쉼표로 구분):</span>
+                  <input
+                    type="text"
+                    value={adhocCustomPhone}
+                    onChange={(e) => setAdhocCustomPhone(e.target.value)}
+                    placeholder="예: 010-1234-5678, 010-9876-5432"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                {/* 발송 메시지 입력란 */}
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold text-slate-700 block">✍️ 발송 메시지 내용:</span>
+                  <textarea
+                    value={adhocMessage}
+                    onChange={(e) => setAdhocMessage(e.target.value)}
+                    rows={3}
+                    placeholder="전송할 알림 문구를 입력하세요."
+                    className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500 leading-relaxed"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingAdhocSms(false)}
+                    className="px-3 py-1.5 text-slate-500 hover:bg-slate-200/60 rounded-xl text-xs font-bold transition-all border-none bg-transparent cursor-pointer"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddAdhocSms}
+                    className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs flex items-center gap-1"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    <span>1회성 문자 목록에 추가</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* 최고관리자 커스텀 추천 작업 인라인 작성 폼 */}
             {isAddingAction && (
@@ -983,10 +1190,18 @@ export default function GovernanceDetailModal({
             </div>
           ) : !actionReports ? (
             <button
-              onClick={() => handleExecuteActions({ 
-                saveAutoRule: saveAutoRuleOnExecute,
-                smsPayload: selectedActions.includes('SMS_AUTO_NOTIFY') ? matchedSmsAction?.smsPayload : undefined
-              })}
+              onClick={() => {
+                const selectedSmsActions = actionsList.filter(
+                  (act: any) => act.isSmsAction && selectedActions.includes(act.code)
+                );
+                const smsPayloadList = selectedSmsActions.map((a: any) => a.smsPayload).filter(Boolean);
+
+                handleExecuteActions({ 
+                  saveAutoRule: saveAutoRuleOnExecute,
+                  smsPayload: selectedActions.includes('SMS_AUTO_NOTIFY') ? matchedSmsAction?.smsPayload : undefined,
+                  smsPayloadList: smsPayloadList
+                });
+              }}
               disabled={isExecuting || selectedActions.length === 0}
               className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold px-6 py-3 rounded-xl shadow-xs text-xs border-none cursor-pointer flex items-center gap-2 transition-all"
             >
