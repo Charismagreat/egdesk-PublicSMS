@@ -133,7 +133,7 @@ export async function GET(request: Request) {
       const soRes = await queryTable('crm_sales_orders', { limit: 1000, orderBy: 'id', orderDirection: 'DESC' });
       const soRows = (soRes.rows || []).filter((r: any) => !r.deleted_at);
       soRows.forEach((so: any) => {
-        const deliveryDate = sanitizeDateStr(so.delivery_date);
+        const deliveryDate = sanitizeDateStr(so.delivery_date) || sanitizeDateStr(so.due_date);
         if (deliveryDate) {
           const partnerName = so.customer_name || so.partner_name || '거래처';
           const amountStr = so.total_amount ? ` (${Number(so.total_amount).toLocaleString()}원)` : '';
@@ -160,7 +160,7 @@ export async function GET(request: Request) {
       const poRes = await queryTable('crm_purchase_orders', { limit: 1000, orderBy: 'id', orderDirection: 'DESC' });
       const poRows = (poRes.rows || []).filter((r: any) => !r.deleted_at);
       poRows.forEach((po: any) => {
-        const deliveryDate = sanitizeDateStr(po.delivery_date);
+        const deliveryDate = sanitizeDateStr(po.delivery_date) || sanitizeDateStr(po.due_date);
         if (deliveryDate) {
           const partnerName = po.supplier_name || po.partner_name || '공급처';
           const amountStr = po.total_amount ? ` (${Number(po.total_amount).toLocaleString()}원)` : '';
@@ -180,26 +180,29 @@ export async function GET(request: Request) {
         }
       });
 
-      // 5-3. 견적 마스터(crm_estimates) 보조 스캔
+      // 5-3. 견적/수주등록 마스터(crm_estimates) 보조 스캔
       const estimateRes = await queryTable('crm_estimates', { limit: 500 });
       const estimates = (estimateRes.rows || []).filter((r: any) => !r.deleted_at);
       estimates.forEach((est: any) => {
-        let deliveryDate = null;
-        if (est.spec) {
+        let deliveryDate = sanitizeDateStr(est.payment_due_date) || sanitizeDateStr(est.delivery_date);
+        if (!deliveryDate && est.spec) {
           try {
             const parsed = typeof est.spec === 'string' ? JSON.parse(est.spec) : est.spec;
-            deliveryDate = sanitizeDateStr(parsed.delivery_date);
+            deliveryDate = sanitizeDateStr(parsed.delivery_date) || sanitizeDateStr(parsed.payment_due_date);
           } catch (e) {}
         }
-        if (deliveryDate && !salesDeliveries.some(s => s.estimate_id === est.id)) {
+        if (deliveryDate && !salesDeliveries.some(s => s.estimate_id === est.id || s.so_id === est.id)) {
+          const isOutbound = String(est.type || '').toUpperCase().includes('OUTBOUND') || String(est.type || '').toLowerCase().includes('so');
+          const partnerName = est.partner_name || est.customer_name || '거래처';
+          const amountStr = est.total_amount ? ` (${Number(est.total_amount).toLocaleString()}원)` : '';
           salesDeliveries.push({
             id: 'est_' + est.id,
             estimate_id: est.id,
-            customer_name: est.partner_name || est.customer_name || '거래처',
-            title: `[${est.type === 'outbound_so' ? '수주납기' : '발주납기'}] ${est.partner_name || est.customer_name || '거래처'}`,
+            customer_name: partnerName,
+            title: `[${isOutbound ? '수주납기' : '발주납기'}] ${partnerName}${amountStr}`,
             due_date: deliveryDate,
-            amount: est.total_amount,
-            type: est.type || 'ESTIMATE',
+            amount: est.total_amount || 0,
+            type: isOutbound ? 'SALES_ORDER' : 'PURCHASE_ORDER',
             raw: est
           });
         }
