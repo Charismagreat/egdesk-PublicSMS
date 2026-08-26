@@ -216,8 +216,8 @@ export default function GovernanceDetailModal({
 
           // 1회성 문자 기본 추천 문구 프리필
           setAdhocMessage(
-            isDeleteOrHold
-              ? `[긴급 공유] ${partnerName} 수주 건(${docIdText})이 최고관리자 승인으로 취소/삭제되었습니다. 연관 부서는 생산 및 출하 준비를 중단 바랍니다.`
+            isExplicitDelete
+              ? `[긴급 공유] ${partnerName} 건(${docIdText})이 최고관리자 승인으로 취소/삭제되었습니다. 연관 부서는 업무를 중단 바랍니다.`
               : `[업무 공유] ${partnerName} 관련 관제 조치 사항을 전사 유관 부서에 전달드립니다.`
           );
         }
