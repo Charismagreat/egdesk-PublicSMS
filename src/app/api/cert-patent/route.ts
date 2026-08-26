@@ -91,9 +91,66 @@ export async function GET(request: Request) {
       folderItems = [];
     }
 
-    // 5. 전사 영업/수주/발주 납품 기한 (crm_estimates)
+    // 5. 전사 실시간 수주 대장(crm_sales_orders) 및 발주 대장(crm_purchase_orders) 납품 기한 연동
     let salesDeliveries: any[] = [];
+    const sanitizeDateStr = (raw: any): string | null => {
+      if (!raw || typeof raw !== 'string') return null;
+      const cleaned = raw.trim().replace(/[\.\/]/g, '-');
+      const match = cleaned.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+      return match ? match[1] : null;
+    };
+
     try {
+      // 5-1. 실제 수주 대장(crm_sales_orders) 납기일 스캔
+      const soRes = await queryTable('crm_sales_orders', { limit: 1000, orderBy: 'id', orderDirection: 'DESC' });
+      const soRows = (soRes.rows || []).filter((r: any) => !r.deleted_at);
+      soRows.forEach((so: any) => {
+        const deliveryDate = sanitizeDateStr(so.delivery_date);
+        if (deliveryDate) {
+          const partnerName = so.customer_name || so.partner_name || '거래처';
+          const amountStr = so.total_amount ? ` (${Number(so.total_amount).toLocaleString()}원)` : '';
+          salesDeliveries.push({
+            id: 'so_' + so.id,
+            so_id: so.id,
+            estimate_id: so.estimate_id || '',
+            client_order_no: so.client_order_no || '',
+            customer_name: partnerName,
+            title: `[수주납기] ${partnerName}${amountStr}`,
+            due_date: deliveryDate,
+            amount: so.total_amount || 0,
+            status: so.status || 'REGISTERED',
+            item_name: so.item_name || '수주 품목',
+            type: 'SALES_ORDER',
+            raw: so
+          });
+        }
+      });
+
+      // 5-2. 실제 발주 대장(crm_purchase_orders) 납기일 스캔
+      const poRes = await queryTable('crm_purchase_orders', { limit: 1000, orderBy: 'id', orderDirection: 'DESC' });
+      const poRows = (poRes.rows || []).filter((r: any) => !r.deleted_at);
+      poRows.forEach((po: any) => {
+        const deliveryDate = sanitizeDateStr(po.delivery_date);
+        if (deliveryDate) {
+          const partnerName = po.supplier_name || po.partner_name || '공급처';
+          const amountStr = po.total_amount ? ` (${Number(po.total_amount).toLocaleString()}원)` : '';
+          salesDeliveries.push({
+            id: 'po_' + po.id,
+            po_id: po.id,
+            estimate_id: po.estimate_id || '',
+            customer_name: partnerName,
+            title: `[발주납기] ${partnerName}${amountStr}`,
+            due_date: deliveryDate,
+            amount: po.total_amount || 0,
+            status: po.status || 'REGISTERED',
+            item_name: po.item_name || '발주 품목',
+            type: 'PURCHASE_ORDER',
+            raw: po
+          });
+        }
+      });
+
+      // 5-3. 견적 마스터(crm_estimates) 보조 스캔
       const estimateRes = await queryTable('crm_estimates', { limit: 500 });
       const estimates = (estimateRes.rows || []).filter((r: any) => !r.deleted_at);
       estimates.forEach((est: any) => {
@@ -101,21 +158,24 @@ export async function GET(request: Request) {
         if (est.spec) {
           try {
             const parsed = typeof est.spec === 'string' ? JSON.parse(est.spec) : est.spec;
-            deliveryDate = parsed.delivery_date || null;
+            deliveryDate = sanitizeDateStr(parsed.delivery_date);
           } catch (e) {}
         }
-        if (deliveryDate) {
+        if (deliveryDate && !salesDeliveries.some(s => s.estimate_id === est.id)) {
           salesDeliveries.push({
             id: 'est_' + est.id,
-            title: `[${est.type === 'outbound_so' ? '수주납기' : '발주납기'}] ${est.customer_name || '거래처'}`,
+            estimate_id: est.id,
+            customer_name: est.partner_name || est.customer_name || '거래처',
+            title: `[${est.type === 'outbound_so' ? '수주납기' : '발주납기'}] ${est.partner_name || est.customer_name || '거래처'}`,
             due_date: deliveryDate,
             amount: est.total_amount,
-            type: est.type
+            type: est.type || 'ESTIMATE',
+            raw: est
           });
         }
       });
     } catch (e) {
-      salesDeliveries = [];
+      console.error('Error loading sales/purchase deliveries for calendar:', e);
     }
 
     return NextResponse.json({

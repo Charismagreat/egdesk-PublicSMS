@@ -462,20 +462,41 @@ export default function DashboardCertPatentWidget() {
             <Clock className="w-4 h-4 text-indigo-600" />
             선택 일자 전사 마일스톤: <strong className="text-slate-900 font-mono">{selectedDateStr}</strong> ({selectedEvents.length}건)
           </h4>
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-2.5 mt-2.5">
             {selectedEvents.length === 0 ? (
               <span className="text-xs text-slate-400">선택한 날짜에 예정된 전사 기한 일정이 없습니다.</span>
             ) : (
               selectedEvents.map((ev, i) => (
-                <div key={i} className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2 shadow-2xs">
-                  <span className="font-bold text-slate-800">{ev.title}</span>
+                <div key={i} className="bg-white border border-slate-200 px-3.5 py-2 rounded-2xl text-xs flex flex-wrap items-center gap-2 shadow-xs hover:border-indigo-300 transition-all">
+                  <span className="font-extrabold text-slate-900">{ev.title}</span>
+                  
+                  {/* 📦 수주 납기 건 바로가기 및 상세 */}
+                  {ev.category === "SALES" && (
+                    <div className="flex items-center gap-1.5 ml-1">
+                      {ev.raw?.client_order_no && (
+                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                          발주번호: {ev.raw.client_order_no}
+                        </span>
+                      )}
+                      <Link
+                        href={ev.raw?.so_id ? `/estimates/statement-write?soId=${ev.raw.so_id}` : "/estimates"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>거래명세서 작성/수주조회</span>
+                        <ArrowUpRight className="w-2.5 h-2.5" />
+                      </Link>
+                    </div>
+                  )}
+
                   {ev.type === "TASK" && ev.status === "AI_SUGGESTED" && (
                     <button
                       onClick={() => {
                         setSelectedTask(ev.raw);
                         setIsAssignModalOpen(true);
                       }}
-                      className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-[10px] font-bold"
+                      className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-[10px] font-bold cursor-pointer"
                     >
                       직원 배정하기
                     </button>
