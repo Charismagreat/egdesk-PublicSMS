@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, SAMPLE_GOOGLE_SHEET_URL } from '@/lib/google-sheets-storage';
 import GoogleSheetPresetModal, { GoogleSheetPreset } from "@/components/GoogleSheetPresetModal";
+import { parsePurchaseOrderExcel } from "../utils";
 import { 
   sanitizeDate, 
   sanitizeAmount, 
@@ -51,12 +52,14 @@ interface EstimateOcrModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  onOpenExcelMappingModal?: (file: File) => void;
 }
 
 export default function EstimateOcrModal({
   isOpen,
   onClose,
-  onSuccess
+  onSuccess,
+  onOpenExcelMappingModal
 }: EstimateOcrModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
