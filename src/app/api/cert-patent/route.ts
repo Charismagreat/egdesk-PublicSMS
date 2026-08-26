@@ -242,7 +242,7 @@ export async function POST(request: Request) {
 
     // 6. 🌟 담당자 배정 (단일 또는 복수 지정 - AI 태스크 및 수주/발주 납기 건 통합 지원)
     if (action === 'assign_task' || action === 'assign_sales_order') {
-      const { taskId, soId, assignees, assigneeName } = payload || {};
+      const { taskId, soId, assignees, assigneeName, registerAsPartnerManager, applyToAllUnassigned, partnerName: reqPartnerName } = payload || {};
       let finalAssignees = '';
       if (Array.isArray(assignees) && assignees.length > 0) {
         finalAssignees = assignees.join(', ');
@@ -267,32 +267,75 @@ export async function POST(request: Request) {
 
       // (2) crm_sales_orders 배정
       if (soId) {
-        await updateRows('crm_sales_orders', {
-          assigned_to: finalAssignees,
-          updated_at: nowStr
-        }, { filters: { id: soId } });
-
         // 수주서 상세 정보 조회
         const soRes = await queryTable('crm_sales_orders', { filters: { id: soId } });
         const so = soRes.rows?.[0];
-        const partnerName = so?.customer_name || so?.partner_name || '거래처';
-        const deliveryDate = so?.delivery_date || '';
+        const partnerName = (reqPartnerName || so?.customer_name || so?.partner_name || '').trim();
 
-        // (3) 배정된 각 직원의 모바일 스냅태스크(SnapTask)에 납기 할 일 자율 생성
-        const assigneeList = finalAssignees.split(',').map((s: string) => s.trim()).filter(Boolean);
-        for (const emp of assigneeList) {
-          await insertRows('crm_snaptasks', [{
-            id: Date.now() + Math.floor(Math.random() * 1000),
-            title: `[수주납기 관리] ${partnerName} (납기: ${deliveryDate})`,
-            description: `발주번호: ${so?.client_order_no || soId}, 수주총액: ${Number(so?.total_amount || 0).toLocaleString()}원. 납기 기한 내 출하/검수/거래명세서 발송을 완료해 주세요.`,
-            status: 'IN_PROGRESS',
-            assigned_to: emp,
-            created_by: '최고관리자 (전사 캘린더 자율 배정)',
-            tenant_id: so?.tenant_id || 'tenant-wontrading',
-            created_at: nowStr,
-            updated_at: nowStr
-          }]).catch(e => console.error('SnapTask create error:', e));
+        // 🌟 [기능 1] 거래처 마스터(crm_partners)에 전담 관리자 영구 등록
+        if (registerAsPartnerManager && partnerName) {
+          try {
+            const ptRes = await queryTable('crm_partners', { limit: 500 });
+            const matchedPartners = (ptRes.rows || []).filter((p: any) => 
+              !p.deleted_at && 
+              (p.company_name?.trim() === partnerName || p.name?.trim() === partnerName)
+            );
+            for (const pt of matchedPartners) {
+              await updateRows('crm_partners', {
+                manager_name: finalAssignees,
+                manager: finalAssignees,
+                charge_person: finalAssignees,
+                assigned_to: finalAssignees,
+                updated_at: nowStr
+              }, { filters: { id: pt.id } }).catch(() => {});
+            }
+          } catch (e) {
+            console.error('Error updating partner manager:', e);
+          }
         }
+
+        // 🌟 [기능 2] 동일 거래처의 다른 미배정 건도 일괄 소급 배정
+        let targetOrders: any[] = [];
+        if (applyToAllUnassigned && partnerName) {
+          const allSoRes = await queryTable('crm_sales_orders', { limit: 1000 });
+          targetOrders = (allSoRes.rows || []).filter((r: any) => 
+            !r.deleted_at && 
+            (r.customer_name?.trim() === partnerName || r.partner_name?.trim() === partnerName) &&
+            (!r.assigned_to || r.id === soId)
+          );
+        } else {
+          targetOrders = so ? [so] : [{ id: soId }];
+        }
+
+        // 일괄 업데이트 및 스냅태스크 생성
+        const assigneeList = finalAssignees.split(',').map((s: string) => s.trim()).filter(Boolean);
+        for (const targetSo of targetOrders) {
+          await updateRows('crm_sales_orders', {
+            assigned_to: finalAssignees,
+            updated_at: nowStr
+          }, { filters: { id: targetSo.id } });
+
+          const deliveryDate = targetSo.delivery_date || '';
+          for (const emp of assigneeList) {
+            await insertRows('crm_snaptasks', [{
+              id: Date.now() + Math.floor(Math.random() * 10000),
+              title: `[수주납기 관리] ${partnerName} (납기: ${deliveryDate})`,
+              description: `발주번호: ${targetSo.client_order_no || targetSo.id}, 수주총액: ${Number(targetSo.total_amount || 0).toLocaleString()}원. 납기 기한 내 출하/검수/거래명세서 발송을 완료해 주세요.`,
+              status: 'IN_PROGRESS',
+              assigned_to: emp,
+              created_by: '최고관리자 (전사 캘린더 자율 배정)',
+              tenant_id: targetSo.tenant_id || 'tenant-wontrading',
+              created_at: nowStr,
+              updated_at: nowStr
+            }]).catch(e => console.error('SnapTask create error:', e));
+          }
+        }
+
+        const countText = targetOrders.length > 1 ? ` (총 ${targetOrders.length}건 일괄 배정 완료)` : '';
+        return NextResponse.json({
+          success: true,
+          message: `${finalAssignees} 님에게 ${partnerName} 수주 납기 업무가 성공적으로 배정되었습니다.${countText}${registerAsPartnerManager ? ' (해당 거래처 전담 매니저 등록 완료)' : ''}`
+        });
       }
 
       return NextResponse.json({

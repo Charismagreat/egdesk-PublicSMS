@@ -49,6 +49,8 @@ export default function DashboardCertPatentWidget() {
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [customAssigneeInput, setCustomAssigneeInput] = useState("");
   const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
+  const [registerAsPartnerManager, setRegisterAsPartnerManager] = useState(true);
+  const [applyToAllUnassigned, setApplyToAllUnassigned] = useState(true);
 
   const fetchData = async () => {
     setLoading(true);
@@ -117,6 +119,8 @@ export default function DashboardCertPatentWidget() {
     const existing = item.assigned_to ? item.assigned_to.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
     setSelectedAssignees(existing);
     setCustomAssigneeInput("");
+    setRegisterAsPartnerManager(true);
+    setApplyToAllUnassigned(true);
     setIsAssignModalOpen(true);
   };
 
@@ -138,6 +142,7 @@ export default function DashboardCertPatentWidget() {
     setIsSubmittingAssign(true);
     try {
       const isSo = selectedTask.category === "SALES" || selectedTask.type === "SALES_ORDER" || selectedTask.so_id;
+      const partnerName = selectedTask.customer_name || selectedTask.raw?.customer_name || selectedTask.raw?.partner_name || '';
       const res = await apiFetch("/api/cert-patent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -146,7 +151,10 @@ export default function DashboardCertPatentWidget() {
           payload: {
             taskId: selectedTask.id,
             soId: selectedTask.so_id || (selectedTask.raw?.id ? selectedTask.raw.id : null),
-            assignees: finalAssignees
+            partnerName,
+            assignees: finalAssignees,
+            registerAsPartnerManager,
+            applyToAllUnassigned
           }
         })
       });
@@ -716,6 +724,45 @@ export default function DashboardCertPatentWidget() {
                   className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
+
+              {/* 🌟 [스마트 자율 배정 2종 옵션 카드] */}
+              {(selectedTask?.category === "SALES" || selectedTask?.type === "SALES_ORDER" || selectedTask?.so_id) && (
+                <div className="bg-gradient-to-br from-indigo-50/70 via-purple-50/40 to-slate-50 border border-indigo-100/80 rounded-2xl p-3.5 space-y-2.5">
+                  <label className="flex items-start gap-2.5 cursor-pointer text-xs font-bold text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={registerAsPartnerManager}
+                      onChange={(e) => setRegisterAsPartnerManager(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-indigo-950 font-extrabold flex items-center gap-1">
+                        🏢 해당 거래처({selectedTask?.customer_name || '거래처'})의 전담 납기 매니저로 영구 등록
+                      </span>
+                      <span className="text-[10px] font-normal text-slate-500 mt-0.5">
+                        향후 모바일 상신이나 엑셀 수주 등록 시 해당 거래처 건은 이 담당자에게 100% 자동 배정됩니다.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-2.5 cursor-pointer text-xs font-bold text-slate-800 pt-2 border-t border-indigo-100/70">
+                    <input
+                      type="checkbox"
+                      checked={applyToAllUnassigned}
+                      onChange={(e) => setApplyToAllUnassigned(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-indigo-950 font-extrabold flex items-center gap-1">
+                        ⚡ 동일 거래처의 다른 미배정 수주 건도 지금 즉시 일괄 배정
+                      </span>
+                      <span className="text-[10px] font-normal text-slate-500 mt-0.5">
+                        현재 대장에 등록된 동일 거래처의 모든 미배정 수주 건을 한 번에 배정하고 모바일 SnapTask도 동시 발송합니다.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              )}
 
               <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 text-[11px] text-indigo-900 leading-relaxed">
                 💡 <strong>자동 연동 안내</strong>: [배정 확정]을 누르시면 지정된 직원들의 <strong>모바일 스냅태스크(SnapTask) 업무 보드에 즉시 납기 관리 태스크가 자동 생성</strong>되고, 전사 캘린더에 배정 상태가 즉시 마운트됩니다.
