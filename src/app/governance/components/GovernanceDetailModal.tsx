@@ -62,16 +62,13 @@ export default function GovernanceDetailModal({
     let isMounted = true;
     (async () => {
       try {
-        const [rulesRes, tmplRes, opRes] = await Promise.all([
-          apiFetch('/api/settings?key=automation_rules').then(r => r.json()).catch(() => ({})),
+        const [autoRes, tmplRes, opRes] = await Promise.all([
+          apiFetch('/api/automation').then(r => r.json()).catch(() => ({ rules: {} })),
           apiFetch('/api/message-templates').then(r => r.json()).catch(() => ({ templates: [] })),
           apiFetch('/api/operators').then(r => r.json()).catch(() => ({ operators: [] }))
         ]);
 
-        let rules: Record<string, any> = {};
-        if (rulesRes?.success && rulesRes?.value) {
-          try { rules = JSON.parse(rulesRes.value); } catch {}
-        }
+        let rules = autoRes?.rules || {};
         const templates = tmplRes?.templates || [];
         const operators = opRes?.operators || [];
 
@@ -80,7 +77,7 @@ export default function GovernanceDetailModal({
         const isSales = title.includes('수주') || title.includes('발주') || docTitle.includes('수주') || docTitle.includes('발주');
 
         const ruleKey = isSales ? 'sales_order_confirmed' : Object.keys(rules)[0] || 'sales_order_confirmed';
-        const targetRule = rules[ruleKey];
+        const targetRule = rules[ruleKey] || Object.values(rules).find((r: any) => r.enabled);
 
         if (targetRule && targetRule.enabled) {
           const tmpl = templates.find((t: any) => String(t.id) === String(targetRule.templateId)) || templates[0];
@@ -105,16 +102,18 @@ export default function GovernanceDetailModal({
 
           // 수신자 명단 및 번호 추출
           let targetRecipients: { name: string; phone: string; dept?: string }[] = [];
+          const targetOpIds = targetRule.targetOperatorIds || (targetRule.targetOperatorId ? [String(targetRule.targetOperatorId)] : []);
+
           if (targetRule.targetType === 'ALL_OPERATORS') {
             targetRecipients = operators.map((o: any) => ({ name: o.name, phone: o.phone, dept: o.department }));
-          } else if (targetRule.targetType === 'OPERATORS' && Array.isArray(targetRule.targetOperatorIds)) {
+          } else if ((targetRule.targetType === 'OPERATORS' || targetRule.targetType === 'OPERATOR') && targetOpIds.length > 0) {
             targetRecipients = operators
-              .filter((o: any) => targetRule.targetOperatorIds.includes(String(o.id)))
+              .filter((o: any) => targetOpIds.map(String).includes(String(o.id)))
               .map((o: any) => ({ name: o.name, phone: o.phone, dept: o.department }));
           } else if (targetRule.targetType === 'CUSTOM' && targetRule.targetPhone) {
             targetRecipients = targetRule.targetPhone.split(',').map((p: string) => ({ name: '직접입력', phone: p.trim() }));
-          } else {
-            const op = operators.find((o: any) => String(o.id) === String(targetRule.targetOperatorId)) || operators[0];
+          } else if (targetRule.targetOperatorId) {
+            const op = operators.find((o: any) => String(o.id) === String(targetRule.targetOperatorId));
             if (op) targetRecipients = [{ name: op.name, phone: op.phone, dept: op.department }];
           }
 
