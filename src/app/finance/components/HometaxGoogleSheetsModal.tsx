@@ -210,6 +210,8 @@ export default function HometaxGoogleSheetsModal({
       let colBuyerCeo = -1;
       let colBuyerAddress = -1;
       let colBuyerEmail = -1;
+      let colBuyerEmail1 = -1;
+      let colBuyerEmail2 = -1;
       let colTotalAmount = -1;
       let colSupplyAmount = -1;
       let colTaxAmount = -1;
@@ -249,7 +251,10 @@ export default function HometaxGoogleSheetsModal({
           colBuyerCeo = idx;
         } else if (clean.includes('공급받는자사업장주소') || clean.includes('공급받는자주소') || (clean.includes('공급받는자') && clean.includes('주소'))) {
           colBuyerAddress = idx;
-        } else if (clean.includes('공급받는자이메일') || clean.includes('공급받는자전자우편') || (clean.includes('공급받는자') && clean.includes('이메일'))) {
+        } else if (clean.includes('공급받는자이메일2') || clean.includes('공급받는자전자우편2') || (clean.includes('공급받는자') && clean.includes('이메일2'))) {
+          colBuyerEmail2 = idx;
+        } else if (clean.includes('공급받는자이메일1') || clean.includes('공급받는자전자우편1') || clean.includes('공급받는자이메일') || clean.includes('공급받는자전자우편') || (clean.includes('공급받는자') && clean.includes('이메일'))) {
+          if (colBuyerEmail1 === -1) colBuyerEmail1 = idx;
           colBuyerEmail = idx;
         } else if (clean === '합계금액' || clean === '총액' || clean === '총금액' || (clean.includes('합계금액') && !clean.includes('품목'))) {
           colTotalAmount = idx;
@@ -346,8 +351,9 @@ export default function HometaxGoogleSheetsModal({
         const rawBuyerNum = colBuyerNum !== -1 ? String(rowArr[colBuyerNum] || '').trim() : '';
         const buyer_corp_name = colBuyerName !== -1 ? String(rowArr[colBuyerName] || '').trim() : '';
         const buyer_ceo_name = colBuyerCeo !== -1 ? String(rowArr[colBuyerCeo] || '').trim() : '';
-        const buyer_address = colBuyerAddress !== -1 ? String(rowArr[colBuyerAddress] || '').trim() : '';
-        const buyer_email = colBuyerEmail !== -1 ? String(rowArr[colBuyerEmail] || '').trim() : '';
+        const buyer_email1 = colBuyerEmail1 !== -1 ? String(rowArr[colBuyerEmail1] || '').trim() : '';
+        const buyer_email2 = colBuyerEmail2 !== -1 ? String(rowArr[colBuyerEmail2] || '').trim() : '';
+        const buyer_email = buyer_email1 || buyer_email2 || (colBuyerEmail !== -1 ? String(rowArr[colBuyerEmail] || '').trim() : '');
 
         let item_name = colItemName !== -1 ? String(rowArr[colItemName] || '').trim() : '';
         let remark = colRemark !== -1 ? String(rowArr[colRemark] || '').trim() : '';
