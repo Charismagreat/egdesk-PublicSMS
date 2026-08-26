@@ -159,7 +159,7 @@ export async function GET(req: Request) {
       // 4) crm_governance_logs 상신 및 관제 로그 due_date 결합 동기화 (테넌트 격리)
       try {
         const govLogsRes = await queryTable('crm_governance_logs', { filters: { tenant_id: userTenantId }, limit: 10000 }).catch(() => ({ rows: [] }));
-        const govLogs = govLogsRes.rows || [];
+        const govLogs = (govLogsRes.rows || []).filter((l: any) => !l.deleted_at);
 
         // 제목 정제 함수 (모든 접두어 전면 제거하여 순수 핵심 제목 추출)
         const getPureTitle = (titleStr: string) => {

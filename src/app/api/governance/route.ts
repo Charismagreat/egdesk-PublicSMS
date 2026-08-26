@@ -246,7 +246,7 @@ export async function GET(request: Request) {
       // 1.1. crm_governance_logs (결재 보류 건 및 모바일 취소 요청 건)
       try {
         const govRes = await queryTable('crm_governance_logs', { filters: tenantFilterObj, limit: 500 });
-        const logs = govRes.rows || [];
+        const logs = (govRes.rows || []).filter((l: any) => !l.deleted_at);
         
         // 💡 첨부 파일명 매칭을 위해 crm_snaptask_items 전체 목록 미리 조회 (최신순 DESC 정렬)
         const itemsRes = await queryTable('crm_snaptask_items', { filters: tenantFilterObj, limit: 10000, orderBy: 'id', orderDirection: 'DESC' });
