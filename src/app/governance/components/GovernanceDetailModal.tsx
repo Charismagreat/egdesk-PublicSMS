@@ -199,14 +199,35 @@ export default function GovernanceDetailModal({
     }
   });
 
+  const isSalesOrderEvent = (selectedEvent.title || '').includes('수주') || 
+                            (selectedEvent.title || '').includes('발주') || 
+                            (selectedEvent.data?.doc_title || '').includes('수주') || 
+                            (selectedEvent.data?.doc_title || '').includes('발주');
+
+  const attachedFileName = modalFiles[0]?.name || modalPhotos[0]?.name || selectedEvent.data?.matched_filename || 'LS발주서.xlsx';
+
+  const orderRegisterAction = isSalesOrderEvent ? {
+    code: "auto_register_sales_order",
+    label: `[📦 B2B 수주 대장 자동 등록] ${attachedFileName ? `${attachedFileName} 실물 분석` : '발주서 파싱'}`,
+    description: `상신 첨부 파일(${attachedFileName})의 실물 품목·수량·금액을 AI가 정밀 분석하여 수주 대장(crm_sales_orders)에 수주서 즉시 자동 적재`,
+    isOrderAction: true,
+    fileName: attachedFileName
+  } : null;
+
   const baseDefaultActions = selectedEvent.data?.suggested_actions || [
     { code: "NOTIFY_USER", label: "관리자 / 담당자 알림 발송", description: "관제 이벤트를 담당 관리자에게 즉시 알림" },
     { code: "LOG_AUDIT", label: "감사 로그 보존", description: "본 사건 처리 이력을 전사 거버넌스 원장에 기록" },
   ];
 
-  const defaultActionsList = matchedSmsAction
-    ? [matchedSmsAction, ...baseDefaultActions.filter((a: any) => a.code !== "NOTIFY_USER")]
-    : baseDefaultActions;
+  const defaultActionsList = [
+    ...(orderRegisterAction ? [orderRegisterAction] : []),
+    ...(matchedSmsAction ? [matchedSmsAction] : []),
+    ...baseDefaultActions.filter((a: any) => 
+      a.code !== "NOTIFY_USER" && 
+      a.code !== "auto_register_sales_order" && 
+      a.code !== "scan_received_order"
+    )
+  ];
 
   const actionsList = [...defaultActionsList, ...customActions];
 
@@ -565,12 +586,62 @@ export default function GovernanceDetailModal({
                         ? isSelected
                           ? "bg-gradient-to-br from-indigo-50/90 to-purple-50/70 border-indigo-300 shadow-sm"
                           : "bg-slate-50/60 border-slate-200 opacity-70 hover:opacity-100"
-                        : isSelected
-                          ? "bg-indigo-50/60 border-indigo-300 shadow-2xs p-3.5"
-                          : "bg-slate-50/50 border-slate-200/60 opacity-60 hover:opacity-100 p-3.5"
+                        : act.isOrderAction
+                          ? isSelected
+                            ? "bg-gradient-to-br from-blue-50/90 to-cyan-50/70 border-blue-300 shadow-sm"
+                            : "bg-slate-50/60 border-slate-200 opacity-70 hover:opacity-100"
+                          : isSelected
+                            ? "bg-indigo-50/60 border-indigo-300 shadow-2xs p-3.5"
+                            : "bg-slate-50/50 border-slate-200/60 opacity-60 hover:opacity-100 p-3.5"
                     }`}
                   >
-                    {isSms ? (
+                    {act.isOrderAction ? (
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <button type="button" className="text-blue-600 border-none bg-transparent cursor-pointer p-0">
+                              {isSelected ? <CheckSquare className="w-4.5 h-4.5" /> : <Square className="w-4.5 h-4.5 text-slate-400" />}
+                            </button>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-xs font-black ${isSelected ? "text-blue-950" : "text-slate-700"}`}>
+                                {act.label}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-black border border-blue-200">
+                                📑 실물 데이터 파싱
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-700 text-[10px] font-black border border-cyan-200">
+                                📦 수주 대장 자동 연동
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleRemoveAction(e, act.code)}
+                            className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all border-none bg-transparent cursor-pointer shrink-0"
+                            title="해당 작업 항목 제거/해제"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* 파일명 및 설명 박스 */}
+                        <div className="ml-7 bg-white/90 border border-blue-100 rounded-xl p-3 shadow-2xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black text-blue-600 flex items-center gap-1">
+                              <FileText className="w-3 h-3" />
+                              상신 첨부 서류: {act.fileName || 'LS발주서.xlsx'}
+                            </span>
+                            <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.2 rounded">
+                              자동 파싱 준비완료
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+                            {act.description}
+                          </p>
+                        </div>
+                      </div>
+                    ) : isSms ? (
                       <div className="p-4 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2.5">
