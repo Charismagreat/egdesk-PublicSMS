@@ -236,18 +236,30 @@ export default function GovernanceDashboard() {
     setSelectedEvent(evt);
     setEventDueDate(evt.due_date || '');
     
-    const isDeleteOrHold = 
-      evt.type === 'RAG_HOLD' || 
-      evt.type === 'TASK_CANCEL_REQUEST' ||
-      (evt.title || '').includes('삭제') || 
-      (evt.title || '').includes('취소') || 
-      (evt.data?.doc_title || '').includes('삭제') || 
-      (evt.data?.doc_title || '').includes('취소');
+    const titleText = evt.title || '';
+    const docTitleText = evt.data?.doc_title || '';
+    const reasonText = evt.data?.reason || '';
 
-    const defaultCodes = isDeleteOrHold
-      ? ["DELETE_APPROVED_DATA", "LOG_AUDIT"]
+    const isExplicitDelete = 
+      evt.type === 'TASK_CANCEL_REQUEST' ||
+      evt.data?.has_cancel_request === true ||
+      ((titleText.includes('삭제') || titleText.includes('취소') || docTitleText.includes('삭제') || docTitleText.includes('취소') || reasonText.includes('삭제') || reasonText.includes('취소')) && !titleText.includes('[상신]'));
+
+    const isSalesOrderEvent = !isExplicitDelete && (
+      titleText.includes('[상신]') ||
+      titleText.includes('수주') || 
+      titleText.includes('발주') || 
+      docTitleText.includes('수주') || 
+      docTitleText.includes('발주') ||
+      (evt.data?.files && evt.data.files.length > 0)
+    );
+
+    const defaultCodes = isExplicitDelete
+      ? ["DELETE_APPROVED_DATA", "SMS_AUTO_NOTIFY", "LOG_AUDIT"]
+      : isSalesOrderEvent
+      ? ["auto_register_sales_order", "SMS_AUTO_NOTIFY", "LOG_AUDIT"]
       : (evt.data?.suggested_actions || [
-          { code: "NOTIFY_USER" },
+          { code: "SMS_AUTO_NOTIFY" },
           { code: "LOG_AUDIT" }
         ]).map((a: any) => a.code);
 

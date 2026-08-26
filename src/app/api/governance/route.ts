@@ -1735,6 +1735,107 @@ ${JSON.stringify(operators || [], null, 2)}
       }
     }
 
+    // 💡 [신설] 관제 사건의 맥락을 AI(Gemini)가 종합 판독하여 최적의 추천 조치 시나리오를 동적으로 생성
+    if (action === 'get_smart_recommendations') {
+      const { event_info, operators } = body;
+      if (!event_info) {
+        return NextResponse.json({ success: false, error: '사건 정보가 누락되었습니다.' }, { status: 400 });
+      }
+
+      try {
+        const prompt = `
+당신은 B2B 전사 비즈니스 거버넌스 및 자율 의사결정 오케스트레이터 AI입니다.
+다음 관제 사건(이벤트)을 정밀하게 분석하여, 최고관리자가 취해야 할 [최적의 추천 조치 시나리오 2~3종]을 동적으로 생성해 주십시오.
+
+### 📌 관제 사건 데이터:
+${JSON.stringify(event_info, null, 2)}
+
+### 👥 사내 임직원 명단:
+${JSON.stringify(operators || [], null, 2)}
+
+### 🎯 상황별 추천 지침 (사건의 본질을 정확히 파악하십시오):
+1. **[신규 접수 / 상신 / 첨부파일 파싱 요청인 경우]**:
+   - 예: 모바일 현장 상신, 엑셀/사진 첨부 수주 요청 건
+   - 1순위: "[📦 B2B 수주 대장 자동 등록] {첨부파일명} 실물 분석" (isOrderAction: true, code: "auto_register_sales_order")
+   - 2순위: "[📱 AI 자동 문자 발송] B2B 수주 확정 및 배정 알림" (isSmsAction: true, code: "SMS_AUTO_NOTIFY")
+   - 3순위: "감사 로그 보존" (code: "LOG_AUDIT")
+
+2. **[기존 데이터 삭제 / 취소 / 반품 요청인 경우]**:
+   - 예: RAG 규정에 의해 보류된 삭제 건, 임직원 업무 취소 요청 건
+   - 1순위: "[🗑️ 데이터 최종 삭제 승인 (Soft Delete)]" (isDeleteAction: true, code: "DELETE_APPROVED_DATA")
+   - 2순위: "[📱 AI 자동 문자 발송] 삭제/취소 승인 완료 알림" (isSmsAction: true, code: "SMS_AUTO_NOTIFY")
+   - 3순위: "[📝 거버넌스 삭제 승인 감사 로그 보존]" (code: "LOG_AUDIT")
+
+3. **[휴가 / 근태 신청인 경우]**:
+   - 1순위: "[휴가 최종 결재 승인]" (code: "APPROVE_LEAVE")
+   - 2순위: "[📱 AI 자동 문자 발송] 휴가 승인 알림" (isSmsAction: true, code: "SMS_AUTO_NOTIFY")
+
+4. **[재고 부족 / 안전재고 미달인 경우]**:
+   - 1순위: "[긴급 발주 품의서 자동 생성]" (code: "CREATE_PURCHASE_ORDER")
+   - 2순위: "[자재팀 긴급 알림]" (isSmsAction: true, code: "SMS_AUTO_NOTIFY")
+
+### 📝 응답 형식 (반드시 Markdown 코드 블록 없이 순수 JSON만 반환):
+{
+  "recommendations": [
+    {
+      "code": "auto_register_sales_order",
+      "label": "[📦 B2B 수주 대장 자동 등록] LS발주서.xlsx 실물 분석",
+      "description": "상신 첨부 파일(LS발주서.xlsx)의 실물 품목·수량·금액을 AI가 정밀 분석하여 수주 대장(crm_sales_orders)에 수주서 즉시 자동 적재",
+      "isOrderAction": true,
+      "fileName": "LS발주서.xlsx"
+    },
+    {
+      "code": "SMS_AUTO_NOTIFY",
+      "label": "[📱 AI 자동 문자 발송] B2B 수주 확정 알림",
+      "description": "템플릿: '수주등록' · 수신: 홍종현, 최창숙 (총 2명)",
+      "isSmsAction": true,
+      "templateTitle": "수주등록",
+      "finalMessage": "[이지데스크] 새로운 수주가 접수되었습니다. 엘에스",
+      "targetRecipients": [{"name": "홍종현", "phone": "010-2911-5361", "dept": "자재팀"}],
+      "smsPayload": {
+        "templateTitle": "수주등록",
+        "message": "[이지데스크] 새로운 수주가 접수되었습니다. 엘에스",
+        "phones": ["010-2911-5361"],
+        "operatorNames": ["홍종현"]
+      }
+    },
+    {
+      "code": "LOG_AUDIT",
+      "label": "감사 로그 보존",
+      "description": "본 사건 처리 이력을 전사 거버넌스 원장에 기록"
+    }
+  ]
+}
+`;
+
+        const geminiRes = await callAiCaller({
+          prompt,
+          systemInstruction: '당신은 B2B 전사 거버넌스 오케스트레이터입니다. 오직 순수 JSON 포맷만 반환하십시오.',
+          model: 'gemini-2.5-flash'
+        });
+
+        let parsedJson: any = null;
+        try {
+          const rawText = (geminiRes?.text || geminiRes?.content || (typeof geminiRes === 'string' ? geminiRes : JSON.stringify(geminiRes)))
+            .replace(/```json/gi, '')
+            .replace(/```/g, '')
+            .trim();
+          parsedJson = JSON.parse(rawText);
+        } catch (jsonErr) {
+          console.warn('AI 추천 시나리오 JSON 파싱 실패:', jsonErr);
+        }
+
+        const recommendations = parsedJson?.recommendations || [];
+        return NextResponse.json({
+          success: true,
+          recommendations
+        });
+      } catch (err: any) {
+        console.error('스마트 추천 시나리오 생성 에러:', err);
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      }
+    }
+
     // 1. AI 추천 다음 작업 자율 대행 실행
     if (action === 'execute_actions' || action === 'execute_autonomous_actions') {
       const eventId = body.eventId || body.event_id;

@@ -55,6 +55,7 @@ export default function GovernanceDetailModal({
   const [customActions, setCustomActions] = useState<any[]>([]);
   const [saveAutoRuleOnExecute, setSaveAutoRuleOnExecute] = useState(false);
   const [matchedSmsAction, setMatchedSmsAction] = useState<any | null>(null);
+  const [dynamicRecommendations, setDynamicRecommendations] = useState<any[] | null>(null);
 
   // 🤖 자연어 지시 기반 AI 자율 조치 생성 상태
   const [naturalPrompt, setNaturalPrompt] = useState("");
@@ -68,13 +69,14 @@ export default function GovernanceDetailModal({
   const [adhocCustomPhone, setAdhocCustomPhone] = useState("");
   const [adhocMessage, setAdhocMessage] = useState("");
 
-  // 📱 문자 관제 활성 자동 발송 규칙 실시간 매칭 (상시 기본 탑재)
+  // 📱 문자 관제 활성 자동 발송 규칙 실시간 매칭 & 🧠 AI 스마트 추천 시나리오 동적 로딩
   useEffect(() => {
     if (!selectedEvent) return;
 
     // 🧹 새 모달 진입 시 이전 커스텀/1회성 작업 상태 완전 리셋
     setCustomActions([]);
     setCustomActionPayloads({});
+    setDynamicRecommendations(null);
     setIsAddingAction(false);
     setIsAddingAdhocSms(false);
     setAdhocSelectedOpIds([]);
@@ -97,13 +99,29 @@ export default function GovernanceDetailModal({
         const operators = opRes?.operators || [];
         if (isMounted) setAllOperators(operators);
 
+        // 🤖 [AI 자율 동적 시나리오 엔진 호출]
+        apiFetch('/api/governance?action=get_smart_recommendations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event_info: selectedEvent,
+            operators
+          })
+        }).then(r => r.json()).then(data => {
+          if (isMounted && data.success && data.recommendations && data.recommendations.length > 0) {
+            setDynamicRecommendations(data.recommendations);
+          }
+        }).catch(err => console.warn('AI 추천 시나리오 로드 폴백:', err));
+
         const title = selectedEvent.title || '';
         const docTitle = selectedEvent.data?.doc_title || '';
-        const isDeleteOrHold = 
-          selectedEvent.type === 'RAG_HOLD' || 
+        const reason = selectedEvent.data?.reason || '';
+        
+        // 🎯 정밀 판별: 진짜 삭제/취소 요청인 경우만 isExplicitDelete = true
+        const isExplicitDelete = 
           selectedEvent.type === 'TASK_CANCEL_REQUEST' ||
-          title.includes('삭제') || title.includes('취소') || 
-          docTitle.includes('삭제') || docTitle.includes('취소');
+          selectedEvent.data?.has_cancel_request === true ||
+          ((title.includes('삭제') || title.includes('취소') || docTitle.includes('삭제') || docTitle.includes('취소') || reason.includes('삭제') || reason.includes('취소')) && !title.includes('[상신]'));
 
         // 거래처명 및 상신자명 추출
         let partnerName = '엘에스';
@@ -121,7 +139,7 @@ export default function GovernanceDetailModal({
         let targetRuleTitle = 'B2B 수주 확정 알림';
         let targetRecipients: { name: string; phone: string; dept?: string }[] = [];
 
-        if (isDeleteOrHold) {
+        if (isExplicitDelete) {
           // 🗑️ 삭제/취소 승인 건 전용 기본 문자 구성
           targetRuleTitle = '데이터 삭제/취소 승인 완료 알림';
           templateTitle = '삭제/취소 승인 통보';
@@ -258,19 +276,23 @@ export default function GovernanceDetailModal({
     }
   });
 
-  const isDeleteOrHoldEvent = 
-    selectedEvent.type === 'RAG_HOLD' || 
-    selectedEvent.type === 'TASK_CANCEL_REQUEST' ||
-    (selectedEvent.title || '').includes('삭제') || 
-    (selectedEvent.title || '').includes('취소') || 
-    (selectedEvent.data?.doc_title || '').includes('삭제') || 
-    (selectedEvent.data?.doc_title || '').includes('취소');
+  const titleText = selectedEvent.title || '';
+  const docTitleText = selectedEvent.data?.doc_title || '';
+  const reasonText = selectedEvent.data?.reason || '';
 
-  const isSalesOrderEvent = !isDeleteOrHoldEvent && (
-    (selectedEvent.title || '').includes('수주') || 
-    (selectedEvent.title || '').includes('발주') || 
-    (selectedEvent.data?.doc_title || '').includes('수주') || 
-    (selectedEvent.data?.doc_title || '').includes('발주')
+  // 🎯 정밀 판별
+  const isExplicitDelete = 
+    selectedEvent.type === 'TASK_CANCEL_REQUEST' ||
+    selectedEvent.data?.has_cancel_request === true ||
+    ((titleText.includes('삭제') || titleText.includes('취소') || docTitleText.includes('삭제') || docTitleText.includes('취소') || reasonText.includes('삭제') || reasonText.includes('취소')) && !titleText.includes('[상신]'));
+
+  const isSalesOrderEvent = !isExplicitDelete && (
+    titleText.includes('[상신]') ||
+    titleText.includes('수주') || 
+    titleText.includes('발주') || 
+    docTitleText.includes('수주') || 
+    docTitleText.includes('발주') ||
+    modalFiles.length > 0
   );
 
   const attachedFileName = modalFiles[0]?.name || modalPhotos[0]?.name || selectedEvent.data?.matched_filename || 'LS발주서.xlsx';
@@ -284,7 +306,7 @@ export default function GovernanceDetailModal({
   } : null;
 
   // 🗑️ 삭제/취소 요청 건 전용 추천 액션
-  const deleteApprovalAction = isDeleteOrHoldEvent ? {
+  const deleteApprovalAction = isExplicitDelete ? {
     code: "DELETE_APPROVED_DATA",
     label: `[🗑️ 데이터 최종 삭제 승인 (Soft Delete)]`,
     description: `최고관리자 승인에 따라 대상 문서(${selectedEvent.data?.doc_title || selectedEvent.title}) 및 연관 데이터를 대장에서 안전하게 삭제(폐기) 처리`,
@@ -293,19 +315,22 @@ export default function GovernanceDetailModal({
 
   const baseDefaultActions = selectedEvent.data?.suggested_actions || [
     { code: "NOTIFY_USER", label: "관리자 / 담당자 알림 발송", description: "관제 이벤트를 담당 관리자에게 즉시 알림" },
-    { code: "LOG_AUDIT", label: isDeleteOrHoldEvent ? "[📝 거버넌스 삭제 승인 감사 로그 보존]" : "감사 로그 보존", description: "본 사건 처리 이력을 전사 거버넌스 원장에 기록" },
+    { code: "LOG_AUDIT", label: isExplicitDelete ? "[📝 거버넌스 삭제 승인 감사 로그 보존]" : "감사 로그 보존", description: "본 사건 처리 이력을 전사 거버넌스 원장에 기록" },
   ];
 
-  const defaultActionsList = [
-    ...(deleteApprovalAction ? [deleteApprovalAction] : []),
-    ...(orderRegisterAction ? [orderRegisterAction] : []),
-    ...(matchedSmsAction ? [matchedSmsAction] : []),
-    ...baseDefaultActions.filter((a: any) => 
-      a.code !== "NOTIFY_USER" && 
-      a.code !== "auto_register_sales_order" && 
-      a.code !== "scan_received_order"
-    )
-  ];
+  // 🤖 AI 동적 추천 목록이 있으면 우선 적용, 아니면 정밀 기본 폴백 적용
+  const defaultActionsList = dynamicRecommendations && dynamicRecommendations.length > 0 
+    ? dynamicRecommendations 
+    : [
+        ...(deleteApprovalAction ? [deleteApprovalAction] : []),
+        ...(orderRegisterAction ? [orderRegisterAction] : []),
+        ...(matchedSmsAction ? [matchedSmsAction] : []),
+        ...baseDefaultActions.filter((a: any) => 
+          a.code !== "NOTIFY_USER" && 
+          a.code !== "auto_register_sales_order" && 
+          a.code !== "scan_received_order"
+        )
+      ];
 
   const actionsList = [...defaultActionsList, ...customActions];
 
