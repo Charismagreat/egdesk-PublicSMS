@@ -95,8 +95,12 @@ export default function GovernanceDetailModal({
         ]);
 
         let rules = autoRes?.rules || {};
-        const templates = tmplRes?.templates || [];
-        const operators = opRes?.operators || [];
+        const rawOperators = opRes?.operators || [];
+        const operators = rawOperators.filter((o: any) => 
+          o.role !== 'SYSTEM_ADMIN' && 
+          o.username !== 'admin' && 
+          o.name !== '시스템 운영자'
+        );
         if (isMounted) setAllOperators(operators);
 
         // 🤖 [AI 자율 동적 시나리오 엔진 호출]

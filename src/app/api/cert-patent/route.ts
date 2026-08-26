@@ -91,17 +91,24 @@ export async function GET(request: Request) {
       folderItems = [];
     }
 
-    // 0. 직원 목록 로드 (복수 담당자 배정용)
+    // 0. 직원 목록 로드 (복수 담당자 배정용 - 최상위 시스템 운영자 제외)
     let operators: any[] = [];
     try {
       const opRes = await queryTable('crm_operators', { limit: 100 });
-      operators = (opRes.rows || []).filter((o: any) => !o.deleted_at).map((o: any) => ({
-        id: o.id,
-        name: o.name,
-        username: o.username,
-        role: o.role,
-        phone: o.phone
-      }));
+      operators = (opRes.rows || [])
+        .filter((o: any) => 
+          !o.deleted_at && 
+          o.role !== 'SYSTEM_ADMIN' && 
+          o.username !== 'admin' && 
+          o.name !== '시스템 운영자'
+        )
+        .map((o: any) => ({
+          id: o.id,
+          name: o.name,
+          username: o.username,
+          role: o.role,
+          phone: o.phone
+        }));
     } catch (e) {
       operators = [];
     }

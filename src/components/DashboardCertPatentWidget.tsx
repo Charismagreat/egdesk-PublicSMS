@@ -60,7 +60,12 @@ export default function DashboardCertPatentWidget() {
         setCertificates(data.certificates || []);
         setPatents(data.patents || []);
         setSalesDeliveries(data.salesDeliveries || []);
-        setOperators(data.operators || []);
+        const filteredOps = (data.operators || []).filter((o: any) => 
+          o.role !== 'SYSTEM_ADMIN' && 
+          o.username !== 'admin' && 
+          o.name !== '시스템 운영자'
+        );
+        setOperators(filteredOps);
       }
     } catch (e) {
       console.error("Universal Calendar Widget Fetch Error:", e);
