@@ -672,6 +672,38 @@ export default function SalesOrderOcrModal({
     }
   };
 
+  // ✏️ 다중 바이어 그룹 필드 실시간 인라인 수정 핸들러
+  const handleUpdateGroupField = (groupId: string, field: keyof ParsedSalesOrderGroup, value: any) => {
+    setParsedGroups((prev) =>
+      prev.map((g) => {
+        if (g.id !== groupId) return g;
+        return {
+          ...g,
+          [field]: value,
+          isPartnerPending: field === 'partner_name' && value ? false : g.isPartnerPending,
+        };
+      })
+    );
+  };
+
+  // ✏️ 다중 바이어 품목 실시간 인라인 수정 핸들러
+  const handleUpdateGroupItem = (groupId: string, itemIdx: number, field: string, value: any) => {
+    setParsedGroups((prev) =>
+      prev.map((g) => {
+        if (g.id !== groupId) return g;
+        const newItems = [...g.items];
+        newItems[itemIdx] = {
+          ...newItems[itemIdx],
+          [field]: value,
+        };
+        return {
+          ...g,
+          items: newItems,
+        };
+      })
+    );
+  };
+
   // 이미지/PDF AI OCR 파일 변경 핸들러
   const handleOcrFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -1211,67 +1243,123 @@ export default function SalesOrderOcrModal({
                           </div>
                         </div>
 
-                        {/* 아코디언 상세 내용 */}
+                        {/* 아코디언 상세 내용 (인라인 실시간 직접 수정 지원) */}
                         {isExpanded && (
-                          <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3 text-left animate-fade-in">
-                            <div className="grid grid-cols-2 gap-2 text-[11px] bg-white p-3 rounded-xl border border-slate-200/80">
+                          <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3.5 text-left animate-fade-in">
+                            <div className="grid grid-cols-2 gap-2.5 bg-white p-3 rounded-xl border border-slate-200/80">
                               <div>
-                                <span className="text-slate-400 font-bold">발주처(상호명):</span>{' '}
-                                <span className="font-bold">{group.partner_name || (
-                                  <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[10px]">
-                                    미기재 (후보완 가능)
-                                  </span>
-                                )}</span>
+                                <label className="text-[10px] text-slate-500 font-bold block mb-1">발주처 (상호명)</label>
+                                <input
+                                  type="text"
+                                  value={group.partner_name}
+                                  placeholder="미기재 (클릭하여 상호명 입력)"
+                                  onChange={(e) => handleUpdateGroupField(group.id, 'partner_name', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                />
                               </div>
                               <div>
-                                <span className="text-slate-400 font-bold">사업자번호:</span>{' '}
-                                <span className="font-semibold">{group.business_number || (
-                                  <span className="text-amber-600 font-bold bg-amber-50 px-1 py-0.2 rounded text-[10px]">미기재 (후보완 가능)</span>
-                                )}</span>
+                                <label className="text-[10px] text-slate-500 font-bold block mb-1">사업자등록번호</label>
+                                <input
+                                  type="text"
+                                  value={group.business_number}
+                                  placeholder="000-00-00000"
+                                  onChange={(e) => handleUpdateGroupField(group.id, 'business_number', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                />
                               </div>
                               <div>
-                                <span className="text-slate-400 font-bold">대표자명:</span>{' '}
-                                <span className="font-semibold">{group.representative || (
-                                  <span className="text-slate-400 font-medium">-</span>
-                                )}</span>
+                                <label className="text-[10px] text-slate-500 font-bold block mb-1">대표자 성명</label>
+                                <input
+                                  type="text"
+                                  value={group.representative}
+                                  placeholder="대표자명 입력"
+                                  onChange={(e) => handleUpdateGroupField(group.id, 'representative', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                />
                               </div>
                               <div>
-                                <span className="text-slate-400 font-bold">담당자(발주자):</span>{' '}
-                                <span className="font-semibold text-indigo-900">{group.partner_manager || '-'}</span>
+                                <label className="text-[10px] text-slate-500 font-bold block mb-1">담당자 (발주자)</label>
+                                <input
+                                  type="text"
+                                  value={group.partner_manager}
+                                  placeholder="담당자명, 사번 등"
+                                  onChange={(e) => handleUpdateGroupField(group.id, 'partner_manager', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-indigo-950 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                />
                               </div>
                               <div>
-                                <span className="text-slate-400 font-bold">연락처:</span>{' '}
-                                <span className="font-semibold">{group.partner_phone || '-'}</span>
+                                <label className="text-[10px] text-slate-500 font-bold block mb-1">연락처</label>
+                                <input
+                                  type="text"
+                                  value={group.partner_phone}
+                                  placeholder="010-0000-0000"
+                                  onChange={(e) => handleUpdateGroupField(group.id, 'partner_phone', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                />
                               </div>
                               <div>
-                                <span className="text-slate-400 font-bold">납기요청일:</span>{' '}
-                                <span className="font-semibold text-emerald-700">{group.delivery_date || '-'}</span>
+                                <label className="text-[10px] text-slate-500 font-bold block mb-1">납기요청일</label>
+                                <input
+                                  type="date"
+                                  value={group.delivery_date}
+                                  onChange={(e) => handleUpdateGroupField(group.id, 'delivery_date', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-emerald-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                />
                               </div>
                             </div>
 
                             {group.validationWarnings && group.validationWarnings.length > 0 && (
                               <div className="p-2 bg-amber-50 rounded-xl border border-amber-200 text-[10px] text-amber-800 font-bold flex items-center gap-1.5">
                                 <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
-                                <span>확인 필요: {group.validationWarnings.join(' · ')}</span>
+                                <span>서식 확인 필요: {group.validationWarnings.join(' · ')}</span>
                               </div>
                             )}
 
+                            {/* 품목 리스트 실시간 인라인 편집 지원 */}
                             <div className="space-y-1.5">
-                              <span className="text-[10px] font-bold text-slate-500 block">발주 품목 리스트</span>
-                              <div className="space-y-1 max-h-[160px] overflow-y-auto">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-slate-500 block">발주 품목 리스트 (직접 수정 가능)</span>
+                                <span className="text-[10px] text-indigo-600 font-semibold">수량/단가 변경 시 합계 자동 계산</span>
+                              </div>
+                              <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
                                 {group.items.map((it, iIdx) => (
-                                  <div key={iIdx} className="bg-white p-2.5 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs font-semibold">
-                                    <div className="flex items-center gap-2 truncate">
-                                      <span className="font-bold text-slate-800 truncate">{it.product_name}</span>
+                                  <div key={iIdx} className="bg-white p-2.5 rounded-xl border border-slate-200/80 flex items-center justify-between gap-2 text-xs">
+                                    <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                                      <input
+                                        type="text"
+                                        value={it.product_name}
+                                        onChange={(e) => handleUpdateGroupItem(group.id, iIdx, 'product_name', e.target.value)}
+                                        className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-400 focus:outline-none"
+                                        placeholder="품목명"
+                                      />
                                       {it.validItemCode && (
-                                        <span className="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 text-[9px] font-black rounded border border-emerald-200">
+                                        <span className="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 text-[9px] font-black rounded border border-emerald-200 shrink-0">
                                           {it.validItemCode}
                                         </span>
                                       )}
                                     </div>
-                                    <div className="text-right shrink-0 flex items-center gap-3">
-                                      <span className="text-slate-500">{it.quantity}개 × {it.unit_price.toLocaleString()}원</span>
-                                      <span className="font-bold text-slate-800 font-mono">{(it.quantity * it.unit_price).toLocaleString()}원</span>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number"
+                                          value={it.quantity}
+                                          onChange={(e) => handleUpdateGroupItem(group.id, iIdx, 'quantity', Math.max(1, parseInt(e.target.value) || 0))}
+                                          className="w-14 px-1.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-right focus:bg-white focus:border-indigo-400 focus:outline-none"
+                                        />
+                                        <span className="text-[11px] text-slate-400">개 ×</span>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number"
+                                          value={it.unit_price}
+                                          onChange={(e) => handleUpdateGroupItem(group.id, iIdx, 'unit_price', Math.max(0, parseInt(e.target.value) || 0))}
+                                          className="w-20 px-1.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-right focus:bg-white focus:border-indigo-400 focus:outline-none"
+                                        />
+                                        <span className="text-[11px] text-slate-400">원 =</span>
+                                      </div>
+                                      <span className="w-24 text-right font-black text-slate-800 font-mono text-xs">
+                                        {(it.quantity * it.unit_price).toLocaleString()}원
+                                      </span>
                                     </div>
                                   </div>
                                 ))}
