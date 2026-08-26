@@ -237,7 +237,15 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
           <div className="relative mt-1">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
-                 {/* 업무 태스크 목록 카드 */}
+              type="text"
+              placeholder="업무 검색..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-8 pr-3 py-1.5 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 focus:bg-white transition-all"
+            />
+          </div>
+
+          {/* 업무 태스크 목록 카드 */}
           <div className="space-y-2 mt-3">
             {filteredTasks.length === 0 ? (
               <div className="py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
