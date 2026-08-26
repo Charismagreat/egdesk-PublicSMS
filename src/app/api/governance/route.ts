@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx';
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
@@ -1457,41 +1458,40 @@ export async function POST(request: Request) {
           const logRow = logRes.rows?.[0] || originalData;
           const reasonText = logRow?.reason || '';
           
-          let imageBase64 = '';
-          let imageFilename = '동양특수금속-가로.jpg';
-          let imageMime = 'image/jpeg';
+          let fileBase64 = '';
+          let targetFilename = 'LS발주서.xlsx';
+          let fileMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-          // 1. reason 문구 내 "1. 파일명.ext" 형태가 존재하는지 추출 시도
+          // 1. reason 문구 내 파일명 추출 시도
           let matchedFilename = '';
           if (reasonText) {
-            const fileMatch = reasonText.match(/(?:1\.\s*|첨부\s*사진\s*1건\s*:\s*\n?\s*1\.\s*)([^\n\(\s]+)/i);
+            const fileMatch = reasonText.match(/(?:1\.\s*|첨부\s*(?:서류|사진)\s*1건\s*:\s*\n?\s*1\.\s*)([^\n\(\s]+)/i);
             if (fileMatch) {
               matchedFilename = fileMatch[1].trim();
             }
           }
 
-          // 2. crm_snaptask_items 에서 egdesk-helpers의 queryTable API를 사용해 이미지 목록 조회 (규칙 준수 및 테넌트 필터 명시)
-          const tenantId = originalData?.tenant_id || originalData?.tenantId || await resolveTenantId() || 'default';
+          // 2. crm_snaptask_items 에서 첨부 파일 목록 조회 (이미지뿐 아니라 EXCEL/DOCUMENT 전체 검색)
+          const tenantId = originalData?.tenant_id || originalData?.tenantId || await resolveTenantId() || 'tenant-wontrading';
           const itemsRes = await queryTable('crm_snaptask_items', { 
-            filters: { file_type: 'IMAGE', tenant_id: tenantId },
+            filters: tenantId ? { tenant_id: tenantId } : {},
             orderBy: 'id',
             orderDirection: 'DESC',
             limit: 1000
           });
-          const itemsRows = itemsRes.rows || [];
+          const itemsRows = (itemsRes.rows || []).filter((it: any) => it.file_url && it.file_url.trim() !== '');
 
           let targetItem = null;
           if (matchedFilename && itemsRows.length > 0) {
-            targetItem = itemsRows.find((item: any) => item.content_text?.includes(matchedFilename));
+            targetItem = itemsRows.find((item: any) => item.content_text?.includes(matchedFilename) || item.file_url?.includes(matchedFilename));
           }
-          // 만약 파일명으로 매핑되지 않았다면, 가장 최근 등록된 이미지 항목을 폴백으로 설정
           if (!targetItem && itemsRows.length > 0) {
             targetItem = itemsRows[0];
           }
 
           if (!targetItem) {
             sharedOcrSuccess = false;
-            sharedOcrDetail = `[이미지 조회 실패] 스냅태스크 아이템 테이블(crm_snaptask_items)에서 첨부된 이미지 레코드를 찾을 수 없습니다. (조회된 이미지 수: ${itemsRows.length}건, 매칭 파일명: '${matchedFilename || '없음'}'). 수동 등록을 진행하거나 작업을 반려해 주세요.`;
+            sharedOcrDetail = `[첨부 서류 조회 실패] 첨부된 실물 발주서 파일 레코드를 찾을 수 없습니다. 수동 등록을 진행해 주세요.`;
             return;
           }
 
@@ -1793,15 +1793,65 @@ export async function POST(request: Request) {
               const totalAmount = Number(originalData?.total_amount || originalData?.amount || 1500000);
               orderId = `SO-${Date.now().toString().slice(-6)}`;
 
+              const nowObj = new Date();
+              const yy = String(nowObj.getFullYear()).slice(-2);
+              const mm = String(nowObj.getMonth() + 1).padStart(2, '0');
+              const dd = String(nowObj.getDate()).padStart(2, '0');
+              const hh = String(nowObj.getHours()).padStart(2, '0');
+              const min = String(nowObj.getMinutes()).padStart(2, '0');
+              const ss = String(nowObj.getSeconds()).padStart(2, '0');
+              const estimateId = `ORD-${yy}${mm}${dd}-${hh}${min}${ss}`;
+
+              // 1. 섀도우 견적 마스터 생성
+              await insertRows('crm_estimates', [{
+                id: estimateId,
+                type: 'OUTBOUND',
+                direction_status: 'RECEIVED',
+                partner_name: partnerName,
+                partner_phone: originalData?.customer_phone || originalData?.phone || '',
+                partner_manager: originalData?.customer_manager || originalData?.operator || '',
+                total_amount: totalAmount,
+                file_url: originalData?.file_url || '',
+                ai_parsed: 1,
+                sales_order_number: orderId,
+                created_at: nowStr,
+                tenant_id: tenantId,
+                _version: 1
+              }]);
+
+              // 2. 섀도우 견적 상세 품목 생성
+              await insertRows('crm_estimate_items', [{
+                id: Date.now(),
+                estimate_id: estimateId,
+                product_id: '',
+                item_code: 'LS-AUTO',
+                product_name: itemName,
+                spec: '상신 분석 품목',
+                quantity: 1,
+                unit_price: totalAmount,
+                amount: totalAmount,
+                delivery_date: '',
+                tenant_id: tenantId,
+                _version: 1
+              }]);
+
+              // 3. 수주 대장에 완벽한 컬럼으로 적재
               await insertRows('crm_sales_orders', [{
                 id: orderId,
-                tenant_id: tenantId,
+                estimate_id: estimateId,
+                client_order_no: originalData?.client_order_no || orderId,
+                customer_name: partnerName,
+                customer_phone: originalData?.customer_phone || originalData?.phone || '',
+                customer_manager: originalData?.customer_manager || originalData?.operator || '',
                 partner_name: partnerName,
                 item_name: itemName,
                 quantity: 1,
                 total_amount: totalAmount,
-                status: '수주등록',
-                created_at: nowStr
+                status: 'REGISTERED',
+                created_at: nowStr,
+                order_date: nowStr,
+                tenant_id: tenantId,
+                _version: 1
               }]);
               sharedSoId = orderId;
               sharedPartnerName = partnerName;
@@ -1961,24 +2011,63 @@ export async function POST(request: Request) {
                 finalMsg = finalMsg || `[AI 관제 알림] 관제 이벤트(${displayTitle})가 승인 처리되었습니다.`;
               }
 
-              // 각 수신자에게 message_logs 기록 삽입
+              // 💡 [실제 SMS 발송 API 게이트웨이 연동 호출]
+              const host = request.headers.get('host') || 'localhost:4000';
+              const protocol = request.url.startsWith('https') ? 'https' : 'http';
+              const baseUrl = `${protocol}://${host}`;
+              const cookieStore = await cookies();
+              const allCookies = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
+
+              let sentSuccessCount = 0;
+              let sendFailureDetail = '';
+
               for (let i = 0; i < targetPhones.length; i++) {
                 const phone = targetPhones[i];
-                await insertRows('message_logs', [{
-                  id: Date.now() + i,
-                  phone,
-                  message: finalMsg,
-                  status: 'SUCCESS',
-                  tenant_id: tenantId,
-                  created_at: nowStr
-                }]);
+                try {
+                  const smsRes = await fetch(`${baseUrl}/api/sms/send`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Cookie': allCookies
+                    },
+                    body: JSON.stringify({
+                      phoneNumber: phone,
+                      message: finalMsg
+                    })
+                  });
+                  const smsData = await smsRes.json().catch(() => ({ success: false }));
+                  if (smsData.success) {
+                    sentSuccessCount++;
+                  } else {
+                    sendFailureDetail = smsData.error || '발송 기기 응답 실패';
+                    // 실패하더라도 message_logs 기록은 안전하게 보존
+                    await insertRows('message_logs', [{
+                      id: Date.now() + i,
+                      phone,
+                      message: finalMsg,
+                      status: 'FAIL',
+                      tenant_id: tenantId,
+                      created_at: nowStr
+                    }]);
+                  }
+                } catch (sendErr: any) {
+                  sendFailureDetail = sendErr.message;
+                }
               }
 
-              actionReports.push({
-                action: act,
-                success: true,
-                detail: `[📱 AI 자동 문자 발송 완료] ${recipientNames.join(', ')} 담당자(${targetPhones.length}명)에게 '${templateTitle}' 템플릿 문자("${finalMsg.slice(0, 30)}...")가 0원으로 자동 발송되었습니다.`
-              });
+              if (sentSuccessCount > 0) {
+                actionReports.push({
+                  action: act,
+                  success: true,
+                  detail: `[📱 실제 문자 전송 완료] ${recipientNames.join(', ')} 담당자(${sentSuccessCount}명)에게 '${templateTitle}' 템플릿 문자("${finalMsg.slice(0, 30)}...")가 실제 스마트폰 연동으로 성공적으로 발송되었습니다.`
+                });
+              } else {
+                actionReports.push({
+                  action: act,
+                  success: false,
+                  detail: `[실제 문자 발송 실패] 스마트폰 발송 기기 연결 상태 또는 한도 확인 필요 (${sendFailureDetail || '기기 미페어링'}). 무료 문자 발송 AI 메뉴 우측 [발송 기기 멀티 허브]에서 QR 페어링을 확인해 주세요.`
+                });
+              }
             } catch (smsErr: any) {
               actionReports.push({
                 action: act,
