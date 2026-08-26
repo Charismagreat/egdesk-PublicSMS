@@ -444,7 +444,7 @@ export default function SalesOrderOcrModal({
       const rowMemo = memoIdx >= 0 ? String(row[memoIdx] || '').trim() : '';
 
       // 🏢 [1안: 기존 거래처 스마트 매칭 및 자동 보강 (Auto-Enrichment)]
-      let enrichedPartnerName = rowPartner || fallbackPartner;
+      let enrichedPartnerName = rowPartner || '';
       let enrichedBizNo = rowBizNo;
       let enrichedRep = rowRep;
       let enrichedPhone = rowPhone;
@@ -452,8 +452,9 @@ export default function SalesOrderOcrModal({
       let isPartnerEnriched = false;
       let isPartnerPending = false;
 
-      // 매칭 검색 키워드 정제 (예: "LS발주서" -> "LS", "엘에스")
-      const cleanKeyword = (enrichedPartnerName || '')
+      // 매칭 검색 키워드 정제 (rowPartner 우선, 없으면 담당자명/파일명 참고 매칭 시도)
+      const searchTarget = rowPartner || cleanFileNamePartner || '';
+      const cleanKeyword = searchTarget
         .replace(/발주서|수주서|주문서|견적서|\.xlsx|\.xls|\.pdf/gi, '')
         .replace(/\(주\)|주식회사/g, '')
         .trim().toLowerCase();
@@ -481,8 +482,10 @@ export default function SalesOrderOcrModal({
         }
       }
 
-      if (!isPartnerEnriched && (!enrichedBizNo || !enrichedRep)) {
-        isPartnerPending = true; // [3안: 신규 거래처 정보 후보완 관리]
+      if (!isPartnerEnriched && !enrichedPartnerName) {
+        isPartnerPending = true; // [3안: 발주처 미기재 - 수주 우선 승인 및 사후 보완 관리]
+      } else if (!isPartnerEnriched && (!enrichedBizNo || !enrichedRep)) {
+        isPartnerPending = true;
       }
 
       // 🛡️ 중앙 검증 엔진(data-validator)을 통한 정규화 및 가드
@@ -499,7 +502,8 @@ export default function SalesOrderOcrModal({
       if (enrichedPhone && !phoneSan.isValid) groupWarnings.push(`연락처 (${phoneSan.warning})`);
 
       const currentPartnerName = enrichedPartnerName;
-      const groupKey = `${currentPartnerName}_${rowDocNo || 'DEFAULT'}`;
+      // 발주번호(PO) 기준 또는 거래처 기준으로 고유 그룹 분할
+      const groupKey = rowDocNo ? `PO_${rowDocNo}` : (currentPartnerName ? `${currentPartnerName}_ROW${r}` : `ORDER_ROW${r}`);
 
       if (!groupsMap.has(groupKey)) {
         groupsMap.set(groupKey, {
@@ -1160,7 +1164,13 @@ export default function SalesOrderOcrModal({
                             </span>
                             <div>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h5 className="text-xs font-black text-slate-800">{group.partner_name}</h5>
+                                <h5 className="text-xs font-black text-slate-800">
+                                  {group.partner_name || (
+                                    <span className="text-amber-800 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[10px]">
+                                      발주처 미기재
+                                    </span>
+                                  )}
+                                </h5>
                                 {group.document_number && (
                                   <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-mono font-bold">
                                     {group.document_number}
@@ -1171,7 +1181,7 @@ export default function SalesOrderOcrModal({
                                     <ShieldCheck className="w-2.5 h-2.5 text-blue-600" /> 거래처 자동 완성
                                   </span>
                                 ) : group.isPartnerPending ? (
-                                  <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-[9px] font-black flex items-center gap-0.5" title="사업자번호/대표자명 미기재 (수주 우선 승인 후 거래처 원장 보완 가능)">
+                                  <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-[9px] font-black flex items-center gap-0.5" title="발주처 상호/사업자번호 미기재 (수주 우선 승인 후 거래처 원장 보완 가능)">
                                     <AlertTriangle className="w-2.5 h-2.5 text-amber-600" /> 신규 바이어 (후보완 가능)
                                   </span>
                                 ) : null}
@@ -1207,7 +1217,11 @@ export default function SalesOrderOcrModal({
                             <div className="grid grid-cols-2 gap-2 text-[11px] bg-white p-3 rounded-xl border border-slate-200/80">
                               <div>
                                 <span className="text-slate-400 font-bold">발주처(상호명):</span>{' '}
-                                <span className="font-black text-slate-800">{group.partner_name || '미기재 (바이어)'}</span>
+                                <span className="font-bold">{group.partner_name || (
+                                  <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[10px]">
+                                    미기재 (후보완 가능)
+                                  </span>
+                                )}</span>
                               </div>
                               <div>
                                 <span className="text-slate-400 font-bold">사업자번호:</span>{' '}
