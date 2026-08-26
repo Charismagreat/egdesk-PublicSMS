@@ -20,21 +20,28 @@ export async function GET(req: NextRequest) {
       const res = await executeSQL(sql).catch(() => ({ rows: [] }));
       let workplaces = res.rows || [];
 
-      // 해당 테넌트에 사업장이 하나도 없으면 기본 '본사' 자동 주입
+      // 전체 또는 해당 테넌트에 사업장이 하나도 없을 때만 최초 1회 본사 주입
       if (workplaces.length === 0) {
-        const defaultWorkplace = {
-          name: '본사',
-          address: '서울특별시 중구 세종대로 110 (본사)',
-          latitude: 37.5665,
-          longitude: 126.9780,
-          radius_meters: 500,
-          is_main: 'Y',
-          tenant_id: tenantId,
-          created_at: new Date().toISOString()
-        };
-        await insertRows('crm_workplaces', [defaultWorkplace]).catch(() => null);
-        const reFetch = await executeSQL(sql).catch(() => ({ rows: [] }));
-        workplaces = reFetch.rows || [];
+        const anyWpRes = await queryTable('crm_workplaces', { limit: 10 }).catch(() => ({ rows: [] }));
+        const activeAny = (anyWpRes.rows || []).filter((r: any) => !r.deleted_at);
+        if (activeAny.length > 0) {
+          workplaces = activeAny;
+        } else {
+          const defaultWorkplace = {
+            id: 1,
+            name: '본사',
+            address: '서울특별시 중구 세종대로 110 (본사)',
+            latitude: 37.5665,
+            longitude: 126.9780,
+            radius_meters: 500,
+            is_main: 'Y',
+            tenant_id: tenantId,
+            created_at: new Date().toISOString()
+          };
+          await insertRows('crm_workplaces', [defaultWorkplace]).catch(() => null);
+          const reFetch = await queryTable('crm_workplaces', { limit: 10 }).catch(() => ({ rows: [] }));
+          workplaces = (reFetch.rows || []).filter((r: any) => !r.deleted_at);
+        }
       }
 
       return NextResponse.json({ success: true, workplaces });
