@@ -8,12 +8,14 @@ interface UploadHometaxModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  onUploadedPeriod?: (startDate: string, endDate: string) => void;
 }
 
 export default function UploadHometaxModal({
   isOpen,
   onClose,
-  onSuccess
+  onSuccess,
+  onUploadedPeriod
 }: UploadHometaxModalProps) {
   const [useSmartDetection, setUseSmartDetection] = useState(true);
   const [hometaxKind, setHometaxKind] = useState("sales");
@@ -81,6 +83,9 @@ export default function UploadHometaxModal({
           text: msg
         });
         setHometaxFile(null);
+        if (result.data?.queryPeriodStart && result.data?.queryPeriodEnd && onUploadedPeriod) {
+          onUploadedPeriod(result.data.queryPeriodStart, result.data.queryPeriodEnd);
+        }
         setTimeout(() => {
           handleClose();
           onSuccess();

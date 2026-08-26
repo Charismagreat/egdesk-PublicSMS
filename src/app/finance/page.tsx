@@ -350,6 +350,11 @@ export default function FinancePage() {
         isOpen={isHometaxModalOpen}
         onClose={() => setIsHometaxModalOpen(false)}
         onSuccess={handleRefresh}
+        onUploadedPeriod={(sDate, eDate) => {
+          setStartDate(sDate);
+          setEndDate(eDate);
+          setIsDateManuallySet(true);
+        }}
       />
 
       {/* 🌐 국세청 홈택스 구글 스프레드시트 연동 UI */}

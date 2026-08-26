@@ -170,7 +170,8 @@ export async function POST(request: NextRequest) {
     let kind = formData.get("kind") as string; // 'sales', 'purchase', 'tax-exempt-sales', 'tax-exempt-purchase', 'cash-receipt'
     let businessNumber = formData.get("businessNumber") as string;
 
-    const tenantId = (await getTenantId()) || 'default';
+    const rawTenantId = (await getTenantId()) || request.headers.get("x-egdesk-project-id") || request.headers.get("X-EGDesk-Project-Id") || "";
+    const tenantId = rawTenantId || 'tenant-default-id';
 
     if (!file) {
       return NextResponse.json(
@@ -266,10 +267,10 @@ export async function POST(request: NextRequest) {
     let queryPeriodEnd = "";
     const nowStr = new Date().toISOString();
 
-    // 1. 기존 DB 내 세금계산서 맵 구축 (중복 방지 및 누락된 주소/이메일 스마트 백필용)
+    // 1. 기존 DB 내 세금계산서 맵 구축 (해당 테넌트 격리 중복 방지 및 누락된 주소/이메일 스마트 백필용)
     const existingInvoices = new Map<string, any>();
     try {
-      const checkRes = await queryTable(tableName, { limit: 5000 });
+      const checkRes = await queryTable(tableName, { limit: 5000, filters: { tenant_id: tenantId } });
       if (checkRes && checkRes.rows) {
         checkRes.rows.forEach((r: any) => {
           const appNo = (r.승인번호 || r.approval_no || '').trim();
