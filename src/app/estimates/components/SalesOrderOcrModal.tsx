@@ -29,6 +29,7 @@ import { createPortal } from "react-dom";
 import ProcessingOverlay from "../../../components/ProcessingOverlay";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, SAMPLE_SALES_ORDER_GOOGLE_SHEET_URL } from "../../../lib/google-sheets-storage";
 import GoogleSheetPresetModal, { GoogleSheetPreset } from "@/components/GoogleSheetPresetModal";
+import { parsePurchaseOrderExcel } from "../utils";
 import { 
   sanitizeDate, 
   sanitizeAmount, 
@@ -41,6 +42,7 @@ interface SalesOrderOcrModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  onOpenExcelMappingModal?: (file: File) => void;
 }
 
 // 📦 다중 바이어/다중 발주서 그룹핑 인터페이스
@@ -82,7 +84,8 @@ export interface ParsedSalesOrderGroup {
 export default function SalesOrderOcrModal({
   isOpen,
   onClose,
-  onSuccess
+  onSuccess,
+  onOpenExcelMappingModal
 }: SalesOrderOcrModalProps) {
   // 채널 탭: 'ocr' | 'excel' | 'sheets'
   const [activeImportTab, setActiveImportTab] = useState<'ocr' | 'excel' | 'sheets'>('ocr');
@@ -612,6 +615,29 @@ export default function SalesOrderOcrModal({
     if (!file) return;
 
     try {
+      // 🛡️ 1차 서식 시그니처 학습 여부 사전 검증 가드
+      let isLearned = false;
+      try {
+        const parsedTmp = await parsePurchaseOrderExcel(file);
+        const sig = parsedTmp.header_signature;
+        const sigRes = await apiFetch("/api/estimates/excel-signatures");
+        const sigData = await sigRes.json();
+        if (sigData.success && Array.isArray(sigData.configs)) {
+          const matched = sigData.configs.find((c: any) => c.header_signature === sig);
+          isLearned = !!matched;
+        }
+      } catch (checkErr) {
+        console.error("서식 학습 여부 확인 오류:", checkErr);
+      }
+
+      // 만약 학습되지 않은 신규 엑셀 서식이면 -> 임의 파싱 차단 및 AI 매핑 학습창으로 즉시 토스
+      if (!isLearned && onOpenExcelMappingModal) {
+        alert("⚠️ 등록된 적 없는 신규 엑셀 발주서 서식입니다.\n데이터 무결성 보장을 위해 1차 AI 컬럼 매핑 검토 및 서식 학습 창으로 자동 이동합니다.");
+        onClose();
+        onOpenExcelMappingModal(file);
+        return;
+      }
+
       const XLSX = await import("xlsx");
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: "array" });
@@ -626,7 +652,7 @@ export default function SalesOrderOcrModal({
       }
 
       await parseTableDataToSalesOrder(combinedRows, file.name);
-    } catch (err) {
+    } catch (err: any) {
       setOcrScanning(false);
       alert("엑셀 파일 파싱 오류: " + err.message);
     }

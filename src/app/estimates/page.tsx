@@ -11,6 +11,7 @@ import EstimateOcrModal from "./components/EstimateOcrModal";
 import InboundInspectModal from "./components/InboundInspectModal";
 import EstimateWriteModal from "./components/EstimateWriteModal";
 import SalesOrderOcrModal from "./components/SalesOrderOcrModal";
+import SalesOrderExcelModal from "./components/SalesOrderExcelModal";
 import InboundStatementOcrModal from "./components/InboundStatementOcrModal";
 import ProcessingOverlay from "../../components/ProcessingOverlay";
 
@@ -48,6 +49,8 @@ export default function EstimatesDashboard() {
   const [isWriteModalOpen, setIsWriteModalOpen] = useState(false);
   const [isSoOcrOpen, setIsSoOcrOpen] = useState(false);
   const [isInboundStatementOcrOpen, setIsInboundStatementOcrOpen] = useState(false);
+  const [isSoExcelModalOpen, setIsSoExcelModalOpen] = useState(false);
+  const [uploadedSoExcelFile, setUploadedSoExcelFile] = useState<File | null>(null);
 
   // 📂 태그 프리셋 로드
   useEffect(() => {
