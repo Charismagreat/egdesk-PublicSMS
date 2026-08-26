@@ -537,10 +537,13 @@ export default function DashboardCertPatentWidget() {
                     >
                       <span className="truncate">{ev.title}</span>
                       {isUnassigned ? (
-                        <span className="text-[8px] bg-amber-600 text-white px-1 py-0.2 rounded font-black shrink-0 ml-1">미배정</span>
+                        <span className="text-[8px] bg-amber-500 text-white px-1.5 py-0.2 rounded-md font-black shrink-0 ml-1 shadow-3xs">
+                          미배정
+                        </span>
                       ) : (
-                        <span className="text-[8px] bg-slate-200 text-slate-700 px-1 py-0.2 rounded font-bold shrink-0 ml-1 truncate max-w-[40px]">
-                          {ev.assigned_to}
+                        <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.2 rounded-md font-black shrink-0 ml-1 shadow-3xs flex items-center gap-0.5 max-w-[70px] truncate">
+                          <span>👤</span>
+                          <span className="truncate">{ev.assigned_to}</span>
                         </span>
                       )}
                     </div>
@@ -577,19 +580,19 @@ export default function DashboardCertPatentWidget() {
                   {ev.assigned_to ? (
                     <button
                       onClick={() => handleOpenAssignModal(ev)}
-                      className="text-[10px] text-indigo-700 font-bold bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 px-2 py-0.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all"
-                      title="담당자 변경"
+                      className="text-[11px] text-indigo-900 font-extrabold bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-3xs"
+                      title="클릭하여 담당자 변경"
                     >
-                      <Users className="w-3 h-3" />
-                      <span>담당: {ev.assigned_to}</span>
+                      <Users className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>배정 담당: <strong className="text-indigo-700 underline underline-offset-2">{ev.assigned_to}</strong></span>
                     </button>
                   ) : (
                     <button
                       onClick={() => handleOpenAssignModal(ev)}
-                      className="text-[10px] text-white font-bold bg-amber-500 hover:bg-amber-600 px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-xs cursor-pointer animate-bounce"
+                      className="text-[11px] text-amber-900 font-extrabold bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2.5 py-1 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-3xs"
                     >
-                      <AlertTriangle className="w-3 h-3" />
-                      <span>⚡ 담당자 배정하기</span>
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 animate-bounce" />
+                      <span>미배정 (클릭하여 배정)</span>
                     </button>
                   )}
 

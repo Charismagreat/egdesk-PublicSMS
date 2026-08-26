@@ -73,10 +73,24 @@ export default function MobileTaskDetailModal({
       return (
         <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 px-2.5 py-0.5 rounded-full text-xs font-black">
           <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-          <span>🟢 관제 실행 완료</span>
+          <span>🟢 완료됨</span>
         </span>
       );
     }
+    const isAdminAssigned = 
+      task.created_by?.includes('최고관리자') || 
+      task.category === 'ADMIN_DIRECTIVE' || 
+      task.title?.includes('[수주납기 관리]') ||
+      task.is_assigned === true;
+
+    if (isAdminAssigned) {
+      return (
+        <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200/80 px-2.5 py-0.5 rounded-full text-xs font-black">
+          <span>📌 최고관리자 배정 업무</span>
+        </span>
+      );
+    }
+
     return (
       <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200/80 px-2.5 py-0.5 rounded-full text-xs font-black">
         <Clock className="w-3 h-3 text-amber-500 shrink-0" />
@@ -84,6 +98,13 @@ export default function MobileTaskDetailModal({
       </span>
     );
   };
+
+  const isAdminAssigned = 
+    task.created_by?.includes('최고관리자') || 
+    task.category === 'ADMIN_DIRECTIVE' || 
+    task.title?.includes('[수주납기 관리]') ||
+    task.is_assigned === true;
+  const displayTitle = isAdminAssigned ? task.title.replace(/^\[상신\]\s*/g, '') : task.title;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
@@ -101,7 +122,7 @@ export default function MobileTaskDetailModal({
               )}
             </div>
             <h3 className="text-base font-black text-slate-850 leading-snug">
-              {task.title}
+              {displayTitle}
             </h3>
           </div>
           <button

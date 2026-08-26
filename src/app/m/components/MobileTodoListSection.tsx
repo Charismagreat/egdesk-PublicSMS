@@ -46,11 +46,21 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
 }) => {
 
   const handleTaskCheckClick = (t: any) => {
-    if (t.status !== "DONE") {
-      alert("📌 해당 업무는 최고관리자의 컨트롤타워 관제 및 실행 완료 후 '한 일'로 자동 이동됩니다.");
+    const isAdminAssigned = 
+      t.created_by?.includes('최고관리자') || 
+      t.category === 'ADMIN_DIRECTIVE' || 
+      t.title?.includes('[수주납기 관리]') ||
+      t.is_assigned === true;
+
+    if (isAdminAssigned) {
+      // 💡 최고관리자가 배정한 업무는 직원이 직접 체크하여 완료(DONE) 토글 가능
+      onToggleTaskStatus(t.id, t.status);
     } else {
-      // 완료 항목 클릭 안내
-      alert("✅ 최고관리자의 관제 승인에 의해 실행 완료된 업무입니다.");
+      if (t.status !== "DONE") {
+        alert("📌 임직원 현장 상신 건은 최고관리자의 컨트롤타워 관제 및 결재 실행 완료 후 '한 일'로 자동 이동됩니다.");
+      } else {
+        onToggleTaskStatus(t.id, t.status);
+      }
     }
   };
 
@@ -227,15 +237,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
           <div className="relative mt-1">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
-              type="text"
-              placeholder="업무 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-8 pr-3 py-1.5 text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 focus:bg-white transition-all"
-            />
-          </div>
-
-          {/* 업무 태스크 목록 카드 */}
+                 {/* 업무 태스크 목록 카드 */}
           <div className="space-y-2 mt-3">
             {filteredTasks.length === 0 ? (
               <div className="py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
@@ -251,6 +253,15 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
             ) : (
               filteredTasks.map((t) => {
                 const isDone = t.status === "DONE";
+                const isAdminAssigned = 
+                  t.created_by?.includes('최고관리자') || 
+                  t.category === 'ADMIN_DIRECTIVE' || 
+                  t.title?.includes('[수주납기 관리]') ||
+                  t.is_assigned === true;
+                const displayTitle = isAdminAssigned
+                  ? t.title.replace(/^\[상신\]\s*/g, '')
+                  : t.title;
+
                 return (
                   <div
                     key={t.id}
@@ -269,7 +280,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                         handleTaskCheckClick(t);
                       }}
                       className="mt-0.5 text-slate-400 border-none bg-transparent cursor-pointer shrink-0"
-                      title={isDone ? "최고관리자 관제 실행 완료" : "최고관리자 관제 승인 대기"}
+                      title={isDone ? "완료됨" : isAdminAssigned ? "클릭하여 업무 완료 처리" : "최고관리자 관제 승인 대기"}
                     >
                       {isDone ? (
                         <CheckSquare className="w-4 h-4 text-emerald-600" />
@@ -285,19 +296,25 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                             isDone ? "line-through text-slate-400" : "text-slate-800"
                           }`}
                         >
-                          {t.title}
+                          {displayTitle}
                         </p>
                         {/* 관제 상태 뱃지 및 취소 요청 버튼 */}
                         {isDone ? (
                           <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center gap-0.5 shrink-0">
                             <ShieldCheck className="w-3 h-3" />
-                            <span>관제 실행 완료</span>
+                            <span>완료</span>
                           </span>
                         ) : t.status === 'PENDING_APPROVAL' ? (
                           <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-0.5 shrink-0">
                             <Clock className="w-3 h-3 text-rose-600 animate-pulse" />
                             <span>🚨 취소 승인 대기 중</span>
                           </span>
+                        ) : isAdminAssigned ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="px-2 py-0.5 rounded-md text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/80 flex items-center gap-1 shadow-3xs">
+                              <span>📌 배정 업무</span>
+                            </span>
+                          </div>
                         ) : (
                           <div className="flex items-center gap-1 shrink-0">
                             <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center gap-0.5">
