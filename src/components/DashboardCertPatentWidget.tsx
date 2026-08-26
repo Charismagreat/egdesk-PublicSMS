@@ -1,7 +1,7 @@
 "use client";
 
 import { apiFetch } from '@/lib/api';
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Calendar as CalendarIcon,
   Sparkles,
@@ -18,7 +18,10 @@ import {
   AlertCircle,
   Truck,
   Filter,
-  ShieldCheck
+  ShieldCheck,
+  Users,
+  Check,
+  AlertTriangle
 } from "lucide-react";
 import Link from "next/link";
 
@@ -27,19 +30,25 @@ export default function DashboardCertPatentWidget() {
   const [certificates, setCertificates] = useState<any[]>([]);
   const [patents, setPatents] = useState<any[]>([]);
   const [salesDeliveries, setSalesDeliveries] = useState<any[]>([]);
+  const [operators, setOperators] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 카테고리 필터 상태 ('ALL' | 'AI_TASK' | 'CERT_PATENT' | 'SALES')
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
 
+  // ⚠️ 미배정 건만 보기 토글 상태
+  const [unassignedOnly, setUnassignedOnly] = useState<boolean>(false);
+
   // 달력 연도 / 월 선택 상태
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string>("");
 
-  // 최고관리자 담당자 배정 모달
+  // 최고관리자 복수 담당자 배정 모달
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
-  const [assigneeName, setAssigneeName] = useState("");
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [customAssigneeInput, setCustomAssigneeInput] = useState("");
+  const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -51,6 +60,7 @@ export default function DashboardCertPatentWidget() {
         setCertificates(data.certificates || []);
         setPatents(data.patents || []);
         setSalesDeliveries(data.salesDeliveries || []);
+        setOperators(data.operators || []);
       }
     } catch (e) {
       console.error("Universal Calendar Widget Fetch Error:", e);
@@ -89,34 +99,68 @@ export default function DashboardCertPatentWidget() {
     }
   };
 
-  // 최고관리자 배정
-  const handleAssignTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTask || !assigneeName.trim()) return;
+  // 👥 복수 담당자 선택 토글
+  const toggleAssignee = (name: string) => {
+    setSelectedAssignees(prev => 
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    );
+  };
 
+  // 배정 모달 열기 핸들러
+  const handleOpenAssignModal = (item: any) => {
+    setSelectedTask(item);
+    const existing = item.assigned_to ? item.assigned_to.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+    setSelectedAssignees(existing);
+    setCustomAssigneeInput("");
+    setIsAssignModalOpen(true);
+  };
+
+  // 복수 담당자 배정 확정 제출
+  const handleAssignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTask) return;
+
+    let finalAssignees = [...selectedAssignees];
+    if (customAssigneeInput.trim() && !finalAssignees.includes(customAssigneeInput.trim())) {
+      finalAssignees.push(customAssigneeInput.trim());
+    }
+
+    if (finalAssignees.length === 0) {
+      alert("배정할 직원을 1명 이상 선택하거나 입력해 주세요.");
+      return;
+    }
+
+    setIsSubmittingAssign(true);
     try {
+      const isSo = selectedTask.category === "SALES" || selectedTask.type === "SALES_ORDER" || selectedTask.so_id;
       const res = await apiFetch("/api/cert-patent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "assign_task",
+          action: isSo ? "assign_sales_order" : "assign_task",
           payload: {
             taskId: selectedTask.id,
-            assignedTo: assigneeName.trim(),
-            assignedBy: "최고관리자"
+            soId: selectedTask.so_id || (selectedTask.raw?.id ? selectedTask.raw.id : null),
+            assignees: finalAssignees
           }
         })
       });
       const data = await res.json();
       if (data.success) {
-        alert(`'${assigneeName}' 담당자에게 할 일이 성공적으로 배정되었습니다.`);
+        alert(data.message || `${finalAssignees.join(', ')} 님에게 성공적으로 배정되었습니다.`);
         setIsAssignModalOpen(false);
         setSelectedTask(null);
-        setAssigneeName("");
+        setSelectedAssignees([]);
+        setCustomAssigneeInput("");
         fetchData();
+      } else {
+        alert(data.error || "배정 처리 중 오류가 발생했습니다.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert("배정 요청 중 오류: " + e.message);
+    } finally {
+      setIsSubmittingAssign(false);
     }
   };
 
@@ -179,7 +223,7 @@ export default function DashboardCertPatentWidget() {
     });
   }
 
-  // 특정 날짜에 대한 전사 기한 이벤트 조회 (카테고리 필터 포함)
+  // 특정 날짜에 대한 전사 기한 이벤트 조회 (카테고리 필터 및 미배정 필터 포함)
   const getEventsForDate = (dateStr: string) => {
     const eventList: any[] = [];
 
@@ -210,6 +254,7 @@ export default function DashboardCertPatentWidget() {
             id: c.id,
             title: `[인증만료] ${c.cert_name}`,
             status: c.renewal_status,
+            assigned_to: c.assigned_to || null,
             raw: c
           });
         }
@@ -223,6 +268,7 @@ export default function DashboardCertPatentWidget() {
             id: p.id,
             title: `[연차료] ${p.title}`,
             amount: p.annual_fee_amount,
+            assigned_to: p.assigned_to || null,
             raw: p
           });
         }
@@ -235,57 +281,95 @@ export default function DashboardCertPatentWidget() {
         if (s.due_date === dateStr) {
           eventList.push({
             category: 'SALES',
-            type: 'SALES_DELIVERY',
+            type: s.type || 'SALES_DELIVERY',
             id: s.id,
+            so_id: s.so_id,
             title: s.title,
             amount: s.amount,
+            assigned_to: s.assigned_to || null,
             raw: s
           });
         }
       });
     }
 
+    // ⚠️ 미배정 필터 적용 (assigned_to가 없는 건만 추출)
+    if (unassignedOnly) {
+      return eventList.filter(ev => !ev.assigned_to || String(ev.assigned_to).trim() === "");
+    }
+
     return eventList;
   };
 
+  // 전사 전체 미배정 총 건수 계산
+  const totalUnassignedCount = useMemo(() => {
+    let count = 0;
+    tasks.forEach(t => { if (!t.assigned_to) count++; });
+    salesDeliveries.forEach(s => { if (!s.assigned_to) count++; });
+    return count;
+  }, [tasks, salesDeliveries]);
+
+  // 선택된 일자의 이벤트 목록
+  const selectedEvents = getEventsForDate(selectedDateStr);
   const todayStr = new Date().toISOString().split('T')[0];
-  const selectedEvents = selectedDateStr ? getEventsForDate(selectedDateStr) : [];
 
   return (
-    <div className="w-full block bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm transition-all">
+    <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm">
       {/* 캘린더 위젯 상단 헤더 */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5 border-b border-slate-100 pb-5">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-indigo-100 text-indigo-700 rounded-2xl">
-            <CalendarIcon className="w-7 h-7" />
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+              <CalendarIcon className="w-5 h-5" />
+            </span>
+            <h3 className="text-base font-black text-slate-800 tracking-tight">
+              전사 캘린더 (수주 납기 · 전사 마일스톤)
+            </h3>
+            <span className="text-[11px] font-extrabold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">
+              실시간 DB 감시 연동
+            </span>
           </div>
-          <div>
-            <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-              전사 캘린더
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              인증서/특허 만료일, 영업 수주·발주 납품 기한, 결제일 및 AI 수집 일일 할 일을 포함한 회사 전체 기한을 중앙에서 추적 관리합니다.
-            </p>
-          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            수주 대장 납기일, 특허 연차료, 인증서 갱신, AI 자동 태스크 일정을 실시간 종합 관제합니다.
+          </p>
         </div>
 
-        {/* 컨트롤 버튼 */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+        {/* 월 이동 및 액션 컨트롤러 */}
+        <div className="flex items-center flex-wrap gap-2">
+          {/* ⚠️ 미배정 건만 보기 필터 토글 버튼 */}
+          <button
+            type="button"
+            onClick={() => setUnassignedOnly(prev => !prev)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+              unassignedOnly
+                ? "bg-amber-500 text-white ring-2 ring-amber-400 animate-pulse"
+                : "bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80"
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>미배정 건만 보기</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+              unassignedOnly ? "bg-white text-amber-600" : "bg-amber-200 text-amber-900"
+            }`}>
+              {totalUnassignedCount}건
+            </span>
+          </button>
+
+          <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200">
             <button
               onClick={handlePrevMonth}
-              className="p-1.5 hover:bg-white text-slate-600 hover:text-slate-900 rounded-lg transition-all"
-              title="이전달"
+              className="p-1.5 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
+              title="이전 달"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="px-3 text-sm font-black text-slate-800">
+            <span className="px-3 text-xs font-black text-slate-800 font-mono">
               {year}년 {month + 1}월
             </span>
             <button
               onClick={handleNextMonth}
-              className="p-1.5 hover:bg-white text-slate-600 hover:text-slate-900 rounded-lg transition-all"
-              title="다음달"
+              className="p-1.5 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
+              title="다음 달"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -293,59 +377,59 @@ export default function DashboardCertPatentWidget() {
 
           <button
             onClick={handleToday}
-            className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-2xs"
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
           >
             오늘
           </button>
 
           <button
             onClick={handleTriggerAiScan}
-            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/10 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            AI Daily Scanner 가동
+            AI Daily Scan
           </button>
         </div>
       </div>
 
-      {/* 범주 필터 칩스 (Category Filters) */}
-      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
-        <span className="text-xs font-bold text-slate-500 flex items-center gap-1 mr-1">
-          <Filter className="w-3.5 h-3.5" /> 기한 범주:
+      {/* 🏷️ 카테고리 필터 버튼 칩 바 */}
+      <div className="flex items-center gap-1.5 py-3 overflow-x-auto scrollbar-none text-xs">
+        <span className="text-slate-400 font-bold flex items-center gap-1 mr-1 shrink-0">
+          <Filter className="w-3 h-3" /> 필터:
         </span>
         <button
           onClick={() => setCategoryFilter("ALL")}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+          className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer whitespace-nowrap ${
             categoryFilter === "ALL"
               ? "bg-slate-900 text-white shadow-xs"
               : "bg-slate-100 hover:bg-slate-200 text-slate-600"
           }`}
         >
-          전체 기한 보기
+          전체 보기
         </button>
         <button
           onClick={() => setCategoryFilter("AI_TASK")}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+          className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
             categoryFilter === "AI_TASK"
-              ? "bg-amber-500 text-white shadow-xs"
-              : "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200"
+              ? "bg-indigo-600 text-white shadow-xs"
+              : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200"
           }`}
         >
-          <Sparkles className="w-3 h-3" /> AI 수집/태스크
+          <Sparkles className="w-3 h-3" /> AI 수집 태스크
         </button>
         <button
           onClick={() => setCategoryFilter("CERT_PATENT")}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+          className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
             categoryFilter === "CERT_PATENT"
-              ? "bg-indigo-600 text-white shadow-xs"
-              : "bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200"
+              ? "bg-emerald-600 text-white shadow-xs"
+              : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200"
           }`}
         >
-          <ShieldCheck className="w-3 h-3" /> 인증서 · 특허
+          <ShieldCheck className="w-3 h-3" /> 인증서 · 특허 기한
         </button>
         <button
           onClick={() => setCategoryFilter("SALES")}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+          className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
             categoryFilter === "SALES"
               ? "bg-rose-600 text-white shadow-xs"
               : "bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200"
@@ -374,6 +458,7 @@ export default function DashboardCertPatentWidget() {
           const isSelected = cell.dateStr === selectedDateStr;
           const isSunday = idx % 7 === 0;
           const isSaturday = idx % 7 === 6;
+          const hasUnassigned = events.some(e => !e.assigned_to);
 
           return (
             <div
@@ -387,7 +472,7 @@ export default function DashboardCertPatentWidget() {
                   : "bg-white hover:bg-slate-50/80"
               }`}
             >
-              {/* 날짜 숫 표시 및 오늘 뱃지 */}
+              {/* 날짜 표시 및 오늘 뱃지 / 미배정 알림 */}
               <div className="flex items-center justify-between mb-1">
                 <span
                   className={`text-xs font-black px-1.5 py-0.5 rounded-full ${
@@ -405,44 +490,57 @@ export default function DashboardCertPatentWidget() {
                   {cell.dayNum}
                 </span>
 
-                {events.length > 0 && (
-                  <span className="text-[10px] font-black px-1.5 py-0.5 bg-amber-400 text-slate-950 rounded-full">
-                    {events.length}건
-                  </span>
-                )}
+                <div className="flex items-center gap-1">
+                  {hasUnassigned && (
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" title="미배정 건 존재" />
+                  )}
+                  {events.length > 0 && (
+                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                      hasUnassigned ? "bg-amber-400 text-slate-950 font-bold" : "bg-slate-100 text-slate-600"
+                    }`}>
+                      {events.length}건
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* 해당 날짜의 통합 이벤트 칩 리스트 */}
               <div className="space-y-1 flex-1 overflow-hidden">
-                {events.slice(0, 3).map((ev, i) => (
-                  <div
-                    key={i}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (ev.type === "TASK" && ev.status === "AI_SUGGESTED") {
-                        setSelectedTask(ev.raw);
-                        setIsAssignModalOpen(true);
-                      }
-                    }}
-                    className={`px-1.5 py-1 rounded-md text-[10px] font-extrabold truncate flex items-center justify-between transition-all ${
-                      ev.category === "SALES"
-                        ? "bg-rose-100 text-rose-900 border border-rose-200"
-                        : ev.type === "TASK" && ev.status === "AI_SUGGESTED"
-                        ? "bg-amber-100 text-amber-900 border border-amber-200"
-                        : ev.type === "TASK" && ev.status === "ASSIGNED"
-                        ? "bg-indigo-100 text-indigo-900 border border-indigo-200"
-                        : ev.type === "CERT"
-                        ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
-                        : "bg-purple-100 text-purple-900 border border-purple-200"
-                    }`}
-                    title={ev.title}
-                  >
-                    <span className="truncate">{ev.title}</span>
-                    {ev.type === "TASK" && ev.status === "AI_SUGGESTED" && (
-                      <span className="text-[8px] bg-amber-500 text-white px-1 py-0.2 rounded font-black shrink-0 ml-1">배정</span>
-                    )}
-                  </div>
-                ))}
+                {events.slice(0, 3).map((ev, i) => {
+                  const isUnassigned = !ev.assigned_to;
+                  return (
+                    <div
+                      key={i}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenAssignModal(ev);
+                      }}
+                      className={`px-1.5 py-1 rounded-md text-[10px] font-extrabold truncate flex items-center justify-between transition-all cursor-pointer hover:opacity-90 ${
+                        isUnassigned
+                          ? "bg-amber-100 text-amber-900 border border-amber-300 ring-1 ring-amber-400/40"
+                          : ev.category === "SALES"
+                          ? "bg-rose-100 text-rose-900 border border-rose-200"
+                          : ev.type === "TASK" && ev.status === "AI_SUGGESTED"
+                          ? "bg-amber-100 text-amber-900 border border-amber-200"
+                          : ev.type === "TASK" && ev.status === "ASSIGNED"
+                          ? "bg-indigo-100 text-indigo-900 border border-indigo-200"
+                          : ev.type === "CERT"
+                          ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
+                          : "bg-purple-100 text-purple-900 border border-purple-200"
+                      }`}
+                      title={`${ev.title} (${ev.assigned_to ? `담당: ${ev.assigned_to}` : '미배정 - 클릭하여 배정'})`}
+                    >
+                      <span className="truncate">{ev.title}</span>
+                      {isUnassigned ? (
+                        <span className="text-[8px] bg-amber-600 text-white px-1 py-0.2 rounded font-black shrink-0 ml-1">미배정</span>
+                      ) : (
+                        <span className="text-[8px] bg-slate-200 text-slate-700 px-1 py-0.2 rounded font-bold shrink-0 ml-1 truncate max-w-[40px]">
+                          {ev.assigned_to}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
 
                 {events.length > 3 && (
                   <div className="text-[9px] text-slate-400 font-bold text-center">
@@ -470,7 +568,27 @@ export default function DashboardCertPatentWidget() {
                 <div key={i} className="bg-white border border-slate-200 px-3.5 py-2 rounded-2xl text-xs flex flex-wrap items-center gap-2 shadow-xs hover:border-indigo-300 transition-all">
                   <span className="font-extrabold text-slate-900">{ev.title}</span>
                   
-                  {/* 📦 수주 납기 건 바로가기 및 상세 */}
+                  {/* 담당자 뱃지 / 미배정 배정하기 버튼 */}
+                  {ev.assigned_to ? (
+                    <button
+                      onClick={() => handleOpenAssignModal(ev)}
+                      className="text-[10px] text-indigo-700 font-bold bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 px-2 py-0.5 rounded-lg flex items-center gap-1 cursor-pointer transition-all"
+                      title="담당자 변경"
+                    >
+                      <Users className="w-3 h-3" />
+                      <span>담당: {ev.assigned_to}</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleOpenAssignModal(ev)}
+                      className="text-[10px] text-white font-bold bg-amber-500 hover:bg-amber-600 px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-xs cursor-pointer animate-bounce"
+                    >
+                      <AlertTriangle className="w-3 h-3" />
+                      <span>⚡ 담당자 배정하기</span>
+                    </button>
+                  )}
+
+                  {/* 📦 수주 납기 건 바로가기 */}
                   {ev.category === "SALES" && (
                     <div className="flex items-center gap-1.5 ml-1">
                       {ev.raw?.client_order_no && (
@@ -484,27 +602,10 @@ export default function DashboardCertPatentWidget() {
                         rel="noopener noreferrer"
                         className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer"
                       >
-                        <span>거래명세서 작성/수주조회</span>
+                        <span>거래명세서/수주조회</span>
                         <ArrowUpRight className="w-2.5 h-2.5" />
                       </Link>
                     </div>
-                  )}
-
-                  {ev.type === "TASK" && ev.status === "AI_SUGGESTED" && (
-                    <button
-                      onClick={() => {
-                        setSelectedTask(ev.raw);
-                        setIsAssignModalOpen(true);
-                      }}
-                      className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-[10px] font-bold cursor-pointer"
-                    >
-                      직원 배정하기
-                    </button>
-                  )}
-                  {ev.assigned_to && (
-                    <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">
-                      담당: {ev.assigned_to}
-                    </span>
                   )}
                 </div>
               ))
@@ -522,44 +623,107 @@ export default function DashboardCertPatentWidget() {
         </Link>
       </div>
 
-      {/* 모달: 최고관리자 담당자 배정 */}
+      {/* 👥 모달: 최고관리자 스마트 복수 담당자 배정 */}
       {isAssignModalOpen && selectedTask && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100">
-            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-2">
-              <UserCheck className="w-5 h-5 text-indigo-600" />
-              직원에게 할 일 배정
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              항목: <strong className="text-slate-800">{selectedTask.title}</strong>
-            </p>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-600" />
+                담당자 지정 및 자율 작업 배정
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsAssignModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
 
-            <form onSubmit={handleAssignTask} className="space-y-4">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 mb-4">
+              <p className="text-xs text-slate-500">배정 대상 마일스톤</p>
+              <p className="text-sm font-black text-slate-800 mt-0.5">{selectedTask.title}</p>
+              {selectedTask.raw?.client_order_no && (
+                <p className="text-xs font-mono text-slate-500 mt-1">발주번호: {selectedTask.raw.client_order_no}</p>
+              )}
+            </div>
+
+            <form onSubmit={handleAssignSubmit} className="space-y-4">
+              {/* 등록된 직원 복수 선택 칩 영역 */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">담당 직원 이름/사번</label>
+                <label className="block text-xs font-black text-slate-700 mb-2 flex items-center justify-between">
+                  <span>사내 등록 직원 (클릭하여 1명 또는 복수 선택)</span>
+                  <span className="text-[10px] text-indigo-600 font-bold">
+                    선택됨: {selectedAssignees.length}명
+                  </span>
+                </label>
+
+                {operators.length === 0 ? (
+                  <div className="text-xs text-slate-400 bg-slate-50 p-3 rounded-xl">
+                    등록된 직원 정보가 없습니다. 아래에 이름을 직접 입력해 주세요.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {operators.map((op) => {
+                      const isSelected = selectedAssignees.includes(op.name);
+                      return (
+                        <button
+                          key={op.id}
+                          type="button"
+                          onClick={() => toggleAssignee(op.name)}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between border transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                              : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
+                          }`}
+                        >
+                          <div className="flex flex-col text-left">
+                            <span>{op.name}</span>
+                            <span className={`text-[9px] ${isSelected ? "text-indigo-200" : "text-slate-400"}`}>
+                              {op.role || "직원"}
+                            </span>
+                          </div>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 추가/외부 직접 입력 */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  기타 / 직접 입력 (선택)
+                </label>
                 <input
                   type="text"
-                  required
-                  placeholder="예: 홍길동 (또는 EMP-001)"
-                  value={assigneeName}
-                  onChange={(e) => setAssigneeName(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="예: 김담당, 이출하 등 직접 입력"
+                  value={customAssigneeInput}
+                  onChange={(e) => setCustomAssigneeInput(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+              </div>
+
+              <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 text-[11px] text-indigo-900 leading-relaxed">
+                💡 <strong>자동 연동 안내</strong>: [배정 확정]을 누르시면 지정된 직원들의 <strong>모바일 스냅태스크(SnapTask) 업무 보드에 즉시 납기 관리 태스크가 자동 생성</strong>되고, 전사 캘린더에 배정 상태가 즉시 마운트됩니다.
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsAssignModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
                 >
                   취소
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md"
+                  disabled={isSubmittingAssign}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
                 >
-                  배정 확정 (모바일 전송)
+                  {isSubmittingAssign ? "배정 처리 중..." : "배정 확정 (모바일 SnapTask 전송)"}
                 </button>
               </div>
             </form>

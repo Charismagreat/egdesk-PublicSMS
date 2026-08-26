@@ -91,6 +91,34 @@ export async function GET(request: Request) {
       folderItems = [];
     }
 
+    // 0. 직원 목록 로드 (복수 담당자 배정용)
+    let operators: any[] = [];
+    try {
+      const opRes = await queryTable('crm_operators', { limit: 100 });
+      operators = (opRes.rows || []).filter((o: any) => !o.deleted_at).map((o: any) => ({
+        id: o.id,
+        name: o.name,
+        username: o.username,
+        role: o.role,
+        phone: o.phone
+      }));
+    } catch (e) {
+      operators = [];
+    }
+
+    // 0.1. 거래처 전담자 맵 로드 (crm_partners)
+    const partnerManagerMap: Record<string, string> = {};
+    try {
+      const ptRes = await queryTable('crm_partners', { limit: 500 });
+      (ptRes.rows || []).forEach((pt: any) => {
+        const pName = pt.name || pt.partner_name || '';
+        const pManager = pt.manager || pt.charge_person || pt.assigned_to || '';
+        if (pName && pManager) {
+          partnerManagerMap[pName.trim()] = pManager.trim();
+        }
+      });
+    } catch (e) {}
+
     // 5. 전사 실시간 수주 대장(crm_sales_orders) 및 발주 대장(crm_purchase_orders) 납품 기한 연동
     let salesDeliveries: any[] = [];
     const sanitizeDateStr = (raw: any): string | null => {
@@ -109,6 +137,7 @@ export async function GET(request: Request) {
         if (deliveryDate) {
           const partnerName = so.customer_name || so.partner_name || '거래처';
           const amountStr = so.total_amount ? ` (${Number(so.total_amount).toLocaleString()}원)` : '';
+          const assignedTo = so.assigned_to || partnerManagerMap[partnerName.trim()] || null;
           salesDeliveries.push({
             id: 'so_' + so.id,
             so_id: so.id,
@@ -120,8 +149,9 @@ export async function GET(request: Request) {
             amount: so.total_amount || 0,
             status: so.status || 'REGISTERED',
             item_name: so.item_name || '수주 품목',
+            assigned_to: assignedTo,
             type: 'SALES_ORDER',
-            raw: so
+            raw: { ...so, assigned_to: assignedTo }
           });
         }
       });
@@ -185,7 +215,8 @@ export async function GET(request: Request) {
       patents,
       tasks,
       folderItems,
-      salesDeliveries
+      salesDeliveries,
+      operators
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -198,6 +229,67 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { action, payload } = body;
+
+    // 6. 🌟 담당자 배정 (단일 또는 복수 지정 - AI 태스크 및 수주/발주 납기 건 통합 지원)
+    if (action === 'assign_task' || action === 'assign_sales_order') {
+      const { taskId, soId, assignees, assigneeName } = payload || {};
+      let finalAssignees = '';
+      if (Array.isArray(assignees) && assignees.length > 0) {
+        finalAssignees = assignees.join(', ');
+      } else if (typeof assigneeName === 'string' && assigneeName.trim()) {
+        finalAssignees = assigneeName.trim();
+      }
+
+      if (!finalAssignees) {
+        return NextResponse.json({ success: false, error: '배정할 직원을 1명 이상 선택해 주세요.' }, { status: 400 });
+      }
+
+      const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+
+      // (1) cert_patent_tasks 배정
+      if (taskId) {
+        await updateRows('cert_patent_tasks', {
+          assigned_to: finalAssignees,
+          status: 'ASSIGNED',
+          updated_at: nowStr
+        }, { filters: { id: taskId } });
+      }
+
+      // (2) crm_sales_orders 배정
+      if (soId) {
+        await updateRows('crm_sales_orders', {
+          assigned_to: finalAssignees,
+          updated_at: nowStr
+        }, { filters: { id: soId } });
+
+        // 수주서 상세 정보 조회
+        const soRes = await queryTable('crm_sales_orders', { filters: { id: soId } });
+        const so = soRes.rows?.[0];
+        const partnerName = so?.customer_name || so?.partner_name || '거래처';
+        const deliveryDate = so?.delivery_date || '';
+
+        // (3) 배정된 각 직원의 모바일 스냅태스크(SnapTask)에 납기 할 일 자율 생성
+        const assigneeList = finalAssignees.split(',').map((s: string) => s.trim()).filter(Boolean);
+        for (const emp of assigneeList) {
+          await insertRows('crm_snaptasks', [{
+            id: Date.now() + Math.floor(Math.random() * 1000),
+            title: `[수주납기 관리] ${partnerName} (납기: ${deliveryDate})`,
+            description: `발주번호: ${so?.client_order_no || soId}, 수주총액: ${Number(so?.total_amount || 0).toLocaleString()}원. 납기 기한 내 출하/검수/거래명세서 발송을 완료해 주세요.`,
+            status: 'IN_PROGRESS',
+            assigned_to: emp,
+            created_by: '최고관리자 (전사 캘린더 자율 배정)',
+            tenant_id: so?.tenant_id || 'tenant-wontrading',
+            created_at: nowStr,
+            updated_at: nowStr
+          }]).catch(e => console.error('SnapTask create error:', e));
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `${finalAssignees} 님에게 성공적으로 배정되었습니다. (모바일 스냅태스크 자동 연동 완료)`
+      });
+    }
 
     // 0. 기존 테스트 지식 자료 및 파싱 데이터 전체 삭제 (지식 초기화)
     if (action === 'clear_task_knowledge') {
