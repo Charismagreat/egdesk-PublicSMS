@@ -184,11 +184,14 @@ export async function checkRagApproval(
       console.error('RAG 지식 마이닝 실패:', e);
     }
 
-    // 만약 RAG 규정이 하나도 등록되지 않았다면, 안전을 위해 보류하는 기본 정책 또는 안내 적용
-    if (!rlsRulesText) {
-      rlsRulesText = `[기본 규정] 
-- 모든 삭제는 기본적으로 수동 결재 대기(PENDING_APPROVAL)를 따릅니다.
-- 10만 원 미만의 오등록 건에 한해 자동 전결 승인(APPROVED_AUTO)이 가능합니다.`;
+    // 💡 [개선] 만약 RAG 사내 규정이 하나도 등록되지 않았다면 가짜 규정을 주입하지 않고 즉시 자동 승인(정상 삭제) 처리
+    if (!rlsRulesText || rlsRulesText.trim() === '') {
+      console.log(`[RAG Approval] 등록된 사내 삭제 통제 규정이 없으므로 즉시 자동 승인 처리합니다. (${docType})`);
+      return {
+        approved: true,
+        status: 'APPROVED_AUTO',
+        reason: '등록된 사내 삭제 제한 규정이 없어 즉시 정상 삭제 승인되었습니다.'
+      };
     }
 
     // 3. Gemini 판정 프롬프트 작성
