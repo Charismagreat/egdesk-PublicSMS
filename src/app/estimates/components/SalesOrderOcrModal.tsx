@@ -613,8 +613,9 @@ export default function SalesOrderOcrModal({
   };
 
   // 📂 엑셀 파일 업로드 핸들러
-  const handleExcelFileUpload = async (e) => {
-    const file = e.target.files?.[0];
+  const handleExcelFileUpload = async (e: any) => {
+    const file = e.target?.files?.[0] || (e instanceof File ? e : null);
+    console.log("%c[DEBUG-OCR-MODAL] handleExcelFileUpload file:", "color:#2563eb;font-weight:bold", file?.name);
     if (!file) return;
 
     try {
@@ -630,11 +631,13 @@ export default function SalesOrderOcrModal({
           isLearned = !!matched;
         }
       } catch (checkErr) {
-        console.error("서식 학습 여부 확인 오류:", checkErr);
+        console.error("[DEBUG-OCR-MODAL] 서식 학습 여부 확인 오류:", checkErr);
       }
 
+      console.log("%c[DEBUG-OCR-MODAL] isLearned result:", "color:#7c3aed;font-weight:bold", isLearned);
       // 만약 학습되지 않은 신규 엑셀 서식이면 -> 임의 파싱 차단 및 AI 매핑 학습창으로 즉시 토스
       if (!isLearned) {
+        console.log("%c[DEBUG-OCR-MODAL] Triggering onOpenExcelMappingModal for unlearned excel...", "color:#ea580c;font-weight:bold");
         alert("⚠️ 등록된 적 없는 신규 엑셀 발주서 서식입니다.\n데이터 무결성 보장을 위해 1차 AI 컬럼 매핑 검토 및 서식 학습 창으로 자동 이동합니다.");
         onClose();
         if (onOpenExcelMappingModal) {

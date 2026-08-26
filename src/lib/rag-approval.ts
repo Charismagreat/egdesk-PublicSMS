@@ -8,7 +8,9 @@ import {
   listKnowledgeDocuments, 
   getKnowledgeDocument,
   insertRows,
-  updateRows
+  updateRows,
+  AI_KEY_NAMES,
+  getGeminiApiKey
 } from '../../egdesk-helpers';
 import { fetchGeminiWithFallback } from './gemini-fallback';
 import { cookies } from 'next/headers';
@@ -27,15 +29,26 @@ async function saveGovernanceLog(
 ) {
   try {
     let operator = 'system';
+    let tenantId = docData?.tenant_id || 'default';
     try {
       const cookieStore = await cookies();
       const token = cookieStore.get('auth_token')?.value;
       if (token) {
         const payload = decodeJwt(token);
         operator = (payload.username as string) || (payload.role as string) || 'system';
+        if (payload.tenant_id) {
+          tenantId = payload.tenant_id as string;
+        }
       }
     } catch (e) {
       operator = docData?.updated_by || docData?.operator || 'system';
+    }
+
+    if (!tenantId || tenantId === 'default') {
+      try {
+        const tId = await getTenantId();
+        if (tId) tenantId = tId;
+      } catch {}
     }
 
     const docId = docData?.id || 'unknown';
@@ -68,10 +81,11 @@ async function saveGovernanceLog(
           updated_at: nowStr,
           reason: reason,
           operator: operator,
-          updated_by: operator
+          updated_by: operator,
+          tenant_id: tenantId
         };
         await updateRows('crm_governance_logs', updates, { filters: { id: existLog.id } });
-        console.log(`[Governance Log] Updated existing PENDING_APPROVAL log for ${docType} ID: ${docId}`);
+        console.log(`[Governance Log] Updated existing PENDING_APPROVAL log for ${docType} ID: ${docId} (Tenant: ${tenantId})`);
         return;
       }
     }
@@ -88,7 +102,8 @@ async function saveGovernanceLog(
       created_at: nowStr,
       uuid: logId,
       updated_at: nowStr,
-      updated_by: operator
+      updated_by: operator,
+      tenant_id: tenantId
     };
 
     await insertRows('crm_governance_logs', [logRow]);
@@ -106,17 +121,16 @@ export async function checkRagApproval(
   docData: any
 ): Promise<{ approved: boolean; reason: string; status: 'APPROVED_AUTO' | 'PENDING_APPROVAL' }> {
   try {
-    // 1. Google Gemini API 키 및 모델 설정 조회
+    // 1. Google Gemini API 키 및 모델 설정 (AI CALLER 표준 체계)
     const tenantId = await getTenantId();
-    const apiKey = await getAppSetting('google_ai_api_key', tenantId);
-
+    let apiKey = (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : '';
     if (!apiKey) {
-      // API 키가 없으면 보안상 안전하게 수동 결재 대기로 판정
-      return { 
-        approved: false, 
-        status: 'PENDING_APPROVAL', 
-        reason: '구글 AI API 키가 시스템에 등록되지 않았습니다. 안전을 위해 삭제가 보류되었습니다.' 
-      };
+      try {
+        apiKey = await getGeminiApiKey();
+      } catch {}
+    }
+    if (!apiKey) {
+      apiKey = (await getAppSetting('google_ai_api_key', tenantId)) || 'DUMMY_AI_CALLER_API_KEY';
     }
 
     const selectedModelValue = await getAppSetting('google_ai_model', tenantId);

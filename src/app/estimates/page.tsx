@@ -48,9 +48,17 @@ export default function EstimatesDashboard() {
 
   const [isWriteModalOpen, setIsWriteModalOpen] = useState(false);
   const [isSoOcrOpen, setIsSoOcrOpen] = useState(false);
-  const [isInboundStatementOcrOpen, setIsInboundStatementOcrOpen] = useState(false);
   const [isSoExcelModalOpen, setIsSoExcelModalOpen] = useState(false);
   const [uploadedSoExcelFile, setUploadedSoExcelFile] = useState<File | null>(null);
+
+  React.useEffect(() => {
+    console.log("%c[DEBUG-PAGE-STATE] isSoOcrOpen:", "color:#4f46e5;font-weight:bold", isSoOcrOpen);
+  }, [isSoOcrOpen]);
+
+  React.useEffect(() => {
+    console.log("%c[DEBUG-PAGE-STATE] isSoExcelModalOpen:", "color:#059669;font-weight:bold", isSoExcelModalOpen, "file:", uploadedSoExcelFile?.name);
+  }, [isSoExcelModalOpen, uploadedSoExcelFile]);
+  const [isInboundStatementOcrOpen, setIsInboundStatementOcrOpen] = useState(false);
 
   // 📂 태그 프리셋 로드
   useEffect(() => {
@@ -752,6 +760,12 @@ export default function EstimatesDashboard() {
         isOpen={isOcrModalOpen}
         onClose={() => setIsOcrModalOpen(false)}
         onSuccess={fetchData}
+        onOpenExcelMappingModal={(file) => {
+          console.log("%c[DEBUG-PAGE] EstimateOcrModal triggered onOpenExcelMappingModal with file:", "color:#d97706;font-weight:bold", file.name);
+          setIsOcrModalOpen(false);
+          setUploadedSoExcelFile(file);
+          setIsSoExcelModalOpen(true);
+        }}
       />
 
       <InboundInspectModal
@@ -775,12 +789,34 @@ export default function EstimatesDashboard() {
         isOpen={isSoOcrOpen}
         onClose={() => setIsSoOcrOpen(false)}
         onSuccess={fetchData}
+        onOpenExcelMappingModal={(file) => {
+          console.log("%c[DEBUG-PAGE] onOpenExcelMappingModal triggered with file:", "color:#d97706;font-weight:bold", file.name);
+          setIsSoOcrOpen(false);
+          setUploadedSoExcelFile(file);
+          setIsSoExcelModalOpen(true);
+        }}
       />
 
       <InboundStatementOcrModal
         isOpen={isInboundStatementOcrOpen}
         onClose={() => setIsInboundStatementOcrOpen(false)}
         onSuccess={fetchData}
+      />
+
+      <SalesOrderExcelModal
+        isOpen={isSoExcelModalOpen}
+        onClose={() => {
+          console.log("%c[DEBUG-PAGE] SalesOrderExcelModal closed", "color:#dc2626");
+          setIsSoExcelModalOpen(false);
+          setUploadedSoExcelFile(null);
+        }}
+        onSuccess={() => {
+          console.log("%c[DEBUG-PAGE] SalesOrderExcelModal success", "color:#16a34a");
+          setIsSoExcelModalOpen(false);
+          setUploadedSoExcelFile(null);
+          fetchData();
+        }}
+        uploadedFile={uploadedSoExcelFile}
       />
 
       <ProcessingOverlay

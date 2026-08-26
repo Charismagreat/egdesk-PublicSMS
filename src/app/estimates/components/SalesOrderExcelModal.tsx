@@ -31,7 +31,7 @@ export default function SalesOrderExcelModal({
   const [parsing, setParsing] = useState(false);
   const [parseSuccess, setParseSuccess] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [step, setStep] = useState<"upload" | "mapping" | "review">("upload");
+  const [step, setStep] = useState<"upload" | "mapping" | "review">(uploadedFile ? "mapping" : "upload");
   const [filename, setFilename] = useState("");
   const [excelData, setExcelData] = useState<{
     columns: string[];
@@ -151,40 +151,51 @@ export default function SalesOrderExcelModal({
       const dd = String(future.getDate()).padStart(2, "0");
       setDeliveryDate(`${yyyy}-${mm}-${dd}`);
 
-      if (uploadedFile) {
+      console.log("%c[DEBUG-EXCEL-MODAL] Mounted/Updated with isOpen:", "color:#059669;font-weight:bold", isOpen, "uploadedFile:", uploadedFile?.name, "step:", step);
+    if (uploadedFile) {
+      console.log("%c[DEBUG-EXCEL-MODAL] Starting processFile for:", "color:#059669", uploadedFile.name);
         const processFile = async (file: File) => {
           setParsing(true);
           setParseSuccess(false);
           setFilename(file.name);
           setFileObject(file);
+          setStep("mapping"); // 🚀 즉시 매핑 단계로 전환하여 화면 표시
 
           try {
             const res = await getExcelColumnsAndRawData(file);
             setExcelData(res);
+            console.log("%c[DEBUG-EXCEL-MODAL] Extracted columns count:", "color:#0284c7;font-weight:bold", res.columns.length, res.columns);
 
             // 엑셀 헤더 시그니처 분석
-            const parsedTmp = await parsePurchaseOrderExcel(file);
-            const sig = parsedTmp.header_signature;
-            setHeaderSignature(sig);
+            let sig = "";
+            try {
+              const parsedTmp = await parsePurchaseOrderExcel(file);
+              sig = parsedTmp.header_signature;
+              setHeaderSignature(sig);
+            } catch (e) {
+              console.warn("헤더 시그니처 분석 폴백:", e);
+            }
 
             let loadedMapping: ExcelColumnMapping | null = null;
-            try {
-              const sigRes = await apiFetch("/api/estimates/excel-signatures");
-              const sigData = await sigRes.json();
-              if (sigData.success && Array.isArray(sigData.configs)) {
-                const matched = sigData.configs.find((c: any) => c.header_signature === sig);
-                if (matched && matched.mapping_info) {
-                  loadedMapping = JSON.parse(matched.mapping_info);
+            if (sig) {
+              try {
+                const sigRes = await apiFetch("/api/estimates/excel-signatures");
+                const sigData = await sigRes.json();
+                if (sigData.success && Array.isArray(sigData.configs)) {
+                  const matched = sigData.configs.find((c: any) => c.header_signature === sig);
+                  if (matched && matched.mapping_info) {
+                    loadedMapping = JSON.parse(matched.mapping_info);
+                  }
                 }
+              } catch (sigErr) {
+                console.error("이전 매핑 설정 불러오기 실패:", sigErr);
               }
-            } catch (sigErr) {
-              console.error("이전 매핑 설정 불러오기 실패:", sigErr);
             }
 
             if (loadedMapping) {
               setMapping(loadedMapping);
             } else {
-              const cols = res.columns;
+              const cols = res.columns || [];
               const getRecommended = (keywords: string[]) => {
                 for (const col of cols) {
                   const c = col.toLowerCase().trim();
@@ -213,11 +224,13 @@ export default function SalesOrderExcelModal({
                 delivery_date: getRecommended(['납기', '납기일', '납기일자', '예정일', 'delivery'])
               };
               setMapping(initialMapping);
+              console.log("%c[DEBUG-EXCEL-MODAL] Generated initialMapping:", "color:#16a34a;font-weight:bold", initialMapping);
             }
             
             setStep("mapping");
-          } catch (err) {
-            alert("엑셀 파일 로드 중 오류가 발생했습니다.");
+          } catch (err: any) {
+            console.error("엑셀 파일 로드 중 오류:", err);
+            alert("엑셀 파일 로드 중 오류가 발생했습니다: " + (err.message || ""));
             setFilename("");
             setStep("upload");
           } finally {
@@ -531,7 +544,16 @@ export default function SalesOrderExcelModal({
           )}
 
           {/* 2. 컬럼 매핑 단계 (mapping) */}
-          {step === "mapping" && excelData && (
+          {step === "mapping" && (
+            parsing || !excelData ? (
+              <div className="py-12 flex flex-col items-center justify-center space-y-4 text-center">
+                <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin" />
+                <div className="space-y-1">
+                  <p className="text-sm font-black text-slate-800 animate-pulse">🤖 AI가 엑셀 헤더를 분석하여 최적의 컬럼 매핑을 구성 중입니다...</p>
+                  <p className="text-xs text-slate-400 font-semibold">{filename}</p>
+                </div>
+              </div>
+            ) : (
             <div className="space-y-5 animate-scale-up text-left">
               <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-2xl text-xs font-bold leading-normal text-indigo-900">
                 ⚡ 엑셀 파일 로드 완료! 적재될 데이터 필드와 엑셀 열(Column) 헤더를 지정해 주세요.
@@ -662,6 +684,7 @@ export default function SalesOrderExcelModal({
                 </div>
               </div>
             </div>
+            )
           )}
 
           {/* 3. 데이터 검토 및 조율 단계 (review) */}
