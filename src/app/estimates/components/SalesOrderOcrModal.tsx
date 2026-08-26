@@ -61,6 +61,9 @@ export interface ParsedSalesOrderGroup {
   originalTotalQuantity: number;
   isValid?: boolean;
   validationWarnings?: string[];
+  isPartnerEnriched?: boolean;
+  isPartnerPending?: boolean;
+  matchedPartnerName?: string;
   items: Array<{
     item_code?: string;
     product_name: string;
@@ -393,16 +396,22 @@ export default function SalesOrderOcrModal({
       throw new Error("품목명(상품명) 또는 수량/단가 헤더 열을 찾을 수 없습니다.");
     }
 
-    // 마스터 품목 연동
-    let masterProducts = [];
+    // 마스터 품목 및 마스터 거래처 연동
+    let masterProducts: any[] = [];
+    let masterPartners: any[] = [];
     try {
-      const prodRes = await apiFetch("/api/inventory?action=list");
-      const prodData = await prodRes.json();
-      if (prodData.success && Array.isArray(prodData.items)) {
-        masterProducts = prodData.items;
+      const [prodRes, partnerRes] = await Promise.all([
+        apiFetch("/api/inventory?action=list").then(r => r.json()).catch(() => ({})),
+        apiFetch("/api/partners?action=list").then(r => r.json()).catch(() => ({}))
+      ]);
+      if (prodRes?.success && Array.isArray(prodRes.items)) {
+        masterProducts = prodRes.items;
+      }
+      if (partnerRes?.success && Array.isArray(partnerRes.partners)) {
+        masterPartners = partnerRes.partners;
       }
     } catch (e) {
-      console.warn("마스터 품목 로드 건너뜀:", e);
+      console.warn("마스터 데이터 로드 건너뜀:", e);
     }
 
     const groupsMap = new Map();
@@ -427,30 +436,73 @@ export default function SalesOrderOcrModal({
       const rowDlvDate = dlvDateIdx >= 0 ? String(row[dlvDateIdx] || '').trim() : '';
       const rowMemo = memoIdx >= 0 ? String(row[memoIdx] || '').trim() : '';
 
+      // 🏢 [1안: 기존 거래처 스마트 매칭 및 자동 보강 (Auto-Enrichment)]
+      let enrichedPartnerName = rowPartner || fallbackPartner;
+      let enrichedBizNo = rowBizNo;
+      let enrichedRep = rowRep;
+      let enrichedPhone = rowPhone;
+      let enrichedAddress = '';
+      let isPartnerEnriched = false;
+      let isPartnerPending = false;
+
+      // 매칭 검색 키워드 정제 (예: "LS발주서" -> "LS", "엘에스")
+      const cleanKeyword = (enrichedPartnerName || '')
+        .replace(/발주서|수주서|주문서|견적서|\.xlsx|\.xls|\.pdf/gi, '')
+        .replace(/\(주\)|주식회사/g, '')
+        .trim().toLowerCase();
+
+      if (masterPartners.length > 0) {
+        const matched = masterPartners.find((p: any) => {
+          const pName = (p.company_name || p.name || '').toLowerCase();
+          const pMgr = (p.manager_name || '').toLowerCase();
+          const pBiz = (p.business_number || '').replace(/[^0-9]/g, '');
+          const rowCleanBiz = (rowBizNo || '').replace(/[^0-9]/g, '');
+
+          if (rowCleanBiz && pBiz && rowCleanBiz === pBiz) return true;
+          if (cleanKeyword && cleanKeyword.length >= 2 && (pName.includes(cleanKeyword) || cleanKeyword.includes(pName))) return true;
+          if (rowMgr && pMgr && (pMgr.includes(rowMgr.toLowerCase()) || rowMgr.toLowerCase().includes(pMgr))) return true;
+          return false;
+        });
+
+        if (matched) {
+          enrichedPartnerName = matched.company_name || matched.name || enrichedPartnerName;
+          enrichedBizNo = matched.business_number || enrichedBizNo;
+          enrichedRep = matched.representative || enrichedRep;
+          enrichedPhone = matched.phone || enrichedPhone;
+          enrichedAddress = matched.address || '';
+          isPartnerEnriched = true;
+        }
+      }
+
+      if (!isPartnerEnriched && (!enrichedBizNo || !enrichedRep)) {
+        isPartnerPending = true; // [3안: 신규 거래처 정보 후보완 관리]
+      }
+
       // 🛡️ 중앙 검증 엔진(data-validator)을 통한 정규화 및 가드
       const dateSan = sanitizeDate(rowDate);
       const dlvDateSan = sanitizeDate(rowDlvDate);
-      const bizSan = sanitizeBusinessNumber(rowBizNo);
-      const phoneSan = sanitizePhoneNumber(rowPhone);
+      const bizSan = sanitizeBusinessNumber(enrichedBizNo);
+      const phoneSan = sanitizePhoneNumber(enrichedPhone);
 
       const groupWarnings = [];
       if (!dateSan.isValid && rowDate) groupWarnings.push(`발주일자 (${dateSan.warning})`);
       if (!dlvDateSan.isValid && rowDlvDate) groupWarnings.push(`납기일자 (${dlvDateSan.warning})`);
-      if (!bizSan.isValid && rowBizNo) groupWarnings.push(`사업자번호 (${bizSan.warning})`);
-      if (!phoneSan.isValid && rowPhone) groupWarnings.push(`연락처 (${phoneSan.warning})`);
+      // 사업자번호가 비어있는 것은 후보완이 가능하므로 에러 경고로 차단하지 않음
+      if (enrichedBizNo && !bizSan.isValid) groupWarnings.push(`사업자번호 (${bizSan.warning})`);
+      if (enrichedPhone && !phoneSan.isValid) groupWarnings.push(`연락처 (${phoneSan.warning})`);
 
-      const currentPartnerName = rowPartner || fallbackPartner;
+      const currentPartnerName = enrichedPartnerName;
       const groupKey = `${currentPartnerName}_${rowDocNo || 'DEFAULT'}`;
 
       if (!groupsMap.has(groupKey)) {
         groupsMap.set(groupKey, {
           id: groupKey,
           partner_name: currentPartnerName,
-          partner_phone: phoneSan.value || rowPhone || "",
+          partner_phone: phoneSan.value || enrichedPhone || "",
           partner_manager: rowMgr || "",
-          business_number: bizSan.value || rowBizNo || "",
-          representative: rowRep || "",
-          address: "",
+          business_number: bizSan.value || enrichedBizNo || "",
+          representative: enrichedRep || "",
+          address: enrichedAddress,
           document_number: rowDocNo || `PO-${new Date().toISOString().substring(0, 10).replace(/-/g, '')}-${String(groupsMap.size + 1).padStart(3, '0')}`,
           document_date: (dateSan.isValid ? dateSan.value : rowDate) || new Date().toISOString().substring(0, 10),
           delivery_date: (dlvDateSan.isValid ? dlvDateSan.value : rowDlvDate) || new Date(Date.now() + 7 * 86400000).toISOString().substring(0, 10),
@@ -460,6 +512,8 @@ export default function SalesOrderOcrModal({
           originalTotalQuantity: 0,
           isValid: groupWarnings.length === 0,
           validationWarnings: groupWarnings,
+          isPartnerEnriched,
+          isPartnerPending,
           items: []
         });
       }
@@ -1105,6 +1159,15 @@ export default function SalesOrderOcrModal({
                                     {group.document_number}
                                   </span>
                                 )}
+                                {group.isPartnerEnriched ? (
+                                  <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[9px] font-black flex items-center gap-0.5">
+                                    <ShieldCheck className="w-2.5 h-2.5 text-blue-600" /> 거래처 자동 완성
+                                  </span>
+                                ) : group.isPartnerPending ? (
+                                  <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-[9px] font-black flex items-center gap-0.5" title="사업자번호/대표자명 미기재 (수주 우선 승인 후 거래처 원장 보완 가능)">
+                                    <AlertTriangle className="w-2.5 h-2.5 text-amber-600" /> 신규 바이어 (후보완 가능)
+                                  </span>
+                                ) : null}
                                 {isGroupValid ? (
                                   <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[9px] font-black flex items-center gap-0.5">
                                     <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" /> 정상
@@ -1135,8 +1198,18 @@ export default function SalesOrderOcrModal({
                         {isExpanded && (
                           <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3 text-left animate-fade-in">
                             <div className="grid grid-cols-2 gap-2 text-[11px]">
-                              <div><span className="text-slate-400 font-bold">사업자번호:</span> <span className="font-semibold">{group.business_number || '-'}</span></div>
-                              <div><span className="text-slate-400 font-bold">대표자:</span> <span className="font-semibold">{group.representative || '-'}</span></div>
+                              <div>
+                                <span className="text-slate-400 font-bold">사업자번호:</span>{' '}
+                                <span className="font-semibold">{group.business_number || (
+                                  <span className="text-amber-600 font-bold bg-amber-50 px-1 py-0.2 rounded">미기재 (수주 후 보완 가능)</span>
+                                )}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-bold">대표자:</span>{' '}
+                                <span className="font-semibold">{group.representative || (
+                                  <span className="text-slate-400 font-medium">-</span>
+                                )}</span>
+                              </div>
                               <div><span className="text-slate-400 font-bold">연락처:</span> <span className="font-semibold">{group.partner_phone || '-'}</span></div>
                               <div><span className="text-slate-400 font-bold">담당자:</span> <span className="font-semibold">{group.partner_manager || '-'}</span></div>
                             </div>
