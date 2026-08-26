@@ -3,13 +3,15 @@
 import { apiFetch } from '@/lib/api';
 import { Layers, FolderOpen } from "lucide-react";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { 
   Plus, Trash2, Printer, Mail, Send, Check, RefreshCw, 
   ArrowLeft, FileText, Settings, Coins, Sparkles, X, Contact
 } from "lucide-react";
 import Link from "next/link";
+
 const formatBusinessNumber = (numStr: string) => {
   const clean = String(numStr || "").replace(/[^0-9]/g, "");
   if (clean.length <= 3) return clean;
@@ -602,6 +604,22 @@ export default function DeliveryStatementWritePage() {
     
     setMaterials(itemsList.length > 0 ? itemsList : [{ itemCode: "", productName: "", spec: "", quantity: 0, unitPrice: 0, remark: "" }]);
   };
+
+  const searchParams = useSearchParams();
+  const soIdParam = searchParams.get("soId") || searchParams.get("id");
+  const soIdsParam = searchParams.get("soIds");
+
+  // 🚀 URL 쿼리 파라미터(soId, soIds)로 유입된 수주 건 자동 로드 및 폼 오토필
+  useEffect(() => {
+    if (!isRestored || orderList.length === 0) return;
+    const targetIds = (soIdsParam ? soIdsParam.split(",") : [soIdParam]).filter(Boolean) as string[];
+    if (targetIds.length === 0) return;
+
+    const matchedOrders = orderList.filter(o => targetIds.includes(String(o.id)));
+    if (matchedOrders.length > 0) {
+      handleSelectOrders(matchedOrders);
+    }
+  }, [isRestored, orderList, soIdParam, soIdsParam]);
 
   const handleAddMaterial = () => {
     setMaterials([...materials, { itemCode: "", productName: "", spec: "", quantity: 0, unitPrice: 0, remark: "" }]);

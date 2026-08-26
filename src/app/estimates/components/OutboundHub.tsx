@@ -2,7 +2,7 @@
 
 import { apiFetch } from '@/lib/api';
 import React, { useState } from "react";
-import { Plus, Eye, CheckCircle2, ChevronRight, Trash2, Clock, Printer, Upload, Sparkles, ArrowRightLeft } from "lucide-react";
+import { Plus, Eye, CheckCircle2, ChevronRight, Trash2, Clock, Printer, Upload, Sparkles, ArrowRightLeft, FileText } from "lucide-react";
 import Link from "next/link";
 import { Estimate, SalesOrder, Partner } from "../types";
 import { parseEstimateMetadata, parsePurchaseOrderExcel, ExcelParsedPurchaseOrder, getExcelColumnsAndRawData, parseExcelWithMapping } from "../utils";
@@ -1018,18 +1018,13 @@ export default function OutboundHub({
                         >
                           <Eye className="w-3.5 h-3.5" /> 견적상세
                         </button>
-                        {so.status === "REGISTERED" ? (
-                          <button
-                            onClick={() => onConfirmSalesOrder(so)}
-                            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 shadow-md"
-                          >
-                            수주확인서 발송
-                          </button>
-                        ) : (
-                          <span className="text-xs text-emerald-600 font-bold flex items-center gap-0.5">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> 수주 확인 메일 완료
-                          </span>
-                        )}
+                        <Link
+                          href={`/estimates/statement-write?soId=${so.id}`}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer"
+                          title="해당 수주 건을 바탕으로 거래명세서를 작성하고 발송합니다."
+                        >
+                          <FileText className="w-3.5 h-3.5" /> 거래명세서 작성 및 발송
+                        </Link>
                         {so.is_pending_delete ? (
                           <span className="px-2.5 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-[10px] font-black border border-amber-100 inline-flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5 animate-pulse" /> 결재 대기 중
@@ -1062,12 +1057,13 @@ export default function OutboundHub({
           <div className="h-4 w-px bg-slate-800"></div>
           <div className="flex gap-2">
             {outboundSubTab === "sos" && (
-              <button
-                onClick={handleLocalBulkConfirmSalesOrder}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl shadow-md transition-all"
+              <Link
+                href={`/estimates/statement-write?soIds=${Array.from(selectedOutboundIds).join(",")}`}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                title="선택된 수주 건들을 종합하여 거래명세서를 작성하고 일괄 발송합니다."
               >
-                선택 일괄 수주확인서 발송
-              </button>
+                <FileText className="w-3.5 h-3.5" /> 선택 일괄 거래명세서 작성 및 발송
+              </Link>
             )}
             <button
               onClick={handleLocalBulkExportExcel}
