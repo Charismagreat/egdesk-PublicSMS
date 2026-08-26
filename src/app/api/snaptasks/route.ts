@@ -110,6 +110,7 @@ export async function GET(req: Request) {
         limit: 10000
       }).catch(() => ({ rows: [] }));
       const snaptasksRows = snaptasksRes.rows || [];
+console.log("[DEBUG 1] snaptasksRows length:", snaptasksRows.length, "active:", snaptasksRows.filter((t: any) => !t.deleted_at).length);
 
       // 2) crm_partners 및 crm_snaptask_items 대장 미리 조회 (테넌트 격리)
       let partnersRows: any[] = [];
@@ -159,7 +160,8 @@ export async function GET(req: Request) {
       // 4) crm_governance_logs 상신 및 관제 로그 due_date 결합 동기화 (테넌트 격리)
       try {
         const govLogsRes = await queryTable('crm_governance_logs', { filters: { tenant_id: userTenantId }, limit: 10000 }).catch(() => ({ rows: [] }));
-        const govLogs = (govLogsRes.rows || []).filter((l: any) => !l.deleted_at);
+        const govLogs = (govLogsRes.rows || []).filter((l: any) => !l.deleted_at && l.deleted_at !== 'null');
+console.log("[DEBUG 2] govLogs active length:", govLogs.length);
 
         // 제목 정제 함수 (모든 접두어 전면 제거하여 순수 핵심 제목 추출)
         const getPureTitle = (titleStr: string) => {
@@ -285,7 +287,7 @@ export async function GET(req: Request) {
           if (!mergedTasksMap.has(key)) {
             mergedTasksMap.set(key, {
               ...t,
-              title: `[상신] ${pure}`,
+              title: `[상신] ${pureTitle}`,
               status: isCancelTask ? 'PENDING_APPROVAL' : t.status,
               has_cancel_request: isCancelTask ? true : t.has_cancel_request,
               attachments: Array.isArray(t.attachments) ? [...t.attachments] : []
@@ -314,6 +316,7 @@ export async function GET(req: Request) {
         });
 
         tasks = Array.from(mergedTasksMap.values());
+console.log("[DEBUG 3] mergedTasksMap length:", tasks.length);
       } catch (ge) {
         console.error('관제 완료 로그 동기화 실패:', ge);
       }
