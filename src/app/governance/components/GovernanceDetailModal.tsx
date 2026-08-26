@@ -75,6 +75,20 @@ export default function GovernanceDetailModal({
 
         const title = selectedEvent.title || '';
         const docTitle = selectedEvent.data?.doc_title || '';
+        const isDeleteOrHold = 
+          selectedEvent.type === 'RAG_HOLD' || 
+          selectedEvent.type === 'TASK_CANCEL_REQUEST' ||
+          title.includes('삭제') || title.includes('취소') || 
+          docTitle.includes('삭제') || docTitle.includes('취소');
+
+        // 💡 삭제/취소 건인 경우 신규 수주 확정 문자를 매칭하지 않음
+        if (isDeleteOrHold) {
+          if (isMounted) {
+            setMatchedSmsAction(null);
+          }
+          return;
+        }
+
         const isSales = title.includes('수주') || title.includes('발주') || docTitle.includes('수주') || docTitle.includes('발주');
 
         const ruleKey = isSales ? 'sales_order_confirmed' : Object.keys(rules)[0] || 'sales_order_confirmed';
@@ -200,10 +214,20 @@ export default function GovernanceDetailModal({
     }
   });
 
-  const isSalesOrderEvent = (selectedEvent.title || '').includes('수주') || 
-                            (selectedEvent.title || '').includes('발주') || 
-                            (selectedEvent.data?.doc_title || '').includes('수주') || 
-                            (selectedEvent.data?.doc_title || '').includes('발주');
+  const isDeleteOrHoldEvent = 
+    selectedEvent.type === 'RAG_HOLD' || 
+    selectedEvent.type === 'TASK_CANCEL_REQUEST' ||
+    (selectedEvent.title || '').includes('삭제') || 
+    (selectedEvent.title || '').includes('취소') || 
+    (selectedEvent.data?.doc_title || '').includes('삭제') || 
+    (selectedEvent.data?.doc_title || '').includes('취소');
+
+  const isSalesOrderEvent = !isDeleteOrHoldEvent && (
+    (selectedEvent.title || '').includes('수주') || 
+    (selectedEvent.title || '').includes('발주') || 
+    (selectedEvent.data?.doc_title || '').includes('수주') || 
+    (selectedEvent.data?.doc_title || '').includes('발주')
+  );
 
   const attachedFileName = modalFiles[0]?.name || modalPhotos[0]?.name || selectedEvent.data?.matched_filename || 'LS발주서.xlsx';
 
@@ -215,12 +239,21 @@ export default function GovernanceDetailModal({
     fileName: attachedFileName
   } : null;
 
+  // 🗑️ 삭제/취소 요청 건 전용 추천 액션
+  const deleteApprovalAction = isDeleteOrHoldEvent ? {
+    code: "DELETE_APPROVED_DATA",
+    label: `[🗑️ 데이터 최종 삭제 승인 (Soft Delete)]`,
+    description: `최고관리자 승인에 따라 대상 문서(${selectedEvent.data?.doc_title || selectedEvent.title}) 및 연관 데이터를 대장에서 안전하게 삭제(폐기) 처리`,
+    isDeleteAction: true
+  } : null;
+
   const baseDefaultActions = selectedEvent.data?.suggested_actions || [
     { code: "NOTIFY_USER", label: "관리자 / 담당자 알림 발송", description: "관제 이벤트를 담당 관리자에게 즉시 알림" },
-    { code: "LOG_AUDIT", label: "감사 로그 보존", description: "본 사건 처리 이력을 전사 거버넌스 원장에 기록" },
+    { code: "LOG_AUDIT", label: isDeleteOrHoldEvent ? "[📝 거버넌스 삭제 승인 감사 로그 보존]" : "감사 로그 보존", description: "본 사건 처리 이력을 전사 거버넌스 원장에 기록" },
   ];
 
   const defaultActionsList = [
+    ...(deleteApprovalAction ? [deleteApprovalAction] : []),
     ...(orderRegisterAction ? [orderRegisterAction] : []),
     ...(matchedSmsAction ? [matchedSmsAction] : []),
     ...baseDefaultActions.filter((a: any) => 
@@ -549,8 +582,8 @@ export default function GovernanceDetailModal({
           </div>
         )}
 
-        {/* 📅 관제 대상 건 처리 일시 (완료 마감일 due_date) 지정 및 변경 컨트롤 바 (대기 상태일 때만 렌더링) */}
-        {!isResolved && (
+        {/* 📅 관제 대상 건 처리 일시 (완료 마감일 due_date) 지정 및 변경 컨트롤 바 (일반 업무 상신 대기 상태일 때만 렌더링) */}
+        {!isResolved && !isDeleteOrHoldEvent && (
           <div className="bg-gradient-to-r from-indigo-50/80 via-purple-50/40 to-slate-50 border border-indigo-150 rounded-2xl p-4 space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-indigo-900 font-extrabold text-xs">
@@ -658,6 +691,10 @@ export default function GovernanceDetailModal({
                         ? isSelected
                           ? "bg-gradient-to-br from-indigo-50/90 to-purple-50/70 border-indigo-300 shadow-sm"
                           : "bg-slate-50/60 border-slate-200 opacity-70 hover:opacity-100"
+                        : act.isDeleteAction
+                          ? isSelected
+                            ? "bg-gradient-to-br from-rose-50/90 to-amber-50/70 border-rose-300 shadow-sm"
+                            : "bg-slate-50/60 border-slate-200 opacity-70 hover:opacity-100"
                         : act.isOrderAction
                           ? isSelected
                             ? "bg-gradient-to-br from-blue-50/90 to-cyan-50/70 border-blue-300 shadow-sm"
@@ -667,7 +704,43 @@ export default function GovernanceDetailModal({
                             : "bg-slate-50/50 border-slate-200/60 opacity-60 hover:opacity-100 p-3.5"
                     }`}
                   >
-                    {act.isOrderAction ? (
+                    {act.isDeleteAction ? (
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <button type="button" className="text-rose-600 border-none bg-transparent cursor-pointer p-0">
+                              {isSelected ? <CheckSquare className="w-4.5 h-4.5" /> : <Square className="w-4.5 h-4.5 text-slate-400" />}
+                            </button>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-xs font-black ${isSelected ? "text-rose-950" : "text-slate-700"}`}>
+                                {act.label}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-black border border-rose-200">
+                                🗑️ 데이터 영구 폐기
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black border border-amber-200">
+                                🛡️ RAG 규정 준수 승인
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleRemoveAction(e, act.code)}
+                            className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all border-none bg-transparent cursor-pointer shrink-0"
+                            title="해당 작업 항목 제거/해제"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="ml-7 bg-white/90 border border-rose-150 rounded-xl p-3 shadow-2xs space-y-1">
+                          <p className="text-xs text-rose-950 font-semibold leading-relaxed">
+                            {act.description}
+                          </p>
+                        </div>
+                      </div>
+                    ) : act.isOrderAction ? (
                       <div className="p-4 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2.5">

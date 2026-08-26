@@ -235,10 +235,22 @@ export default function GovernanceDashboard() {
   const handleOpenDetail = (evt: ControlEvent) => {
     setSelectedEvent(evt);
     setEventDueDate(evt.due_date || '');
-    const defaultCodes = (evt.data?.suggested_actions || [
-      { code: "NOTIFY_USER" },
-      { code: "LOG_AUDIT" }
-    ]).map((a: any) => a.code);
+    
+    const isDeleteOrHold = 
+      evt.type === 'RAG_HOLD' || 
+      evt.type === 'TASK_CANCEL_REQUEST' ||
+      (evt.title || '').includes('삭제') || 
+      (evt.title || '').includes('취소') || 
+      (evt.data?.doc_title || '').includes('삭제') || 
+      (evt.data?.doc_title || '').includes('취소');
+
+    const defaultCodes = isDeleteOrHold
+      ? ["DELETE_APPROVED_DATA", "LOG_AUDIT"]
+      : (evt.data?.suggested_actions || [
+          { code: "NOTIFY_USER" },
+          { code: "LOG_AUDIT" }
+        ]).map((a: any) => a.code);
+
     setSelectedActions(defaultCodes);
     setActionReports(null);
   };

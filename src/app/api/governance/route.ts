@@ -2191,7 +2191,7 @@ export async function POST(request: Request) {
             });
           }
 
-          else if (act === 'force_delete') {
+          else if (act === 'force_delete' || act === 'DELETE_APPROVED_DATA') {
             let tableName = '';
             if (docType === 'estimate') tableName = 'crm_estimates';
             else if (docType === 'purchase_order') tableName = 'crm_purchase_orders';
@@ -2208,13 +2208,28 @@ export async function POST(request: Request) {
                   deleted_at: nowStr,
                   deleted_by: adminUser
                 }, { filters: { estimate_id: docId } });
+              } else if (docType === 'sales_order') {
+                // 수주서와 연결된 견적 및 품목 연쇄 소프트 삭제
+                const soRes = await queryTable('crm_sales_orders', { filters: { id: docId } });
+                const targetSo = soRes.rows?.[0];
+                const relEstId = targetSo?.estimate_id;
+                if (relEstId) {
+                  await updateRows('crm_estimates', {
+                    deleted_at: nowStr,
+                    deleted_by: adminUser
+                  }, { filters: { id: relEstId } });
+                  await updateRows('crm_estimate_items', {
+                    deleted_at: nowStr,
+                    deleted_by: adminUser
+                  }, { filters: { estimate_id: relEstId } });
+                }
               }
 
               if (eventId) {
                 const logRawId = eventId.replace('event_rag_hold_', '').replace('rag_hold_', '');
                 await updateRows('crm_governance_logs', {
-                  status: 'FORCE_APPROVED',
-                  reason: `최고관리자(${adminUser})에 의해 자율 대행 조치로 강제 삭제 처리 승인됨.`,
+                  status: 'RESOLVED',
+                  reason: `최고관리자(${adminUser})에 의해 자율 대행 조치로 데이터 삭제 승인 완료.`,
                   updated_at: nowStr,
                   updated_by: adminUser,
                   resolved_at: nowStr
@@ -2224,7 +2239,7 @@ export async function POST(request: Request) {
               actionReports.push({
                 action: act,
                 success: true,
-                detail: `[강제 삭제 완료] RAG 보류 대상인 ${docType} ID [${docId}] 문서를 대장에서 소프트 삭제 완료했습니다.`
+                detail: `[삭제 승인 처리 완료] 최고관리자 결재 승인에 따라 ${docType} ID [${docId}] 및 연관 데이터를 대장에서 안전하게 삭제(Soft Delete) 완료했습니다.`
               });
             } else {
               throw new Error('유효하지 않은 문서 종류');
