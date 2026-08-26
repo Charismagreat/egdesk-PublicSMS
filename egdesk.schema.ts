@@ -341,6 +341,8 @@ export const COLUMN_DEFINITIONS = {
     { name: 'total_amount', type: 'INTEGER' },
     { name: 'delivery_date', type: 'TEXT' },
     { name: 'order_date', type: 'TEXT' },
+    { name: 'assigned_to', type: 'TEXT' },
+    { name: 'item_name', type: 'TEXT' },
     { name: 'created_at', type: 'TEXT', notNull: true },
   ],
   crm_partners: [
