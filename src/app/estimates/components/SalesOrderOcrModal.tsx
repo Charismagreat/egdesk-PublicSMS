@@ -636,9 +636,10 @@ export default function SalesOrderOcrModal({
       // 만약 학습되지 않은 신규 엑셀 서식이면 -> 임의 파싱 차단 및 AI 매핑 학습창으로 즉시 토스
       if (!isLearned) {
         alert("⚠️ 등록된 적 없는 신규 엑셀 발주서 서식입니다.\n데이터 무결성 보장을 위해 1차 AI 컬럼 매핑 검토 및 서식 학습 창으로 자동 이동합니다.");
-        setInnerExcelFile(file);
-        setIsInnerExcelMappingOpen(true);
-        if (onOpenExcelMappingModal) onOpenExcelMappingModal(file);
+        onClose();
+        if (onOpenExcelMappingModal) {
+          onOpenExcelMappingModal(file);
+        }
         return;
       }
 

@@ -480,7 +480,7 @@ export default function SalesOrderExcelModal({
   };
 
   return typeof window !== "undefined" ? createPortal(
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white rounded-[32px] border border-slate-100 max-w-xl w-full p-6 md:p-8 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh] text-slate-850 animate-scale-up">
         
         {/* 닫기 */}
