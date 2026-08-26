@@ -513,12 +513,20 @@ export default function OutboundHub({
                 <Printer className="w-4 h-4 text-indigo-400" />
                 받은 발주 대장
               </button>
+              <input
+                type="file"
+                ref={excelInputRef}
+                onChange={handleExcelUploadDirect}
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+              />
               <button
-                onClick={() => setIsSoExcelOpen(true)}
+                onClick={() => excelInputRef.current?.click()}
+                disabled={isExcelUploading}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/10 flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 transition-all"
               >
                 <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-                AI 엑셀 서식 매핑 & 수주 등록
+                {isExcelUploading ? "엑셀 분석 중..." : "AI 엑셀 서식 매핑 & 수주 등록"}
               </button>
               <button
                 onClick={onOpenOcrModal}
