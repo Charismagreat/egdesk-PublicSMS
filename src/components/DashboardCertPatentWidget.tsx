@@ -182,7 +182,14 @@ export default function DashboardCertPatentWidget() {
     setSelectedDateStr(today.toISOString().split('T')[0]);
   };
 
-  // 🗓️ 월별 달력 그리드 일자 계산
+  // 🗓️ 월별 달력 그리드 일자 계산 (KST 타임존 오차 방지 일관 포맷터)
+  const formatDateKey = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
@@ -199,7 +206,7 @@ export default function DashboardCertPatentWidget() {
     const d = prevMonthLastDay - i;
     const prevMonthDate = new Date(year, month - 1, d);
     calendarCells.push({
-      dateStr: prevMonthDate.toISOString().split('T')[0],
+      dateStr: formatDateKey(prevMonthDate),
       dayNum: d,
       isCurrentMonth: false
     });
@@ -207,12 +214,8 @@ export default function DashboardCertPatentWidget() {
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateObj = new Date(year, month, d);
-    const yyyy = dateObj.getFullYear();
-    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const dd = String(dateObj.getDate()).padStart(2, '0');
-    const dateStr = `${yyyy}-${mm}-${dd}`;
     calendarCells.push({
-      dateStr,
+      dateStr: formatDateKey(dateObj),
       dayNum: d,
       isCurrentMonth: true
     });
@@ -222,7 +225,7 @@ export default function DashboardCertPatentWidget() {
   for (let d = 1; d <= (remainingCells >= 7 ? remainingCells - 7 : remainingCells); d++) {
     const nextMonthDate = new Date(year, month + 1, d);
     calendarCells.push({
-      dateStr: nextMonthDate.toISOString().split('T')[0],
+      dateStr: formatDateKey(nextMonthDate),
       dayNum: d,
       isCurrentMonth: false
     });
