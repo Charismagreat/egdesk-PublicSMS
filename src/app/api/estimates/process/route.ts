@@ -10,12 +10,12 @@ import { decodeJwt } from 'jose';
 async function resolveTenantId(): Promise<string> {
   const cookieStore = await cookies();
   const token = cookieStore.get('auth_token')?.value;
-  if (!token) return 'default';
+  if (!token) return 'tenant-wontrading';
   try {
     const payload = decodeJwt(token);
-    return (payload.tenant_id as string) || 'default';
+    return (payload.tenant_id as string) || 'tenant-wontrading';
   } catch {
-    return 'default';
+    return 'tenant-wontrading';
   }
 }
 
@@ -115,7 +115,7 @@ export async function GET(req: Request) {
     }
 
     if (action === 'so_list') {
-      const res = await queryTable('crm_sales_orders', { filters: { tenant_id: tenantId } });
+      const res = await queryTable('crm_sales_orders', { filters: tenantId ? { tenant_id: tenantId } : {} });
       const rows = (res.rows || []).filter((a: any) => !a.deleted_at);
       
       // 견적 상세 아이템 데이터 로드
