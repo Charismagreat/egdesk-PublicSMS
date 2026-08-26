@@ -479,7 +479,77 @@ export default function GovernanceDetailModal({
           )}
         </div>
 
-          {/* 📅 관제 대상 건 처리 일시 (완료 마감일 due_date) 지정 및 변경 컨트롤 바 */}
+          {/* 🟢 1. 관제 조치 완료 건일 때: 실행 결과 보고서 카드 시각화 */}
+        {isResolved && (
+          <div className="bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-white border border-emerald-200 rounded-3xl p-5 shadow-xs space-y-4 text-left animate-fade-in">
+            <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-2xl bg-emerald-100/80 text-emerald-700">
+                  <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                </span>
+                <div>
+                  <h4 className="text-sm font-black text-slate-850 flex items-center gap-1.5">
+                    <span>관제 조치 완료 보고서</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black">
+                      RESOLVED
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium">본 안건에 대한 관제 조치 및 자율 작업 실행이 성공적으로 완결되었습니다.</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 font-bold block">조치 완료 일시</span>
+                <span className="text-xs font-black text-emerald-700 font-mono">
+                  {selectedEvent.resolved_at || selectedEvent.data?.updated_at || selectedEvent.created_at}
+                </span>
+              </div>
+            </div>
+
+            {/* 조치자 및 처리 사유/결과 */}
+            <div className="bg-white/90 border border-emerald-150 rounded-2xl p-4 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-bold flex items-center gap-1">
+                  👤 최종 조치자: <strong className="text-slate-800">{selectedEvent.data?.updated_by || '최고관리자'}</strong>
+                </span>
+                <span className="text-slate-500 font-bold flex items-center gap-1">
+                  📅 상신 일시: <span className="font-mono text-slate-700">{selectedEvent.created_at}</span>
+                </span>
+              </div>
+
+              <div className="border-t border-slate-100 pt-2.5">
+                <span className="text-[11px] font-black text-emerald-800 block mb-1">📋 실행 결과 및 감사 사유</span>
+                <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 text-xs text-slate-700 font-semibold leading-relaxed whitespace-pre-wrap">
+                  {selectedEvent.data?.reason || '최고관리자에 의해 자율 조치 및 연동 등록이 완료되었습니다.'}
+                </div>
+              </div>
+
+              {/* 바로가기 액션 버튼 */}
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+                <a
+                  href="/estimates"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-xs transition-all text-decoration-none"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>수주 대장 (견적/발주/수주) 확인하기</span>
+                </a>
+                {modalFiles.length > 0 && (
+                  <a
+                    href={modalFiles[0]?.url || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all text-decoration-none"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-slate-600" />
+                    <span>상신 실물 서류 열람 ({modalFiles[0]?.name || '서류'})</span>
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 📅 관제 대상 건 처리 일시 (완료 마감일 due_date) 지정 및 변경 컨트롤 바 (대기 상태일 때만 렌더링) */}
+        {!isResolved && (
           <div className="bg-gradient-to-r from-indigo-50/80 via-purple-50/40 to-slate-50 border border-indigo-150 rounded-2xl p-4 space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-indigo-900 font-extrabold text-xs">
@@ -505,10 +575,11 @@ export default function GovernanceDetailModal({
                 <span>처리 일시 저장</span>
               </button>
             </div>
-        </div>
+          </div>
+        )}
 
-        {/* AI 추천 자율 대행 액션 리스트 및 최고관리자 항목 추가/제거 */}
-        {!actionReports && selectedEvent.type !== 'LEAVE_APPROVAL_REQUEST' && (
+        {/* AI 추천 자율 대행 액션 리스트 및 최고관리자 항목 추가/제거 (대기 상태일 때만 노출) */}
+        {!isResolved && !actionReports && selectedEvent.type !== 'LEAVE_APPROVAL_REQUEST' && (
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
@@ -796,10 +867,10 @@ export default function GovernanceDetailModal({
             onClick={handleCloseDetail}
             className="bg-white hover:bg-slate-50 text-slate-700 font-bold px-5 py-3 rounded-xl border border-slate-200 shadow-xs text-xs transition-colors cursor-pointer"
           >
-            {actionReports ? "닫기 및 리프레시" : "검토 보류"}
+            {isResolved ? "닫기" : actionReports ? "닫기 및 리프레시" : "검토 보류"}
           </button>
           
-          {!actionReports && (selectedEvent.type === 'TASK_CANCEL_REQUEST' || selectedEvent.data?.has_cancel_request) ? (
+          {isResolved ? null : !actionReports && (selectedEvent.type === 'TASK_CANCEL_REQUEST' || selectedEvent.data?.has_cancel_request) ? (
             <div className="flex gap-2">
               <button
                 onClick={() => handleRejectCancelRequest(selectedEvent)}
