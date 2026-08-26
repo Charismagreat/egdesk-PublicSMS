@@ -1,3 +1,5 @@
+import { cookies } from 'next/headers';
+import { decodeJwt } from 'jose';
 import { NextResponse } from 'next/server';
 import { getGmAutomation } from '@/lib/google-messages';
 import { insertRows, queryTable, executeSQL } from '@/../egdesk-helpers';
@@ -94,9 +96,20 @@ export async function POST(request: Request) {
     const automation = getGmAutomation(targetDeviceId);
     const result = await automation.sendSMS(phoneNumber, message);
     
+    // 테넌트 ID 추출 헬퍼 연동
+    let tenantId = 'tenant-wontrading';
+    try {
+      const cookieStore = await cookies();
+      const token = cookieStore.get('auth_token')?.value;
+      if (token) {
+        const payload = decodeJwt(token);
+        tenantId = (payload.tenant_id as string) || 'tenant-wontrading';
+      }
+    } catch {}
+
+    const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
     // Log to DB (메시지 꼬리에 비가시 전송기기 메타데이터 서명 삽입)
     const logMessage = `${message}\n[sender_device: ${targetDeviceId}]`;
-    const now = new Date().toISOString();
     const id = Math.floor(Math.random() * 1000000);
     
     await insertRows('message_logs', [
@@ -106,7 +119,8 @@ export async function POST(request: Request) {
         phone: phoneNumber,
         message: logMessage,
         status: result.success ? 'SUCCESS' : 'FAILED',
-        created_at: now
+        tenant_id: tenantId,
+        created_at: nowStr
       }
     ]).catch(e => console.error('Failed to log message to DB:', e));
 

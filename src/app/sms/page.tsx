@@ -54,6 +54,8 @@ function SmsContent() {
   useEffect(() => {
     if (activeTab === "SEND" && smsHook.fetchMessageTemplates) {
       smsHook.fetchMessageTemplates();
+    } else if (activeTab === "LOGS" && logsHook.fetchLogs) {
+      logsHook.fetchLogs();
     } else if (activeTab === "AUTO" && autoHook.fetchTemplates) {
       autoHook.fetchTemplates();
     }
