@@ -653,10 +653,17 @@ export default function EstimateOcrModal({
     }
   };
 
-  // 이미지/PDF AI OCR 파일 변경 핸들러
+  // 이미지/PDF AI OCR 및 엑셀 통합 파일 변경 핸들러
   const handleOcrFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // 💡 엑셀 파일(.xlsx, .xls, .csv)이 유입된 경우 엑셀 파이프라인으로 안전 분기
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv')) {
+      await handleExcelFileUpload(e);
+      return;
+    }
     setOcrScanning(true);
     setOcrFilename(file.name);
     const reader = new FileReader();
