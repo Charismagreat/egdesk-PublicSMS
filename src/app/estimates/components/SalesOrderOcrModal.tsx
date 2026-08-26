@@ -30,6 +30,7 @@ import ProcessingOverlay from "../../../components/ProcessingOverlay";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, SAMPLE_SALES_ORDER_GOOGLE_SHEET_URL } from "../../../lib/google-sheets-storage";
 import GoogleSheetPresetModal, { GoogleSheetPreset } from "@/components/GoogleSheetPresetModal";
 import { parsePurchaseOrderExcel } from "../utils";
+import SalesOrderExcelModal from "./SalesOrderExcelModal";
 import { 
   sanitizeDate, 
   sanitizeAmount, 
@@ -99,6 +100,8 @@ export default function SalesOrderOcrModal({
   const [userRole, setUserRole] = useState<string>("SUB_OPERATOR");
   const [userName, setUserName] = useState<string>("");
   const [forceBypass, setForceBypass] = useState<boolean>(false);
+  const [isInnerExcelMappingOpen, setIsInnerExcelMappingOpen] = useState(false);
+  const [innerExcelFile, setInnerExcelFile] = useState<File | null>(null);
   const [bypassReason, setBypassReason] = useState<string>("");
 
   // 🌐 구글 시트 프리셋 및 탭 상태
@@ -631,10 +634,11 @@ export default function SalesOrderOcrModal({
       }
 
       // 만약 학습되지 않은 신규 엑셀 서식이면 -> 임의 파싱 차단 및 AI 매핑 학습창으로 즉시 토스
-      if (!isLearned && onOpenExcelMappingModal) {
+      if (!isLearned) {
         alert("⚠️ 등록된 적 없는 신규 엑셀 발주서 서식입니다.\n데이터 무결성 보장을 위해 1차 AI 컬럼 매핑 검토 및 서식 학습 창으로 자동 이동합니다.");
-        onClose();
-        onOpenExcelMappingModal(file);
+        setInnerExcelFile(file);
+        setIsInnerExcelMappingOpen(true);
+        if (onOpenExcelMappingModal) onOpenExcelMappingModal(file);
         return;
       }
 

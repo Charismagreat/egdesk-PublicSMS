@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl, SAMPLE_GOOGLE_SHEET_URL } from '@/lib/google-sheets-storage';
 import GoogleSheetPresetModal, { GoogleSheetPreset } from "@/components/GoogleSheetPresetModal";
 import { parsePurchaseOrderExcel } from "../utils";
+import SalesOrderExcelModal from "./SalesOrderExcelModal";
 import { 
   sanitizeDate, 
   sanitizeAmount, 
@@ -75,6 +76,8 @@ export default function EstimateOcrModal({
   const [userRole, setUserRole] = useState<string>("SUB_OPERATOR");
   const [userName, setUserName] = useState<string>("");
   const [forceBypass, setForceBypass] = useState<boolean>(false);
+  const [isInnerExcelMappingOpen, setIsInnerExcelMappingOpen] = useState(false);
+  const [innerExcelFile, setInnerExcelFile] = useState<File | null>(null);
   const [bypassReason, setBypassReason] = useState<string>("");
 
   // 🌐 구글 시트 프리셋 및 탭 관리 상태
