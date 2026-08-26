@@ -36,9 +36,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
+    const isGlobalSysAdmin = loggedUsername === 'admin' && tenantId === 'default';
+
     // 직원 마스터 목록 스캔 (이름 매핑용, 테넌트 격리)
     const queryFilters: any = {};
-    if (loggedUsername !== 'admin') {
+    if (!isGlobalSysAdmin) {
       queryFilters.tenant_id = tenantId;
     }
     const operatorsRes = await queryTable('crm_operators', { filters: queryFilters });
@@ -49,7 +51,7 @@ export async function GET(req: Request) {
     if (statusFilter) {
       filters.status = statusFilter;
     }
-    if (loggedUsername !== 'admin') {
+    if (!isGlobalSysAdmin) {
       filters.tenant_id = tenantId;
     }
     const leavesRes = await queryTable('crm_annual_leaves', { filters, orderBy: 'created_at', orderDirection: 'DESC' });

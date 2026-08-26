@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   ShieldAlert, X, Calendar, Paperclip, FileText, ExternalLink, 
   ListTodo, CheckSquare, Square, ShieldCheck, Loader2, Sparkles, 
-  CheckCircle2, XCircle, Plus, Bot, ToggleLeft, ToggleRight
+  CheckCircle2, XCircle, Plus, Bot, ToggleLeft, ToggleRight,
+  MessageSquare, Send, Users, Zap
 } from "lucide-react";
+import { apiFetch } from '@/lib/api';
 
 interface GovernanceDetailModalProps {
   selectedEvent: any;
@@ -17,7 +19,7 @@ interface GovernanceDetailModalProps {
   setSelectedActions: React.Dispatch<React.SetStateAction<string[]>>;
   actionReports: { action: string; success: boolean; detail: string }[] | null;
   isExecuting: boolean;
-  handleExecuteActions: (options?: { saveAutoRule?: boolean }) => void;
+  handleExecuteActions: (options?: { saveAutoRule?: boolean; smsPayload?: any }) => void;
   handleApproveLeave: (id: string) => void;
   handleRejectLeave: (id: string) => void;
   handleApproveCancelRequest: (evt: any) => void;
@@ -51,6 +53,105 @@ export default function GovernanceDetailModal({
   const [isAddingAction, setIsAddingAction] = useState(false);
   const [customActions, setCustomActions] = useState<any[]>([]);
   const [saveAutoRuleOnExecute, setSaveAutoRuleOnExecute] = useState(false);
+  const [matchedSmsAction, setMatchedSmsAction] = useState<any | null>(null);
+
+  // 📱 문자 관제 활성 자동 발송 규칙 실시간 매칭
+  useEffect(() => {
+    if (!selectedEvent) return;
+
+    let isMounted = true;
+    (async () => {
+      try {
+        const [rulesRes, tmplRes, opRes] = await Promise.all([
+          apiFetch('/api/settings?key=automation_rules').then(r => r.json()).catch(() => ({})),
+          apiFetch('/api/message-templates').then(r => r.json()).catch(() => ({ templates: [] })),
+          apiFetch('/api/operators').then(r => r.json()).catch(() => ({ operators: [] }))
+        ]);
+
+        let rules: Record<string, any> = {};
+        if (rulesRes?.success && rulesRes?.value) {
+          try { rules = JSON.parse(rulesRes.value); } catch {}
+        }
+        const templates = tmplRes?.templates || [];
+        const operators = opRes?.operators || [];
+
+        const title = selectedEvent.title || '';
+        const docTitle = selectedEvent.data?.doc_title || '';
+        const isSales = title.includes('수주') || title.includes('발주') || docTitle.includes('수주') || docTitle.includes('발주');
+
+        const ruleKey = isSales ? 'sales_order_confirmed' : Object.keys(rules)[0] || 'sales_order_confirmed';
+        const targetRule = rules[ruleKey];
+
+        if (targetRule && targetRule.enabled) {
+          const tmpl = templates.find((t: any) => String(t.id) === String(targetRule.templateId)) || templates[0];
+          const templateTitle = tmpl?.title || '수주등록';
+          const templateRawContent = tmpl?.content || '새로운 수주가 들어왔습니다. {거래처명}';
+
+          // 거래처명 및 상신자명 추출
+          let partnerName = '엘에스';
+          const titleMatch = title.match(/\[상신\]\s*([^\s]+)/i);
+          if (titleMatch && titleMatch[1]) {
+            partnerName = titleMatch[1];
+          } else if (selectedEvent.data?.partner_name) {
+            partnerName = selectedEvent.data.partner_name;
+          }
+          const submitterName = selectedEvent.created_by || selectedEvent.data?.operator || '이주용';
+
+          const finalMessage = templateRawContent
+            .replace(/{거래처명}/g, partnerName)
+            .replace(/{상호}/g, partnerName)
+            .replace(/{상신자명}/g, submitterName)
+            .replace(/{담당자명}/g, submitterName);
+
+          // 수신자 명단 및 번호 추출
+          let targetRecipients: { name: string; phone: string; dept?: string }[] = [];
+          if (targetRule.targetType === 'ALL_OPERATORS') {
+            targetRecipients = operators.map((o: any) => ({ name: o.name, phone: o.phone, dept: o.department }));
+          } else if (targetRule.targetType === 'OPERATORS' && Array.isArray(targetRule.targetOperatorIds)) {
+            targetRecipients = operators
+              .filter((o: any) => targetRule.targetOperatorIds.includes(String(o.id)))
+              .map((o: any) => ({ name: o.name, phone: o.phone, dept: o.department }));
+          } else if (targetRule.targetType === 'CUSTOM' && targetRule.targetPhone) {
+            targetRecipients = targetRule.targetPhone.split(',').map((p: string) => ({ name: '직접입력', phone: p.trim() }));
+          } else {
+            const op = operators.find((o: any) => String(o.id) === String(targetRule.targetOperatorId)) || operators[0];
+            if (op) targetRecipients = [{ name: op.name, phone: op.phone, dept: op.department }];
+          }
+
+          if (targetRecipients.length === 0 && operators.length > 0) {
+            targetRecipients = operators.slice(0, 2).map((o: any) => ({ name: o.name, phone: o.phone, dept: o.department }));
+          }
+
+          if (isMounted) {
+            const newSmsAction = {
+              code: "SMS_AUTO_NOTIFY",
+              label: `[📱 AI 자동 문자 발송] ${targetRule.title || 'B2B 수주 확정 알림'}`,
+              description: `템플릿: '${templateTitle}' · 수신: ${targetRecipients.map(r => r.name).join(', ')} (총 ${targetRecipients.length}명)`,
+              isSmsAction: true,
+              templateTitle,
+              finalMessage,
+              targetRecipients,
+              smsPayload: {
+                templateTitle,
+                message: finalMessage,
+                phones: targetRecipients.map(r => r.phone).filter(Boolean),
+                operatorNames: targetRecipients.map(r => r.name)
+              }
+            };
+            setMatchedSmsAction(newSmsAction);
+            setSelectedActions(prev => {
+              const withoutNotify = prev.filter(c => c !== "NOTIFY_USER");
+              return withoutNotify.includes("SMS_AUTO_NOTIFY") ? withoutNotify : ["SMS_AUTO_NOTIFY", ...withoutNotify];
+            });
+          }
+        }
+      } catch (err) {
+        console.error("SMS auto rule matching error:", err);
+      }
+    })();
+
+    return () => { isMounted = false; };
+  }, [selectedEvent]);
 
   if (!selectedEvent) return null;
 
@@ -99,10 +200,14 @@ export default function GovernanceDetailModal({
     }
   });
 
-  const defaultActionsList = selectedEvent.data?.suggested_actions || [
+  const baseDefaultActions = selectedEvent.data?.suggested_actions || [
     { code: "NOTIFY_USER", label: "관리자 / 담당자 알림 발송", description: "관제 이벤트를 담당 관리자에게 즉시 알림" },
     { code: "LOG_AUDIT", label: "감사 로그 보존", description: "본 사건 처리 이력을 전사 거버넌스 원장에 기록" },
   ];
+
+  const defaultActionsList = matchedSmsAction
+    ? [matchedSmsAction, ...baseDefaultActions.filter((a: any) => a.code !== "NOTIFY_USER")]
+    : baseDefaultActions;
 
   const actionsList = [...defaultActionsList, ...customActions];
 
@@ -442,10 +547,11 @@ export default function GovernanceDetailModal({
               </div>
             )}
 
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {actionsList.map((act: any) => {
                 const isSelected = selectedActions.includes(act.code);
                 const isCustom = act.code.startsWith("CUSTOM_");
+                const isSms = act.isSmsAction;
 
                 return (
                   <div
@@ -455,39 +561,107 @@ export default function GovernanceDetailModal({
                         isSelected ? prev.filter((c) => c !== act.code) : [...prev, act.code]
                       );
                     }}
-                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                      isSelected
-                        ? "bg-indigo-50/60 border-indigo-300 shadow-2xs"
-                        : "bg-slate-50/50 border-slate-200/60 opacity-60 hover:opacity-100"
+                    className={`rounded-2xl border transition-all cursor-pointer overflow-hidden ${
+                      isSms
+                        ? isSelected
+                          ? "bg-gradient-to-br from-indigo-50/90 to-purple-50/70 border-indigo-300 shadow-sm"
+                          : "bg-slate-50/60 border-slate-200 opacity-70 hover:opacity-100"
+                        : isSelected
+                          ? "bg-indigo-50/60 border-indigo-300 shadow-2xs p-3.5"
+                          : "bg-slate-50/50 border-slate-200/60 opacity-60 hover:opacity-100 p-3.5"
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <button type="button" className="text-indigo-600 border-none bg-transparent cursor-pointer p-0">
-                        {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 text-slate-400" />}
-                      </button>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-xs font-bold block ${isSelected ? "text-indigo-950 font-black" : "text-slate-800"}`}>
-                            {act.label}
-                          </span>
-                          {isCustom && (
-                            <span className="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 text-[9px] font-black shrink-0">
-                              직접 추가됨
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[11px] text-slate-400 font-medium leading-relaxed block">{act.description}</span>
-                      </div>
-                    </div>
+                    {isSms ? (
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <button type="button" className="text-indigo-600 border-none bg-transparent cursor-pointer p-0">
+                              {isSelected ? <CheckSquare className="w-4.5 h-4.5" /> : <Square className="w-4.5 h-4.5 text-slate-400" />}
+                            </button>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-xs font-black ${isSelected ? "text-indigo-950" : "text-slate-700"}`}>
+                                {act.label}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black border border-indigo-200">
+                                0원 무료 P2P SMS
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-black border border-purple-200">
+                                ⚡ 문자 관제 규칙 연동
+                              </span>
+                            </div>
+                          </div>
 
-                    <button
-                      type="button"
-                      onClick={(e) => handleRemoveAction(e, act.code)}
-                      className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all border-none bg-transparent cursor-pointer shrink-0"
-                      title="해당 작업 항목 제거/해제"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleRemoveAction(e, act.code)}
+                            className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all border-none bg-transparent cursor-pointer shrink-0"
+                            title="해당 작업 항목 제거/해제"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* 수신자 명단 태그 */}
+                        <div className="flex items-center gap-1.5 flex-wrap pl-7">
+                          <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                            <Users className="w-3 h-3 text-indigo-600" />
+                            수신 대상:
+                          </span>
+                          {act.targetRecipients && act.targetRecipients.map((r: any, rIdx: number) => (
+                            <span key={rIdx} className="px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-indigo-900 text-[11px] font-extrabold shadow-2xs">
+                              {r.name} {r.dept ? `(${r.dept})` : ''} {r.phone ? `· ${r.phone}` : ''}
+                            </span>
+                          ))}
+                          <span className="text-[10px] font-bold text-indigo-600">
+                            [총 {act.targetRecipients?.length || 0}명 수신]
+                          </span>
+                        </div>
+
+                        {/* 발송 문구 미리보기 말풍선 */}
+                        <div className="ml-7 bg-white/90 border border-indigo-100 rounded-xl p-3 shadow-2xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black text-indigo-600 flex items-center gap-1">
+                              <MessageSquare className="w-3 h-3" />
+                              연결 템플릿: &apos;{act.templateTitle}&apos;
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-semibold">자동 치환 적용됨</span>
+                          </div>
+                          <p className="text-xs text-slate-800 font-semibold whitespace-pre-wrap leading-relaxed">
+                            &ldquo;{act.finalMessage}&rdquo;
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <button type="button" className="text-indigo-600 border-none bg-transparent cursor-pointer p-0">
+                            {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 text-slate-400" />}
+                          </button>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-xs font-bold block ${isSelected ? "text-indigo-950 font-black" : "text-slate-800"}`}>
+                                {act.label}
+                              </span>
+                              {isCustom && (
+                                <span className="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 text-[9px] font-black shrink-0">
+                                  직접 추가됨
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-400 font-medium leading-relaxed block">{act.description}</span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleRemoveAction(e, act.code)}
+                          className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all border-none bg-transparent cursor-pointer shrink-0"
+                          title="해당 작업 항목 제거/해제"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -594,7 +768,10 @@ export default function GovernanceDetailModal({
             </div>
           ) : !actionReports ? (
             <button
-              onClick={() => handleExecuteActions({ saveAutoRule: saveAutoRuleOnExecute })}
+              onClick={() => handleExecuteActions({ 
+                saveAutoRule: saveAutoRuleOnExecute,
+                smsPayload: selectedActions.includes('SMS_AUTO_NOTIFY') ? matchedSmsAction?.smsPayload : undefined
+              })}
               disabled={isExecuting || selectedActions.length === 0}
               className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold px-6 py-3 rounded-xl shadow-xs text-xs border-none cursor-pointer flex items-center gap-2 transition-all"
             >

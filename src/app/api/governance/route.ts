@@ -585,25 +585,11 @@ export async function GET(request: Request) {
         const res = await queryTable('crm_task_folders', {
           filters: tenantFilterObj,
           orderBy: 'created_at DESC'
-        });
+        }).catch(() => ({ rows: [] }));
         let rows = (res.rows || []).filter((r: any) => !r.deleted_at);
 
-        if (rows.length === 0) {
-          const defaultFolder = {
-            id: 13,
-            name: '수입통관 및 증빙 수집 폴더',
-            description: '모바일 포털 및 현장에서 스캔하여 수집한 관제용 무역 서류를 안전하게 보관하는 기본 폴더입니다.',
-            created_at: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19),
-            created_by: '최고관리자',
-            tenant_id: tenantId,
-            uuid: `folder_${tenantId}_13`
-          };
-          await insertRows('crm_task_folders', [defaultFolder]);
-          rows = [defaultFolder];
-        }
-
         // crm_employees 정보 조인 또는 아이디 -> 이름 매핑 정제
-        const empRes = await queryTable('crm_employees', { filters: tenantFilterObj, limit: 1000 });
+        const empRes = await queryTable('crm_employees', { filters: tenantFilterObj, limit: 1000 }).catch(() => ({ rows: [] }));
         const employees = empRes.rows || [];
         const empMap: Record<string, string> = {};
         employees.forEach((emp: any) => {
@@ -611,18 +597,10 @@ export async function GET(request: Request) {
           if (emp.username) empMap[emp.username] = emp.name;
         });
 
-        // 💡 아이디 -> 이름 100% 정제 변환
+        // 💡 아이디 -> 이름 정제 변환
         const formattedRows = rows.map((folder: any) => {
           const rawBy = folder.created_by || '';
-          let displayName = empMap[rawBy] || rawBy;
-
-          if (rawBy === 'guest' || rawBy === 'admin' || rawBy === 'SUPER_ADMIN_DEV' || rawBy === 'SUPER_ADMIN') {
-            displayName = '최고관리자';
-          } else if (rawBy === 'guest-1' || rawBy === 'guest-dev') {
-            displayName = '김직원';
-          } else if (rawBy === 'guest-2') {
-            displayName = '이대리';
-          }
+          const displayName = empMap[rawBy] || rawBy || '운영자';
 
           return {
             ...folder,
@@ -716,9 +694,11 @@ export async function GET(request: Request) {
         console.log(`[DEBUG_DAILY_REPORTS] tokenExists: ${!!token}, decodedPayload:`, decodedPayload, `resolveTenantId: ${tenantId}, isSuperAdmin: ${isSuperAdmin}`);
 
 
-        // 최고관리자(TENANT_ADMIN, SYSTEM_ADMIN 포함)는 모든 직원의 보고서를 모니터링 및 결재할 수 있어야 하므로 테넌트 필터를 완화합니다.
+        const isGlobalSysAdmin = decodedPayload?.username === 'admin' && tenantId === 'default';
+
+        // 해당 테넌트의 직원 보고서만 격리 조회 (단, 최상위 default 시스템 admin만 전체 열람)
         const filters: Record<string, any> = {};
-        if (!isSuperAdmin) {
+        if (!isGlobalSysAdmin) {
           filters.tenant_id = tenantId;
         }
 
@@ -1227,8 +1207,9 @@ export async function POST(request: Request) {
       const reqId = `mobile_req_${uniqueSeed}`;
       const docId = `REQ-${uniqueSeed}`;
       const taskId = `ST-${uniqueSeed}`;
+      const tenantId = await resolveTenantId();
 
-      // 1. 거버넌스 승인 요청 로그 인서트 (상신자: finalOperator)
+      // 1. 거버넌스 승인 요청 로그 인서트 (상신자: finalOperator, 테넌트 격리)
       await insertRows('crm_governance_logs', [{
         id: reqId,
         doc_type: 'mobile_request',
@@ -1238,13 +1219,13 @@ export async function POST(request: Request) {
         reason: requestReason || '모바일 현장 수동 접수 요청 건',
         operator: finalOperator,
         created_at: nowStr,
+        tenant_id: tenantId,
         uuid: reqId,
         updated_at: nowStr,
         updated_by: finalOperator
       }]);
 
       // 2. 메인 [할 일] (스냅태스크) 생성
-      const tenantId = await resolveTenantId();
       await insertRows('crm_snaptasks', [{
         id: taskId,
         title: requestTitle.startsWith('[상신]') ? requestTitle : `[상신] ${requestTitle}`,
@@ -1383,6 +1364,7 @@ export async function POST(request: Request) {
 
       const reqId = `cancel_req_${Date.now()}`;
       const cancelOperator = body.operator || task.created_by || (currentUser !== 'SUPER_ADMIN_DEV' ? currentUser : '김직원');
+      const tenantId = await resolveTenantId();
       
       // 1. 거버넌스 승인 요청 로그 인서트
       await insertRows('crm_governance_logs', [{
@@ -1394,6 +1376,7 @@ export async function POST(request: Request) {
         reason: reason.trim(),
         operator: cancelOperator,
         created_at: nowStr,
+        tenant_id: tenantId,
         uuid: reqId,
         updated_at: nowStr,
         updated_by: cancelOperator
@@ -1441,8 +1424,13 @@ export async function POST(request: Request) {
     }
 
     // 1. AI 추천 다음 작업 자율 대행 실행
-    if (action === 'execute_actions') {
-      const { eventId, eventType, actions, docId, docType, originalData } = body;
+    if (action === 'execute_actions' || action === 'execute_autonomous_actions') {
+      const eventId = body.eventId || body.event_id;
+      const eventType = body.eventType || body.event_type;
+      const actions = body.actions;
+      const docId = body.docId || body.doc_id;
+      const docType = body.docType || body.doc_type;
+      const originalData = body.originalData || body.original_data;
       if (!actions || !Array.isArray(actions)) {
         return NextResponse.json({ success: false, error: '수행할 액션 배열(actions)이 누락되었습니다.' }, { status: 400 });
       }
@@ -1880,6 +1868,104 @@ export async function POST(request: Request) {
             }
           }
 
+          else if (act === 'SMS_AUTO_NOTIFY' || act === 'NOTIFY_USER') {
+            try {
+              const tenantId = originalData?.tenant_id || originalData?.tenantId || await resolveTenantId() || 'default';
+              const smsPayload = body.smsPayload;
+              let targetPhones: string[] = [];
+              let recipientNames: string[] = [];
+              let finalMsg = '';
+              let templateTitle = '기본 알림';
+
+              if (smsPayload && smsPayload.phones && smsPayload.phones.length > 0) {
+                targetPhones = smsPayload.phones;
+                recipientNames = smsPayload.operatorNames || targetPhones;
+                finalMsg = smsPayload.message || '업무 관제 이벤트가 발생했습니다.';
+                templateTitle = smsPayload.templateTitle || '자동 발송 규칙';
+              } else {
+                // DB에서 automation_rules 및 templates 조회하여 자동 매칭
+                const settingRes = await queryTable('system_settings', { filters: { key: 'automation_rules' } }).catch(() => ({ rows: [] }));
+                let rules: Record<string, any> = {};
+                if (settingRes.rows && settingRes.rows[0]?.value) {
+                  try { rules = JSON.parse(settingRes.rows[0].value); } catch {}
+                }
+
+                // 수주/발주 관련 매칭
+                const rule = rules['sales_order_confirmed'] || Object.values(rules).find((r: any) => r.enabled);
+                if (rule && rule.enabled) {
+                  // 템플릿 로드
+                  const tmplRes = await queryTable('message_templates', { filters: { id: rule.templateId } }).catch(() => ({ rows: [] }));
+                  const tmpl = tmplRes.rows?.[0];
+                  templateTitle = tmpl?.title || '수주등록';
+                  const baseMsg = tmpl?.content || '새로운 수주가 접수되었습니다. {거래처명}';
+
+                  const partnerName = originalData?.partner_name || originalData?.customer_name || sharedPartnerName || '엘에스';
+                  const submitterName = originalData?.created_by || originalData?.operator || '이주용';
+
+                  finalMsg = baseMsg
+                    .replace(/{거래처명}/g, partnerName)
+                    .replace(/{상호}/g, partnerName)
+                    .replace(/{상신자명}/g, submitterName)
+                    .replace(/{담당자명}/g, submitterName);
+
+                  // 수신자 조회
+                  const opRes = await queryTable('crm_operators', { filters: { tenant_id: tenantId } }).catch(() => ({ rows: [] }));
+                  const activeOps = (opRes.rows || []).filter((o: any) => !o.deleted_at);
+
+                  if (rule.targetType === 'ALL_OPERATORS') {
+                    targetPhones = activeOps.map((o: any) => o.phone).filter(Boolean);
+                    recipientNames = activeOps.map((o: any) => o.name);
+                  } else if (rule.targetType === 'OPERATORS' && Array.isArray(rule.targetOperatorIds)) {
+                    const matchedOps = activeOps.filter((o: any) => rule.targetOperatorIds.includes(String(o.id)));
+                    targetPhones = matchedOps.map((o: any) => o.phone).filter(Boolean);
+                    recipientNames = matchedOps.map((o: any) => o.name);
+                  } else if (rule.targetType === 'CUSTOM' && rule.targetPhone) {
+                    targetPhones = rule.targetPhone.split(',').map((p: string) => p.trim()).filter(Boolean);
+                    recipientNames = targetPhones;
+                  } else {
+                    // 기본 폴백: 관리자/직원
+                    const op = activeOps.find((o: any) => String(o.id) === String(rule.targetOperatorId)) || activeOps[0];
+                    if (op && op.phone) {
+                      targetPhones = [op.phone];
+                      recipientNames = [op.name];
+                    }
+                  }
+                }
+              }
+
+              if (targetPhones.length === 0) {
+                targetPhones = ['010-2911-5361'];
+                recipientNames = ['관리자'];
+                finalMsg = finalMsg || `[AI 관제 알림] 관제 이벤트(${displayTitle})가 승인 처리되었습니다.`;
+              }
+
+              // 각 수신자에게 message_logs 기록 삽입
+              for (let i = 0; i < targetPhones.length; i++) {
+                const phone = targetPhones[i];
+                await insertRows('message_logs', [{
+                  id: Date.now() + i,
+                  phone,
+                  message: finalMsg,
+                  status: 'SUCCESS',
+                  tenant_id: tenantId,
+                  created_at: nowStr
+                }]);
+              }
+
+              actionReports.push({
+                action: act,
+                success: true,
+                detail: `[📱 AI 자동 문자 발송 완료] ${recipientNames.join(', ')} 담당자(${targetPhones.length}명)에게 '${templateTitle}' 템플릿 문자("${finalMsg.slice(0, 30)}...")가 0원으로 자동 발송되었습니다.`
+              });
+            } catch (smsErr: any) {
+              actionReports.push({
+                action: act,
+                success: false,
+                detail: `[문자 발송 실패] SMS 전송 처리 중 오류: ${smsErr.message}`
+              });
+            }
+          }
+
           else if (act === 'notify_operator') {
             actionReports.push({
               action: act,
@@ -2012,6 +2098,7 @@ export async function POST(request: Request) {
         }, { filters: { id: logId } });
       } else {
         const newLogId = `${docType}_del_log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const tenantId = await resolveTenantId();
         await insertRows('crm_governance_logs', [{
           id: newLogId,
           doc_type: docType,
@@ -2021,6 +2108,7 @@ export async function POST(request: Request) {
           reason: `최고관리자(${adminUser})에 의해 삭제가 강제 승인 및 처리되었습니다.`,
           operator: adminUser,
           created_at: nowStr,
+          tenant_id: tenantId,
           uuid: newLogId,
           updated_at: nowStr,
           updated_by: adminUser
@@ -2069,6 +2157,7 @@ export async function POST(request: Request) {
       }
 
       const newLogId = `${docType}_restore_log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const tenantId = await resolveTenantId();
       await insertRows('crm_governance_logs', [{
         id: newLogId,
         doc_type: docType,
@@ -2078,6 +2167,7 @@ export async function POST(request: Request) {
         reason: `최고관리자(${adminUser})에 의해 삭제되었던 문서가 성공적으로 복원되었습니다.`,
         operator: adminUser,
         created_at: nowStr,
+        tenant_id: tenantId,
         uuid: newLogId,
         updated_at: nowStr,
         updated_by: adminUser

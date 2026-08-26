@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Users, Plus, Search, Edit2, Trash2, Shield, Check, X, AlertTriangle, Key, FileSpreadsheet, Globe 
+  Users, Plus, Search, Edit2, Trash2, Shield, Check, X, AlertTriangle, Key, FileSpreadsheet, Globe, Clock 
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { usePersistedState } from "@/hooks/usePersistedState";
@@ -331,7 +331,7 @@ export default function EmployeeManagementTabContent() {
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
                 <Users className="w-5 h-5 text-indigo-600" />
-                <span>🏢 소속 부운영자 & 임직원 계정 관리</span>
+                <span>🏢 임직원 계정 관리</span>
               </h3>
               {currentUser?.role === 'SYSTEM_ADMIN' || currentUser?.username === 'admin' ? (
                 <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black">
@@ -344,7 +344,7 @@ export default function EmployeeManagementTabContent() {
               )}
             </div>
             <p className="text-slate-500 text-xs mt-1">
-              테넌트 최고관리자로서 본인 회원사에 소속된 부운영자 및 일반직원 계정을 직접 등록하고 근무 권한을 제어합니다.
+              테넌트 최고관리자로서 본인 회원사에 소속된 임직원 계정을 직접 등록하고 근무 권한을 제어합니다.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -467,6 +467,7 @@ export default function EmployeeManagementTabContent() {
                     <th className="py-3.5 px-4 w-32">권한 등급</th>
                     <th className="py-3.5 px-4 w-32">부서</th>
                     <th className="py-3.5 px-4">전화번호</th>
+                    <th className="py-3.5 px-4 w-36">출퇴근 기준시각</th>
                     <th className="py-3.5 px-4 w-40">등록일</th>
                     <th className="py-3.5 px-4 text-right w-28">관리</th>
                   </tr>
@@ -525,6 +526,12 @@ export default function EmployeeManagementTabContent() {
                         </td>
                         <td className="py-3.5 px-4 font-semibold text-slate-700">{emp.department || "-"}</td>
                         <td className="py-3.5 px-4 font-mono text-slate-600 font-semibold">{emp.phone || "-"}</td>
+                        <td className="py-3.5 px-4">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50/80 text-indigo-700 font-mono text-[11px] font-bold rounded-lg border border-indigo-100">
+                            <Clock className="w-3 h-3 text-indigo-400" />
+                            {emp.work_start_time || "09:00"} ~ {emp.work_end_time || "18:00"}
+                          </span>
+                        </td>
                         <td className="py-3.5 px-4 text-slate-400 text-[10px] font-semibold">
                           {emp.created_at ? new Date(emp.created_at).toLocaleString() : "-"}
                         </td>

@@ -14,7 +14,7 @@ export const EVENTS: EventItem[] = [
   { id: "point_redeemed", label: "포인트 사용/차감 시 🔒", desc: "결제 시 고객의 포인트가 차감 사용되었을 때 발송됩니다." },
   { id: "b2b_partner_registered", label: "B2B 신규 거래처 온보딩 시 🤝", desc: "모바일 견적 요청 또는 명함 스냅을 통해 B2B 신규 파트너로 자동 가입되었을 때 발송됩니다." },
   { id: "estimate_received", label: "B2B 견적 요청 접수 시 🪐", desc: "바이어로부터 새로운 모바일 스마트 견적 요청이 접수되었을 때 접수 확인 문자가 발송됩니다." },
-  { id: "sales_order_confirmed", label: "B2B 수주 확정 시 📦", desc: "바이어의 계약 최종 승인에 따라 수주 확정서 및 배송 안내 문자가 발송됩니다." },
+  { id: "sales_order_confirmed", label: "B2B 수주 확정 시 📦", desc: "새로운 B2B 수주가 등록·확정되었을 때 사내 영업/생산 담당자 및 대표자에게 실시간 알림 문자가 발송됩니다." },
   
   // 신규 스마트 팩토리 & 경영 활성화 AI 경보 이벤트 연동
   { id: "quality_spc_anomaly", label: "품질 공정(SPC) 능력 저하 감지 시 📉", desc: "Cpk 저하 및 공정 이탈 등 품질 저하 징후 발생 시 담당자에게 즉시 SMS를 발송합니다." },
@@ -33,12 +33,26 @@ export const EVENTS: EventItem[] = [
 export function useAutomation() {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [rules, setRules] = useState<Record<string, AutomationRule>>({});
+  const [operators, setOperators] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetchTemplates();
     fetchRules();
+    fetchOperators();
   }, []);
+
+  const fetchOperators = async () => {
+    try {
+      const res = await apiFetch("/api/operators");
+      const json = await res.json();
+      if (json.success && json.operators) {
+        setOperators(json.operators);
+      }
+    } catch (e) {
+      console.error("소속 직원 목록 조회 에러:", e);
+    }
+  };
 
   const fetchTemplates = async () => {
     try {
@@ -59,7 +73,25 @@ export function useAutomation() {
       if (json.success) {
         const initialRules: Record<string, AutomationRule> = {};
         EVENTS.forEach(ev => {
-          initialRules[ev.id] = json.rules[ev.id] || { enabled: false, templateId: null };
+          const loaded = json.rules?.[ev.id];
+          let initialOpIds: string[] = [];
+          if (Array.isArray(loaded?.targetOperatorIds)) {
+            initialOpIds = loaded.targetOperatorIds.map(String);
+          } else if (loaded?.targetOperatorId) {
+            initialOpIds = [String(loaded.targetOperatorId)];
+          }
+
+          let tType = loaded?.targetType || 'ADMIN';
+          if (tType === 'OPERATOR') tType = 'OPERATORS';
+
+          initialRules[ev.id] = {
+            enabled: loaded?.enabled || false,
+            templateId: loaded?.templateId ?? null,
+            targetType: tType,
+            targetPhone: loaded?.targetPhone || '',
+            targetOperatorId: loaded?.targetOperatorId || '',
+            targetOperatorIds: initialOpIds,
+          };
         });
         setRules(initialRules);
       }
@@ -80,6 +112,57 @@ export function useAutomation() {
       ...prev,
       [eventId]: { ...prev[eventId], templateId }
     }));
+  };
+
+  const changeTargetType = (eventId: string, targetType: any) => {
+    setRules(prev => ({
+      ...prev,
+      [eventId]: { ...prev[eventId], targetType }
+    }));
+  };
+
+  const changeTargetPhone = (eventId: string, targetPhone: string) => {
+    setRules(prev => ({
+      ...prev,
+      [eventId]: { ...prev[eventId], targetPhone }
+    }));
+  };
+
+  const changeTargetOperator = (eventId: string, targetOperatorId: string) => {
+    setRules(prev => {
+      const currentIds = prev[eventId]?.targetOperatorIds || [];
+      const updatedIds = targetOperatorId && !currentIds.includes(targetOperatorId)
+        ? [...currentIds, targetOperatorId]
+        : currentIds;
+
+      return {
+        ...prev,
+        [eventId]: {
+          ...prev[eventId],
+          targetOperatorId,
+          targetOperatorIds: updatedIds
+        }
+      };
+    });
+  };
+
+  const toggleTargetOperator = (eventId: string, operatorId: string) => {
+    setRules(prev => {
+      const currentIds = prev[eventId]?.targetOperatorIds || [];
+      const exists = currentIds.includes(operatorId);
+      const updatedIds = exists
+        ? currentIds.filter(id => id !== operatorId)
+        : [...currentIds, operatorId];
+
+      return {
+        ...prev,
+        [eventId]: {
+          ...prev[eventId],
+          targetOperatorId: updatedIds[0] || '',
+          targetOperatorIds: updatedIds
+        }
+      };
+    });
   };
 
   const saveRules = async () => {
@@ -106,9 +189,16 @@ export function useAutomation() {
   return {
     templates,
     rules,
+    operators,
     isSaving,
     toggleRule,
     changeTemplate,
+    changeTargetType,
+    changeTargetPhone,
+    changeTargetOperator,
+    toggleTargetOperator,
+    fetchTemplates,
+    fetchRules,
     saveRules
   };
 }

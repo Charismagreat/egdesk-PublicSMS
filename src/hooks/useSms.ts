@@ -696,6 +696,15 @@ export function useSms() {
   const generateFinalMessage = useCallback((baseMessage: string, customer: Customer, isAd: boolean, optOut: string, header: string, footer: string, product?: Product, assignedCouponCode?: string) => {
     let finalMsg = baseMessage.replace(/{이름}/g, customer.name).replace(/{연락처}/g, customer.phone);
     
+    // 거래처명 및 상신자명 치환
+    const partnerName = (customer as any).partner_name || (customer as any).company || (customer as any).partnerName || customer.name || "주식회사 원트레이딩";
+    const submitterName = (customer as any).operator || (customer as any).submitter || (customer as any).submitter_name || (customer as any).operator_name || "김직원";
+    finalMsg = finalMsg
+      .replace(/{거래처명}/g, partnerName)
+      .replace(/{상호}/g, partnerName)
+      .replace(/{상신자명}/g, submitterName)
+      .replace(/{담당자명}/g, submitterName);
+    
     if (finalMsg.includes("{최근구매내역}")) {
       const customerTx = transactions.filter(t => t.customerPhone === customer.phone);
       const latestTx = customerTx.length > 0 ? customerTx[0].productName : (customer.tags || "상품");

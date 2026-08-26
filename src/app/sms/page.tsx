@@ -50,6 +50,15 @@ function SmsContent() {
   // 3. 자동 발송 탭 데이터 & 바인딩
   const autoHook = useAutomation();
 
+  // 탭 전환 시 최신 템플릿 및 로그 자동 동기화
+  useEffect(() => {
+    if (activeTab === "SEND" && smsHook.fetchMessageTemplates) {
+      smsHook.fetchMessageTemplates();
+    } else if (activeTab === "AUTO" && autoHook.fetchTemplates) {
+      autoHook.fetchTemplates();
+    }
+  }, [activeTab]);
+
   return (
     <div className="space-y-6 pb-20" data-easybot-hint="문자 관제 AI: 무료 SMS/LMS 문자 생성 및 발송, 실시간 발송 로그 모니터링, AI 자동 발송 규칙을 한곳에서 원스톱으로 관리합니다.">
       {/* 📱 메인 서브 타이틀 헤더 바 */}
@@ -216,8 +225,13 @@ function SmsContent() {
           <AutomationGrid 
             rules={autoHook.rules}
             templates={autoHook.templates}
+            operators={autoHook.operators}
             toggleRule={autoHook.toggleRule}
             changeTemplate={autoHook.changeTemplate}
+            changeTargetType={autoHook.changeTargetType}
+            changeTargetPhone={autoHook.changeTargetPhone}
+            changeTargetOperator={autoHook.changeTargetOperator}
+            toggleTargetOperator={autoHook.toggleTargetOperator}
           />
         </div>
       )}

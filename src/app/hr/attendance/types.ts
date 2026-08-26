@@ -7,6 +7,10 @@ export interface Employee {
   username: string;
   role: string;
   employee_number?: string;
+  department?: string;
+  phone?: string;
+  work_start_time?: string;
+  work_end_time?: string;
   clock_in: string | null;
   clock_out: string | null;
   status: 'NORMAL' | 'LATE' | 'EARLY_LEAVE' | 'ABSENT' | 'LEAVE';

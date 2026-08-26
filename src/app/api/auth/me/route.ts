@@ -22,8 +22,9 @@ export async function GET() {
     const payload = decodeJwt(token);
     const username = payload.username as string || '';
     const name = payload.name as string || '운영자';
+    const tenantId = (payload as any).tenant_id || 'default';
 
-    // DB에서 직원의 소속 사업장 정보 조인 조회 시도
+    // DB에서 직원의 소속 사업장 정보 조인 조회 시도 (테넌트 격리)
     let workplaceId = (payload as any).workplace_id || null;
     let workplaceName = (payload as any).workplace_name || null;
     let workplaceLat = null;
@@ -32,12 +33,12 @@ export async function GET() {
 
     try {
       const { executeSQL } = await import('../../../../../egdesk-helpers');
-      // 1. crm_employees에서 workplace_id 및 avatar_url 조회
+      // 1. crm_employees에서 workplace_id 및 avatar_url 조회 (테넌트 격리)
       const empRes = await executeSQL(`
         SELECT e.workplace_id, e.avatar_url, w.name as workplace_name, w.latitude, w.longitude, w.radius_meters
         FROM crm_employees e
-        LEFT JOIN crm_workplaces w ON e.workplace_id = w.id AND w.deleted_at IS NULL
-        WHERE e.deleted_at IS NULL AND (e.name = '${name}' OR e.email = '${username}')
+        LEFT JOIN crm_workplaces w ON e.workplace_id = w.id AND w.deleted_at IS NULL AND w.tenant_id = '${tenantId}'
+        WHERE e.deleted_at IS NULL AND e.tenant_id = '${tenantId}' AND (e.name = '${name}' OR e.email = '${username}')
         LIMIT 1
       `);
       if (empRes.rows && empRes.rows.length > 0) {
@@ -51,10 +52,10 @@ export async function GET() {
         }
       }
 
-      // 2. 만약 소속 사업장이 없으면 기본 '본사' 지정
+      // 2. 만약 소속 사업장이 없으면 해당 테넌트의 기본 '본사' 지정
       if (!workplaceName) {
         const mainWpRes = await executeSQL(`
-          SELECT id, name, latitude, longitude FROM crm_workplaces WHERE deleted_at IS NULL AND is_main = 'Y' LIMIT 1
+          SELECT id, name, latitude, longitude FROM crm_workplaces WHERE deleted_at IS NULL AND tenant_id = '${tenantId}' AND is_main = 'Y' LIMIT 1
         `);
         if (mainWpRes.rows && mainWpRes.rows.length > 0) {
           workplaceId = mainWpRes.rows[0].id;
@@ -62,7 +63,18 @@ export async function GET() {
           workplaceLat = mainWpRes.rows[0].latitude;
           workplaceLng = mainWpRes.rows[0].longitude;
         } else {
-          workplaceName = '본사';
+          // 해당 테넌트의 첫 번째 사업장 조회
+          const firstWpRes = await executeSQL(`
+            SELECT id, name, latitude, longitude FROM crm_workplaces WHERE deleted_at IS NULL AND tenant_id = '${tenantId}' LIMIT 1
+          `);
+          if (firstWpRes.rows && firstWpRes.rows.length > 0) {
+            workplaceId = firstWpRes.rows[0].id;
+            workplaceName = firstWpRes.rows[0].name;
+            workplaceLat = firstWpRes.rows[0].latitude;
+            workplaceLng = firstWpRes.rows[0].longitude;
+          } else {
+            workplaceName = '본사';
+          }
         }
       }
     } catch (e) {
@@ -74,7 +86,7 @@ export async function GET() {
       role: payload.role as string || 'SUB_OPERATOR',
       name: name,
       username: username,
-      tenant_id: (payload as any).tenant_id || 'default',
+      tenant_id: tenantId,
       avatar_url: avatarUrl,
       workplace_id: workplaceId,
       workplace_name: workplaceName || '본사',

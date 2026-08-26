@@ -49,14 +49,12 @@ export default function MobileDailyReportPage() {
         const res = await apiFetch("/api/governance?action=daily_reports");
         const data = await res.json();
         if (data.success && data.reports) {
-          // KST 오늘 날짜와 현재 로그인된 사원의 기존 보고서가 있는지 검색 (실명 및 계정 아이디 모두 교차 검증)
+          // KST 오늘 날짜와 현재 로그인된 사원의 기존 보고서가 있는지 검색 (실명 및 계정 아이디 교차 검증)
           const existing = data.reports.find(
             (r: any) => 
               r.report_date === reportDate && 
-              (r.operator === operatorName || 
-               r.operator === operatorUsername || 
-               r.operator === "김직원" || 
-               r.operator === "guest-1")
+              ((operatorName && r.operator === operatorName) || 
+               (operatorUsername && r.operator === operatorUsername))
           );
           if (existing) {
             setReportContent(existing.report_content);

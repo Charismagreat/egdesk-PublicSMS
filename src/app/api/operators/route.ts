@@ -8,15 +8,16 @@ import { decodeJwt } from 'jose';
 async function getAuthInfoFromToken() {
   const cookieStore = await cookies();
   const token = cookieStore.get('auth_token')?.value;
-  if (!token) return { role: 'SUB_OPERATOR', username: '', isAllowed: false };
+  if (!token) return { role: 'SUB_OPERATOR', username: '', tenant_id: null, isAllowed: false };
   try {
     const payload = decodeJwt(token);
     const role = String(payload.role || '').toUpperCase();
     const username = String(payload.username || '').toLowerCase();
+    const tenant_id = (payload.tenant_id as string) || null;
     const isAllowed = ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'TENANT_ADMIN', 'PRESIDENT', 'GUEST', 'ADMIN'].includes(role) || username === 'admin' || username === 'guest';
-    return { role, username, isAllowed };
+    return { role, username, tenant_id, isAllowed };
   } catch (e) {
-    return { role: 'SUB_OPERATOR', username: '', isAllowed: false };
+    return { role: 'SUB_OPERATOR', username: '', tenant_id: null, isAllowed: false };
   }
 }
 
@@ -28,8 +29,16 @@ export async function GET(req: Request) {
     }
 
     const result = await queryTable('crm_operators');
-    // 전체 임직원 목록 (admin 계정은 SYSTEM_ADMIN 역할 보정, deleted_at 포함)
-    const allOps = (result.rows || []).map((op: any) => {
+    // 💡 1. 소프트 삭제된 임직원 계정 배제
+    const activeOps = (result.rows || []).filter((op: any) => !op.deleted_at);
+
+    // 💡 2. 테넌트 격리 원칙: 현재 로그인한 테넌트 소속의 임직원만 필터링
+    let scopedOps = activeOps;
+    if (auth.tenant_id && auth.role !== 'SYSTEM_ADMIN') {
+      scopedOps = activeOps.filter((op: any) => op.tenant_id === auth.tenant_id);
+    }
+
+    const allOps = scopedOps.map((op: any) => {
       if (op.username === 'admin') {
         return { ...op, role: 'SYSTEM_ADMIN' };
       }

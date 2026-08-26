@@ -25,48 +25,21 @@ export async function GET(req: Request) {
     console.error('Failed to parse JWT payload in task-folders API:', e);
   }
 
+  const isGlobalSysAdmin = userName === 'admin' && userTenantId === 'default';
+
   try {
     if (action === 'list') {
-      const res = await queryTable('crm_task_folders', {
-        orderBy: 'created_at DESC'
-      });
-      let rows = res.rows || [];
-      
-      // 💡 [자가 치유] DB에 폴더가 단 하나도 존재하지 않는 경우, 모바일 연동의 기본 13번 폴더를 강제 자동 생성
-      if (rows.length === 0) {
-        const defaultFolder = {
-          id: 13,
-          name: '수입통관 및 증빙 수집 폴더',
-          description: '모바일 포털 및 현장에서 스캔하여 수집한 관제용 무역 서류를 안전하게 보관하는 기본 폴더입니다.',
-          created_at: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19),
-          created_by: '최고관리자',
-          tenant_id: 'default',
-          uuid: 'folder_default_13',
-          updated_at: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19),
-          updated_by: '최고관리자'
-        };
-        await insertRows('crm_task_folders', [defaultFolder]);
-        
-        // 다시 조회
-        const reFetch = await queryTable('crm_task_folders', {
-          orderBy: 'created_at DESC'
-        });
-        rows = reFetch.rows || [];
+      const queryFilters: any = {};
+      if (!isGlobalSysAdmin) {
+        queryFilters.tenant_id = userTenantId;
       }
+      const res = await queryTable('crm_task_folders', {
+        filters: queryFilters,
+        orderBy: 'created_at DESC'
+      }).catch(() => ({ rows: [] }));
+      const rows = res.rows || [];
       
-      // 계정 수준 격리 필터링
-      const activeRows = rows.filter((r: any) => {
-        if (r.deleted_at) return false;
-        
-        // 💡 [추가] TENANT_ADMIN 및 SYSTEM_ADMIN 역할까지 확장하여 격리 우회 적용
-        if (userRole === 'SUPER_ADMIN' || userRole === 'TENANT_ADMIN' || userRole === 'SYSTEM_ADMIN') {
-          // 최고 관리자는 모바일 포털에서도 모든 직원의 폴더를 볼 수 있습니다.
-          return true;
-        } else {
-          // 일반 임직원은 최고 관리자 소유가 아닌 모든 폴더를 조회
-          return r.created_by !== 'guest' && r.created_by !== '최고관리자';
-        }
-      });
+      const activeRows = rows.filter((r: any) => !r.deleted_at);
       return NextResponse.json({ success: true, folders: activeRows });
     }
 
@@ -76,29 +49,22 @@ export async function GET(req: Request) {
         return NextResponse.json({ success: false, error: 'folderId가 필요합니다.' }, { status: 400 });
       }
 
+      const itemFilters: any = { folder_id: String(folderId) };
+      if (!isGlobalSysAdmin) {
+        itemFilters.tenant_id = userTenantId;
+      }
+
       // deleted_at IS NULL 규칙 및 최신순 정렬 적용
       const res = await queryTable('crm_task_folder_items', {
+        filters: itemFilters,
         orderBy: 'created_at',
         orderDirection: 'DESC'
-      });
+      }).catch(() => ({ rows: [] }));
       const rows = res.rows || [];
       
-      // 💡 [멀티테넌트 보안 격리] 테넌트별 사내 문서 격리 보장 및 공용(default) 결합
-      const activeRows = rows.filter((r: any) => {
-        const matchedFolder = String(r.folder_id) === String(folderId);
-        if (!matchedFolder || r.deleted_at) return false;
-        
-        // 최고 관리자는 전사 모든 태스크 폴더 자료 조회 허용
-        if (userRole === 'SUPER_ADMIN' || userRole === 'TENANT_ADMIN' || userRole === 'SYSTEM_ADMIN') {
-          return true;
-        }
-        
-        // 멀티테넌트 보안 격리: 자신의 테넌트 소속이거나 공용(default) 문서인 경우만 안전하게 조회
-        const itemTenant = r.tenant_id || 'default';
-        return itemTenant === userTenantId || itemTenant === 'default' || userTenantId === 'default' || itemTenant === 'tenant-guest-id-2222';
-      });
+      const activeRows = rows.filter((r: any) => !r.deleted_at);
       
-      // 최신순 정렬 재확보 (자바스크립트 수준의 이중 가드)
+      // 최신순 정렬 재확보
       activeRows.sort((a: any, b: any) => {
         const timeA = new Date(a.created_at).getTime() || 0;
         const timeB = new Date(b.created_at).getTime() || 0;

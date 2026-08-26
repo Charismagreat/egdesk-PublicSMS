@@ -1,10 +1,12 @@
 // 🏢 테넌트 다중 사업장 마스터 CRUD API (Turbopack HMR Refreshed)
 import { NextRequest, NextResponse } from 'next/server';
 import { queryTable, insertRows, updateRows, executeSQL } from '../../../../egdesk-helpers';
+import { getTenantId } from '@/lib/tenant';
 
 // GET: 사업장/현장 목록 조회
 export async function GET(req: NextRequest) {
   try {
+    const tenantId = (await getTenantId()) || 'default';
     const { searchParams } = new URL(req.url);
     const action = searchParams.get('action') || 'list';
 
@@ -12,13 +14,13 @@ export async function GET(req: NextRequest) {
       const sql = `
         SELECT id, uuid, name, address, latitude, longitude, radius_meters, is_main, created_at, updated_at
         FROM crm_workplaces
-        WHERE deleted_at IS NULL
+        WHERE deleted_at IS NULL AND tenant_id = '${tenantId}'
         ORDER BY is_main DESC, id ASC
       `;
-      const res = await executeSQL(sql);
+      const res = await executeSQL(sql).catch(() => ({ rows: [] }));
       let workplaces = res.rows || [];
 
-      // 초기 시드 데이터가 없는 경우 기본 '본사' 자동 주입
+      // 해당 테넌트에 사업장이 하나도 없으면 기본 '본사' 자동 주입
       if (workplaces.length === 0) {
         const defaultWorkplace = {
           name: '본사',
@@ -27,10 +29,11 @@ export async function GET(req: NextRequest) {
           longitude: 126.9780,
           radius_meters: 500,
           is_main: 'Y',
+          tenant_id: tenantId,
           created_at: new Date().toISOString()
         };
-        await insertRows('crm_workplaces', [defaultWorkplace]);
-        const reFetch = await executeSQL(sql);
+        await insertRows('crm_workplaces', [defaultWorkplace]).catch(() => null);
+        const reFetch = await executeSQL(sql).catch(() => ({ rows: [] }));
         workplaces = reFetch.rows || [];
       }
 
@@ -47,6 +50,7 @@ export async function GET(req: NextRequest) {
 // POST: 사업장 추가, 수정, 삭제
 export async function POST(req: NextRequest) {
   try {
+    const tenantId = (await getTenantId()) || 'default';
     const { searchParams } = new URL(req.url);
     const action = searchParams.get('action');
     const body = await req.json();
@@ -57,9 +61,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: '사업장명은 필수입니다.' }, { status: 400 });
       }
 
-      // 만약 본사(is_main === 'Y')로 지정한 경우 기존 본사 해제
+      // 만약 본사(is_main === 'Y')로 지정한 경우 해당 테넌트의 기존 본사 해제
       if (is_main === 'Y') {
-        await executeSQL(`UPDATE crm_workplaces SET is_main = 'N' WHERE deleted_at IS NULL`);
+        await executeSQL(`UPDATE crm_workplaces SET is_main = 'N' WHERE deleted_at IS NULL AND tenant_id = '${tenantId}'`);
       }
 
       const newRow = {
@@ -69,6 +73,7 @@ export async function POST(req: NextRequest) {
         longitude: longitude ? Number(longitude) : 126.9780,
         radius_meters: radius_meters ? Number(radius_meters) : 500,
         is_main: is_main === 'Y' ? 'Y' : 'N',
+        tenant_id: tenantId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -84,7 +89,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (is_main === 'Y') {
-        await executeSQL(`UPDATE crm_workplaces SET is_main = 'N' WHERE deleted_at IS NULL AND id != ${Number(id)}`);
+        await executeSQL(`UPDATE crm_workplaces SET is_main = 'N' WHERE deleted_at IS NULL AND tenant_id = '${tenantId}' AND id != ${Number(id)}`);
       }
 
       const updateData = {
@@ -97,7 +102,7 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString()
       };
 
-      await updateRows('crm_workplaces', updateData, { filters: { id: String(id) } });
+      await updateRows('crm_workplaces', updateData, { filters: { id: String(id), tenant_id: tenantId } });
       return NextResponse.json({ success: true, message: '사업장 정보가 수정되었습니다.' });
     }
 
@@ -111,7 +116,7 @@ export async function POST(req: NextRequest) {
       const deleteData = {
         deleted_at: new Date().toISOString()
       };
-      await updateRows('crm_workplaces', deleteData, { filters: { id: String(id) } });
+      await updateRows('crm_workplaces', deleteData, { filters: { id: String(id), tenant_id: tenantId } });
       return NextResponse.json({ success: true, message: '사업장이 소프트 삭제되었습니다.' });
     }
 

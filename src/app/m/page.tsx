@@ -255,10 +255,14 @@ export default function MobileHubPage() {
             const json = await res.json();
             if (json.success && json.reports && json.reports.length > 0) {
               const todayStr = new Date().toISOString().substring(0, 10);
-              // 오늘 날짜(YYYY-MM-DD)와 일치하는 일일 업무 보고서 검색
+              const myName = session?.name;
+              const myUsername = session?.username;
+              // 오늘 날짜(YYYY-MM-DD)와 일치하고 본인이 작성한 일일 업무 보고서 검색
               const todayFound = json.reports.find((r: any) => {
                 const reportDate = r.report_date || r.date || (r.created_at ? r.created_at.substring(0, 10) : "");
-                return reportDate === todayStr;
+                const isDateMatch = reportDate === todayStr;
+                const isMyReport = !myName || r.operator === myName || r.operator === myUsername;
+                return isDateMatch && isMyReport;
               });
               setTodayReport(todayFound || null);
             } else {

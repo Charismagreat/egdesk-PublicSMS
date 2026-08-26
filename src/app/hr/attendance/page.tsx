@@ -12,7 +12,7 @@ import { Employee, CompanyEvent, LeaveRequest, Contract, Payroll, EmployeeProfil
 import { MyCommuteStamp } from "./components/MyCommuteStamp";
 import { AttendanceStats } from "./components/AttendanceStats";
 import { CompanyCalendar } from "./components/CompanyCalendar";
-import { AiBriefingMonitor } from "./components/AiBriefingMonitor";
+import { TodayAttendanceLiveBoard } from "./components/TodayAttendanceLiveBoard";
 import { LeaveApprovalBox } from "./components/LeaveApprovalBox";
 import { PayrollContractCenter } from "./components/PayrollContractCenter";
 import { BasicProfileEditor } from "./components/BasicProfileEditor";
@@ -23,7 +23,6 @@ import { LeaveRequestModal } from "./components/LeaveRequestModal";
 import { CalendarEventModal } from "./components/CalendarEventModal";
 import { LeaveRejectModal } from "./components/LeaveRejectModal";
 import { EventTypeMasterModal } from "./components/EventTypeMasterModal";
-import { BriefingZoomModal } from "./components/BriefingZoomModal";
 import HrBatchUploadModal from "./components/HrBatchUploadModal";
 import HrGoogleSheetsUploadModal from "./components/HrGoogleSheetsUploadModal";
 
@@ -708,16 +707,14 @@ export default function HrAttendancePage() {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 pb-6 border-b border-slate-200 relative z-10 shrink-0">
         <div className="space-y-1">
           <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-            <Calendar className="w-8 h-8 text-indigo-660" />
+            <Calendar className="w-8 h-8 text-indigo-600" />
             근태 관리 AI
           </h1>
           <p className="text-slate-500 mt-2 text-sm pl-10">
-            실시간 1초 출퇴근 타임스탬프와 주간/월간 전사 공유 캘린더, 그리고 Gemini AI 자율 인사 평가 및 마감 연계형 실시간 AI 전사 업무 분석 예보를 정밀 관제합니다.
+            실시간 1초 출퇴근 타임스탬프와 주간/월간 전사 공유 캘린더, 그리고 전체 직원의 실시간 출퇴근 현황을 정밀 관제합니다.
           </p>
         </div>
       </div>
-
-
 
       {/* 3. 대시보드 5대 통계 스코어카드 */}
       <AttendanceStats
@@ -728,9 +725,7 @@ export default function HrAttendancePage() {
         pendingLeavesCount={pendingLeavesCount}
       />
 
-
-
-      {/* 4. 메인 관제 보드 (캘린더 + AI 예보) */}
+      {/* 4. 메인 관제 보드 (캘린더 + 실시간 출퇴근 현황 & 결재함) */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
         {/* 캘린더 영역 */}
         <CompanyCalendar
@@ -763,20 +758,12 @@ export default function HrAttendancePage() {
           handleDeleteEvent={handleDeleteEvent}
         />
 
-        {/* AI 예보 & 결재함 영역 */}
+        {/* 👥 전체 직원 실시간 출퇴근 현황 & 결재함 영역 */}
         <div className="space-y-6 xl:col-span-1 block">
-          <AiBriefingMonitor
-            aiBriefing={aiBriefing}
-            aiLoading={aiLoading}
-            isHighPrivilege={isHighPrivilege}
+          <TodayAttendanceLiveBoard
+            employees={employees}
             currentUser={currentUser}
-            briefingHistories={briefingHistories}
-            selectedHistoryId={selectedHistoryId}
-            handleSelectHistory={handleSelectHistory}
-            triggerAiBriefing={triggerAiBriefing}
-            handleCopyBriefing={handleCopyBriefing}
-            copied={copied}
-            setIsBriefingZoomed={setIsBriefingZoomed}
+            onRefresh={fetchHrData}
           />
 
           <LeaveApprovalBox
@@ -1000,18 +987,6 @@ export default function HrAttendancePage() {
         submitLoading={submitLoading}
         typeError={typeError}
         setTypeError={setTypeError}
-      />
-
-      {/* 모달 5: AI 예보 상세 확대 돋보기 모달 */}
-      <BriefingZoomModal
-        isOpen={isBriefingZoomed}
-        onClose={() => setIsBriefingZoomed(false)}
-        aiBriefing={aiBriefing}
-        briefingHistories={briefingHistories}
-        isHighPrivilege={isHighPrivilege}
-        currentUser={currentUser}
-        handleCopyBriefing={handleCopyBriefing}
-        copied={copied}
       />
     </div>
   );

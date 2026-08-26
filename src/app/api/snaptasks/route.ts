@@ -102,18 +102,19 @@ export async function GET(req: Request) {
     // ────────────────────────────────────────────────────────
     let tasks: any[] = [];
     try {
-      // 1) crm_snaptasks 테이블 조회
+      // 1) crm_snaptasks 테이블 조회 (테넌트 격리)
       const snaptasksRes = await queryTable('crm_snaptasks', {
+        filters: { tenant_id: userTenantId },
         orderBy: 'id',
         orderDirection: 'DESC',
         limit: 10000
-      });
+      }).catch(() => ({ rows: [] }));
       const snaptasksRows = snaptasksRes.rows || [];
 
-      // 2) crm_partners 및 crm_snaptask_items 대장 미리 조회
+      // 2) crm_partners 및 crm_snaptask_items 대장 미리 조회 (테넌트 격리)
       let partnersRows: any[] = [];
       try {
-        const partnersRes = await queryTable('crm_partners', { limit: 10000 });
+        const partnersRes = await queryTable('crm_partners', { filters: { tenant_id: userTenantId }, limit: 10000 });
         partnersRows = partnersRes.rows || [];
       } catch (pe) {
         console.error('파트너 목록 조회 실패:', pe);
@@ -121,7 +122,7 @@ export async function GET(req: Request) {
 
       let itemsRows: any[] = [];
       try {
-        const itemsRes = await queryTable('crm_snaptask_items', { limit: 10000, orderBy: 'id', orderDirection: 'DESC' });
+        const itemsRes = await queryTable('crm_snaptask_items', { filters: { tenant_id: userTenantId }, limit: 10000, orderBy: 'id', orderDirection: 'DESC' });
         itemsRows = (itemsRes.rows || []).filter((it: any) => !it.deleted_at);
       } catch (ie) {
         console.error('스냅태스크 아이템 목록 조회 실패:', ie);
@@ -155,9 +156,9 @@ export async function GET(req: Request) {
           };
         });
 
-      // 4) crm_governance_logs 상신 및 관제 로그 due_date 결합 동기화
+      // 4) crm_governance_logs 상신 및 관제 로그 due_date 결합 동기화 (테넌트 격리)
       try {
-        const govLogsRes = await queryTable('crm_governance_logs', { limit: 10000 });
+        const govLogsRes = await queryTable('crm_governance_logs', { filters: { tenant_id: userTenantId }, limit: 10000 }).catch(() => ({ rows: [] }));
         const govLogs = govLogsRes.rows || [];
 
         // 제목 정제 함수 (모든 접두어 전면 제거하여 순수 핵심 제목 추출)

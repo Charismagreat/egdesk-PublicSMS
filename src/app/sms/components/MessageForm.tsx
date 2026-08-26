@@ -126,58 +126,72 @@ export function MessageForm({
       </h2>
 
       {/* 치환 변수 삽입 패널 */}
-      <div className="flex space-x-2 mb-3 bg-slate-100 p-2 rounded-lg items-center">
+      <div className="flex flex-wrap items-center gap-2 mb-3 bg-slate-100/90 p-2.5 rounded-xl border border-slate-200/80">
         <span className="text-xs font-bold text-slate-500 px-1">기본 변수:</span>
         <button 
           type="button"
           onClick={() => insertVariable("{이름}")} 
-          className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs cursor-pointer font-bold"
+          className="px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-2xs cursor-pointer font-bold transition-all active:scale-95"
         >
           + {"{이름}"}
         </button>
         <button 
           type="button"
           onClick={() => insertVariable("{연락처}")} 
-          className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-xs cursor-pointer font-bold"
+          className="px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs hover:bg-slate-50 shadow-2xs cursor-pointer font-bold transition-all active:scale-95"
         >
           + {"{연락처}"}
         </button>
         <button 
           type="button"
+          onClick={() => insertVariable("{거래처명}")} 
+          className="px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-xs hover:bg-indigo-100 shadow-2xs cursor-pointer font-bold transition-all active:scale-95"
+        >
+          + {"{거래처명}"}
+        </button>
+        <button 
+          type="button"
+          onClick={() => insertVariable("{상신자명}")} 
+          className="px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-xs hover:bg-indigo-100 shadow-2xs cursor-pointer font-bold transition-all active:scale-95"
+        >
+          + {"{상신자명}"}
+        </button>
+        <button 
+          type="button"
           onClick={() => insertVariable("{최근구매내역}")} 
-          className="px-3 py-1.5 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg text-xs hover:bg-orange-100 shadow-xs cursor-pointer font-bold"
+          className="px-2.5 py-1.5 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg text-xs hover:bg-orange-100 shadow-2xs cursor-pointer font-bold transition-all active:scale-95"
         >
           + {"{최근구매내역}"}
         </button>
         <button 
           type="button"
           onClick={() => insertVariable("{쿠폰코드}")} 
-          className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-xs hover:bg-emerald-100 shadow-xs cursor-pointer font-bold"
+          className="px-2.5 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-xs hover:bg-emerald-100 shadow-2xs cursor-pointer font-bold transition-all active:scale-95"
         >
           + {"{쿠폰코드}"}
         </button>
         
-        <div className="w-px h-6 bg-slate-300 mx-2"></div>
+        <div className="w-px h-5 bg-slate-300 mx-1 hidden sm:block"></div>
         
         <span className="text-xs font-bold text-blue-500 px-1">상품 변수:</span>
         <button 
           type="button"
           onClick={() => insertVariable("{상품명}")} 
-          className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs hover:bg-blue-100 shadow-xs cursor-pointer font-bold"
+          className="px-2.5 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs hover:bg-blue-100 shadow-2xs cursor-pointer font-bold transition-all active:scale-95"
         >
           + {"{상품명}"}
         </button>
         <button 
           type="button"
           onClick={() => insertVariable("{금액}")} 
-          className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs hover:bg-blue-100 shadow-xs cursor-pointer font-bold"
+          className="px-2.5 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs hover:bg-blue-100 shadow-2xs cursor-pointer font-bold transition-all active:scale-95"
         >
           + {"{금액}"}
         </button>
         <button 
           type="button"
           onClick={() => insertVariable("{URL}")} 
-          className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs hover:bg-blue-100 shadow-xs cursor-pointer font-bold"
+          className="px-2.5 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs hover:bg-blue-100 shadow-2xs cursor-pointer font-bold transition-all active:scale-95"
         >
           + {"{URL}"}
         </button>

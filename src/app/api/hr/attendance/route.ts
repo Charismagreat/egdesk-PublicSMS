@@ -202,8 +202,9 @@ export async function GET(req: Request) {
     }
 
     // 1. 직원 마스터 목록 스캔 (소프트 삭제 배제, 테넌트 격리, SYSTEM_ADMIN 차단)
+    const isGlobalSysAdmin = loggedUsername === 'admin' && tenantId === 'default';
     const queryFilters: any = { is_active: '1' };
-    if (loggedUsername !== 'admin') {
+    if (!isGlobalSysAdmin) {
       queryFilters.tenant_id = tenantId;
     }
     const operatorsRes = await queryTable('crm_operators', { filters: queryFilters });
@@ -216,7 +217,7 @@ export async function GET(req: Request) {
 
     // 2. 당일 전원 근태 정보 스캔 (소프트 삭제 배제, 테넌트 격리)
     const attFilters: any = { work_date: workDate };
-    if (loggedUsername !== 'admin') {
+    if (!isGlobalSysAdmin) {
       attFilters.tenant_id = tenantId;
     }
     const attendanceRes = await queryTable('crm_attendance', { filters: attFilters });
@@ -224,7 +225,7 @@ export async function GET(req: Request) {
 
     // 3. 직원별 연차 현황 스캔 (소프트 삭제 배제, 테넌트 격리)
     const balFilters: any = {};
-    if (loggedUsername !== 'admin') {
+    if (!isGlobalSysAdmin) {
       balFilters.tenant_id = tenantId;
     }
     const balancesRes = await queryTable('crm_operator_leave_balances', { filters: balFilters });
@@ -232,7 +233,7 @@ export async function GET(req: Request) {
 
     // 4. 전사 공유 일정 스캔 (소프트 삭제 배제, 테넌트 격리)
     const eventFilters: any = {};
-    if (loggedUsername !== 'admin') {
+    if (!isGlobalSysAdmin) {
       eventFilters.tenant_id = tenantId;
     }
     const eventsRes = await queryTable('crm_company_events', { filters: eventFilters });
@@ -240,7 +241,7 @@ export async function GET(req: Request) {
 
     // 5. 캘린더 종합 조회를 위해 전체 연차 내역(APPROVED 상태인 것) 스캔 (소프트 삭제 배제, 테넌트 격리)
     const leaveFilters: any = { status: 'APPROVED' };
-    if (loggedUsername !== 'admin') {
+    if (!isGlobalSysAdmin) {
       leaveFilters.tenant_id = tenantId;
     }
     const approvedLeavesRes = await queryTable('crm_annual_leaves', { filters: leaveFilters });
@@ -248,7 +249,7 @@ export async function GET(req: Request) {
 
     // 6. 전체 근태 내역 스캔 (캘린더 매핑용) (소프트 삭제 배제, 테넌트 격리)
     const allAttFilters: any = {};
-    if (loggedUsername !== 'admin') {
+    if (!isGlobalSysAdmin) {
       allAttFilters.tenant_id = tenantId;
     }
     const allAttendanceRes = await queryTable('crm_attendance', { filters: allAttFilters });
@@ -265,6 +266,10 @@ export async function GET(req: Request) {
         username: emp.username,
         role: emp.role,
         employee_number: emp.employee_number,
+        department: emp.department || '',
+        phone: emp.phone || '',
+        work_start_time: emp.work_start_time || '09:00',
+        work_end_time: emp.work_end_time || '18:00',
         clock_in: att ? att.clock_in : null,
         clock_out: att ? att.clock_out : null,
         status: att ? att.status : 'ABSENT', // 기록 없으면 결근
@@ -367,8 +372,16 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: '이미 오늘의 출근 스탬프가 찍혀 있습니다.' }, { status: 400 });
       }
 
-      // 출근 시간 판별 기준 (오전 반차 승인 시 13:00 기준, 일반 시 사원 설정 기준 시각 적용)
-      const isLate = timeStr > workStartTime;
+      // 출근 시간 판별 기준 (문자열 비교 버그 방지: 초/분 단위 숫자로 정확히 변환 비교)
+      const parseTimeToSec = (tStr: string): number => {
+        const parts = String(tStr).split(':').map((p) => parseInt(p, 10));
+        const h = parts[0] || 0;
+        const m = parts[1] || 0;
+        const s = parts[2] || 0;
+        return h * 3600 + m * 60 + s;
+      };
+
+      const isLate = parseTimeToSec(timeStr) > parseTimeToSec(workStartTime);
       const status = isLate ? 'LATE' : 'NORMAL';
 
       const newRecord = {
