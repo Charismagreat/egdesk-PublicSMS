@@ -90,22 +90,12 @@ export async function POST(req: Request) {
 
     const availableSheets: string[] = sheetsData.map((s: any) => s.sheetTitle || s.title || s.sheetName);
 
-    // 대상 시트 선택 로직
+    // 대상 시트 선택 로직: URL에 명시된 gid가 있으면 최우선 매칭 (정확한 탭 로드 보장)
     let targetSheet: any = null;
-    if (requestedSheetName) {
-      targetSheet = sheetsData.find(
-        (s: any) => (s.sheetTitle || s.title || s.sheetName) === requestedSheetName
-      );
-    }
 
-    if (!targetSheet && gid) {
-      // 1. sheetsData에서 직접 gid 매칭
-      targetSheet = sheetsData.find(
-        (s: any) => String(s.sheetId ?? s.id ?? s.properties?.sheetId ?? '') === String(gid)
-      );
-
-      // 2. metadata.sheets에서 gid 매칭 후 타이틀로 탐색
-      if (!targetSheet && Array.isArray(metadata?.sheets)) {
+    if (gid) {
+      // 1. metadata.sheets에서 gid 매칭 후 타이틀로 탐색 (가장 정확)
+      if (Array.isArray(metadata?.sheets)) {
         const matchedMeta = metadata.sheets.find(
           (s: any) => String(s.sheetId ?? s.id ?? s.properties?.sheetId ?? '') === String(gid)
         );
@@ -116,6 +106,20 @@ export async function POST(req: Request) {
           );
         }
       }
+
+      // 2. sheetsData에서 직접 gid 매칭
+      if (!targetSheet) {
+        targetSheet = sheetsData.find(
+          (s: any) => String(s.sheetId ?? s.id ?? s.properties?.sheetId ?? '') === String(gid)
+        );
+      }
+    }
+
+    // gid가 없거나 gid로 못 찾은 경우 요청된 시트명으로 탐색
+    if (!targetSheet && requestedSheetName) {
+      targetSheet = sheetsData.find(
+        (s: any) => (s.sheetTitle || s.title || s.sheetName) === requestedSheetName
+      );
     }
 
     if (!targetSheet) {

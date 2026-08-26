@@ -126,6 +126,9 @@ export default function HometaxGoogleSheetsModal({
     setParsedInvoices([]);
 
     try {
+      const hasGidInUrl = sheetUrl.includes("gid=");
+      const effectiveSheetName = overrideSheetName || (!hasGidInUrl ? selectedSheetName : undefined);
+
       setSavedGoogleSheetUrl('hometax_inbound_sheet_url', sheetUrl, overrideSheetName || selectedSheetName);
 
       const res = await apiFetch("/api/shared/google-sheets", {
@@ -133,7 +136,7 @@ export default function HometaxGoogleSheetsModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: sheetUrl.trim(),
-          sheetName: overrideSheetName || selectedSheetName || undefined,
+          sheetName: effectiveSheetName || undefined,
           fetchAllRows: true
         })
       });
@@ -548,7 +551,10 @@ export default function HometaxGoogleSheetsModal({
               <input
                 type="text"
                 value={sheetUrl}
-                onChange={(e) => setSheetUrl(e.target.value)}
+                onChange={(e) => {
+                  setSheetUrl(e.target.value);
+                  setSelectedSheetName("");
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
