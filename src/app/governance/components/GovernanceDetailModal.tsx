@@ -740,7 +740,7 @@ export default function GovernanceDetailModal({
         )}
 
         {/* 📅 관제 대상 건 처리 일시 (완료 마감일 due_date) 지정 및 변경 컨트롤 바 (일반 업무 상신 대기 상태일 때만 렌더링) */}
-        {!isResolved && !isDeleteOrHoldEvent && (
+        {!isResolved && !isExplicitDelete && (
           <div className="bg-gradient-to-r from-indigo-50/80 via-purple-50/40 to-slate-50 border border-indigo-150 rounded-2xl p-4 space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-indigo-900 font-extrabold text-xs">
