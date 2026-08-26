@@ -1041,6 +1041,82 @@ ${content}
  * 4. action=clear_logs: 실시간 AI 결재 심사 이력 전체 초기화
  * 5. action=set_toggle: 이미지 OCR 자율 대행 활성화 토글 변경
  */
+
+// 📊 서버 사이드 실물 발주서 엑셀(.xlsx) 정밀 파서
+function parseExcelBufferDirect(buf: Buffer, originalFilename: string = '') {
+  const workbook = XLSX.read(buf, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+  if (rawRows.length === 0) return null;
+
+  // 1. 헤더 행 탐색
+  let headerRowIndex = 0;
+  for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+    const rowStr = rawRows[i].map(c => String(c).trim()).join(' ');
+    if (rowStr.includes('품목') || rowStr.includes('품명') || rowStr.includes('주문번호') || rowStr.includes('단가')) {
+      headerRowIndex = i;
+      break;
+    }
+  }
+
+  const headers = rawRows[headerRowIndex].map(c => String(c).trim());
+  const findCol = (keywords: string[]): number => {
+    return headers.findIndex(h => keywords.some(k => h.includes(k)));
+  };
+
+  const itemCodeIdx = findCol(['품목번호', '품번', '품목코드', '자재코드']);
+  const itemNameIdx = findCol(['품명', '품목명', '자재명', '품목']);
+  const orderNoIdx = findCol(['주문번호', '발주번호', 'PO번호', 'Order No']);
+  const orderDateIdx = findCol(['주문확정일자', '주문일자', '발주일자', '발주일']);
+  const deliveryDateIdx = findCol(['납기일자', '납기일', '납품일자', '최종납품 예정일자']);
+  const qtyIdx = findCol(['주문수량', '발주수량', '수량', 'Qty']);
+  const priceIdx = findCol(['구매단가', '단가', '발주단가', 'Price']);
+  const managerIdx = findCol(['발주자/요청자', '담당자', '발주자', '요청자']);
+
+  let partnerName = 'LS일렉트릭 주식회사';
+  if (originalFilename.toLowerCase().includes('ls')) {
+    partnerName = 'LS일렉트릭 주식회사';
+  } else if (originalFilename.toLowerCase().includes('동양')) {
+    partnerName = '동양특수금속';
+  }
+
+  const parsedItems: any[] = [];
+  for (let i = headerRowIndex + 1; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    if (!row || row.every(c => String(c).trim() === '')) continue;
+
+    const itemName = itemNameIdx > -1 ? String(row[itemNameIdx]).trim() : '';
+    if (!itemName) continue;
+
+    const itemCode = itemCodeIdx > -1 ? String(row[itemCodeIdx]).trim() : '';
+    const orderNo = orderNoIdx > -1 ? String(row[orderNoIdx]).trim() : `PO-${Date.now()}-${i}`;
+    const orderDate = orderDateIdx > -1 ? String(row[orderDateIdx]).trim() : '';
+    const deliveryDate = deliveryDateIdx > -1 ? String(row[deliveryDateIdx]).trim() : '';
+    const qty = qtyIdx > -1 ? Math.max(1, Number(String(row[qtyIdx]).replace(/,/g, '')) || 1) : 1;
+    const price = priceIdx > -1 ? Number(String(row[priceIdx]).replace(/,/g, '')) || 0 : 0;
+    const manager = managerIdx > -1 ? String(row[managerIdx]).trim() : '';
+
+    parsedItems.push({
+      item_code: itemCode,
+      product_name: itemName,
+      order_no: orderNo,
+      order_date: orderDate,
+      delivery_date: deliveryDate,
+      quantity: qty,
+      unit_price: price,
+      amount: qty * price,
+      manager: manager
+    });
+  }
+
+  return {
+    partner_name: partnerName,
+    items: parsedItems
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -1493,6 +1569,121 @@ export async function POST(request: Request) {
             sharedOcrSuccess = false;
             sharedOcrDetail = `[첨부 서류 조회 실패] 첨부된 실물 발주서 파일 레코드를 찾을 수 없습니다. 수동 등록을 진행해 주세요.`;
             return;
+          }
+
+          targetFilename = targetItem.content_text?.replace('[상신 첨부] ', '') || targetItem.file_url?.split('/').pop() || targetFilename;
+
+          // 3. 실물 엑셀 파일 로컬 직접 판독 시도 (.xlsx, .xls)
+          const isExcel = targetFilename.toLowerCase().endsWith('.xlsx') || targetFilename.toLowerCase().endsWith('.xls') || targetItem.file_type === 'DOCUMENT';
+          if (isExcel) {
+            let excelBuffer: Buffer | null = null;
+            if (targetItem.file_url) {
+              const localUploadPath = 'C:/dev/egdesk-PublicSMS/public' + (targetItem.file_url.startsWith('/') ? targetItem.file_url : '/' + targetItem.file_url);
+              if (require('fs').existsSync(localUploadPath)) {
+                excelBuffer = require('fs').readFileSync(localUploadPath);
+              }
+            }
+
+            if (!excelBuffer) {
+              const downloadRes = await downloadFile({
+                tableName: 'crm_snaptask_items',
+                rowId: Number(targetItem.id),
+                columnName: 'file_url'
+              });
+              if (downloadRes.success && downloadRes.data) {
+                excelBuffer = Buffer.from(downloadRes.data, 'base64');
+              }
+            }
+
+            if (excelBuffer) {
+              const parsedExcel = parseExcelBufferDirect(excelBuffer, targetFilename);
+              if (parsedExcel && parsedExcel.items.length > 0) {
+                console.log(`[EXCEL PARSER SUCCESS] ${targetFilename} 에서 ${parsedExcel.items.length}개 품목 실물 파싱 성공!`);
+                const partnerName = parsedExcel.partner_name;
+                let totalBatchAmount = 0;
+                let firstOrderId = '';
+
+                // 각 품목별로 실제 수주 대장에 개별 또는 일괄 적재
+                for (let idx = 0; idx < parsedExcel.items.length; idx++) {
+                  const it = parsedExcel.items[idx];
+                  const soId = `SO-${Date.now()}-${idx + 1}`;
+                  if (!firstOrderId) firstOrderId = soId;
+                  totalBatchAmount += it.amount;
+
+                  const nowObj = new Date();
+                  const yy = String(nowObj.getFullYear()).slice(-2);
+                  const mm = String(nowObj.getMonth() + 1).padStart(2, '0');
+                  const dd = String(nowObj.getDate()).padStart(2, '0');
+                  const hh = String(nowObj.getHours()).padStart(2, '0');
+                  const min = String(nowObj.getMinutes()).padStart(2, '0');
+                  const ss = String(nowObj.getSeconds()).padStart(2, '0');
+                  const estimateId = `ORD-${yy}${mm}${dd}-${hh}${min}${ss}-${idx + 1}`;
+
+                  // 섀도우 견적 마스터 생성
+                  await insertRows('crm_estimates', [{
+                    id: estimateId,
+                    type: 'OUTBOUND',
+                    direction_status: 'RECEIVED',
+                    partner_name: partnerName,
+                    partner_phone: '1544-2080',
+                    partner_manager: it.manager || '최규신,215992',
+                    total_amount: it.amount,
+                    file_url: targetItem.file_url || '',
+                    ai_parsed: 1,
+                    sales_order_number: it.order_no || soId,
+                    created_at: nowStr,
+                    tenant_id: tenantId,
+                    _version: 1
+                  }]);
+
+                  // 섀도우 견적 상세 품목 생성
+                  await insertRows('crm_estimate_items', [{
+                    id: Date.now() + idx,
+                    estimate_id: estimateId,
+                    product_id: '',
+                    item_code: it.item_code || '',
+                    product_name: it.product_name,
+                    spec: it.item_code || '-',
+                    quantity: it.quantity,
+                    unit_price: it.unit_price,
+                    amount: it.amount,
+                    delivery_date: it.delivery_date || '',
+                    tenant_id: tenantId,
+                    _version: 1
+                  }]);
+
+                  // 수주 대장 적재
+                  await insertRows('crm_sales_orders', [{
+                    id: soId,
+                    estimate_id: estimateId,
+                    client_order_no: it.order_no || '',
+                    customer_name: partnerName,
+                    customer_phone: '1544-2080',
+                    customer_manager: it.manager || '최규신,215992',
+                    partner_name: partnerName,
+                    item_name: it.product_name,
+                    quantity: it.quantity,
+                    total_amount: it.amount,
+                    delivery_date: it.delivery_date || '',
+                    order_date: it.order_date || nowStr,
+                    status: 'REGISTERED',
+                    created_at: nowStr,
+                    tenant_id: tenantId,
+                    _version: 1
+                  }]);
+                }
+
+                sharedOcrSuccess = true;
+                sharedSoId = firstOrderId;
+                sharedPartnerName = partnerName;
+                sharedAmount = totalBatchAmount;
+                sharedItemName = parsedExcel.items[0].product_name;
+                sharedQty = parsedExcel.items.reduce((s: number, i: any) => s + i.quantity, 0);
+
+                sharedOcrDetail = `[실물 엑셀 발주서 정밀 파싱 완료] 상신 엑셀 '${targetFilename}' 분석 성공: ${partnerName} 총 ${parsedExcel.items.length}개 품목(총 ${sharedQty}개, ${totalBatchAmount.toLocaleString()}원)이 수주 대장에 실물 그대로 개별 적재되었습니다.`;
+                return;
+              }
+            }
           }
 
           // 3. 파일 바이너리 다운로드 (egdesk-helpers 의 downloadFile 1순위 사용 및 통합 게이트웨이 폴백 연동)
