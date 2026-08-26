@@ -217,7 +217,7 @@ interface ProcessItem {
   remark: string;
 }
 
-export default function DeliveryStatementWritePage() {
+function DeliveryStatementWriteContent() {
   // 1. 상태 보존용 Persisted States (v2 키 변경으로 이전 캐시 원천 초기화)
   const [supplier, setSupplier, isSupplierRestored] = usePersistedState("egdesk_gen_stmt_supplier_v2", {
     businessNumber: "",
@@ -504,6 +504,68 @@ export default function DeliveryStatementWritePage() {
     }));
   }, [isRestored, meta.estimateNumber]);
 
+  const searchParams = useSearchParams();
+  const soIdParam = searchParams.get("soId") || searchParams.get("id");
+  const soIdsParam = searchParams.get("soIds");
+
+  // 5. 폼 제어 핸들러 (수주 선택)
+  const handleSelectOrders = (selectedOrders: any[]) => {
+    if (selectedOrders.length === 0) return;
+    
+    // 첫 수주 건 기준으로 바이어 정보 바인딩
+    const first = selectedOrders[0];
+    setBuyer(prev => ({
+      ...prev,
+      companyName: first.customer_name || "",
+      phone: first.customer_phone || "",
+      managerName: first.customer_manager || prev.managerName || "",
+      email: prev.email || ""
+    }));
+
+    // 품목 목록 구성 (각 수주건의 items 배열을 평탄화하여 복원, 없으면 o 자체 정보 폴백)
+    const itemsList: any[] = [];
+    selectedOrders.forEach(o => {
+      if (o.items && Array.isArray(o.items) && o.items.length > 0) {
+        o.items.forEach((it: any) => {
+          itemsList.push({
+            itemCode: it.item_code || "",
+            productName: it.product_name || "",
+            spec: it.spec ? formatSpec(it.spec) : "",
+            quantity: Number(it.quantity) || 0,
+            unitPrice: Number(it.unit_price) || 0,
+            remark: o.id ? `수주:${o.id}` : ""
+          });
+        });
+      } else {
+        const qty = Number(o.quantity) || 1;
+        const total = Number(o.total_price) || 0;
+        const price = qty > 0 ? Math.round(total / qty) : total;
+        itemsList.push({
+          itemCode: "",
+          productName: o.product_name || "",
+          spec: "",
+          quantity: qty,
+          unitPrice: price,
+          remark: o.id ? `수주:${o.id}` : ""
+        });
+      }
+    });
+    
+    setMaterials(itemsList.length > 0 ? itemsList : [{ itemCode: "", productName: "", spec: "", quantity: 0, unitPrice: 0, remark: "" }]);
+  };
+
+  // 🚀 URL 쿼리 파라미터(soId, soIds)로 유입된 수주 건 자동 로드 및 폼 오토필
+  useEffect(() => {
+    if (!isRestored || orderList.length === 0) return;
+    const targetIds = (soIdsParam ? soIdsParam.split(",") : [soIdParam]).filter(Boolean) as string[];
+    if (targetIds.length === 0) return;
+
+    const matchedOrders = orderList.filter(o => targetIds.includes(String(o.id)));
+    if (matchedOrders.length > 0) {
+      handleSelectOrders(matchedOrders);
+    }
+  }, [isRestored, orderList, soIdParam, soIdsParam]);
+
   // 📇 바이어 정보가 존재할 때 최신 거래처 정보를 동기화하는 백필 이펙트
   useEffect(() => {
     if (!isRestored) return;
@@ -558,68 +620,6 @@ export default function DeliveryStatementWritePage() {
 
   // 최종 거래명세금액 (재료비 + 기타 부대 비용)
   const grandTotal = materialsTotal + extraCostsTotal;
-
-  // 5. 폼 제어 핸들러
-  const handleSelectOrders = (selectedOrders: any[]) => {
-    if (selectedOrders.length === 0) return;
-    
-    // 첫 수주 건 기준으로 바이어 정보 바인딩
-    const first = selectedOrders[0];
-    setBuyer(prev => ({
-      ...prev,
-      companyName: first.customer_name || "",
-      phone: first.customer_phone || "",
-      managerName: first.customer_manager || prev.managerName || "",
-      email: prev.email || ""
-    }));
-
-    // 품목 목록 구성 (각 수주건의 items 배열을 평탄화하여 복원, 없으면 o 자체 정보 폴백)
-    const itemsList: any[] = [];
-    selectedOrders.forEach(o => {
-      if (o.items && Array.isArray(o.items) && o.items.length > 0) {
-        o.items.forEach((it: any) => {
-          itemsList.push({
-            itemCode: it.item_code || "",
-            productName: it.product_name || "",
-            spec: it.spec ? formatSpec(it.spec) : "",
-            quantity: Number(it.quantity) || 0,
-            unitPrice: Number(it.unit_price) || 0,
-            remark: o.id ? `수주:${o.id}` : ""
-          });
-        });
-      } else {
-        const qty = Number(o.quantity) || 1;
-        const total = Number(o.total_price) || 0;
-        const price = qty > 0 ? Math.round(total / qty) : total;
-        itemsList.push({
-          itemCode: "",
-          productName: o.product_name || "",
-          spec: "",
-          quantity: qty,
-          unitPrice: price,
-          remark: o.id ? `수주:${o.id}` : ""
-        });
-      }
-    });
-    
-    setMaterials(itemsList.length > 0 ? itemsList : [{ itemCode: "", productName: "", spec: "", quantity: 0, unitPrice: 0, remark: "" }]);
-  };
-
-  const searchParams = useSearchParams();
-  const soIdParam = searchParams.get("soId") || searchParams.get("id");
-  const soIdsParam = searchParams.get("soIds");
-
-  // 🚀 URL 쿼리 파라미터(soId, soIds)로 유입된 수주 건 자동 로드 및 폼 오토필
-  useEffect(() => {
-    if (!isRestored || orderList.length === 0) return;
-    const targetIds = (soIdsParam ? soIdsParam.split(",") : [soIdParam]).filter(Boolean) as string[];
-    if (targetIds.length === 0) return;
-
-    const matchedOrders = orderList.filter(o => targetIds.includes(String(o.id)));
-    if (matchedOrders.length > 0) {
-      handleSelectOrders(matchedOrders);
-    }
-  }, [isRestored, orderList, soIdParam, soIdsParam]);
 
   const handleAddMaterial = () => {
     setMaterials([...materials, { itemCode: "", productName: "", spec: "", quantity: 0, unitPrice: 0, remark: "" }]);
@@ -1896,4 +1896,17 @@ export default function DeliveryStatementWritePage() {
     </div>
   </div>
 );
+}
+
+export default function DeliveryStatementWritePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-indigo-600">
+        <RefreshCw className="w-10 h-10 animate-spin mr-3" />
+        <span className="text-sm font-extrabold tracking-widest uppercase">거래명세 시스템 준비 중...</span>
+      </div>
+    }>
+      <DeliveryStatementWriteContent />
+    </Suspense>
+  );
 }
