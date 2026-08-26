@@ -35,6 +35,14 @@ async function verifyUserRole() {
   }
 }
 
+// 🔑 테넌트 격리 조건 생성 헬퍼
+function getTenantCondition(tenantId: string): string {
+  if (!tenantId || tenantId === 'tenant-default-id' || tenantId === 'default') {
+    return `(tenant_id = 'tenant-default-id' OR tenant_id = 'default' OR tenant_id IS NULL OR tenant_id = '')`;
+  }
+  return `tenant_id = '${tenantId}'`;
+}
+
 // 이중 안전 장치: 배열이 아닐 경우 빈 배열로 방어 처리
 function safeArray<T>(data: any): T[] {
   return Array.isArray(data) ? data : [];
@@ -222,7 +230,7 @@ export async function GET(request: NextRequest) {
             const latestCardTxRes = await executeSQL(`
               SELECT approval_date, time 
               FROM card_transactions 
-              WHERE account_id = '${acc.id}' AND (tenant_id = '${tenantId}' OR tenant_id = 'tenant-default-id' OR tenant_id = 'default' OR tenant_id IS NULL)
+              WHERE account_id = '${acc.id}' AND ${getTenantCondition(tenantId)}
               ORDER BY approval_date DESC, time DESC, id DESC 
               LIMIT 1
             `);
@@ -235,7 +243,7 @@ export async function GET(request: NextRequest) {
             const latestTxRes = await executeSQL(`
               SELECT transaction_date, transaction_time 
               FROM bank_transactions 
-              WHERE account_id = '${acc.id}' AND (tenant_id = '${tenantId}' OR tenant_id = 'tenant-default-id' OR tenant_id = 'default' OR tenant_id IS NULL)
+              WHERE account_id = '${acc.id}' AND ${getTenantCondition(tenantId)}
               ORDER BY transaction_date DESC, transaction_time DESC, id DESC 
               LIMIT 1
             `);
@@ -391,7 +399,7 @@ export async function GET(request: NextRequest) {
       let total = 0;
 
       try {
-        let query = `SELECT * FROM tax_invoices WHERE (tenant_id = '${tenantId}' OR tenant_id = 'tenant-default-id' OR tenant_id = 'default' OR tenant_id IS NULL)`;
+        let query = `SELECT * FROM tax_invoices WHERE ${getTenantCondition(tenantId)}`;
         const whereClauses: string[] = [];
         
         if (startDate) {
@@ -427,7 +435,7 @@ export async function GET(request: NextRequest) {
           list = dbRows.map(mapTaxInvoiceToFrontend).filter(Boolean);
         } else {
           // Fallback to legacy excel_hometax_invoices
-          const legacyQuery = `SELECT * FROM excel_hometax_invoices WHERE (tenant_id = '${tenantId}' OR tenant_id = 'tenant-default-id' OR tenant_id = 'default' OR tenant_id IS NULL) AND is_exempt = 0`;
+          const legacyQuery = `SELECT * FROM excel_hometax_invoices WHERE ${getTenantCondition(tenantId)} AND is_exempt = 0`;
           const legacyRes = await executeSQL(legacyQuery).catch(() => ({ rows: [] }));
           if (legacyRes.rows?.length) {
             const rows = (legacyRes.rows || []).filter((r: any) => !r.deleted_at);
@@ -454,7 +462,7 @@ export async function GET(request: NextRequest) {
       let total = 0;
 
       try {
-        let query = `SELECT * FROM tax_exempt_invoices WHERE (tenant_id = '${tenantId}' OR tenant_id = 'tenant-default-id' OR tenant_id = 'default' OR tenant_id IS NULL)`;
+        let query = `SELECT * FROM tax_exempt_invoices WHERE ${getTenantCondition(tenantId)}`;
         const whereClauses: string[] = [];
         
         if (startDate) {
@@ -490,7 +498,7 @@ export async function GET(request: NextRequest) {
           list = dbRows.map(mapTaxInvoiceToFrontend).filter(Boolean);
         } else {
           // Fallback to legacy excel_hometax_invoices
-          const legacyQuery = `SELECT * FROM excel_hometax_invoices WHERE (tenant_id = '${tenantId}' OR tenant_id = 'tenant-default-id' OR tenant_id = 'default' OR tenant_id IS NULL) AND is_exempt = 1`;
+          const legacyQuery = `SELECT * FROM excel_hometax_invoices WHERE ${getTenantCondition(tenantId)} AND is_exempt = 1`;
           const legacyRes = await executeSQL(legacyQuery).catch(() => ({ rows: [] }));
           if (legacyRes.rows?.length) {
             const rows = (legacyRes.rows || []).filter((r: any) => !r.deleted_at);
@@ -518,7 +526,7 @@ export async function GET(request: NextRequest) {
       const cashPurpose = searchParams.get("cashPurpose") || undefined;
 
       try {
-        let query = `SELECT * FROM cash_receipts WHERE (tenant_id = '${tenantId}' OR tenant_id = 'tenant-default-id' OR tenant_id = 'default' OR tenant_id IS NULL)`;
+        let query = `SELECT * FROM cash_receipts WHERE ${getTenantCondition(tenantId)}`;
         const whereClauses: string[] = [];
         
         if (startDate) {
@@ -553,7 +561,7 @@ export async function GET(request: NextRequest) {
           list = dbRows.map(mapCashReceiptToFrontend).filter(Boolean);
         } else {
           // Fallback to legacy excel_hometax_cash_receipts
-          const legacyQuery = `SELECT * FROM excel_hometax_cash_receipts WHERE tenant_id = '${tenantId}'`;
+          const legacyQuery = `SELECT * FROM excel_hometax_cash_receipts WHERE ${getTenantCondition(tenantId)}`;
           const legacyRes = await executeSQL(legacyQuery).catch(() => ({ rows: [] }));
           if (legacyRes.rows?.length) {
             total = legacyRes.rows.length;
@@ -579,7 +587,7 @@ export async function GET(request: NextRequest) {
         const latestTx = await executeSQL(`
           SELECT created_at, COUNT(*) as cnt, bank_id
           FROM excel_bank_transactions
-          WHERE tenant_id = '${tenantId}'
+          WHERE ${getTenantCondition(tenantId)}
           GROUP BY created_at, bank_id
           ORDER BY created_at DESC
           LIMIT 10
@@ -620,8 +628,8 @@ export async function GET(request: NextRequest) {
 
       try {
         const [latestCardTxRes, latestTaxInvRes] = await Promise.all([
-          executeSQL(`SELECT approval_date as dt FROM card_transactions WHERE approval_date IS NOT NULL AND approval_date != '' ORDER BY approval_date DESC LIMIT 1`).catch(() => ({ rows: [] })),
-          executeSQL(`SELECT COALESCE(작성일자, issue_date) as dt FROM tax_invoices WHERE COALESCE(작성일자, issue_date) IS NOT NULL ORDER BY dt DESC LIMIT 1`).catch(() => ({ rows: [] }))
+          executeSQL(`SELECT approval_date as dt FROM card_transactions WHERE ${getTenantCondition(tenantId)} AND approval_date IS NOT NULL AND approval_date != '' ORDER BY approval_date DESC LIMIT 1`).catch(() => ({ rows: [] })),
+          executeSQL(`SELECT COALESCE(작성일자, issue_date) as dt FROM tax_invoices WHERE ${getTenantCondition(tenantId)} AND COALESCE(작성일자, issue_date) IS NOT NULL ORDER BY dt DESC LIMIT 1`).catch(() => ({ rows: [] }))
         ]);
         const cardDate = latestCardTxRes.rows?.[0]?.dt;
         const invDate = latestTaxInvRes.rows?.[0]?.dt;
@@ -656,7 +664,7 @@ export async function GET(request: NextRequest) {
       const m2Start = `${m2Date.getFullYear()}-${String(m2Date.getMonth() + 1).padStart(2, '0')}-01`;
       const filterStartDate = m2Start < yearStart ? m2Start : yearStart;
 
-      const tenantCond = `(tenant_id = '${tenantId}' OR tenant_id = 'tenant-default-id' OR tenant_id = 'default' OR tenant_id IS NULL)`;
+      const tenantCond = getTenantCondition(tenantId);
 
       const [cardTxRes, taxInvoiceRes, cashReceiptRes, legacyCardRes, legacyTaxRes] = await Promise.all([
         executeSQL(`SELECT * FROM card_transactions WHERE ${tenantCond}`).catch(() => ({ rows: [] })),

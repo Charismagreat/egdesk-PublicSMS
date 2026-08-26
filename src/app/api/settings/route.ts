@@ -40,14 +40,16 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, value: rows[0].value });
     }
 
-    // 2차 폴백: 구버전 단순 key로 저장된 레거시 레코드 조회 (하위 호환)
-    const legacyResult = await queryTable('system_settings', { filters: { key }, limit: 1 });
-    const legacyRows = (legacyResult?.rows || []).filter(
-      (r: any) => !r.tenant_id || r.tenant_id === '' || r.tenant_id === 'default'
-    );
+    // 2차 폴백: 'default' 테넌트인 경우에만 구버전 단순 key 레거시 레코드 조회 (신규 테넌트의 타사 정보 유입 원천 차단)
+    if (tenantId === 'default') {
+      const legacyResult = await queryTable('system_settings', { filters: { key }, limit: 1 });
+      const legacyRows = (legacyResult?.rows || []).filter(
+        (r: any) => !r.tenant_id || r.tenant_id === '' || r.tenant_id === 'default'
+      );
 
-    if (legacyRows.length > 0) {
-      return NextResponse.json({ success: true, value: legacyRows[0].value });
+      if (legacyRows.length > 0) {
+        return NextResponse.json({ success: true, value: legacyRows[0].value });
+      }
     }
 
     return NextResponse.json({ success: true, value: null });

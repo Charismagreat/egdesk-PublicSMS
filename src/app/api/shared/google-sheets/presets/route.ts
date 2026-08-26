@@ -27,8 +27,12 @@ export async function GET(req: NextRequest) {
     const domain = searchParams.get('domain') || 'default';
 
     if (domain === 'all') {
-      // 전사 모든 도메인의 프리셋 일괄 조회 (표준 queryTable 경유)
-      const res = await queryTable('system_settings', {}).catch(() => ({ rows: [] }));
+      // 전사 모든 도메인의 프리셋 일괄 조회 (테넌트 격리 필터 적용)
+      const filterObj: Record<string, string> = {};
+      if (tenantId && tenantId !== 'all') {
+        filterObj.tenant_id = tenantId;
+      }
+      const res = await queryTable('system_settings', { filters: filterObj }).catch(() => ({ rows: [] }));
       const allPresets: Record<string, GoogleSheetPreset[]> = {};
       const flatPresets: Array<GoogleSheetPreset & { domain: string }> = [];
 

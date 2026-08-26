@@ -1,15 +1,30 @@
 import { NextResponse } from 'next/server';
-import { getSavedGoogleSheetUrl, setSavedGoogleSheetUrl } from '@/lib/google-sheets-storage';
+import { queryTable, insertRows, updateRows } from '@/lib/egdesk-helpers';
+import { getTenantId } from '@/lib/tenant';
 
 export async function GET() {
   try {
-    const savedUrl = getSavedGoogleSheetUrl();
+    const tenantId = (await getTenantId()) || 'default';
+    let savedUrl = '';
     let sheetMetadata: any = null;
+
+    const res = await queryTable('system_settings', {
+      filters: { key: 'google_sheet_config_default', tenant_id: tenantId }
+    }).catch(() => ({ rows: [] }));
+
+    if (res.rows && res.rows.length > 0) {
+      try {
+        const parsed = JSON.parse(res.rows[0].value);
+        savedUrl = parsed.url || '';
+      } catch {
+        savedUrl = res.rows[0].value || '';
+      }
+    }
 
     if (savedUrl) {
       try {
         const apiUrl = process.env.NEXT_PUBLIC_EGDESK_API_URL || 'http://localhost:8080';
-        const res = await fetch(`${apiUrl}/sheets/tools/call`, {
+        const sheetRes = await fetch(`${apiUrl}/sheets/tools/call`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -17,8 +32,8 @@ export async function GET() {
             arguments: { url: savedUrl }
           })
         });
-        if (res.ok) {
-          sheetMetadata = await res.json();
+        if (sheetRes.ok) {
+          sheetMetadata = await sheetRes.json();
         }
       } catch (e: any) {
         sheetMetadata = { error: e.message };
@@ -49,6 +64,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const tenantId = (await getTenantId()) || 'default';
     const body = await req.json().catch(() => ({}));
     const { url } = body;
 
@@ -56,9 +72,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'URL이 필요합니다.' }, { status: 400 });
     }
 
-    setSavedGoogleSheetUrl(url);
+    const cleanUrl = String(url).trim();
+    const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
-    return NextResponse.json({ success: true, url });
+    const existing = await queryTable('system_settings', {
+      filters: { key: 'google_sheet_config_default', tenant_id: tenantId }
+    }).catch(() => ({ rows: [] }));
+
+    const configValue = JSON.stringify({
+      url: cleanUrl,
+      updatedAt: now
+    });
+
+    if (existing.rows && existing.rows.length > 0) {
+      await updateRows('system_settings', {
+        value: configValue,
+        updated_at: now
+      }, { filters: { id: existing.rows[0].id } });
+    } else {
+      await insertRows('system_settings', [{
+        key: 'google_sheet_config_default',
+        value: configValue,
+        description: 'Google Sheet Default Config',
+        tenant_id: tenantId,
+        created_at: now,
+        updated_at: now
+      }]);
+    }
+
+    return NextResponse.json({ success: true, url: cleanUrl });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

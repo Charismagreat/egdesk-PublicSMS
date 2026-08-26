@@ -7,7 +7,7 @@ import { usePersistedState } from "@/hooks/usePersistedState";
 import { 
   ShieldCheck, Users, Search, Plus, Edit, Trash2, Key, 
   RefreshCw, AlertTriangle, UserCheck, UserPlus, Phone, 
-  ShieldAlert, Calendar, LayoutGrid, X
+  ShieldAlert, Calendar, LayoutGrid, X, RotateCcw
 } from "lucide-react";
 
 interface Member {
@@ -31,7 +31,7 @@ export default function MemberManagementPage() {
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   // 2. usePersistedState를 활용한 상태 보존
-  const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<"all" | "sysadmin" | "owners" | "staff">("egdesk_admin_members_activeTab", "all");
+  const [activeTab, setActiveTab, isActiveTabRestored] = usePersistedState<"all" | "sysadmin" | "owners" | "staff" | "deleted">("egdesk_admin_members_activeTab", "all");
   const [selectedTenantFilter, setSelectedTenantFilter, isTenantFilterRestored] = usePersistedState<string>("egdesk_admin_members_selectedTenant", "ALL");
   const [searchQuery, setSearchQuery, isSearchQueryRestored] = usePersistedState<string>("egdesk_admin_members_searchQuery", "");
   const [currentPage, setCurrentPage, isCurrentPageRestored] = usePersistedState<number>("egdesk_admin_members_currentPage", 1);
@@ -232,7 +232,7 @@ export default function MemberManagementPage() {
       return;
     }
 
-    if (!window.confirm(`[경고] 계정 "${username}"을 즉각 비활성화(정지) 처리하시겠습니까?`)) {
+    if (!window.confirm(`[경고] 계정 "${username}"을 즉각 비활성화(정지) 처리하시겠습니까?\n정지된 계정은 [정지/삭제된 계정] 탭으로 이동하며 언제든 복구할 수 있습니다.`)) {
       return;
     }
 
@@ -245,6 +245,65 @@ export default function MemberManagementPage() {
         fetchMembers();
       } else {
         alert("처리에 실패했습니다: " + json.error);
+      }
+    } catch (err: any) {
+      alert("통신 오류: " + err.message);
+    }
+  };
+
+  // 💡 플랫폼 최상위 시스템 운영자(admin) 판별 헬퍼
+  const isSystemAdminUser = (m: Member) => {
+    const r = String(m.role || "").toUpperCase();
+    const u = String(m.username || "").toLowerCase();
+    return r === "SYSTEM_ADMIN" || u === "admin";
+  };
+
+  // 💡 테넌트 최고관리자 판별 헬퍼 (시스템 운영자 admin 제외)
+  const isTenantOwner = (m: Member) => {
+    if (isSystemAdminUser(m)) return false;
+    const r = String(m.role || "").toUpperCase();
+    const u = String(m.username || "").toLowerCase();
+    return ["SUPER_ADMIN", "TENANT_ADMIN", "PRESIDENT", "GUEST"].includes(r) || u === "guest";
+  };
+
+  // 💡 정지된 회원 복원(Restore) 처리
+  const handleRestoreMember = async (member: Member) => {
+    // [가드] 일반 직원/부운영자 계정일 경우, 소속 테넌트의 대표(사장님) 계정이 활성화되어 있는지 사전 검증
+    const isOwner = isSystemAdminUser(member) || isTenantOwner(member);
+    if (!isOwner && member.tenant_id && member.tenant_id.trim() !== "") {
+      const ownersOfTenant = members.filter((m) => isTenantOwner(m) && m.tenant_id === member.tenant_id);
+      const activeOwner = ownersOfTenant.find((m) => !m.deleted_at);
+
+      if (!activeOwner) {
+        const deletedOwner = ownersOfTenant.find((m) => Boolean(m.deleted_at));
+        const ownerName = deletedOwner ? `${deletedOwner.name} 사장님 (${deletedOwner.username})` : "대표 사장님";
+        alert(
+          `[복원 불가] 소속 테넌트의 대표(${ownerName}) 계정이 현재 정지 상태입니다.\n\n` +
+          `대표 계정이 정지된 상태에서는 소속 직원을 복원할 수 없습니다.\n` +
+          `먼저 대표 계정을 복원하신 후에 다시 직원을 복원해 주세요.`
+        );
+        return;
+      }
+    }
+
+    if (!window.confirm(`[계정 복원] 정지된 계정 "${member.username}" (${member.name})을 다시 정상 활성화하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      const res = await apiFetch("/api/operators", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: member.id,
+          action: "RESTORE"
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        fetchMembers();
+      } else {
+        alert("복원에 실패했습니다: " + (json.error || "알 수 없는 오류"));
       }
     } catch (err: any) {
       alert("통신 오류: " + err.message);
@@ -295,23 +354,12 @@ export default function MemberManagementPage() {
     );
   }
 
-  // 💡 플랫폼 최상위 시스템 운영자(admin) 판별 헬퍼
-  const isSystemAdminUser = (m: Member) => {
-    const r = String(m.role || "").toUpperCase();
-    const u = String(m.username || "").toLowerCase();
-    return r === "SYSTEM_ADMIN" || u === "admin";
-  };
+  // 💡 활성 회원 및 삭제된 회원 분리
+  const activeMembers = members.filter((m) => !m.deleted_at);
+  const deletedMembers = members.filter((m) => Boolean(m.deleted_at));
 
-  // 💡 테넌트 최고관리자 판별 헬퍼 (시스템 운영자 admin 제외)
-  const isTenantOwner = (m: Member) => {
-    if (isSystemAdminUser(m)) return false;
-    const r = String(m.role || "").toUpperCase();
-    const u = String(m.username || "").toLowerCase();
-    return ["SUPER_ADMIN", "TENANT_ADMIN", "PRESIDENT", "GUEST"].includes(r) || u === "guest";
-  };
-
-  // 💡 등록된 테넌트 목록 추출 (실제 등록된 테넌트 최고관리자 사장님 계정 기준)
-  const tenantList = members
+  // 💡 등록된 테넌트 목록 추출 (활성 테넌트 최고관리자 사장님 계정 기준)
+  const tenantList = activeMembers
     .filter((m) => isTenantOwner(m) && Boolean(m.tenant_id && m.tenant_id.trim() !== ""))
     .map((m) => ({
       tenant_id: m.tenant_id!,
@@ -323,19 +371,27 @@ export default function MemberManagementPage() {
   // 데이터 필터링 및 검색 로직
   const filteredMembers = members.filter((member) => {
     // 1. 탭 필터링
-    if (activeTab === "sysadmin") {
-      // 시스템 운영자 탭: 플랫폼 호스트 관리자 계정만 표출
-      if (!isSystemAdminUser(member)) return false;
-    } else if (activeTab === "owners") {
-      // 테넌트 최고관리자 탭: 회원사 최고관리자 계정만 표출
-      if (!isTenantOwner(member)) return false;
-    } else if (activeTab === "staff") {
-      // 부운영자/일반직원 탭: 시스템 운영자 및 테넌트 최고관리자를 엄격히 제외한 순수 부운영자/직원만 표출
-      if (isSystemAdminUser(member) || isTenantOwner(member)) return false;
+    if (activeTab === "deleted") {
+      // 💡 정지/삭제된 탭: deleted_at이 존재하는 계정만 표출
+      if (!member.deleted_at) return false;
+    } else {
+      // 💡 활성 탭: 삭제된 계정은 제외
+      if (member.deleted_at) return false;
 
-      // 💡 테넌트 선택 필터링 적용
-      if (selectedTenantFilter !== "ALL") {
-        if (member.tenant_id !== selectedTenantFilter) return false;
+      if (activeTab === "sysadmin") {
+        // 시스템 운영자 탭: 플랫폼 호스트 관리자 계정만 표출
+        if (!isSystemAdminUser(member)) return false;
+      } else if (activeTab === "owners") {
+        // 테넌트 최고관리자 탭: 회원사 최고관리자 계정만 표출
+        if (!isTenantOwner(member)) return false;
+      } else if (activeTab === "staff") {
+        // 부운영자/일반직원 탭: 시스템 운영자 및 테넌트 최고관리자를 엄격히 제외한 순수 부운영자/직원만 표출
+        if (isSystemAdminUser(member) || isTenantOwner(member)) return false;
+
+        // 테넌트 선택 필터링 적용
+        if (selectedTenantFilter !== "ALL") {
+          if (member.tenant_id !== selectedTenantFilter) return false;
+        }
       }
     }
 
@@ -353,9 +409,10 @@ export default function MemberManagementPage() {
   });
 
   // 카운트 연산
-  const sysAdminCount = members.filter((m) => isSystemAdminUser(m)).length;
-  const ownerCount = members.filter((m) => isTenantOwner(m)).length;
-  const staffCount = members.filter((m) => !isSystemAdminUser(m) && !isTenantOwner(m)).length;
+  const sysAdminCount = activeMembers.filter((m) => isSystemAdminUser(m)).length;
+  const ownerCount = activeMembers.filter((m) => isTenantOwner(m)).length;
+  const staffCount = activeMembers.filter((m) => !isSystemAdminUser(m) && !isTenantOwner(m)).length;
+  const deletedCount = deletedMembers.length;
 
   // 페이지네이션 변수
   const itemsPerPage = 10;
@@ -404,8 +461,8 @@ export default function MemberManagementPage() {
           <div className="p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             
             <div className="flex flex-wrap items-center gap-3">
-              {/* 4대 탭바 */}
-              <div className="flex bg-slate-100 p-1.5 rounded-2xl w-fit">
+              {/* 5대 탭바 (활성 4종 + 정지/삭제 1종) */}
+              <div className="flex flex-wrap bg-slate-100 p-1.5 rounded-2xl w-fit gap-1">
                 <button
                   onClick={() => setActiveTab("all")}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -414,7 +471,7 @@ export default function MemberManagementPage() {
                       : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
-                  전체 구성원 ({members.length})
+                  전체 구성원 ({activeMembers.length})
                 </button>
                 <button
                   onClick={() => setActiveTab("sysadmin")}
@@ -445,6 +502,21 @@ export default function MemberManagementPage() {
                   }`}
                 >
                   👥 부운영자/일반직원 ({staffCount})
+                </button>
+                <button
+                  onClick={() => setActiveTab("deleted")}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === "deleted"
+                      ? "bg-red-50 text-red-600 shadow-sm border border-red-200"
+                      : "text-slate-500 hover:text-red-600"
+                  }`}
+                >
+                  <span>🗑️ 정지/삭제된 계정</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    activeTab === "deleted" ? "bg-red-100 text-red-700 font-black" : "bg-slate-200 text-slate-600 font-bold"
+                  }`}>
+                    {deletedCount}
+                  </span>
                 </button>
               </div>
 
@@ -497,7 +569,9 @@ export default function MemberManagementPage() {
             ) : filteredMembers.length === 0 ? (
               <div className="py-20 flex flex-col items-center justify-center text-slate-400">
                 <Users className="w-12 h-12 mb-3 text-slate-300" />
-                <p className="text-sm font-semibold">등록된 정보가 없거나 검색 결과가 존재하지 않습니다.</p>
+                <p className="text-sm font-semibold">
+                  {activeTab === "deleted" ? "정지/삭제된 계정이 없습니다." : "등록된 정보가 없거나 검색 결과가 존재하지 않습니다."}
+                </p>
               </div>
             ) : (
               <table className="w-full border-collapse">
@@ -512,76 +586,104 @@ export default function MemberManagementPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-medium">
-                  {currentItems.map((member) => (
-                    <tr key={member.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="p-4 pl-6">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                            {member.name}
-                            {isSystemAdminUser(member) && (
-                              <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md text-[10px] font-black border border-amber-200">플랫폼 운영자</span>
-                            )}
-                            {isTenantOwner(member) && (
-                              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-black border border-indigo-200">테넌트 대표</span>
-                            )}
+                  {currentItems.map((member) => {
+                    const isDeleted = Boolean(member.deleted_at);
+                    return (
+                      <tr 
+                        key={member.id} 
+                        className={`transition-colors ${
+                          isDeleted ? "bg-rose-50/20 hover:bg-rose-50/40 text-slate-500" : "hover:bg-slate-50/50"
+                        }`}
+                      >
+                        <td className="p-4 pl-6">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                              {member.name}
+                              {isDeleted && (
+                                <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded-md text-[10px] font-black border border-rose-200">
+                                  🚫 정지됨
+                                </span>
+                              )}
+                              {!isDeleted && isSystemAdminUser(member) && (
+                                <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md text-[10px] font-black border border-amber-200">플랫폼 운영자</span>
+                              )}
+                              {!isDeleted && isTenantOwner(member) && (
+                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-black border border-indigo-200">테넌트 대표</span>
+                              )}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              {member.username} {isDeleted && member.deleted_at && `(정지일시: ${member.deleted_at.substring(0, 10)})`}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-mono border border-slate-200">
+                            {member.tenant_id || "default"}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-mono mt-0.5">{member.username}</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-mono border border-slate-200">
-                          {member.tenant_id || "default"}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center">
-                          {isSystemAdminUser(member) ? (
-                            <span className="text-amber-600 font-extrabold flex items-center gap-1">
-                              🔑 시스템 최고운영자 (SYSTEM_ADMIN)
-                            </span>
-                          ) : isTenantOwner(member) ? (
-                            <span className="text-indigo-600 font-bold flex items-center gap-1">
-                              👑 테넌트 최고관리자 (TENANT_ADMIN)
-                            </span>
-                          ) : member.role === "SUB_OPERATOR" ? (
-                            <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                              🛠️ 매장 부운영자 (SUB_OPERATOR)
-                            </span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center">
+                            {isSystemAdminUser(member) ? (
+                              <span className="text-amber-600 font-extrabold flex items-center gap-1">
+                                🔑 시스템 최고운영자 (SYSTEM_ADMIN)
+                              </span>
+                            ) : isTenantOwner(member) ? (
+                              <span className="text-indigo-600 font-bold flex items-center gap-1">
+                                👑 테넌트 최고관리자 (TENANT_ADMIN)
+                              </span>
+                            ) : member.role === "SUB_OPERATOR" ? (
+                              <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                                🛠️ 매장 부운영자 (SUB_OPERATOR)
+                              </span>
+                            ) : (
+                              <span className="text-slate-500 font-semibold flex items-center gap-1">
+                                👥 매장 일반직원 (EMPLOYEE)
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-4 font-mono text-[11px] text-slate-500">
+                          {member.employee_number || "-"}
+                        </td>
+                        <td className="p-4 font-mono text-[11px] text-slate-500">
+                          {member.phone || "-"}
+                        </td>
+                        <td className="p-4 text-center">
+                          {isDeleted ? (
+                            <div className="flex items-center justify-center">
+                              <button
+                                onClick={() => handleRestoreMember(member)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                                title="정지된 계정 즉시 복원"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>계정 복원</span>
+                              </button>
+                            </div>
                           ) : (
-                            <span className="text-slate-500 font-semibold flex items-center gap-1">
-                              👥 매장 일반직원 (EMPLOYEE)
-                            </span>
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => openEditModal(member)}
+                                className="p-2 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 rounded-xl transition-colors cursor-pointer border-none bg-transparent"
+                                title="정보 수정"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              {member.username !== "admin" && (
+                                <button
+                                  onClick={() => handleDeleteMember(member.id, member.username)}
+                                  className="p-2 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-xl transition-colors cursor-pointer border-none bg-transparent"
+                                  title="정지/삭제"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                           )}
-                        </div>
-                      </td>
-                      <td className="p-4 font-mono text-[11px] text-slate-500">
-                        {member.employee_number || "-"}
-                      </td>
-                      <td className="p-4 font-mono text-[11px] text-slate-500">
-                        {member.phone || "-"}
-                      </td>
-                      <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => openEditModal(member)}
-                            className="p-2 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 rounded-xl transition-colors cursor-pointer border-none bg-transparent"
-                            title="정보 수정"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          {member.username !== "admin" && (
-                            <button
-                              onClick={() => handleDeleteMember(member.id, member.username)}
-                              className="p-2 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-xl transition-colors cursor-pointer border-none bg-transparent"
-                              title="정지/삭제"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

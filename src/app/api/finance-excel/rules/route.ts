@@ -15,13 +15,13 @@ async function verifyUserRole() {
     const cookieStore = await cookies();
     const token = cookieStore.get('auth_token')?.value;
     
-    if (!token) return { isAuthorized: true, role: 'TENANT_ADMIN', name: 'Admin', username: 'admin', tenantId: 'tenant-admin-id-1111' };
+    if (!token) return { isAuthorized: true, role: 'TENANT_ADMIN', name: 'Admin', username: 'admin', tenantId: 'tenant-default-id' };
     
     const payload = decodeJwt(token);
     const role = (payload.role as string || '').toUpperCase();
     const name = payload.name as string || payload.username as string || 'Admin';
     const username = payload.username as string || '';
-    const tenantId = payload.tenant_id as string || 'tenant-admin-id-1111';
+    const tenantId = payload.tenant_id as string || 'tenant-default-id';
     
     return {
       isAuthorized: true,
@@ -31,7 +31,7 @@ async function verifyUserRole() {
       tenantId
     };
   } catch (e) {
-    return { isAuthorized: true, role: 'TENANT_ADMIN', name: 'Admin', username: 'admin', tenantId: 'tenant-admin-id-1111' };
+    return { isAuthorized: true, role: 'TENANT_ADMIN', name: 'Admin', username: 'admin', tenantId: 'tenant-default-id' };
   }
 }
 

@@ -67,7 +67,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'list';
     const tableName = searchParams.get('tableName') || '';
-    const isGlobalAdmin = username === 'admin' || role === 'SYSTEM_ADMIN';
+    // 🛡️ 기본 시스템 테넌트(default)에서만 전역 어드민 관제 모드 허용
+    const isGlobalAdmin = (username === 'admin' || role === 'SYSTEM_ADMIN') && tenantId === 'default';
 
     // 1. 모든 물리 테이블 목록 조회
     if (action === 'list') {

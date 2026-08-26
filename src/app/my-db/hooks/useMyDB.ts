@@ -4,6 +4,23 @@ import { apiFetch } from '@/lib/api';
 import React from "react";
 import { ColumnSchema, ConsoleResult, TuneMessage, FriendlyMapping } from "../types";
 import { getTableDisplayName, getColumnFriendlyName, isSensitiveColumn } from "../utils";
+import { getTenantStorageKey } from "@/lib/tenant-client";
+
+// 🔒 테넌트 격리 localStorage 유틸리티
+function getTenantLocalItem(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(getTenantStorageKey(key));
+}
+
+function setTenantLocalItem(key: string, value: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(getTenantStorageKey(key), value);
+}
+
+function removeTenantLocalItem(key: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(getTenantStorageKey(key));
+}
 
 export function useMyDB() {
   // 🖥️ 새 탭 독립 작업 모드(Standalone) 감지 상태 변수
@@ -119,37 +136,29 @@ export function useMyDB() {
   // 💾 챗봇 상태 실시간 localStorage 보존 (복원이 완전히 마친 시점 이후부터 안전 작동)
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("egdesk_mydb_tuneHistory", JSON.stringify(tuneHistory));
-    }
+    setTenantLocalItem("egdesk_mydb_tuneHistory", JSON.stringify(tuneHistory));
   }, [tuneHistory, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("egdesk_mydb_selectedChartPart", selectedChartPart);
-    }
+    setTenantLocalItem("egdesk_mydb_selectedChartPart", selectedChartPart);
   }, [selectedChartPart, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      if (previousSnapshot) {
-        localStorage.setItem("egdesk_mydb_previousSnapshot", JSON.stringify(previousSnapshot));
-      } else {
-        localStorage.removeItem("egdesk_mydb_previousSnapshot");
-      }
+    if (previousSnapshot) {
+      setTenantLocalItem("egdesk_mydb_previousSnapshot", JSON.stringify(previousSnapshot));
+    } else {
+      removeTenantLocalItem("egdesk_mydb_previousSnapshot");
     }
   }, [previousSnapshot, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      if (initialSnapshot) {
-        localStorage.setItem("egdesk_mydb_initialSnapshot", JSON.stringify(initialSnapshot));
-      } else {
-        localStorage.removeItem("egdesk_mydb_initialSnapshot");
-      }
+    if (initialSnapshot) {
+      setTenantLocalItem("egdesk_mydb_initialSnapshot", JSON.stringify(initialSnapshot));
+    } else {
+      removeTenantLocalItem("egdesk_mydb_initialSnapshot");
     }
   }, [initialSnapshot, isRestored]);
 
@@ -380,18 +389,16 @@ export function useMyDB() {
         setAiBriefing(initialSnapshot.briefing);
       }
 
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("egdesk_mydb_tuneHistory");
-        localStorage.removeItem("egdesk_mydb_selectedChartPart");
-        localStorage.removeItem("egdesk_mydb_previousSnapshot");
-        
-        if (initialSnapshot) {
-          localStorage.setItem("egdesk_mydb_aiChartSpec", JSON.stringify(initialSnapshot.chartSpec));
-          if (initialSnapshot.briefing) {
-            localStorage.setItem("egdesk_mydb_aiBriefing", initialSnapshot.briefing);
-          } else {
-            localStorage.removeItem("egdesk_mydb_aiBriefing");
-          }
+      removeTenantLocalItem("egdesk_mydb_tuneHistory");
+      removeTenantLocalItem("egdesk_mydb_selectedChartPart");
+      removeTenantLocalItem("egdesk_mydb_previousSnapshot");
+      
+      if (initialSnapshot) {
+        setTenantLocalItem("egdesk_mydb_aiChartSpec", JSON.stringify(initialSnapshot.chartSpec));
+        if (initialSnapshot.briefing) {
+          setTenantLocalItem("egdesk_mydb_aiBriefing", initialSnapshot.briefing);
+        } else {
+          removeTenantLocalItem("egdesk_mydb_aiBriefing");
         }
       }
       showToast("✓ 대화 내용 및 차트 상태가 최초 추천 원본 상태로 조화롭게 리셋되었습니다.", "success");
@@ -421,23 +428,21 @@ export function useMyDB() {
       setSearchValue("");
       setActiveTab('data');
 
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("egdesk_mydb_sqlQuery");
-        localStorage.removeItem("egdesk_mydb_consoleResult");
-        localStorage.removeItem("egdesk_mydb_safetyUnlocked");
-        localStorage.removeItem("egdesk_mydb_consoleTab");
-        localStorage.removeItem("egdesk_mydb_aiPrompt");
-        localStorage.removeItem("egdesk_mydb_aiGeneratedSql");
-        localStorage.removeItem("egdesk_mydb_aiChartSpec");
-        localStorage.removeItem("egdesk_mydb_aiBriefing");
-        localStorage.removeItem("egdesk_mydb_tuneHistory");
-        localStorage.removeItem("egdesk_mydb_selectedChartPart");
-        localStorage.removeItem("egdesk_mydb_previousSnapshot");
-        localStorage.removeItem("egdesk_mydb_initialSnapshot");
-        localStorage.removeItem("egdesk_mydb_activeTab");
-        localStorage.removeItem("egdesk_mydb_searchKey");
-        localStorage.removeItem("egdesk_mydb_searchValue");
-      }
+      removeTenantLocalItem("egdesk_mydb_sqlQuery");
+      removeTenantLocalItem("egdesk_mydb_consoleResult");
+      removeTenantLocalItem("egdesk_mydb_safetyUnlocked");
+      removeTenantLocalItem("egdesk_mydb_consoleTab");
+      removeTenantLocalItem("egdesk_mydb_aiPrompt");
+      removeTenantLocalItem("egdesk_mydb_aiGeneratedSql");
+      removeTenantLocalItem("egdesk_mydb_aiChartSpec");
+      removeTenantLocalItem("egdesk_mydb_aiBriefing");
+      removeTenantLocalItem("egdesk_mydb_tuneHistory");
+      removeTenantLocalItem("egdesk_mydb_selectedChartPart");
+      removeTenantLocalItem("egdesk_mydb_previousSnapshot");
+      removeTenantLocalItem("egdesk_mydb_initialSnapshot");
+      removeTenantLocalItem("egdesk_mydb_activeTab");
+      removeTenantLocalItem("egdesk_mydb_searchKey");
+      removeTenantLocalItem("egdesk_mydb_searchValue");
 
       showToast("✓ 대화형 SQL 플레이그라운드, 실행 결과, AI 시각화 등 모든 데이터가 완벽히 초기화되었습니다.", "success");
     }
@@ -451,18 +456,16 @@ export function useMyDB() {
       setAiBriefing(previousSnapshot.briefing);
       setTuneHistory(previousSnapshot.tuneHistory);
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem("egdesk_mydb_tuneHistory", JSON.stringify(previousSnapshot.tuneHistory));
-        if (previousSnapshot.chartSpec) {
-          localStorage.setItem("egdesk_mydb_aiChartSpec", JSON.stringify(previousSnapshot.chartSpec));
-        } else {
-          localStorage.removeItem("egdesk_mydb_aiChartSpec");
-        }
-        if (previousSnapshot.briefing) {
-          localStorage.setItem("egdesk_mydb_aiBriefing", previousSnapshot.briefing);
-        } else {
-          localStorage.removeItem("egdesk_mydb_aiBriefing");
-        }
+      setTenantLocalItem("egdesk_mydb_tuneHistory", JSON.stringify(previousSnapshot.tuneHistory));
+      if (previousSnapshot.chartSpec) {
+        setTenantLocalItem("egdesk_mydb_aiChartSpec", JSON.stringify(previousSnapshot.chartSpec));
+      } else {
+        removeTenantLocalItem("egdesk_mydb_aiChartSpec");
+      }
+      if (previousSnapshot.briefing) {
+        setTenantLocalItem("egdesk_mydb_aiBriefing", previousSnapshot.briefing);
+      } else {
+        removeTenantLocalItem("egdesk_mydb_aiBriefing");
       }
 
       setPreviousSnapshot(null);
@@ -484,17 +487,15 @@ export function useMyDB() {
       setAttachedImage("");
       setPreviousSnapshot(null);
       
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("egdesk_mydb_tuneHistory");
-        localStorage.removeItem("egdesk_mydb_selectedChartPart");
-        localStorage.removeItem("egdesk_mydb_previousSnapshot");
-        
-        localStorage.setItem("egdesk_mydb_aiChartSpec", JSON.stringify(initialSnapshot.chartSpec));
-        if (initialSnapshot.briefing) {
-          localStorage.setItem("egdesk_mydb_aiBriefing", initialSnapshot.briefing);
-        } else {
-          localStorage.removeItem("egdesk_mydb_aiBriefing");
-        }
+      removeTenantLocalItem("egdesk_mydb_tuneHistory");
+      removeTenantLocalItem("egdesk_mydb_selectedChartPart");
+      removeTenantLocalItem("egdesk_mydb_previousSnapshot");
+      
+      setTenantLocalItem("egdesk_mydb_aiChartSpec", JSON.stringify(initialSnapshot.chartSpec));
+      if (initialSnapshot.briefing) {
+        setTenantLocalItem("egdesk_mydb_aiBriefing", initialSnapshot.briefing);
+      } else {
+        removeTenantLocalItem("egdesk_mydb_aiBriefing");
       }
       
       showToast("✓ 최초 생성되었던 오리지널 시각화 차트 상태로 완벽히 되돌아갔습니다!", "success");
@@ -665,7 +666,7 @@ export function useMyDB() {
       const data = await res.json();
       if (data.success) {
         setTables(data.tables || []);
-        const savedTable = typeof window !== "undefined" ? localStorage.getItem("egdesk_mydb_selectedTable") : null;
+        const savedTable = getTenantLocalItem("egdesk_mydb_selectedTable");
         if (data.tables && data.tables.length > 0 && !selectedTable && !savedTable) {
           setSelectedTable(data.tables[0].name);
         }
@@ -731,165 +732,143 @@ export function useMyDB() {
 
   // 🔄 로컬스토리지로부터 이전 작업중이던 내용 상태 복원
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedTable = localStorage.getItem("egdesk_mydb_selectedTable");
-      const savedTab = localStorage.getItem("egdesk_mydb_activeTab");
-      const savedSqlQuery = localStorage.getItem("egdesk_mydb_sqlQuery");
-      const savedConsoleTab = localStorage.getItem("egdesk_mydb_consoleTab");
-      const savedAiPrompt = localStorage.getItem("egdesk_mydb_aiPrompt");
-      const savedSafety = localStorage.getItem("egdesk_mydb_safetyUnlocked");
-      const savedSearchKey = localStorage.getItem("egdesk_mydb_searchKey");
-      const savedSearchVal = localStorage.getItem("egdesk_mydb_searchValue");
+    const savedTable = getTenantLocalItem("egdesk_mydb_selectedTable");
+    const savedTab = getTenantLocalItem("egdesk_mydb_activeTab");
+    const savedSqlQuery = getTenantLocalItem("egdesk_mydb_sqlQuery");
+    const savedConsoleTab = getTenantLocalItem("egdesk_mydb_consoleTab");
+    const savedAiPrompt = getTenantLocalItem("egdesk_mydb_aiPrompt");
+    const savedSafety = getTenantLocalItem("egdesk_mydb_safetyUnlocked");
+    const savedSearchKey = getTenantLocalItem("egdesk_mydb_searchKey");
+    const savedSearchVal = getTenantLocalItem("egdesk_mydb_searchValue");
 
-      const savedConsoleResult = localStorage.getItem("egdesk_mydb_consoleResult");
-      const savedAiChartSpec = localStorage.getItem("egdesk_mydb_aiChartSpec");
-      const savedAiBriefing = localStorage.getItem("egdesk_mydb_aiBriefing");
-      const savedAiGeneratedSql = localStorage.getItem("egdesk_mydb_aiGeneratedSql");
+    const savedConsoleResult = getTenantLocalItem("egdesk_mydb_consoleResult");
+    const savedAiChartSpec = getTenantLocalItem("egdesk_mydb_aiChartSpec");
+    const savedAiBriefing = getTenantLocalItem("egdesk_mydb_aiBriefing");
+    const savedAiGeneratedSql = getTenantLocalItem("egdesk_mydb_aiGeneratedSql");
 
-      if (savedTable) setSelectedTable(savedTable);
-      if (savedTab) setActiveTab(savedTab as any);
-      if (savedSqlQuery) setSqlQuery(savedSqlQuery);
-      if (savedConsoleTab) setConsoleTab(savedConsoleTab as any);
-      if (savedAiPrompt) setAiPrompt(savedAiPrompt);
-      if (savedSafety) setSafetyUnlocked(savedSafety === "true");
-      if (savedSearchKey) setSearchKey(savedSearchKey);
-      if (savedSearchVal) setSearchValue(savedSearchVal);
+    if (savedTable) setSelectedTable(savedTable);
+    if (savedTab) setActiveTab(savedTab as any);
+    if (savedSqlQuery) setSqlQuery(savedSqlQuery);
+    if (savedConsoleTab) setConsoleTab(savedConsoleTab as any);
+    if (savedAiPrompt) setAiPrompt(savedAiPrompt);
+    if (savedSafety) setSafetyUnlocked(savedSafety === "true");
+    if (savedSearchKey) setSearchKey(savedSearchKey);
+    if (savedSearchVal) setSearchValue(savedSearchVal);
 
-      if (savedConsoleResult) {
-        try {
-          setConsoleResult(JSON.parse(savedConsoleResult));
-        } catch (e) {
-          console.error("consoleResult 복원 실패:", e);
-        }
+    if (savedConsoleResult) {
+      try {
+        setConsoleResult(JSON.parse(savedConsoleResult));
+      } catch (e) {
+        console.error("consoleResult 복원 실패:", e);
       }
-      if (savedAiChartSpec) {
-        try {
-          setAiChartSpec(JSON.parse(savedAiChartSpec));
-        } catch (e) {
-          console.error("aiChartSpec 복원 실패:", e);
-        }
-      }
-      if (savedAiBriefing) setAiBriefing(savedAiBriefing);
-      if (savedAiGeneratedSql) setAiGeneratedSql(savedAiGeneratedSql);
-
-      const savedHistory = localStorage.getItem("egdesk_mydb_tuneHistory");
-      const savedPart = localStorage.getItem("egdesk_mydb_selectedChartPart");
-      const savedSnapshot = localStorage.getItem("egdesk_mydb_previousSnapshot");
-      
-      if (savedHistory) {
-        try {
-          setTuneHistory(JSON.parse(savedHistory));
-        } catch (e) {
-          console.error("⚠️ 챗 로그 복원 실패", e);
-        }
-      }
-      if (savedPart) {
-        setSelectedChartPart(savedPart);
-      }
-      if (savedSnapshot) {
-        try {
-          setPreviousSnapshot(JSON.parse(savedSnapshot));
-        } catch (e) {
-          console.error("⚠️ 스냅샷 복원 실패", e);
-        }
-      }
-      
-      setIsRestored(true);
     }
+    if (savedAiChartSpec) {
+      try {
+        setAiChartSpec(JSON.parse(savedAiChartSpec));
+      } catch (e) {
+        console.error("aiChartSpec 복원 실패:", e);
+      }
+    }
+    if (savedAiBriefing) setAiBriefing(savedAiBriefing);
+    if (savedAiGeneratedSql) setAiGeneratedSql(savedAiGeneratedSql);
+
+    const savedHistory = getTenantLocalItem("egdesk_mydb_tuneHistory");
+    const savedPart = getTenantLocalItem("egdesk_mydb_selectedChartPart");
+    const savedSnapshot = getTenantLocalItem("egdesk_mydb_previousSnapshot");
+    
+    if (savedHistory) {
+      try {
+        setTuneHistory(JSON.parse(savedHistory));
+      } catch (e) {
+        console.error("⚠️ 챗 로그 복원 실패", e);
+      }
+    }
+    if (savedPart) {
+      setSelectedChartPart(savedPart);
+    }
+    if (savedSnapshot) {
+      try {
+        setPreviousSnapshot(JSON.parse(savedSnapshot));
+      } catch (e) {
+        console.error("⚠️ 스냅샷 복원 실패", e);
+      }
+    }
+    
+    setIsRestored(true);
   }, []);
 
   // 💾 상태 실시간 로컬스토리지 보존
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("egdesk_mydb_selectedTable", selectedTable);
+    if (selectedTable) {
+      setTenantLocalItem("egdesk_mydb_selectedTable", selectedTable);
     }
   }, [selectedTable, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("egdesk_mydb_activeTab", activeTab);
-    }
+    setTenantLocalItem("egdesk_mydb_activeTab", activeTab);
   }, [activeTab, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("egdesk_mydb_sqlQuery", sqlQuery);
-    }
+    setTenantLocalItem("egdesk_mydb_sqlQuery", sqlQuery);
   }, [sqlQuery, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("egdesk_mydb_consoleTab", consoleTab);
-    }
+    setTenantLocalItem("egdesk_mydb_consoleTab", consoleTab);
   }, [consoleTab, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("egdesk_mydb_aiPrompt", aiPrompt);
-    }
+    setTenantLocalItem("egdesk_mydb_aiPrompt", aiPrompt);
   }, [aiPrompt, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("egdesk_mydb_safetyUnlocked", String(safetyUnlocked));
-    }
+    setTenantLocalItem("egdesk_mydb_safetyUnlocked", String(safetyUnlocked));
   }, [safetyUnlocked, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("egdesk_mydb_searchKey", searchKey);
-      localStorage.setItem("egdesk_mydb_searchValue", searchValue);
-    }
+    setTenantLocalItem("egdesk_mydb_searchKey", searchKey);
+    setTenantLocalItem("egdesk_mydb_searchValue", searchValue);
   }, [searchKey, searchValue, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      if (consoleResult) {
-        localStorage.setItem("egdesk_mydb_consoleResult", JSON.stringify(consoleResult));
-      } else {
-        localStorage.removeItem("egdesk_mydb_consoleResult");
-      }
+    if (consoleResult) {
+      setTenantLocalItem("egdesk_mydb_consoleResult", JSON.stringify(consoleResult));
+    } else {
+      removeTenantLocalItem("egdesk_mydb_consoleResult");
     }
   }, [consoleResult, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      if (aiChartSpec) {
-        localStorage.setItem("egdesk_mydb_aiChartSpec", JSON.stringify(aiChartSpec));
-      } else {
-        localStorage.removeItem("egdesk_mydb_aiChartSpec");
-      }
+    if (aiChartSpec) {
+      setTenantLocalItem("egdesk_mydb_aiChartSpec", JSON.stringify(aiChartSpec));
+    } else {
+      removeTenantLocalItem("egdesk_mydb_aiChartSpec");
     }
   }, [aiChartSpec, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      if (aiBriefing) {
-        localStorage.setItem("egdesk_mydb_aiBriefing", aiBriefing);
-      } else {
-        localStorage.removeItem("egdesk_mydb_aiBriefing");
-      }
+    if (aiBriefing) {
+      setTenantLocalItem("egdesk_mydb_aiBriefing", aiBriefing);
+    } else {
+      removeTenantLocalItem("egdesk_mydb_aiBriefing");
     }
   }, [aiBriefing, isRestored]);
 
   React.useEffect(() => {
     if (!isRestored) return;
-    if (typeof window !== "undefined") {
-      if (aiGeneratedSql) {
-        localStorage.setItem("egdesk_mydb_aiGeneratedSql", aiGeneratedSql);
-      } else {
-        localStorage.removeItem("egdesk_mydb_aiGeneratedSql");
-      }
+    if (aiGeneratedSql) {
+      setTenantLocalItem("egdesk_mydb_aiGeneratedSql", aiGeneratedSql);
+    } else {
+      removeTenantLocalItem("egdesk_mydb_aiGeneratedSql");
     }
   }, [aiGeneratedSql, isRestored]);
 
@@ -902,8 +881,8 @@ export function useMyDB() {
       }
       setShowDeleted(false);
       
-      const savedSearchKey = isRestored ? "" : (localStorage.getItem("egdesk_mydb_searchKey") || "");
-      const savedSearchVal = isRestored ? "" : (localStorage.getItem("egdesk_mydb_searchValue") || "");
+      const savedSearchKey = isRestored ? "" : (getTenantLocalItem("egdesk_mydb_searchKey") || "");
+      const savedSearchVal = isRestored ? "" : (getTenantLocalItem("egdesk_mydb_searchValue") || "");
       
       fetchTableSchema(selectedTable);
       fetchTableRows(selectedTable, 1, savedSearchKey, savedSearchVal, false);

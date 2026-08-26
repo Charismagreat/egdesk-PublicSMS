@@ -807,6 +807,7 @@ export async function GET(request: NextRequest) {
               비고,
               memo
             FROM tax_invoices
+            WHERE tenant_id = '${tenantId}' AND deleted_at IS NULL
             UNION ALL
             SELECT 
               'exempt' AS source_table, 
@@ -824,6 +825,7 @@ export async function GET(request: NextRequest) {
               비고,
               memo
             FROM tax_exempt_invoices
+            WHERE tenant_id = '${tenantId}' AND deleted_at IS NULL
           ),
           matched_pairs AS (
             SELECT 
@@ -843,19 +845,21 @@ export async function GET(request: NextRequest) {
               ) as rn
             FROM combined_invoices i
             LEFT JOIN bank_transactions bt ON (
-              -- 금액 조건
-              (i.invoice_type = 'sales' AND bt.deposit = i.합계금액) OR
-              (i.invoice_type = 'purchase' AND bt.withdrawal = i.합계금액)
-            ) AND (
-              -- Fuzzy 상호명 조건
-              (i.invoice_type = 'sales' AND (
-                 bt.counterparty_name LIKE '%' || REPLACE(REPLACE(REPLACE(REPLACE(i.공급받는자상호, '(주)', ''), '주식회사', ''), '(합자)', ''), '(유한)', '') || '%' OR
-                 bt.description LIKE '%' || REPLACE(REPLACE(REPLACE(REPLACE(i.공급받는자상호, '(주)', ''), '주식회사', ''), '(합자)', ''), '(유한)', '') || '%'
-              )) OR
-              (i.invoice_type = 'purchase' AND (
-                 bt.counterparty_name LIKE '%' || REPLACE(REPLACE(REPLACE(REPLACE(i.공급자상호, '(주)', ''), '주식회사', ''), '(합자)', ''), '(유한)', '') || '%' OR
-                 bt.description LIKE '%' || REPLACE(REPLACE(REPLACE(REPLACE(i.공급자상호, '(주)', ''), '주식회사', ''), '(합자)', ''), '(유한)', '') || '%'
-              ))
+              bt.tenant_id = '${tenantId}' AND bt.deleted_at IS NULL AND (
+                -- 금액 조건
+                (i.invoice_type = 'sales' AND bt.deposit = i.합계금액) OR
+                (i.invoice_type = 'purchase' AND bt.withdrawal = i.합계금액)
+              ) AND (
+                -- Fuzzy 상호명 조건
+                (i.invoice_type = 'sales' AND (
+                   bt.counterparty_name LIKE '%' || REPLACE(REPLACE(REPLACE(REPLACE(i.공급받는자상호, '(주)', ''), '주식회사', ''), '(합자)', ''), '(유한)', '') || '%' OR
+                   bt.description LIKE '%' || REPLACE(REPLACE(REPLACE(REPLACE(i.공급받는자상호, '(주)', ''), '주식회사', ''), '(합자)', ''), '(유한)', '') || '%'
+                )) OR
+                (i.invoice_type = 'purchase' AND (
+                   bt.counterparty_name LIKE '%' || REPLACE(REPLACE(REPLACE(REPLACE(i.공급자상호, '(주)', ''), '주식회사', ''), '(합자)', ''), '(유한)', '') || '%' OR
+                   bt.description LIKE '%' || REPLACE(REPLACE(REPLACE(REPLACE(i.공급자상호, '(주)', ''), '주식회사', ''), '(합자)', ''), '(유한)', '') || '%'
+                ))
+              )
             )
             -- 작성일자와 거래일자 차이가 90일 이내인 거래만 매칭
             WHERE bt.id IS NULL OR ABS(julianday(REPLACE(bt.transaction_date, '.', '-')) - julianday(REPLACE(i.작성일자, '.', '-'))) <= 90

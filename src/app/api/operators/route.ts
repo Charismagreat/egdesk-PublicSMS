@@ -28,17 +28,15 @@ export async function GET(req: Request) {
     }
 
     const result = await queryTable('crm_operators');
-    // 소프트 삭제(deleted_at)되지 않은 활성 임직원만 필터링 (admin 계정은 SYSTEM_ADMIN 역할 보정)
-    const activeOps = (result.rows || [])
-      .filter((op: any) => !op.deleted_at)
-      .map((op: any) => {
-        if (op.username === 'admin') {
-          return { ...op, role: 'SYSTEM_ADMIN' };
-        }
-        return op;
-      });
+    // 전체 임직원 목록 (admin 계정은 SYSTEM_ADMIN 역할 보정, deleted_at 포함)
+    const allOps = (result.rows || []).map((op: any) => {
+      if (op.username === 'admin') {
+        return { ...op, role: 'SYSTEM_ADMIN' };
+      }
+      return op;
+    });
 
-    return NextResponse.json({ success: true, operators: activeOps });
+    return NextResponse.json({ success: true, operators: allOps });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -51,7 +49,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
-    const { username, password, name, newRole, employee_number, phone } = await req.json();
+    const { username, password, name, newRole, employee_number, phone, tenant_id } = await req.json();
 
     if (!username || !password || !name) {
       return NextResponse.json({ success: false, error: '모든 필드를 입력해주세요.' }, { status: 400 });
@@ -81,6 +79,13 @@ export async function POST(req: Request) {
     const dateStr = new Date().toISOString();
     const newOpId = Date.now();
 
+    // 테넌트 식별자 결정 (대표 역할인데 미입력 시 고유 테넌트 ID 자동 발급)
+    const isOwnerRole = ['SUPER_ADMIN', 'TENANT_ADMIN', 'PRESIDENT'].includes(String(newRole || '').toUpperCase());
+    let finalTenantId = (tenant_id || '').trim();
+    if (isOwnerRole && !finalTenantId) {
+      finalTenantId = 'tenant-' + Math.random().toString(36).substring(2, 10);
+    }
+
     // 1. 임직원 마스터 등록
     await insertRows('crm_operators', [{
       id: newOpId,
@@ -90,6 +95,7 @@ export async function POST(req: Request) {
       role: newRole || 'SUB_OPERATOR',
       employee_number: finalEmpNumber,
       phone: (phone || '').trim(),
+      tenant_id: finalTenantId || null,
       created_at: dateStr
     }]);
 
@@ -146,7 +152,7 @@ export async function DELETE(req: Request) {
     const dateStr = new Date().toISOString();
     await updateRows('crm_operators', {
       deleted_at: dateStr,
-      deleted_by: 'SUPER_ADMIN'
+      deleted_by: auth.username || 'SUPER_ADMIN'
     }, { filters: { id } });
 
     return NextResponse.json({ success: true });
@@ -162,9 +168,56 @@ export async function PUT(req: Request) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 });
     }
 
-    const { id, password, name, newRole, employee_number, phone } = await req.json();
+    const body = await req.json();
+    const { id, action, password, name, newRole, employee_number, phone, tenant_id } = body;
 
-    if (!id || !name) {
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'ID가 누락되었습니다.' }, { status: 400 });
+    }
+
+    // [복원(RESTORE) 액션 처리]
+    if (action === 'RESTORE') {
+      const targetRes = await queryTable('crm_operators', { filters: { id } });
+      if (!targetRes.rows || targetRes.rows.length === 0) {
+        return NextResponse.json({ success: false, error: '존재하지 않는 계정입니다.' }, { status: 404 });
+      }
+      const targetOp = targetRes.rows[0];
+
+      // 직원의 경우 소속 테넌트의 대표(사장님)가 활성 상태인지 사전 검증
+      const isOwner = ['SUPER_ADMIN', 'SYSTEM_ADMIN', 'TENANT_ADMIN', 'PRESIDENT', 'GUEST', 'ADMIN'].includes(String(targetOp.role || '').toUpperCase()) || targetOp.username === 'admin' || targetOp.username === 'guest';
+      
+      if (!isOwner && targetOp.tenant_id && targetOp.tenant_id.trim() !== '') {
+        const allOpsRes = await queryTable('crm_operators');
+        const allOps = allOpsRes.rows || [];
+        const owners = allOps.filter((o: any) => {
+          const r = String(o.role || '').toUpperCase();
+          const u = String(o.username || '').toLowerCase();
+          const oIsOwner = (['SUPER_ADMIN', 'TENANT_ADMIN', 'PRESIDENT', 'GUEST'].includes(r) || u === 'guest') && r !== 'SYSTEM_ADMIN' && u !== 'admin';
+          return oIsOwner && o.tenant_id === targetOp.tenant_id;
+        });
+
+        const activeOwner = owners.find((o: any) => !o.deleted_at);
+        if (!activeOwner) {
+          const deletedOwner = owners.find((o: any) => Boolean(o.deleted_at));
+          const ownerDesc = deletedOwner ? `${deletedOwner.name} 사장님 (${deletedOwner.username})` : '대표 사장님';
+          return NextResponse.json({ 
+            success: false, 
+            error: `소속 테넌트의 대표(${ownerDesc}) 계정이 현재 정지 상태입니다. 대표 계정부터 먼저 복원해 주세요.` 
+          }, { status: 400 });
+        }
+      }
+
+      const dateStr = new Date().toISOString();
+      await updateRows('crm_operators', {
+        deleted_at: null,
+        deleted_by: null,
+        restored_at: dateStr,
+        restored_by: auth.username || 'SUPER_ADMIN'
+      }, { filters: { id } });
+      return NextResponse.json({ success: true, message: '성공적으로 복원되었습니다.' });
+    }
+
+    if (!name) {
       return NextResponse.json({ success: false, error: '필수 항목(id, 이름)이 누락되었습니다.' }, { status: 400 });
     }
 
@@ -200,7 +253,8 @@ export async function PUT(req: Request) {
       name,
       role: newRole || currentOp.role,
       employee_number: finalEmpNumber,
-      phone: phone !== undefined ? (phone || '').trim() : currentOp.phone
+      phone: phone !== undefined ? (phone || '').trim() : currentOp.phone,
+      tenant_id: tenant_id !== undefined ? (tenant_id ? tenant_id.trim() : null) : currentOp.tenant_id
     };
 
     // 비밀번호 변경 시 해싱

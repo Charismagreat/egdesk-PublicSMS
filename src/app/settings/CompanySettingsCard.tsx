@@ -92,48 +92,54 @@ export default function CompanySettingsCard() {
             const parsed = JSON.parse(data.value);
             console.log('CompanySettingsCard: Parsed profile:', parsed);
             setProfile({
-              companyName: parsed.companyName || '(주)쿠스',
-              representative: parsed.representative || '차민수',
-              businessNumber: parsed.businessNumber || '731-81-02023',
-              address: parsed.address || '경기도 시흥시 서울대학로 59-69',
-              phone: parsed.phone || '010-7216-5884',
-              email: parsed.email || 'chachogreat@gmail.com',
-              homepage: (parsed.homepage !== undefined && parsed.homepage !== null) ? parsed.homepage : 'https://egdesk.cloud',
+              companyName: parsed.companyName || '',
+              representative: parsed.representative || '',
+              businessNumber: parsed.businessNumber || '',
+              address: parsed.address || '',
+              phone: parsed.phone || '',
+              email: parsed.email || '',
+              homepage: (parsed.homepage !== undefined && parsed.homepage !== null) ? parsed.homepage : '',
               sidebarMainTitle: parsed.sidebarMainTitle || 'EGDESK SMS',
               sidebarSubTitle: parsed.sidebarSubTitle || '우리 회사 스마트 AI 시스템',
               sealImages: parsed.sealImages || [],
-              bankName: parsed.bankName || '국민은행',
-              accountNumber: parsed.accountNumber || '123456-12-123456',
-              accountHolder: parsed.accountHolder || '주식회사 이지데스크',
+              bankName: parsed.bankName || '',
+              accountNumber: parsed.accountNumber || '',
+              accountHolder: parsed.accountHolder || '',
             });
           } catch (e) {
             console.error('회사 프로필 JSON 파싱 에러:', e);
           }
         } else if (data.success && !data.value) {
-          // DB가 비어있는 경우 디폴트 본사 정보를 자동으로 DB 세팅 연동 적재
+          // DB에 회사 정보가 아직 없는 신규 테넌트의 경우 로그인 사용자 정보로 깔끔한 초기 템플릿 세팅
+          let currentUserName = '';
+          let currentUserPhone = '';
+          try {
+            const meRes = await apiFetch('/api/auth/me');
+            const meData = await meRes.json();
+            if (meData.success) {
+              currentUserName = meData.name || '';
+              currentUserPhone = meData.phone || '';
+            }
+          } catch (e) {
+            // ignore
+          }
+
           const defaultVal = {
-            companyName: '(주)쿠스',
-            representative: '차민수',
-            businessNumber: '731-81-02023',
-            address: '경기도 시흥시 서울대학로 59-69',
-            phone: '010-7216-5884',
-            email: 'chachogreat@gmail.com',
-            homepage: 'https://egdesk.cloud',
+            companyName: '',
+            representative: currentUserName,
+            businessNumber: '',
+            address: '',
+            phone: currentUserPhone,
+            email: '',
+            homepage: '',
             sidebarMainTitle: 'EGDESK SMS',
             sidebarSubTitle: '우리 회사 스마트 AI 시스템',
             sealImages: [],
-            bankName: '국민은행',
-            accountNumber: '123456-12-123456',
-            accountHolder: '주식회사 이지데스크',
+            bankName: '',
+            accountNumber: '',
+            accountHolder: '',
           };
           setProfile(defaultVal);
-          
-          // 백그라운드 백엔드 캐시/DB 동기화
-          apiFetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: 'my_company_profile', value: JSON.stringify(defaultVal) })
-          }).catch(err => console.error('디폴트 회사 프로필 자동 적재 실패:', err));
         }
       } catch (err) {
         console.error('회사 정보 로드 실패:', err);

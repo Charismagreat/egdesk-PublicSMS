@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, Dispatch, SetStateAction } from "react";
+import { getTenantStorageKey } from "@/lib/tenant-client";
 
 /**
  * SSR 하이드레이션 오류를 우회하여 브라우저 sessionStorage에 상태를 동기화하고 복구해주는 커스텀 훅입니다.
+ * 테넌트 격리(Multi-Tenancy)를 위해 테넌트별 고유 Prefix를 자동 주입합니다.
  * 
  * @param key sessionStorage에 저장할 유니크 키 이름
  * @param initialValue 복구된 값이 없을 때 사용할 초기 기본값
@@ -19,12 +21,13 @@ export function usePersistedState<T>(
   // 1. 컴포넌트 마운트 완료 시 브라우저 sessionStorage에서 기존 값 복구
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const saved = sessionStorage.getItem(key);
+      const storageKey = getTenantStorageKey(key);
+      const saved = sessionStorage.getItem(storageKey);
       if (saved !== null && saved !== "undefined") {
         try {
           setState(JSON.parse(saved));
         } catch (e) {
-          console.error(`Error parsing sessionStorage key "${key}":`, e);
+          console.error(`Error parsing sessionStorage key "${storageKey}":`, e);
         }
       }
     }
@@ -36,17 +39,19 @@ export function usePersistedState<T>(
     if (!isRestored) return;
 
     if (typeof window !== "undefined") {
+      const storageKey = getTenantStorageKey(key);
       try {
         if (state === undefined) {
-          sessionStorage.removeItem(key);
+          sessionStorage.removeItem(storageKey);
         } else {
-          sessionStorage.setItem(key, JSON.stringify(state));
+          sessionStorage.setItem(storageKey, JSON.stringify(state));
         }
       } catch (e) {
-        console.error(`Error writing sessionStorage key "${key}":`, e);
+        console.error(`Error writing sessionStorage key "${storageKey}":`, e);
       }
     }
   }, [key, state, isRestored]);
 
   return [state, setState, isRestored];
 }
+

@@ -45,8 +45,8 @@ export default async function Sidebar() {
     const cKey = `${tenantId}:my_company_profile`;
     let settingsRes = await queryTable('system_settings', { filters: { key: cKey } });
     
-    // 테넌트 복합 키 매칭 데이터가 없으면 단순 키로 하위 호환 폴백 조회
-    if (!settingsRes.rows || settingsRes.rows.length === 0) {
+    // 'default' 테넌트인 경우에만 단순 키로 하위 호환 폴백 조회
+    if ((!settingsRes.rows || settingsRes.rows.length === 0) && tenantId === 'default') {
       settingsRes = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
     }
 

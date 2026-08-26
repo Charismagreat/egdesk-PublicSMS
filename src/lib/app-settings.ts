@@ -36,9 +36,11 @@ export async function getAppSetting(key: string, tenantId?: string | null): Prom
       if (rows.length > 0 && rows[0].value) {
         return String(rows[0].value);
       }
+      // 격리 테넌트는 타 테넌트 레거시 데이터로의 폴백을 차단
+      return null;
     }
 
-    // 2차 폴백: 레거시 단순 키로 조회 (하위 호환)
+    // 2차 폴백: 'default' 테넌트이거나 tenantId가 없을 때만 레거시 단순 키로 조회 (하위 호환)
     const legacyResult = await queryTable('system_settings', { filters: { key }, limit: 1 });
     const legacyRows = (legacyResult?.rows || []).filter(
       (r: any) => !r.tenant_id || r.tenant_id === '' || r.tenant_id === 'default'
