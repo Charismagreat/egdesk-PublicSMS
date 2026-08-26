@@ -392,7 +392,7 @@ export async function GET(request: Request) {
             status: isLogResolved ? 'RESOLVED' : (matchedCancelLog?.status === 'RESOLVED' ? 'RESOLVED' : 'WAITING'),
             created_at: log.created_at || nowStr,
             due_date: extendedLog.due_date || null,
-            resolved_at: log.updated_at || log.resolved_at || log.created_at || nowStr,
+            resolved_at: log.resolved_at || (isLogResolved ? log.updated_at : null) || log.created_at || nowStr,
             data: extendedLog
           });
         });
@@ -1813,7 +1813,10 @@ export async function POST(request: Request) {
               const logRawId = eventId.replace('event_rag_hold_', '').replace('rag_hold_', '');
               await updateRows('crm_governance_logs', {
                 status: 'RESOLVED',
-                reason: `최고관리자(${adminUser})에 의해 현장 발주서 분석 및 수주 등록(ID: ${orderId}) 자율 조치 처리 완료.`
+                reason: `최고관리자(${adminUser})에 의해 현장 발주서 분석 및 수주 등록(ID: ${orderId}) 자율 조치 처리 완료.`,
+                updated_at: nowStr,
+                updated_by: adminUser,
+                resolved_at: nowStr
               }, { filters: { id: logRawId } });
             }
 
@@ -1870,7 +1873,10 @@ export async function POST(request: Request) {
                 const logRawId = eventId.replace('event_rag_hold_', '').replace('rag_hold_', '');
                 await updateRows('crm_governance_logs', {
                   status: 'FORCE_APPROVED',
-                  reason: `최고관리자(${adminUser})에 의해 자율 대행 조치로 강제 삭제 처리 승인됨.`
+                  reason: `최고관리자(${adminUser})에 의해 자율 대행 조치로 강제 삭제 처리 승인됨.`,
+                  updated_at: nowStr,
+                  updated_by: adminUser,
+                  resolved_at: nowStr
                 }, { filters: { id: logRawId } });
               }
 
@@ -2009,7 +2015,10 @@ export async function POST(request: Request) {
               const logRawId = eventId.replace('event_cancel_req_', '').replace('cancel_req_', '');
               await updateRows('crm_governance_logs', {
                 status: 'APPROVED',
-                reason: `최고관리자(${adminUser})에 의해 업무 취소 최종 승인 및 소프트 삭제 완료.`
+                reason: `최고관리자(${adminUser})에 의해 업무 취소 최종 승인 및 소프트 삭제 완료.`,
+                updated_at: nowStr,
+                updated_by: adminUser,
+                resolved_at: nowStr
               }, { filters: { id: logRawId } });
             }
 
@@ -2047,7 +2056,10 @@ export async function POST(request: Request) {
               const logRawId = eventId.replace('event_cancel_req_', '').replace('cancel_req_', '');
               await updateRows('crm_governance_logs', {
                 status: 'REJECTED',
-                reason: `최고관리자(${adminUser})에 의해 취소 요청 기각 및 반려됨.`
+                reason: `최고관리자(${adminUser})에 의해 취소 요청 기각 및 반려됨.`,
+                updated_at: nowStr,
+                updated_by: adminUser,
+                resolved_at: nowStr
               }, { filters: { id: logRawId } });
             }
 
@@ -2618,6 +2630,7 @@ ${leaderComment}
 
       // 안전 보정: crm_governance_logs 테이블에 due_date 컬럼 동적 추가
       await executeSQL('ALTER TABLE crm_governance_logs ADD COLUMN due_date TEXT').catch(() => {});
+      await executeSQL('ALTER TABLE crm_governance_logs ADD COLUMN resolved_at TEXT').catch(() => {});
       await executeSQL('ALTER TABLE crm_snaptasks ADD COLUMN due_date TEXT').catch(() => {});
 
       const tenantId = await resolveTenantId();
