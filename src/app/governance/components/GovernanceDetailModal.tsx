@@ -72,6 +72,17 @@ export default function GovernanceDetailModal({
   useEffect(() => {
     if (!selectedEvent) return;
 
+    // 🧹 새 모달 진입 시 이전 커스텀/1회성 작업 상태 완전 리셋
+    setCustomActions([]);
+    setCustomActionPayloads({});
+    setIsAddingAction(false);
+    setIsAddingAdhocSms(false);
+    setAdhocSelectedOpIds([]);
+    setAdhocCustomPhone("");
+    setNaturalPrompt("");
+    setCustomActionTitle("");
+    setCustomActionDesc("");
+
     let isMounted = true;
     (async () => {
       try {
