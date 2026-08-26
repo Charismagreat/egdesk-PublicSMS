@@ -415,7 +415,14 @@ export default function SalesOrderOcrModal({
     }
 
     const groupsMap = new Map();
-    let fallbackPartner = sourceTitle.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ").trim() || "바이어";
+    // 파일명에서 상호명 정제 (예: "LS발주서.xlsx" -> "LS")
+    const cleanFileNamePartner = sourceTitle
+      .replace(/\.[^/.]+$/, "")
+      .replace(/발주서|수주서|주문서|명세서|엑셀|리스트/gi, "")
+      .replace(/[-_]/g, " ")
+      .trim();
+
+    let fallbackPartner = cleanFileNamePartner || "바이어";
 
     for (let r = headerIdx + 1; r < rawRows.length; r++) {
       const row = rawRows[r];
@@ -1197,21 +1204,35 @@ export default function SalesOrderOcrModal({
                         {/* 아코디언 상세 내용 */}
                         {isExpanded && (
                           <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3 text-left animate-fade-in">
-                            <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div className="grid grid-cols-2 gap-2 text-[11px] bg-white p-3 rounded-xl border border-slate-200/80">
+                              <div>
+                                <span className="text-slate-400 font-bold">발주처(상호명):</span>{' '}
+                                <span className="font-black text-slate-800">{group.partner_name || '미기재 (바이어)'}</span>
+                              </div>
                               <div>
                                 <span className="text-slate-400 font-bold">사업자번호:</span>{' '}
                                 <span className="font-semibold">{group.business_number || (
-                                  <span className="text-amber-600 font-bold bg-amber-50 px-1 py-0.2 rounded">미기재 (수주 후 보완 가능)</span>
+                                  <span className="text-amber-600 font-bold bg-amber-50 px-1 py-0.2 rounded text-[10px]">미기재 (후보완 가능)</span>
                                 )}</span>
                               </div>
                               <div>
-                                <span className="text-slate-400 font-bold">대표자:</span>{' '}
+                                <span className="text-slate-400 font-bold">대표자명:</span>{' '}
                                 <span className="font-semibold">{group.representative || (
                                   <span className="text-slate-400 font-medium">-</span>
                                 )}</span>
                               </div>
-                              <div><span className="text-slate-400 font-bold">연락처:</span> <span className="font-semibold">{group.partner_phone || '-'}</span></div>
-                              <div><span className="text-slate-400 font-bold">담당자:</span> <span className="font-semibold">{group.partner_manager || '-'}</span></div>
+                              <div>
+                                <span className="text-slate-400 font-bold">담당자(발주자):</span>{' '}
+                                <span className="font-semibold text-indigo-900">{group.partner_manager || '-'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-bold">연락처:</span>{' '}
+                                <span className="font-semibold">{group.partner_phone || '-'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 font-bold">납기요청일:</span>{' '}
+                                <span className="font-semibold text-emerald-700">{group.delivery_date || '-'}</span>
+                              </div>
                             </div>
 
                             {group.validationWarnings && group.validationWarnings.length > 0 && (
