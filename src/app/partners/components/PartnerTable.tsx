@@ -341,17 +341,31 @@ export function PartnerTable({
                     {/* 1. 구분 */}
                     <td className="py-4 px-3.5">
                       <div className="flex flex-wrap gap-1">
-                        {(pt.type || '').toUpperCase().split(',').filter(Boolean).map(t => (
-                          <span key={t} className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-black tracking-wider ${
-                            t === 'VENDOR' 
-                              ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
-                              : t === 'BUYER' 
-                              ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-                              : 'bg-amber-50 text-amber-600 border border-amber-100'
-                          }`}>
-                            {t === 'VENDOR' ? '공급사' : t === 'BUYER' ? '바이어' : t === 'AFFILIATE' ? '관계사' : t}
-                          </span>
-                        ))}
+                        {(pt.type || '').toUpperCase().split(',').filter(Boolean).map(t => {
+                          if (t === 'BOTH') {
+                            return (
+                              <React.Fragment key="both">
+                                <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                  바이어
+                                </span>
+                                <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black tracking-wider bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                  공급사
+                                </span>
+                              </React.Fragment>
+                            );
+                          }
+                          return (
+                            <span key={t} className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-black tracking-wider ${
+                              t === 'VENDOR' 
+                                ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
+                                : t === 'BUYER' 
+                                ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                                : 'bg-amber-50 text-amber-600 border border-amber-100'
+                            }`}>
+                              {t === 'VENDOR' ? '공급사' : t === 'BUYER' ? '바이어' : t === 'AFFILIATE' ? '관계사' : t}
+                            </span>
+                          );
+                        })}
                       </div>
                     </td>
 

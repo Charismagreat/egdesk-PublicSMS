@@ -497,8 +497,14 @@ export function usePartners() {
     // 🔍 검색어가 비어있을 때 선택된 탭(전체/공급사/바이어) 범위로 제한합니다.
     if (!hasSearchQuery) {
       if (activeTab === 'ALL') return true;
-      if (!pt.type || !pt.type.split(',').includes(activeTab)) return false;
-      return true;
+      const typeUpper = (pt.type || '').toUpperCase();
+      if (activeTab === 'BUYER') {
+        return typeUpper.includes('BUYER') || typeUpper === 'BOTH';
+      }
+      if (activeTab === 'VENDOR') {
+        return typeUpper.includes('VENDOR') || typeUpper === 'BOTH';
+      }
+      return typeUpper.split(',').includes(activeTab);
     }
 
     const query = searchQuery.toLowerCase().trim();
@@ -520,12 +526,24 @@ export function usePartners() {
   const endIndex = startIndex + itemsPerPage;
   const paginatedPartners = filteredPartners.slice(startIndex, endIndex);
 
-  // 집계 수치 산출
-  const totalVendors = partners.filter(p => p.type && p.type.split(',').includes('VENDOR')).length;
-  const totalBuyers = partners.filter(p => p.type && p.type.split(',').includes('BUYER')).length;
-  const totalAffiliates = partners.filter(p => p.type && p.type.split(',').includes('AFFILIATE')).length;
-  const totalPurchases = partners.filter(p => p.type && p.type.split(',').includes('VENDOR')).reduce((sum, p) => sum + (p.total_performance || 0), 0);
-  const totalSales = partners.filter(p => p.type && p.type.split(',').includes('BUYER')).reduce((sum, p) => sum + (p.total_performance || 0), 0);
+  // 집계 수치 산출 (BOTH 타입은 바이어/공급사 양쪽 모두 합산 반영)
+  const totalVendors = partners.filter(p => {
+    const t = (p.type || '').toUpperCase();
+    return t.includes('VENDOR') || t === 'BOTH';
+  }).length;
+  const totalBuyers = partners.filter(p => {
+    const t = (p.type || '').toUpperCase();
+    return t.includes('BUYER') || t === 'BOTH';
+  }).length;
+  const totalAffiliates = partners.filter(p => (p.type || '').toUpperCase().includes('AFFILIATE')).length;
+  const totalPurchases = partners.filter(p => {
+    const t = (p.type || '').toUpperCase();
+    return t.includes('VENDOR') || t === 'BOTH';
+  }).reduce((sum, p) => sum + (p.total_performance || 0), 0);
+  const totalSales = partners.filter(p => {
+    const t = (p.type || '').toUpperCase();
+    return t.includes('BUYER') || t === 'BOTH';
+  }).reduce((sum, p) => sum + (p.total_performance || 0), 0);
 
   return {
     partners,
