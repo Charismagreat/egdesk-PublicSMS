@@ -1066,13 +1066,14 @@ function parseExcelBufferDirect(buf: Buffer, originalFilename: string = '') {
     return headers.findIndex(h => keywords.some(k => h.includes(k)));
   };
 
-  const itemCodeIdx = findCol(['품목번호', '품번', '품목코드', '자재코드']);
-  const itemNameIdx = findCol(['품명', '품목명', '자재명', '품목']);
+  const itemCodeIdx = findCol(['품목번호', '품목코드', '품번', '자재코드']);
+  const itemNameIdx = findCol(['품명', '품목명', '상품명', '자재명', 'Product', 'Item']);
+  const specIdx = findCol(['규격', '사양', '도면', 'Spec', 'spec']);
   const orderNoIdx = findCol(['주문번호', '발주번호', 'PO번호', 'Order No']);
   const orderDateIdx = findCol(['주문확정일자', '주문일자', '발주일자', '발주일']);
-  const deliveryDateIdx = findCol(['납기일자', '납기일', '납품일자', '최종납품 예정일자']);
+  const deliveryDateIdx = findCol(['납기일자', '최종납품 예정일자', '최초납품 예정일자', '납기일', '납품일자']);
   const qtyIdx = findCol(['주문수량', '발주수량', '수량', 'Qty']);
-  const priceIdx = findCol(['구매단가', '단가', '발주단가', 'Price']);
+  const priceIdx = findCol(['구매단가', '발주단가', '단가', 'Price']);
   const managerIdx = findCol(['발주자/요청자', '담당자', '발주자', '요청자']);
 
   let partnerName = 'LS일렉트릭 주식회사';
@@ -1091,6 +1092,7 @@ function parseExcelBufferDirect(buf: Buffer, originalFilename: string = '') {
     if (!itemName) continue;
 
     const itemCode = itemCodeIdx > -1 ? String(row[itemCodeIdx]).trim() : '';
+    const spec = specIdx > -1 ? String(row[specIdx]).trim() : '-';
     const orderNo = orderNoIdx > -1 ? String(row[orderNoIdx]).trim() : `PO-${Date.now()}-${i}`;
     const orderDate = orderDateIdx > -1 ? String(row[orderDateIdx]).trim() : '';
     const deliveryDate = deliveryDateIdx > -1 ? String(row[deliveryDateIdx]).trim() : '';
@@ -1101,6 +1103,7 @@ function parseExcelBufferDirect(buf: Buffer, originalFilename: string = '') {
     parsedItems.push({
       item_code: itemCode,
       product_name: itemName,
+      spec: spec,
       order_no: orderNo,
       order_date: orderDate,
       delivery_date: deliveryDate,
@@ -1630,6 +1633,7 @@ export async function POST(request: Request) {
                     total_amount: it.amount,
                     file_url: targetItem.file_url || '',
                     ai_parsed: 1,
+                    tags: JSON.stringify({ document_memo: '바이어 발주서 연동 등록', tags: '바이어 발주서 연동 등록' }),
                     sales_order_number: it.order_no || soId,
                     created_at: nowStr,
                     tenant_id: tenantId,
