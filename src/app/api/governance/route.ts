@@ -1042,8 +1042,8 @@ ${content}
  * 5. action=set_toggle: 이미지 OCR 자율 대행 활성화 토글 변경
  */
 
-// 📊 서버 사이드 실물 발주서 엑셀(.xlsx) 정밀 파서
-function parseExcelBufferDirect(buf: Buffer, originalFilename: string = '') {
+// 📊 엑셀 헤더 시그니처 기반 지능형 학습 및 자동 매핑 파서 (Memory & Learning Engine)
+async function parseExcelBufferWithSignatureMemory(buf: Buffer, originalFilename: string = '', tenantId: string = 'tenant-wontrading') {
   const workbook = XLSX.read(buf, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
@@ -1062,26 +1062,107 @@ function parseExcelBufferDirect(buf: Buffer, originalFilename: string = '') {
   }
 
   const headers = rawRows[headerRowIndex].map(c => String(c).trim());
+  const headerSignature = headers.filter(Boolean).join('|');
+
+  // 2. 학습된 서식 시그니처 DB(crm_excel_signatures) 조회
+  let learnedConfig: any = null;
+  try {
+    const sigRes = await queryTable('crm_excel_signatures', { filters: { header_signature: headerSignature } });
+    if (sigRes.rows && sigRes.rows.length > 0) {
+      learnedConfig = sigRes.rows[0];
+    }
+  } catch (e) {}
+
+  let itemCodeIdx = -1;
+  let itemNameIdx = -1;
+  let specIdx = -1;
+  let orderNoIdx = -1;
+  let orderDateIdx = -1;
+  let deliveryDateIdx = -1;
+  let qtyIdx = -1;
+  let priceIdx = -1;
+  let managerIdx = -1;
+  let partnerName = learnedConfig?.partner_name || '';
+
+  if (learnedConfig && learnedConfig.mapping_info) {
+    try {
+      const mapping = JSON.parse(learnedConfig.mapping_info);
+      itemCodeIdx = headers.indexOf(mapping.item_code);
+      itemNameIdx = headers.indexOf(mapping.product_name);
+      specIdx = headers.indexOf(mapping.spec);
+      orderNoIdx = headers.indexOf(mapping.document_number);
+      orderDateIdx = headers.indexOf(mapping.document_date);
+      deliveryDateIdx = headers.indexOf(mapping.delivery_date);
+      qtyIdx = headers.indexOf(mapping.quantity);
+      priceIdx = headers.indexOf(mapping.unit_price);
+      managerIdx = headers.indexOf(mapping.partner_manager);
+      if (mapping.partner_name && !mapping.partner_name.startsWith('__DIRECT')) {
+        const pIdx = headers.indexOf(mapping.partner_name);
+        if (pIdx > -1 && rawRows[headerRowIndex + 1]) {
+          partnerName = String(rawRows[headerRowIndex + 1][pIdx]).trim() || partnerName;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. 학습된 설정이 없거나 미매칭된 필드는 지능형 퍼지 AI 규칙으로 추천 매핑
   const findCol = (keywords: string[]): number => {
     return headers.findIndex(h => keywords.some(k => h.includes(k)));
   };
 
-  const itemCodeIdx = findCol(['품목번호', '품목코드', '품번', '자재코드']);
-  const itemNameIdx = findCol(['품명', '품목명', '상품명', '자재명', 'Product', 'Item']);
-  const specIdx = findCol(['규격', '사양', '도면', 'Spec', 'spec']);
-  const orderNoIdx = findCol(['주문번호', '발주번호', 'PO번호', 'Order No']);
-  const orderDateIdx = findCol(['주문확정일자', '주문일자', '발주일자', '발주일']);
-  const deliveryDateIdx = findCol(['납기일자', '최종납품 예정일자', '최초납품 예정일자', '납기일', '납품일자']);
-  const qtyIdx = findCol(['주문수량', '발주수량', '수량', 'Qty']);
-  const priceIdx = findCol(['구매단가', '발주단가', '단가', 'Price']);
-  const managerIdx = findCol(['발주자/요청자', '담당자', '발주자', '요청자']);
+  if (itemCodeIdx === -1) itemCodeIdx = findCol(['품목번호', '품목코드', '품번', '자재코드']);
+  if (itemNameIdx === -1) itemNameIdx = findCol(['품명', '품목명', '상품명', '자재명', 'Product', 'Item']);
+  if (specIdx === -1) specIdx = findCol(['규격', '사양', '도면', 'Spec', 'spec']);
+  if (orderNoIdx === -1) orderNoIdx = findCol(['주문번호', '발주번호', 'PO번호', 'Order No']);
+  if (orderDateIdx === -1) orderDateIdx = findCol(['주문확정일자', '주문일자', '발주일자', '발주일']);
+  if (deliveryDateIdx === -1) deliveryDateIdx = findCol(['납기일자', '최종납품 예정일자', '최초납품 예정일자', '납기일', '납품일자']);
+  if (qtyIdx === -1) qtyIdx = findCol(['주문수량', '발주수량', '수량', 'Qty']);
+  if (priceIdx === -1) priceIdx = findCol(['구매단가', '발주단가', '단가', 'Price']);
+  if (managerIdx === -1) managerIdx = findCol(['발주자/요청자', '담당자', '발주자', '요청자']);
 
-  let partnerName = 'LS일렉트릭 주식회사';
-  if (originalFilename.toLowerCase().includes('ls')) {
-    partnerName = 'LS일렉트릭 주식회사';
-  } else if (originalFilename.toLowerCase().includes('동양')) {
-    partnerName = '동양특수금속';
+  if (!partnerName) {
+    if (originalFilename.toLowerCase().includes('ls')) {
+      partnerName = 'LS일렉트릭 주식회사';
+    } else if (originalFilename.toLowerCase().includes('동양')) {
+      partnerName = '동양특수금속';
+    } else {
+      partnerName = 'LS일렉트릭 주식회사';
+    }
   }
+
+  // 4. 신규 서식인 경우 시그니처 자동 학습(Auto-learn) 영구 저장
+  if (!learnedConfig) {
+    try {
+      const newMappingInfo = {
+        item_code: itemCodeIdx > -1 ? headers[itemCodeIdx] : '',
+        product_name: itemNameIdx > -1 ? headers[itemNameIdx] : '',
+        spec: specIdx > -1 ? headers[specIdx] : '',
+        document_number: orderNoIdx > -1 ? headers[orderNoIdx] : '',
+        document_date: orderDateIdx > -1 ? headers[orderDateIdx] : '',
+        delivery_date: deliveryDateIdx > -1 ? headers[deliveryDateIdx] : '',
+        quantity: qtyIdx > -1 ? headers[qtyIdx] : '',
+        unit_price: priceIdx > -1 ? headers[priceIdx] : '',
+        partner_manager: managerIdx > -1 ? headers[managerIdx] : '',
+        partner_name: partnerName
+      };
+      const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+      await insertRows('crm_excel_signatures', [{
+        id: Date.now(),
+        header_signature: headerSignature,
+        partner_name: partnerName,
+        is_auto_approve: 1,
+        mapping_info: JSON.stringify(newMappingInfo),
+        created_at: nowStr,
+        updated_at: nowStr
+      }]).catch(() => {});
+      console.log(`[Signature Auto-Learned] 신규 엑셀 서식 시그니처('${headerSignature.substring(0, 30)}...')가 영구 학습 저장되었습니다.`);
+    } catch (learnErr) {}
+  }
+
+  const mappedIndices = new Set([
+    itemCodeIdx, itemNameIdx, specIdx, orderNoIdx, orderDateIdx,
+    deliveryDateIdx, qtyIdx, priceIdx, managerIdx
+  ].filter(idx => idx > -1));
 
   const parsedItems: any[] = [];
   for (let i = headerRowIndex + 1; i < rawRows.length; i++) {
@@ -1100,6 +1181,19 @@ function parseExcelBufferDirect(buf: Buffer, originalFilename: string = '') {
     const price = priceIdx > -1 ? Number(String(row[priceIdx]).replace(/,/g, '')) || 0 : 0;
     const manager = managerIdx > -1 ? String(row[managerIdx]).trim() : '';
 
+    // 테이블 컬럼에 매핑되고 남은 모든 데이터 상세비고 추출
+    const unmappedEntries: string[] = [];
+    for (let c = 0; c < row.length; c++) {
+      if (!mappedIndices.has(c)) {
+        const headerName = headers[c] || `항목${c + 1}`;
+        const val = String(row[c] || '').trim();
+        if (val && val !== '0' && val !== 'null' && val !== 'undefined') {
+          unmappedEntries.push(`${headerName}: ${val}`);
+        }
+      }
+    }
+    const unmappedMemo = unmappedEntries.length > 0 ? unmappedEntries.join(' | ') : '바이어 발주서 연동 등록';
+
     parsedItems.push({
       item_code: itemCode,
       product_name: itemName,
@@ -1110,13 +1204,15 @@ function parseExcelBufferDirect(buf: Buffer, originalFilename: string = '') {
       quantity: qty,
       unit_price: price,
       amount: qty * price,
-      manager: manager
+      manager: manager,
+      unmapped_memo: unmappedMemo
     });
   }
 
   return {
     partner_name: partnerName,
-    items: parsedItems
+    items: parsedItems,
+    is_learned: !!learnedConfig
   };
 }
 
@@ -1599,7 +1695,7 @@ export async function POST(request: Request) {
             }
 
             if (excelBuffer) {
-              const parsedExcel = parseExcelBufferDirect(excelBuffer, targetFilename);
+              const parsedExcel = await parseExcelBufferWithSignatureMemory(excelBuffer, targetFilename, tenantId);
               if (parsedExcel && parsedExcel.items.length > 0) {
                 console.log(`[EXCEL PARSER SUCCESS] ${targetFilename} 에서 ${parsedExcel.items.length}개 품목 실물 파싱 성공!`);
                 const partnerName = parsedExcel.partner_name;
