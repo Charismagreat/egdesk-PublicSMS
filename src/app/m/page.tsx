@@ -873,13 +873,30 @@ export default function MobileHubPage() {
   const activeTasks = tasks.filter((t) => t.status !== "DONE");
   const completedTasks = tasks.filter((t) => t.status === "DONE");
 
-  // 📅 기간별 필터링 판별 함수 (관제 지정일 due_date vs 일반 오늘 등록건)
+  // 📅 기간별 필터링 판별 함수 (관제 지정일 due_date / 제목 내 납기일 vs 일반 오늘 등록건)
+  const extractDueDate = (t: any): string | null => {
+    if (t.due_date && String(t.due_date).trim() !== '') {
+      const cleaned = String(t.due_date).trim().replace(/[\.\/]/g, '-');
+      const match = cleaned.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+      if (match) return match[1];
+    }
+    if (t.title) {
+      const cleaned = String(t.title).trim().replace(/[\.\/]/g, '-');
+      const match = cleaned.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+      if (match) return match[1];
+    }
+    return null;
+  };
+
   const isTaskInPeriod = (t: any, period: string, tab: "active" | "completed") => {
     if (period === "ALL") return true;
 
-    // 1) 관제에 의해 처리일시(due_date)가 명시적으로 지정된 건 -> 지정된 해당 일자 탭에만 노출
-    if (t.due_date && String(t.due_date).trim() !== '') {
-      const taskDate = new Date(t.due_date);
+    const dueDateStr = extractDueDate(t);
+
+    // 1) 관제/수주납기에 의해 처리일시(due_date)가 존재하는 건 -> 지정된 해당 일자/월 탭에 정확히 노출
+    if (dueDateStr) {
+      const [y, m, d] = dueDateStr.split('-').map(Number);
+      const taskDate = new Date(y, m - 1, d);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 

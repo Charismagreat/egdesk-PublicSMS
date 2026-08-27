@@ -65,14 +65,30 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
   };
 
   // 하부 탭별 건수 동적 집계 함수
+  const extractDueDate = (t: any): string | null => {
+    if (t.due_date && String(t.due_date).trim() !== '') {
+      const cleaned = String(t.due_date).trim().replace(/[\.\/]/g, '-');
+      const match = cleaned.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+      if (match) return match[1];
+    }
+    if (t.title) {
+      const cleaned = String(t.title).trim().replace(/[\.\/]/g, '-');
+      const match = cleaned.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+      if (match) return match[1];
+    }
+    return null;
+  };
+
   const getSubTabCount = (periodId: string, tabType: "active" | "completed") => {
     if (!allTasks || allTasks.length === 0) return 0;
     const targetTasks = allTasks.filter((t) => (tabType === "active" ? t.status !== "DONE" : t.status === "DONE"));
     if (periodId === "ALL") return targetTasks.length;
 
     return targetTasks.filter((t) => {
-      if (t.due_date && String(t.due_date).trim() !== '') {
-        const taskDate = new Date(t.due_date);
+      const dueDateStr = extractDueDate(t);
+      if (dueDateStr) {
+        const [y, m, d] = dueDateStr.split('-').map(Number);
+        const taskDate = new Date(y, m - 1, d);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 

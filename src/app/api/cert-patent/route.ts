@@ -323,6 +323,7 @@ export async function POST(request: Request) {
               description: `발주번호: ${targetSo.client_order_no || targetSo.id}, 수주총액: ${Number(targetSo.total_amount || 0).toLocaleString()}원. 납기 기한 내 출하/검수/거래명세서 발송을 완료해 주세요.`,
               status: 'IN_PROGRESS',
               assigned_to: emp,
+              due_date: deliveryDate,
               created_by: '최고관리자 (전사 캘린더 자율 배정)',
               tenant_id: targetSo.tenant_id || 'tenant-wontrading',
               created_at: nowStr,
