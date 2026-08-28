@@ -91,14 +91,20 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
 
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
 
+  // 모달이 열릴 때 props로 전달된 photos/files를 attachments에 병합
   useEffect(() => {
-    if (!isOpen) return;
-    const initialItems: AttachmentItem[] = [];
-    
-    photos.forEach((p, idx) => {
+    if (!isOpen) {
+      setTitle("");
+      setAttachments([]);
+      return;
+    }
+
+    const itemsFromProps: AttachmentItem[] = [];
+
+    (photos || []).forEach((p, idx) => {
       if (p.base64 || p.preview) {
-        initialItems.push({
-          id: `init_p_${idx}_${Date.now()}`,
+        itemsFromProps.push({
+          id: `prop_p_${idx}_${Date.now()}`,
           name: p.name || `사진_${idx + 1}.jpg`,
           size: "이미지",
           type: p.type || "image/jpeg",
@@ -109,31 +115,31 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
       }
     });
 
-    files.forEach((f, idx) => {
+    (files || []).forEach((f, idx) => {
       const category = detectFileCategory(f.name, f.type);
-      initialItems.push({
-        id: `init_f_${idx}_${Date.now()}`,
+      itemsFromProps.push({
+        id: `prop_f_${idx}_${Date.now()}`,
         name: f.name || `첨부파일_${idx + 1}`,
         size: f.size || "파일",
         type: f.type || "application/octet-stream",
         category: category,
-        base64: f.base64 || f.url || "",
-        preview: f.preview || f.url || "",
+        base64: f.base64 || f.preview || f.url || "",
+        preview: f.preview || f.base64 || f.url || "",
       });
     });
 
-    if (initialItems.length > 0) {
+    if (itemsFromProps.length > 0) {
       setAttachments((prev) => {
-        const combined = [...prev];
-        initialItems.forEach((it) => {
-          if (!combined.some((c) => c.name === it.name && c.base64 === it.base64)) {
-            combined.push(it);
+        const next = [...prev];
+        itemsFromProps.forEach((it) => {
+          if (!next.some((n) => n.name === it.name && (n.base64 === it.base64 || n.preview === it.preview))) {
+            next.push(it);
           }
         });
-        return combined;
+        return next;
       });
     }
-  }, [isOpen, photos, files]);
+  }, [isOpen]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [viewerItem, setViewerItem] = useState<any>(null);
