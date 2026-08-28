@@ -339,8 +339,11 @@ export async function GET(req: Request) {
           }
         });
 
-        tasks = Array.from(mergedTasksMap.values());
-console.log("[DEBUG 3] mergedTasksMap length:", tasks.length);
+        tasks = Array.from(mergedTasksMap.values()).sort((a: any, b: any) => {
+          const timeA = new Date(a.created_at || 0).getTime() || (typeof a.id === 'string' && a.id.startsWith('ST-') ? Number(a.id.replace('ST-', '')) : 0);
+          const timeB = new Date(b.created_at || 0).getTime() || (typeof b.id === 'string' && b.id.startsWith('ST-') ? Number(b.id.replace('ST-', '')) : 0);
+          return timeB - timeA;
+        });
       } catch (ge) {
         console.error('관제 완료 로그 동기화 실패:', ge);
       }

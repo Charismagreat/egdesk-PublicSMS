@@ -608,8 +608,18 @@ export default function MobileHubPage() {
           doc_type: "FIELD_COLLECTION",
           note: note,
           operator: currentOperator,
-          photos: photosToSend,
-          files: filesToSend,
+          photos: photosToSend.map((p: any) => ({
+            name: p.name,
+            base64: p.base64 || p.preview || p.url || '',
+            preview: p.preview || p.base64 || p.url || '',
+            type: p.type || 'image/jpeg'
+          })),
+          files: filesToSend.map((f: any) => ({
+            name: f.name,
+            base64: f.base64 || f.preview || f.url || '',
+            preview: f.preview || f.base64 || f.url || '',
+            type: f.type || 'application/octet-stream'
+          })),
         }),
       });
       const data = await res.json();

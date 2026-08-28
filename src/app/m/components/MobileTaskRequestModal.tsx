@@ -53,8 +53,18 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
   // 등록 타겟: 'TODO' (할 일 상신) vs 'FOLDER' (태스크 폴더 보관)
   const [targetType, setTargetType] = useState<"TODO" | "FOLDER">("TODO");
   const [title, setTitle] = useState("");
+  const [localPhotos, setLocalPhotos] = useState<RequestPhoto[]>(photos || []);
+  const [localFiles, setLocalFiles] = useState<RequestFile[]>(files || []);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // props가 외부에서 변경될 때 로컬 상태 동기화
+  React.useEffect(() => {
+    if (photos && photos.length > 0) setLocalPhotos(photos);
+  }, [photos]);
+  React.useEffect(() => {
+    if (files && files.length > 0) setLocalFiles(files);
+  }, [files]);
 
   // 📸 모달 내부 파일/사진 선택 전용 ref
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -133,7 +143,10 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() && !voiceText.trim() && photos.length === 0 && files.length === 0) {
+    const effectivePhotos = localPhotos.length > 0 ? localPhotos : photos;
+    const effectiveFiles = localFiles.length > 0 ? localFiles : files;
+
+    if (!title.trim() && !voiceText.trim() && effectivePhotos.length === 0 && effectiveFiles.length === 0) {
       alert("상신할 업무 제목 또는 수집 자료를 첨부해 주세요.");
       return;
     }
@@ -142,22 +155,24 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
     try {
       const smartTitle = 
         title.trim() || 
-        (files.length > 0 && files[0]?.name ? files[0].name.replace(/\.[^/.]+$/, "") : "") || 
-        (photos.length > 0 && photos[0]?.name ? photos[0].name.replace(/\.[^/.]+$/, "") : "") || 
+        (effectiveFiles.length > 0 && effectiveFiles[0]?.name ? effectiveFiles[0].name.replace(/\.[^/.]+$/, "") : "") || 
+        (effectivePhotos.length > 0 && effectivePhotos[0]?.name ? effectivePhotos[0].name.replace(/\.[^/.]+$/, "") : "") || 
         (voiceText.trim() ? voiceText.trim().substring(0, 30) : "현장 업무 접수");
 
       if (targetType === "TODO") {
-        await onSendGovernanceRequest(smartTitle, voiceText, photos, files);
+        await onSendGovernanceRequest(smartTitle, voiceText, effectivePhotos, effectiveFiles);
       } else {
         if (!selectedFolderId) {
           alert("보관할 태스크 폴더를 선택해 주세요.");
           setIsSubmitting(false);
           return;
         }
-        await onSaveToTaskFolder(selectedFolderId, smartTitle, photos, files);
+        await onSaveToTaskFolder(selectedFolderId, smartTitle, effectivePhotos, effectiveFiles);
       }
       setTitle("");
       setVoiceText("");
+      setLocalPhotos([]);
+      setLocalFiles([]);
       onClose();
     } catch (err: any) {
       alert("등록 실패: " + (err.message || "오류가 발생했습니다."));
@@ -285,9 +300,9 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
                   const reader = new FileReader();
                   reader.onload = () => {
                     const base64Str = reader.result as string;
-                    if (onAddPhoto) {
-                      onAddPhoto({ name: file.name, preview: base64Str, base64: base64Str });
-                    }
+                    const newPhoto = { name: file.name, preview: base64Str, base64: base64Str };
+                    setLocalPhotos((prev) => [...prev, newPhoto]);
+                    if (onAddPhoto) onAddPhoto(newPhoto);
                   };
                   reader.readAsDataURL(file);
                 });
@@ -307,17 +322,16 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
                   const reader = new FileReader();
                   reader.onload = () => {
                     const base64Str = reader.result as string;
-                    if (onAddFile) {
-                      onAddFile({
-                        name: file.name,
-                        size: (file.size / 1024).toFixed(1) + " KB",
-                        type: file.type,
-                        preview: base64Str,
-                        base64: base64Str,
-                        url: base64Str,
-                        file: file,
-                      });
-                    }
+                    const newFile = {
+                      name: file.name,
+                      size: (file.size / 1024).toFixed(1) + " KB",
+                      type: file.type || "application/octet-stream",
+                      preview: base64Str,
+                      base64: base64Str,
+                      url: base64Str,
+                    };
+                    setLocalFiles((prev) => [...prev, newFile]);
+                    if (onAddFile) onAddFile(newFile);
                   };
                   reader.readAsDataURL(file);
                 });
@@ -329,7 +343,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-extrabold text-slate-400">
-                  등록된 자료 ({photos.length + files.length}건)
+                  등록된 자료 ({localPhotos.length + localFiles.length}건)
                 </span>
                 <div className="flex items-center gap-1.5">
                   <button
@@ -349,72 +363,77 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
                 </div>
               </div>
 
-              {photos.length > 0 || files.length > 0 ? (
+              {localPhotos.length > 0 || localFiles.length > 0 ? (
                 <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-2 space-y-1.5 max-h-40 overflow-y-auto">
-                  {photos.map((p, idx) => (
+                  {localPhotos.map((p, idx) => (
                     <div
                       key={`p_${idx}`}
                       className="flex items-center justify-between bg-white p-1.5 px-2 rounded-xl border border-slate-150 text-xs"
                     >
                       <div
                         onClick={() => handleOpenPreview({ name: p.name, preview: p.preview, type: "IMAGE" })}
-                        className="flex items-center gap-2 truncate cursor-pointer flex-1 hover:text-indigo-600"
-                        title="미리보기"
+                        className="flex items-center gap-2 truncate cursor-pointer hover:text-indigo-600 transition-colors flex-1"
                       >
-                        <img
-                          src={p.preview}
-                          alt="thumb"
-                          className="w-7 h-7 rounded-lg object-cover border border-slate-200 shrink-0"
-                        />
-                        <span className="font-extrabold text-slate-700 hover:text-indigo-600 truncate">
-                          {p.name}
-                        </span>
-                        <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1 hover:text-indigo-600" />
+                        <img src={p.preview} alt={p.name} className="w-6 h-6 object-cover rounded-md border border-slate-200" />
+                        <span className="truncate max-w-[150px] font-bold text-slate-700 text-[11px]">{p.name}</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onRemovePhoto(idx)}
-                        className="p-1 text-slate-400 hover:text-rose-500 border-none bg-transparent cursor-pointer ml-1 shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPreview({ name: p.name, preview: p.preview, type: "IMAGE" })}
+                          className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
+                          title="미리보기"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLocalPhotos((prev) => prev.filter((_, i) => i !== idx));
+                            onRemovePhoto(idx);
+                          }}
+                          className="p-1 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 border-none bg-transparent cursor-pointer"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
 
-                  {files.map((f, idx) => (
+                  {localFiles.map((f, idx) => (
                     <div
                       key={`f_${idx}`}
                       className="flex items-center justify-between bg-white p-1.5 px-2 rounded-xl border border-slate-150 text-xs"
                     >
                       <div
-                        onClick={() =>
-                          handleOpenPreview({
-                            name: f.name,
-                            url: f.url || (f.file ? URL.createObjectURL(f.file) : ""),
-                            isLink: f.isLink,
-                            type: f.type,
-                          })
-                        }
-                        className="flex items-center gap-2 truncate cursor-pointer flex-1 hover:text-indigo-600"
-                        title="미리보기 / 다운로드"
+                        onClick={() => handleOpenPreview({ name: f.name, preview: f.url || f.preview, type: "DOCUMENT" })}
+                        className="flex items-center gap-2 truncate cursor-pointer hover:text-indigo-600 transition-colors flex-1"
                       >
-                        {f.isLink ? (
-                          <LinkIcon className="w-4 h-4 text-amber-500 shrink-0" />
-                        ) : (
-                          <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
-                        )}
-                        <span className="font-extrabold text-slate-700 hover:text-indigo-600 truncate">
-                          {f.name}
-                        </span>
-                        <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
+                        <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+                        <span className="truncate max-w-[150px] font-bold text-slate-700 text-[11px]">{f.name}</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onRemoveFile(idx)}
-                        className="p-1 text-slate-400 hover:text-rose-500 border-none bg-transparent cursor-pointer ml-1 shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPreview({ name: f.name, preview: f.url || f.preview, type: "DOCUMENT" })}
+                          className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
+                          title="미리보기"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLocalFiles((prev) => prev.filter((_, i) => i !== idx));
+                            onRemoveFile(idx);
+                          }}
+                          className="p-1 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 border-none bg-transparent cursor-pointer"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
