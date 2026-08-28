@@ -332,7 +332,13 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
 
       const photosPayload = attachments
         .filter((a) => a.category === "IMAGE")
-        .map((a) => ({ name: a.name, preview: a.preview, base64: a.base64, type: a.type }));
+        .map((a) => ({ 
+          name: a.name, 
+          url: a.url || a.base64,
+          preview: a.preview || a.url, 
+          base64: a.base64, 
+          type: a.type 
+        }));
 
       const filesPayload = attachments
         .map((a) => ({
@@ -340,9 +346,9 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
           size: a.size,
           type: a.type,
           category: a.category,
-          preview: a.preview,
+          url: a.url || a.base64,
+          preview: a.preview || a.url,
           base64: a.base64,
-          url: a.base64,
         }));
 
       if (targetType === "TODO") {

@@ -1462,11 +1462,9 @@ export async function POST(request: Request) {
           const isCad = fileNameLower.match(/\.(dwg|dxf|stp|step|iges|igs|sldprt|catpart)$/i);
           
           const fType = isImg ? 'IMAGE' : (isVid ? 'VIDEO' : (isAud ? 'AUDIO' : (isCad ? 'CAD' : 'DOCUMENT')));
-          const itemUuid = `STI-${Date.now()}-file-${i}`;
-
-          let finalFileUrl = fileContent;
+          let finalFileUrl = file.url || fileContent;
           // Base64 데이터 URL인 경우 로컬 디스크 파일로 저장하여 정적 서빙 주소 생성
-          if (fileContent.startsWith('data:')) {
+          if (finalFileUrl && finalFileUrl.startsWith('data:')) {
             try {
               const base64Data = fileContent.split(';base64,').pop();
               if (base64Data) {
