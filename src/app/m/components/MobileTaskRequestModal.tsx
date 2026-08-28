@@ -31,6 +31,7 @@ export function detectFileCategory(fileName: string, mimeType?: string): FileCat
 interface MobileTaskRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialFiles?: File[];
   onSendGovernanceRequest?: (title: string, note: string, photos?: any[], files?: any[]) => Promise<void>;
   onSaveToTaskFolder?: (folderId: string, title: string, photos?: any[], files?: any[]) => Promise<void>;
   taskFolders?: Array<{ id: string; name: string; title?: string }>;
@@ -47,6 +48,7 @@ interface MobileTaskRequestModalProps {
 export function MobileTaskRequestModal({
   isOpen,
   onClose,
+  initialFiles = [],
   onSendGovernanceRequest,
   taskFolders = [],
 }: MobileTaskRequestModalProps) {
@@ -61,7 +63,7 @@ export function MobileTaskRequestModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
 
-  // 모달 닫힐 때 폼 초기화
+  // 모달 열릴 때 initialFiles 동기화 및 닫힐 때 폼 초기화
   useEffect(() => {
     if (!isOpen) {
       setTitle("");
@@ -69,8 +71,16 @@ export function MobileTaskRequestModal({
       setSelectedFiles([]);
       setIsSubmitting(false);
       setIsRecording(false);
+    } else if (initialFiles && initialFiles.length > 0) {
+      setSelectedFiles(initialFiles);
+      setTitle((prev) => {
+        if (!prev.trim() && initialFiles[0]?.name) {
+          return initialFiles[0].name.replace(/\.[^/.]+$/, "");
+        }
+        return prev;
+      });
     }
-  }, [isOpen]);
+  }, [isOpen, initialFiles]);
 
   if (!isOpen) return null;
 

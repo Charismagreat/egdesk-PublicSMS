@@ -52,6 +52,7 @@ export default function MobileHubPage() {
 
   // 6. 상신 모달 상태 및 임시 첨부 파일 상태
   const [isTaskRequestModalOpen, setIsTaskRequestModalOpen] = useState(false);
+  const [requestRawFiles, setRequestRawFiles] = useState<File[]>([]);
   const [requestPhotos, setRequestPhotos] = useState<any[]>([]);
   const [requestFiles, setRequestFiles] = useState<any[]>([]);
   const [requestVoiceText, setRequestVoiceText] = useState("");
@@ -423,18 +424,15 @@ export default function MobileHubPage() {
       {/* 6. AI 관제 상신 & 태스크 발급 모달 */}
       <MobileTaskRequestModal
         isOpen={isTaskRequestModalOpen}
-        onClose={() => setIsTaskRequestModalOpen(false)}
-        photos={requestPhotos}
-        files={requestFiles}
-        voiceText={requestVoiceText}
-        setVoiceText={setRequestVoiceText}
-        onRemovePhoto={(idx) => setRequestPhotos((prev) => prev.filter((_, i) => i !== idx))}
-        onRemoveFile={(idx) => setRequestFiles((prev) => prev.filter((_, i) => i !== idx))}
-        onAddPhoto={(p) => setRequestPhotos((prev) => [...prev, p])}
-        onAddFile={(f) => setRequestFiles((prev) => [...prev, f])}
+        onClose={() => {
+          setIsTaskRequestModalOpen(false);
+          setRequestRawFiles([]);
+        }}
+        initialFiles={requestRawFiles}
         taskFolders={folders.taskFolders}
-        onSendGovernanceRequest={handleSendGovernanceRequest}
-        onSaveToTaskFolder={handleSaveToTaskFolder}
+        onSendGovernanceRequest={async () => {
+          await fetchTasks();
+        }}
       />
 
       {/* 7. 스피드 다이얼 + FAB 버튼 */}
@@ -442,48 +440,15 @@ export default function MobileHubPage() {
         onPhotoCapture={(e) => {
           const file = e.target.files?.[0];
           if (!file) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64Str = reader.result as string;
-            if (base64Str) {
-              setRequestPhotos((prev) => [
-                ...prev,
-                {
-                  name: file.name || "현장사진.jpg",
-                  type: file.type || "image/jpeg",
-                  preview: base64Str,
-                  base64: base64Str,
-                  url: base64Str,
-                },
-              ]);
-              setIsTaskRequestModalOpen(true);
-            }
-          };
-          reader.readAsDataURL(file);
+          setRequestRawFiles([file]);
+          setIsTaskRequestModalOpen(true);
           if (e.target) e.target.value = "";
         }}
         onFileUpload={(e) => {
           const file = e.target.files?.[0];
           if (!file) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64Str = reader.result as string;
-            if (base64Str) {
-              setRequestFiles((prev) => [
-                ...prev,
-                {
-                  name: file.name || "첨부서류.pdf",
-                  size: (file.size / 1024).toFixed(1) + " KB",
-                  type: file.type || "application/pdf",
-                  preview: base64Str,
-                  base64: base64Str,
-                  url: base64Str,
-                },
-              ]);
-              setIsTaskRequestModalOpen(true);
-            }
-          };
-          reader.readAsDataURL(file);
+          setRequestRawFiles([file]);
+          setIsTaskRequestModalOpen(true);
           if (e.target) e.target.value = "";
         }}
         onAddVoiceTask={(audioBlob, note) => {
