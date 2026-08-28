@@ -209,17 +209,22 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
           ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
           : `${(file.size / 1024).toFixed(0)} KB`;
 
-        // 💡 0.001초 즉각 프리뷰 URL 생성 (메모리 누수 및 행 걸림 원천 방지)
-        let blobUrl = "";
+        let serverFileUrl = "";
+        let previewDataUrl = "";
+
+        // 1. 빠른 DataURL 프리뷰 생성
         try {
-          blobUrl = URL.createObjectURL(file);
+          previewDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => resolve("");
+            reader.readAsDataURL(file);
+          });
         } catch {
-          blobUrl = "";
+          previewDataUrl = "";
         }
 
-        let uploadedUrl = "";
-
-        // 💡 실물 파일 FormData 스트리밍 업로드
+        // 2. 실물 파일을 서버 /api/upload 로 전송하여 영구 정적 URL 획득
         try {
           const formData = new FormData();
           formData.append("file", file);
@@ -230,14 +235,14 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
           if (uploadRes.ok) {
             const uploadData = await uploadRes.json();
             if (uploadData.success && uploadData.url) {
-              uploadedUrl = uploadData.url;
+              serverFileUrl = uploadData.url;
             }
           }
         } catch (upErr) {
           console.warn("실물 업로드 통신 에러:", upErr);
         }
 
-        const finalUrl = uploadedUrl || blobUrl;
+        const finalUrl = serverFileUrl || previewDataUrl;
 
         return {
           id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -245,19 +250,22 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
           size: sizeStr,
           type: file.type || "application/octet-stream",
           category: category,
-          base64: finalUrl,
-          preview: blobUrl || finalUrl,
-          url: finalUrl,
+          base64: serverFileUrl || previewDataUrl,
+          preview: previewDataUrl || serverFileUrl,
+          url: serverFileUrl || previewDataUrl,
         } as AttachmentItem;
       });
 
       const newItems = await Promise.all(uploadPromises);
       setAttachments((prev) => [...prev, ...newItems]);
 
-      if (!title.trim() && newItems.length > 0) {
-        const pureName = newItems[0].name.replace(/\.[^/.]+$/, "");
-        setTitle(pureName);
-      }
+      // 💡 함수형 업데이터로 최신 title 상태를 검사하여 사용자가 이미 입력한 제목을 절대 덮어쓰지 않음
+      setTitle((prevTitle) => {
+        if (!prevTitle.trim() && newItems.length > 0) {
+          return newItems[0].name.replace(/\.[^/.]+$/, "");
+        }
+        return prevTitle;
+      });
     } catch (readErr) {
       console.error("파일 처리 중 오류:", readErr);
       alert("파일을 처리하는 도중 오류가 발생했습니다.");
