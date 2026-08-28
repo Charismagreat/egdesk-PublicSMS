@@ -55,14 +55,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- END:easybot-orchestration-rules -->
 
 <!-- BEGIN:file-upload-rules -->
-## 전사적 파일 보관 및 업로드 표준 준수 원칙
+## 전사적 파일 보관 및 모바일 파일 업로드 표준 준수 원칙
 
-1. **로컬 파일시스템 직접 쓰기 지양**:
-   - `fs.writeFileSync` 또는 임의 저장 방식을 통해 프로젝트 내 `public/uploads` 등의 정적 폴더에 실물 업로드 파일을 직접 생성하는 방식을 금지합니다.
-2. **`egdesk-helpers.ts` 스토리지 API 의무 적용**:
-   - 파일 업로드가 필요한 모든 도메인(명함, 영수증, 계약서, 견적서, 통관서류 등)에서는 `egdesk-helpers.ts`의 `uploadFile` API를 의무적으로 사용하여 시스템 격리 스토리지 버킷에 보관해야 합니다.
-3. **통합 파일 게이트웨이 활용**:
-   - 보관된 파일의 새 창 조회 및 다운로드는 통합 게이트웨이 엔드포인트인 `/api/shared/files?fileId=...` 또는 `tableName`과 `rowId`를 경유하도록 설계하여 다이렉트 파일 서빙 경로 노출에 따른 보안 리스크를 원천 차단합니다.
+1. **모바일 파일 업로드의 웹 표준 `FormData` 단일 직송 원칙**:
+   - 모바일 페이지(`/m`) 및 현장 업무 모달에서 고화질 사진(7MB+), 동영상, 녹음, CAD 도면, PDF 문서 등을 첨부할 때는 **브라우저 순수 `File` 객체를 `FormData`에 담아 서버로 한 번에 직송(Direct Stream)**해야 합니다.
+   - 클라이언트에서 복잡한 Base64 인코딩, 캔버스 압축, 복합 `useEffect` 상태 동기화나 사전 업로드(2-Phase)를 도입하지 마십시오. 이는 모바일 브라우저의 메모리 행(Hanging)과 입력 제목 덮어쓰기 버그를 유발합니다.
+2. **백엔드 멀티파트 파싱 시 Web API 호환성 준수**:
+   - 백엔드 App Router(`route.ts`)에서 `request.formData()`를 순회할 때, Node.js/Next.js 런타임 Realm 불일치를 방지하기 위해 `instanceof File` 대신 `typeof value === 'object' && typeof value.arrayBuffer === 'function'` 표준 판별자를 적용하여 바이너리 버퍼를 추출해야 합니다.
+3. **`egdesk-helpers.ts` 및 이지데스크 MCP `uploadFile` 스토리지 의무 적용**:
+   - 서버에 수신된 파일 바이너리는 `crm_snaptask_items` 등 대장에 1:1 인서트하여 유효한 `rowId`를 획득한 후, 반드시 `egdesk-helpers.ts`의 `uploadFile` API (이지데스크 MCP `user_data_upload_file`)를 호출하여 테넌트 격리 스토리지 버킷에 영구 보관해야 합니다.
+4. **통합 파일 게이트웨이 및 정적 다운로드 연동**:
+   - 보관된 파일의 조회 및 다운로드는 통합 게이트웨이 엔드포인트인 `/api/shared/files?tableName=...&rowId=...` 또는 로컬 정적 디스크 경로(`/uploads/customs/...`)를 경유하도록 설계하여 다이렉트 서빙과 보안성을 동시에 확보합니다.
 <!-- END:file-upload-rules -->
 
 <!-- BEGIN:egdesk-dev-context -->
