@@ -16,7 +16,7 @@ async function verifyUserRole() {
     const name = payload.name as string || payload.username as string || 'Unknown';
     const username = payload.username as string || '';
     const tenantId = payload.tenant_id as string || 'default';
-    const isAuthorized = role === 'SUPER_ADMIN' || role === 'SUB_OPERATOR';
+    const isAuthorized = role === 'SUPER_ADMIN' || role === 'SUB_OPERATOR' || role === 'SYSTEM_ADMIN' || role === 'TENANT_ADMIN' || role === 'EMPLOYEE';
     return { isAuthorized, role, name, username, tenantId };
   } catch (e) {
     return { isAuthorized: false, role: 'SUB_OPERATOR', name: 'Unknown', username: '', tenantId: 'default' };
