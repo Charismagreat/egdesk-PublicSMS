@@ -485,11 +485,9 @@ export async function POST(req: Request) {
       updateFilters.tenant_id = tenantId;
       await updateRows('crm_attendance', updates, { filters: updateFilters });
 
-      const overnightMsg = isOvernight ? ` (야간·철야 근무 인정, 총 ${workingHours}시간)` : ` (총 ${workingHours}시간 근무)`;
-
       return NextResponse.json({
         success: true,
-        message: `${operatorName}님, 퇴근 스탬프가 찍혔습니다. 고생하셨습니다! (${timeStr}${overnightMsg})`,
+        message: `${operatorName}님, 퇴근 스탬프가 찍혔습니다. 고생하셨습니다! (${timeStr}, 총 ${workingHours}시간 근무)`,
         record: { ...attRecord, ...updates }
       });
     }
