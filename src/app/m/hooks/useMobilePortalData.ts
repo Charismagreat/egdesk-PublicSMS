@@ -52,17 +52,25 @@ export function useMobilePortalData() {
     loadWorkplaces();
   }, []);
 
-  // 세션 정보 조회
+  // 세션 정보 조회 및 비로그인 시 로그인 페이지 가드
   useEffect(() => {
     async function loadSession() {
       try {
         const res = await apiFetch("/api/auth/me");
         const json = await safeJson(res);
-        if (json && json.success) {
+        if (json && json.success && json.name && json.role !== 'SUB_OPERATOR') {
           setSession(json);
+        } else {
+          // 세션이 없거나 비로그인 상태인 경우 로그인 페이지로 이동
+          if (typeof window !== "undefined") {
+            window.location.href = "/login";
+          }
         }
       } catch (e) {
         console.error("Failed to load session:", e);
+        if (typeof window !== "undefined") {
+          window.location.href = "/login";
+        }
       }
     }
     loadSession();

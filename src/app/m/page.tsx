@@ -335,11 +335,17 @@ export default function MobileHubPage() {
 
   // 로그아웃
   const handleLogout = async () => {
+    if (!window.confirm("🚪 로그아웃 하시겠습니까?")) return;
     try {
       await apiFetch("/api/auth/logout", { method: "POST" });
-      router.push("/login");
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (storageErr) {}
+      window.location.href = "/login";
     } catch (e) {
       console.error(e);
+      window.location.href = "/login";
     }
   };
 
