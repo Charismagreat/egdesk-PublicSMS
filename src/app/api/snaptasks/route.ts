@@ -109,9 +109,22 @@ export async function GET(req: Request) {
         orderDirection: 'DESC',
         limit: 10000
       }).catch(() => ({ rows: [] }));
-      const snaptasksRows = (snaptasksRes.rows || []).filter((t: any) => 
-        !t.deleted_at && (t.tenant_id === targetTenant || (!t.tenant_id && targetTenant === 'tenant-wontrading'))
-      );
+      const snaptasksRows = (snaptasksRes.rows || []).filter((t: any) => {
+        if (t.deleted_at) return false;
+        const isTargetTenant = t.tenant_id === targetTenant || (!t.tenant_id && targetTenant === 'tenant-wontrading');
+        if (!isTargetTenant) return false;
+
+        // 🚨 시스템 내부 모니터링 로그성 태스크는 실무 할 일 대장에서 원천 제외
+        const title = t.title || '';
+        const isSystemNoise = 
+          title.includes('이지봇') ||
+          title.includes('AI API') ||
+          title.includes('쿼터') ||
+          title.includes('헬스') ||
+          title.includes('작동 지침') ||
+          title.includes('자동 관제');
+        return !isSystemNoise;
+      });
 
       // 2) crm_partners 및 crm_snaptask_items 대장 미리 조회
       let partnersRows: any[] = [];
