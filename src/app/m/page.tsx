@@ -336,6 +336,7 @@ export default function MobileHubPage() {
             <MobileFieldTaskCollector
               folders={folders.taskFolders}
               selectedFolderId={folders.selectedFolderId}
+              collectedItems={folders.collectedItems}
               onSelectFolder={(id) => folders.setSelectedFolderId(id)}
               onOpenNewFolderModal={() => folders.setIsNewFolderModalOpen(true)}
               onEditFolder={(folder) => {
@@ -344,7 +345,7 @@ export default function MobileHubPage() {
                 folders.setEditFolderDesc(folder.description || "");
                 folders.setIsEditFolderModalOpen(true);
               }}
-              onDeleteFolder={(id, name) => folders.handleDeleteFolder(id, name)}
+              onDeleteFolder={(id, name) => folders.handleDeleteFolder(id, name || "")}
               onMoveItem={(item) => {
                 folders.setMovingItem(item);
                 folders.setTargetFolderId(folders.selectedFolderId || "");

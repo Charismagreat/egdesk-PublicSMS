@@ -10,30 +10,30 @@ interface MobileFieldTaskCollectorProps {
   onSelectFolder: (folderId: string) => void;
   onOpenNewFolderModal: () => void;
   onEditFolder: (folder: any) => void;
-  onDeleteFolder: (folderId: string) => void;
-  collectedItems: any[];
-  onUploadFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onOpenItemViewer: (item: any) => void;
-  onMoveItem: (item: any) => void;
-  onDeleteItem: (itemId: string) => void;
-  onClearFolderItems: () => void;
-  isUploading: boolean;
+  onDeleteFolder: (folderId: string, folderName?: string) => void;
+  collectedItems?: any[];
+  onUploadFile?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onOpenItemViewer?: (item: any) => void;
+  onMoveItem?: (item: any) => void;
+  onDeleteItem?: (itemId: string) => void;
+  onClearFolderItems?: () => void;
+  isUploading?: boolean;
 }
 
 export const MobileFieldTaskCollector: React.FC<MobileFieldTaskCollectorProps> = ({
-  folders,
+  folders = [],
   selectedFolderId,
   onSelectFolder,
   onOpenNewFolderModal,
   onEditFolder,
   onDeleteFolder,
-  collectedItems,
-  onUploadFile,
-  onOpenItemViewer,
-  onMoveItem,
-  onDeleteItem,
-  onClearFolderItems,
-  isUploading,
+  collectedItems = [],
+  onUploadFile = () => {},
+  onOpenItemViewer = () => {},
+  onMoveItem = () => {},
+  onDeleteItem = () => {},
+  onClearFolderItems = () => {},
+  isUploading = false,
 }) => {
   // 🔍 태스크 폴더 및 수집 항목 실시간 검색어 상태
   const [searchQuery, setSearchQuery] = useState("");

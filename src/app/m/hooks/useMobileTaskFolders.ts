@@ -23,6 +23,10 @@ export function useMobileTaskFolders() {
   const [movingItem, setMovingItem] = useState<any | null>(null);
   const [targetFolderId, setTargetFolderId] = useState<string>("");
 
+  // 📂 선택된 폴더 내의 수집 아이템 목록
+  const [collectedItems, setCollectedItems] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
   // 폴더 목록 조회
   const reloadTaskFolders = useCallback(async () => {
     try {
@@ -41,9 +45,35 @@ export function useMobileTaskFolders() {
     }
   }, [selectedFolderId]);
 
+  // 선택된 폴더의 수집 아이템 로드
+  const reloadFolderItems = useCallback(async (folderId: string | null) => {
+    if (!folderId) {
+      setCollectedItems([]);
+      return;
+    }
+    try {
+      const res = await apiFetch(`/api/task-folders?action=items&folder_id=${folderId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.items) {
+          setCollectedItems(data.items);
+        } else {
+          setCollectedItems([]);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to reload folder items:", e);
+      setCollectedItems([]);
+    }
+  }, []);
+
   useEffect(() => {
     reloadTaskFolders();
   }, [reloadTaskFolders]);
+
+  useEffect(() => {
+    reloadFolderItems(selectedFolderId);
+  }, [selectedFolderId, reloadFolderItems]);
 
   // 신규 폴더 생성 핸들러
   const handleCreateNewFolder = async () => {
@@ -224,7 +254,11 @@ export function useMobileTaskFolders() {
     targetFolderId,
     setTargetFolderId,
     handleMoveItemToFolder,
-    // 업로드
+    // 아이템 및 업로드
+    collectedItems,
+    reloadFolderItems,
+    isUploading,
+    setIsUploading,
     handleUploadCollectedFile,
   };
 }
