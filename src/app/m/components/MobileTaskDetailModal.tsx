@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { X, Calendar, User, Building2, Paperclip, FileText, ExternalLink, Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import React, { useState } from "react";
+import { X, Calendar, User, Building2, Paperclip, FileText, ExternalLink, Clock, AlertTriangle, CheckCircle2, Image as ImageIcon } from "lucide-react";
 
 interface MobileTaskDetailModalProps {
   task: any | null;
@@ -216,19 +216,29 @@ export default function MobileTaskDetailModal({
               <div className="grid grid-cols-2 gap-2">
                 {photosList.map((photo: any, idx: number) => {
                   const imgUrl = photo.preview || photo.base64 || photo.url || photo;
-                  const imgName = photo.name || `사진_${idx + 1}`;
+                  const imgName = photo.name || photo.filename || `사진_${idx + 1}`;
                   return (
                     <a
                       key={idx}
-                      href={typeof imgUrl === 'string' ? imgUrl : '#'}
+                      href={typeof imgUrl === 'string' && imgUrl.startsWith('http') ? imgUrl : (typeof imgUrl === 'string' ? imgUrl : '#')}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="group relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 flex flex-col justify-end p-1.5 transition-all hover:border-indigo-400"
+                      className="group relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 flex flex-col justify-between p-2 transition-all hover:border-indigo-400"
                     >
-                      {typeof imgUrl === 'string' && (
-                        <img src={imgUrl} alt={imgName} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                      )}
-                      <div className="relative z-10 bg-slate-900/70 backdrop-blur-3xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md truncate">
+                      <div className="flex-1 flex items-center justify-center">
+                        {typeof imgUrl === 'string' && (imgUrl.startsWith('data:') || imgUrl.startsWith('/') || imgUrl.startsWith('http')) ? (
+                          <img 
+                            src={imgUrl} 
+                            alt={imgName} 
+                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.opacity = '0';
+                            }}
+                          />
+                        ) : null}
+                        <ImageIcon className="w-8 h-8 text-slate-300" />
+                      </div>
+                      <div className="relative z-10 bg-slate-900/75 backdrop-blur-3xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md truncate">
                         {imgName}
                       </div>
                     </a>
