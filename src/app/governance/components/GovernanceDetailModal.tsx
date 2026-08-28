@@ -95,6 +95,7 @@ export default function GovernanceDetailModal({
         ]);
 
         let rules = autoRes?.rules || {};
+        const templates = tmplRes?.templates || tmplRes?.items || [];
         const rawOperators = opRes?.operators || [];
         const operators = rawOperators.filter((o: any) => 
           o.role !== 'SYSTEM_ADMIN' && 
