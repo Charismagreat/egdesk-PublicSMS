@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { executeSQL, queryTable } from '../../../../../egdesk-helpers';
 import { sendMail } from '../../../../lib/email';
 import { callAI } from '../../../../lib/ai-router';
+import { getTenantSetting } from '@/lib/tenant';
 
 /**
  * POST: 일일 현장 안전 TBM 및 품질/설비 점검 데이터 자동 아카이빙 이메일 전송
@@ -78,17 +79,17 @@ export async function POST(req: Request) {
 
     try {
       // 회사명 조회
-      const companySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
-      if (companySetting.rows?.[0]?.value) {
-        const p = JSON.parse(companySetting.rows[0].value);
+      const companySettingVal = await getTenantSetting('my_company_profile');
+      if (companySettingVal) {
+        const p = JSON.parse(companySettingVal);
         if (p.email) archiveDestinationEmail = p.email;
         if (p.companyName) companyName = p.companyName;
       }
 
       // 전용 아카이빙 주소 설정이 있는지 조회
-      const archiveEmailSetting = await queryTable('system_settings', { filters: { key: 'email_archive_destination' } });
-      if (archiveEmailSetting.rows?.[0]?.value) {
-        archiveDestinationEmail = archiveEmailSetting.rows[0].value;
+      const archiveEmailSettingVal = await getTenantSetting('email_archive_destination');
+      if (archiveEmailSettingVal) {
+        archiveDestinationEmail = archiveEmailSettingVal;
       }
     } catch (e) {
       console.warn('아카이빙 수신처 설정 로드 실패:', e);

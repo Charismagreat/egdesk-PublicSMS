@@ -1,6 +1,7 @@
 import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from "next/server";
 import { queryTable, insertRows, updateRows, deleteRows } from "../../../../../egdesk-helpers";
+import { getTenantSetting } from '@/lib/tenant';
 
 export const dynamic = "force-dynamic";
 
@@ -225,17 +226,17 @@ export async function POST(req: Request) {
       ).length;
 
       // 4) system_settings 테이블에서 회사 프로필(설립일 등) 확인
-      const settingsRes = await queryTable("system_settings", { filters: { key: "my_company_profile" } });
       let establishmentYear = 2022;
       let sector = "도소매 및 물류 소프트웨어";
-      if (settingsRes.rows && settingsRes.rows.length > 0) {
-        try {
-          const profileData = JSON.parse(settingsRes.rows[0].value);
+      try {
+        const profileSettingVal = await getTenantSetting("my_company_profile");
+        if (profileSettingVal) {
+          const profileData = JSON.parse(profileSettingVal);
           if (profileData.establishmentYear) {
             establishmentYear = Number(profileData.establishmentYear);
           }
-        } catch (e) {}
-      }
+        }
+      } catch (e) {}
 
       // 5) crm_grant_company_profile 갱신 (Upsert)
       const existingProfileRes = await queryTable("crm_grant_company_profile", { filters: { id: "MY-COMPANY" } });

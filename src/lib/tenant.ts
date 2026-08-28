@@ -92,9 +92,47 @@ export const TENANT_EXEMPT_TABLES: string[] = [
   // 예시: 'global_announcements'
 ];
 
+import { queryTable } from '../../egdesk-helpers';
+
 /**
  * 주어진 테이블명이 테넌트 격리 대상인지 여부를 반환합니다.
  */
 export function isTenantIsolated(tableName: string): boolean {
   return !TENANT_EXEMPT_TABLES.includes(tableName);
+}
+
+/**
+ * 테넌트 격리를 지원하는 시스템 설정 조회 헬퍼 (서버 사이드 전용)
+ * 1. 현재 세션의 tenant_id를 확인하여 `${tenant_id}:${key}` 우선 조회
+ * 2. 존재하지 않는 경우 단순 `key`로 폴백 조회
+ *
+ * @param key 조회할 설정 키 (예: 'my_company_profile', 'google_ai_model' 등)
+ * @param defaultValue 값이 없을 경우 반환할 기본값
+ * @returns 설정값 문자열 또는 null
+ */
+export async function getTenantSetting(key: string, defaultValue: string | null = null): Promise<string | null> {
+  try {
+    const tenantId = (await getTenantId()) || 'default';
+    const cKey = `${tenantId}:${key}`;
+
+    // 1차: 테넌트 복합 키로 우선 조회
+    const result = await queryTable('system_settings', { filters: { key: cKey }, limit: 1 });
+    const rows = result?.rows || [];
+    if (rows.length > 0 && rows[0].value !== undefined && rows[0].value !== null) {
+      return rows[0].value;
+    }
+
+    // 2차: 단순 키 레거시 레코드 폴백 조회
+    const legacyResult = await queryTable('system_settings', { filters: { key }, limit: 1 });
+    const legacyRows = (legacyResult?.rows || []).filter(
+      (r: any) => !r.tenant_id || r.tenant_id === '' || r.tenant_id === 'default' || r.tenant_id === tenantId
+    );
+    if (legacyRows.length > 0 && legacyRows[0].value !== undefined && legacyRows[0].value !== null) {
+      return legacyRows[0].value;
+    }
+
+    return defaultValue;
+  } catch (e) {
+    return defaultValue;
+  }
 }

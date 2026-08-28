@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { fetchGeminiWithFallback } from '../../../../lib/gemini-fallback';
 import { NextResponse } from 'next/server';
 import { queryTable, insertRows } from '../../../../../egdesk-helpers';
+import { getTenantSetting } from '@/lib/tenant';
 
 /**
  * POST: AI 동적 견적 제안 단가 연산 및 제안 편지글 생성
@@ -18,12 +19,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: '견적 산정을 위한 품목이 지정되지 않았습니다.' }, { status: 400 });
     }
 
-    // 본사 프로필 로드 (기본값 주식회사 원컨덕터트레이딩/지상현/031-319-9090)
+    // 본사 프로필 로드 (테넌트 격리 지원 getTenantSetting 활용)
     let myCompanyProfile = { companyName: '주식회사 원컨덕터트레이딩', representative: '지상현', phone: '031-319-9090' };
     try {
-      const myCompanySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
-      if (myCompanySetting.rows && myCompanySetting.rows.length > 0) {
-        const parsed = JSON.parse(myCompanySetting.rows[0].value);
+      const myCompanySettingVal = await getTenantSetting('my_company_profile');
+      if (myCompanySettingVal) {
+        const parsed = JSON.parse(myCompanySettingVal);
         if (parsed.companyName) myCompanyProfile.companyName = parsed.companyName;
         if (parsed.representative) myCompanyProfile.representative = parsed.representative;
       }
@@ -34,8 +35,7 @@ export async function POST(req: Request) {
     // 1. DB에서 API 키 조회
     let apiKey: string | null = null;
     try {
-      const settingsRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } });
-      apiKey = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
+      apiKey = await getTenantSetting('google_ai_api_key');
     } catch (e) {
       console.error('Failed to get api key, using high-fidelity dynamic pricing fallback');
     }
@@ -44,18 +44,15 @@ export async function POST(req: Request) {
     let customRules: any = null;
     let customLetterTemplate: string | null = null;
     try {
-      const rulesRes = await queryTable('system_settings', { filters: { key: 'estimate_discount_rules' } });
-      if (rulesRes.rows && rulesRes.rows.length > 0) {
-        customRules = JSON.parse(rulesRes.rows[0].value);
+      const rulesVal = await getTenantSetting('estimate_discount_rules');
+      if (rulesVal) {
+        customRules = JSON.parse(rulesVal);
       }
     } catch (e) {
       console.error('커스텀 할인 규칙 조회 실패:', e);
     }
     try {
-      const templateRes = await queryTable('system_settings', { filters: { key: 'estimate_letter_template' } });
-      if (templateRes.rows && templateRes.rows.length > 0) {
-        customLetterTemplate = templateRes.rows[0].value;
-      }
+      customLetterTemplate = await getTenantSetting('estimate_letter_template');
     } catch (e) {
       console.error('커스텀 편지 템플릿 조회 실패:', e);
     }

@@ -80,6 +80,7 @@ export interface ParsedSalesOrderGroup {
     warning?: string;
   }>;
   file_url?: string;
+  raw_ocr_data?: any;
 }
 
 export default function SalesOrderOcrModal({
@@ -96,7 +97,7 @@ export default function SalesOrderOcrModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrFilename, setOcrFilename] = useState("");
   const [receiverMatched, setReceiverMatched] = useState<boolean>(true);
-  const [myCompanyName, setMyCompanyName] = useState<string>("주식회사 쿠스");
+  const [myCompanyName, setMyCompanyName] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("SUB_OPERATOR");
   const [userName, setUserName] = useState<string>("");
   const [forceBypass, setForceBypass] = useState<boolean>(false);
@@ -180,8 +181,24 @@ export default function SalesOrderOcrModal({
         console.error("세션 조회 실패:", e);
       }
     }
+    async function fetchCompanyProfile() {
+      try {
+        const res = await apiFetch("/api/settings?key=my_company_profile");
+        const data = await res.json();
+        if (data.success && data.value) {
+          const p = JSON.parse(data.value);
+          if (p.companyName) {
+            setMyCompanyName(p.companyName);
+          }
+        }
+      } catch (e) {
+        console.warn("회사 프로필 조회 실패:", e);
+      }
+    }
+
     if (isOpen) {
       fetchUserRole();
+      fetchCompanyProfile();
       fetchPresetsList();
       const savedUrl = getSavedGoogleSheetUrl('sales_order_inbound_sheet_url');
       if (savedUrl) setGoogleSheetUrl(savedUrl);
@@ -807,13 +824,28 @@ export default function SalesOrderOcrModal({
             originalTotalAmount: data.originalTotalAmount || 0,
             originalTotalQuantity: data.originalTotalQuantity || 0,
             isValid: warnings.length === 0,
-            validationWarnings: warnings
+            validationWarnings: warnings,
+            raw_ocr_data: {
+              partner_name: data.partner_name,
+              partner_phone: data.partner_phone,
+              partner_manager: data.partner_manager,
+              business_number: data.business_number,
+              representative: data.representative,
+              address: data.address,
+              document_number: data.document_number,
+              document_date: data.document_date,
+              delivery_date: data.delivery_date,
+              document_memo: data.document_memo,
+              items: data.items
+            }
           };
           setParsedGroups([singleGroup]);
           setExpandedGroupIds(new Set([singleGroup.id]));
           setOcrForm(singleGroup);
           setReceiverMatched(data.receiver_matched !== false);
-          setMyCompanyName(data.my_company_name || "주식회사 쿠스");
+          if (data.my_company_name) {
+            setMyCompanyName(data.my_company_name);
+          }
           setOcrScanning(false);
           setOcrSuccess(true);
         } else {
@@ -1287,64 +1319,117 @@ export default function SalesOrderOcrModal({
                         {/* 아코디언 상세 내용 (인라인 실시간 직접 수정 지원) */}
                         {isExpanded && (
                           <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3.5 text-left animate-fade-in">
-                            <div className="grid grid-cols-2 gap-2.5 bg-white p-3 rounded-xl border border-slate-200/80">
-                              <div>
-                                <label className="text-[10px] text-slate-500 font-bold block mb-1">발주처 (상호명)</label>
-                                <input
-                                  type="text"
-                                  value={group.partner_name}
-                                  placeholder="미기재 (클릭하여 상호명 입력)"
-                                  onChange={(e) => handleUpdateGroupField(group.id, 'partner_name', e.target.value)}
-                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                                />
+                            <div className="bg-white p-3 rounded-xl border border-slate-200/80 space-y-2.5">
+                              <div className="grid grid-cols-2 gap-2.5">
+                                <div>
+                                  <label className="text-[10px] text-slate-500 font-bold block mb-1">발주처 (상호명) *</label>
+                                  <input
+                                    type="text"
+                                    value={group.partner_name}
+                                    placeholder="상호명 입력"
+                                    onChange={(e) => handleUpdateGroupField(group.id, 'partner_name', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-slate-500 font-bold block mb-1">연락처</label>
+                                  <input
+                                    type="text"
+                                    value={group.partner_phone}
+                                    placeholder="010-0000-0000"
+                                    onChange={(e) => handleUpdateGroupField(group.id, 'partner_phone', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                  />
+                                </div>
                               </div>
+
+                              <div className="grid grid-cols-2 gap-2.5">
+                                <div>
+                                  <label className="text-[10px] text-slate-500 font-bold block mb-1">사업자등록번호</label>
+                                  <input
+                                    type="text"
+                                    value={group.business_number}
+                                    placeholder="000-00-00000"
+                                    onChange={(e) => handleUpdateGroupField(group.id, 'business_number', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-slate-500 font-bold block mb-1">대표자 성명</label>
+                                  <input
+                                    type="text"
+                                    value={group.representative}
+                                    placeholder="대표자명 입력"
+                                    onChange={(e) => handleUpdateGroupField(group.id, 'representative', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2.5">
+                                <div>
+                                  <label className="text-[10px] text-slate-500 font-bold block mb-1">담당자 (발주자)</label>
+                                  <input
+                                    type="text"
+                                    value={group.partner_manager}
+                                    placeholder="담당자명 입력"
+                                    onChange={(e) => handleUpdateGroupField(group.id, 'partner_manager', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-indigo-950 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-slate-500 font-bold block mb-1">문서 발주번호</label>
+                                  <input
+                                    type="text"
+                                    value={group.document_number}
+                                    placeholder="고객 발주서 고유번호"
+                                    onChange={(e) => handleUpdateGroupField(group.id, 'document_number', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2.5">
+                                <div>
+                                  <label className="text-[10px] text-slate-500 font-bold block mb-1">문서 발주일자</label>
+                                  <input
+                                    type="text"
+                                    value={group.document_date}
+                                    placeholder="YYYY-MM-DD"
+                                    onChange={(e) => handleUpdateGroupField(group.id, 'document_date', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-slate-500 font-bold block mb-1">납기요청일</label>
+                                  <input
+                                    type="date"
+                                    value={group.delivery_date}
+                                    onChange={(e) => handleUpdateGroupField(group.id, 'delivery_date', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-emerald-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none cursor-pointer"
+                                  />
+                                </div>
+                              </div>
+
                               <div>
-                                <label className="text-[10px] text-slate-500 font-bold block mb-1">사업자등록번호</label>
+                                <label className="text-[10px] text-slate-500 font-bold block mb-1">소재지 / 납품 주소</label>
                                 <input
                                   type="text"
-                                  value={group.business_number}
-                                  placeholder="000-00-00000"
-                                  onChange={(e) => handleUpdateGroupField(group.id, 'business_number', e.target.value)}
+                                  value={group.address}
+                                  placeholder="납품 및 배송 주소"
+                                  onChange={(e) => handleUpdateGroupField(group.id, 'address', e.target.value)}
                                   className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                                 />
                               </div>
+
                               <div>
-                                <label className="text-[10px] text-slate-500 font-bold block mb-1">대표자 성명</label>
-                                <input
-                                  type="text"
-                                  value={group.representative}
-                                  placeholder="대표자명 입력"
-                                  onChange={(e) => handleUpdateGroupField(group.id, 'representative', e.target.value)}
-                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] text-slate-500 font-bold block mb-1">담당자 (발주자)</label>
-                                <input
-                                  type="text"
-                                  value={group.partner_manager}
-                                  placeholder="담당자명, 사번 등"
-                                  onChange={(e) => handleUpdateGroupField(group.id, 'partner_manager', e.target.value)}
-                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-indigo-950 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] text-slate-500 font-bold block mb-1">연락처</label>
-                                <input
-                                  type="text"
-                                  value={group.partner_phone}
-                                  placeholder="010-0000-0000"
-                                  onChange={(e) => handleUpdateGroupField(group.id, 'partner_phone', e.target.value)}
-                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] text-slate-500 font-bold block mb-1">납기요청일</label>
-                                <input
-                                  type="date"
-                                  value={group.delivery_date}
-                                  onChange={(e) => handleUpdateGroupField(group.id, 'delivery_date', e.target.value)}
-                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-emerald-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                <label className="text-[10px] text-slate-500 font-bold block mb-1">기타 비고 및 특기사항</label>
+                                <textarea
+                                  value={group.document_memo}
+                                  placeholder="특기사항, 결제조건 등"
+                                  rows={2}
+                                  onChange={(e) => handleUpdateGroupField(group.id, 'document_memo', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none resize-none"
                                 />
                               </div>
                             </div>
@@ -1413,8 +1498,8 @@ export default function SalesOrderOcrModal({
                   })}
                 </div>
               ) : (
-                /* 단일 바이어 발주서인 경우 상세 폼 */
-                <div className="space-y-4">
+                /* 단일 바이어 발주서인 경우 표준 상세 폼 (SalesOrderExcelModal과 100% 일치) */
+                <div className="space-y-4 text-left">
                   {ocrForm.validationWarnings && ocrForm.validationWarnings.length > 0 && (
                     <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 font-bold flex items-center gap-1.5 text-left">
                       <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -1422,76 +1507,290 @@ export default function SalesOrderOcrModal({
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-3 text-left">
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">바이어명</label>
+                  {/* 1. 바이어 및 문서 메타 정보 */}
+                  <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100 space-y-4">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      1. 바이어 & 문서 정보
+                    </span>
+
+                    <div className="grid grid-cols-2 gap-3 text-left">
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold block mb-1">바이어명 *</label>
+                        <input 
+                          type="text" 
+                          value={ocrForm.partner_name}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setOcrForm(prev => ({ ...prev, partner_name: val }));
+                            if (parsedGroups.length > 0) handleUpdateGroupField(parsedGroups[0].id, 'partner_name', val);
+                          }}
+                          placeholder="상호명을 입력해 주세요."
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold block mb-1">연락처</label>
+                        <input 
+                          type="text" 
+                          value={ocrForm.partner_phone}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setOcrForm(prev => ({ ...prev, partner_phone: val }));
+                            if (parsedGroups.length > 0) handleUpdateGroupField(parsedGroups[0].id, 'partner_phone', val);
+                          }}
+                          placeholder="010-0000-0000"
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-left">
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold block mb-1">사업자번호</label>
+                        <input 
+                          type="text" 
+                          value={ocrForm.business_number}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setOcrForm(prev => ({ ...prev, business_number: val }));
+                            if (parsedGroups.length > 0) handleUpdateGroupField(parsedGroups[0].id, 'business_number', val);
+                          }}
+                          placeholder="000-00-00000"
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold block mb-1">대표자명</label>
+                        <input 
+                          type="text" 
+                          value={ocrForm.representative}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setOcrForm(prev => ({ ...prev, representative: val }));
+                            if (parsedGroups.length > 0) handleUpdateGroupField(parsedGroups[0].id, 'representative', val);
+                          }}
+                          placeholder="대표자명을 입력해 주세요."
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-left">
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold block mb-1">담당자명</label>
+                        <input 
+                          type="text" 
+                          value={ocrForm.partner_manager}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setOcrForm(prev => ({ ...prev, partner_manager: val }));
+                            if (parsedGroups.length > 0) handleUpdateGroupField(parsedGroups[0].id, 'partner_manager', val);
+                          }}
+                          placeholder="담당자명을 입력해 주세요."
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold block mb-1">문서 발주번호</label>
+                        <input 
+                          type="text" 
+                          value={ocrForm.document_number}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setOcrForm(prev => ({ ...prev, document_number: val }));
+                            if (parsedGroups.length > 0) handleUpdateGroupField(parsedGroups[0].id, 'document_number', val);
+                          }}
+                          placeholder="고객 발주서 상의 고유번호"
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-left">
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold block mb-1">문서 발주일자</label>
+                        <input 
+                          type="text" 
+                          value={ocrForm.document_date}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setOcrForm(prev => ({ ...prev, document_date: val }));
+                            if (parsedGroups.length > 0) handleUpdateGroupField(parsedGroups[0].id, 'document_date', val);
+                          }}
+                          placeholder="YYYY-MM-DD"
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <label className="text-[10px] text-slate-500 font-bold block">납기요청일</label>
+                          <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black rounded-md flex items-center shadow-2xs select-none">
+                            📅 납기일
+                          </span>
+                        </div>
+                        <input 
+                          type="date" 
+                          value={ocrForm.delivery_date}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setOcrForm(prev => ({ ...prev, delivery_date: val }));
+                            if (parsedGroups.length > 0) handleUpdateGroupField(parsedGroups[0].id, 'delivery_date', val);
+                          }}
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 cursor-pointer outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="text-left">
+                      <label className="text-[10px] text-slate-500 font-bold block mb-1">소재지 / 납품 주소</label>
                       <input 
                         type="text" 
-                        value={ocrForm.partner_name}
-                        onChange={e => setOcrForm(prev => ({ ...prev, partner_name: e.target.value }))}
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                        value={ocrForm.address}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setOcrForm(prev => ({ ...prev, address: val }));
+                          if (parsedGroups.length > 0) handleUpdateGroupField(parsedGroups[0].id, 'address', val);
+                        }}
+                        placeholder="주소를 입력해 주세요."
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">연락처</label>
-                      <input 
-                        type="text" 
-                        value={ocrForm.partner_phone}
-                        onChange={e => setOcrForm(prev => ({ ...prev, partner_phone: e.target.value }))}
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+
+                    <div className="text-left">
+                      <label className="text-[10px] text-slate-500 font-bold block mb-1">기타 비고 및 특기사항</label>
+                      <textarea 
+                        value={ocrForm.document_memo}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setOcrForm(prev => ({ ...prev, document_memo: val }));
+                          if (parsedGroups.length > 0) handleUpdateGroupField(parsedGroups[0].id, 'document_memo', val);
+                        }}
+                        rows={2}
+                        placeholder="비고 내용을 입력해 주세요."
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 resize-none"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 text-left">
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">발주번호</label>
-                      <input 
-                        type="text" 
-                        value={ocrForm.document_number}
-                        onChange={e => setOcrForm(prev => ({ ...prev, document_number: e.target.value }))}
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1">납기요청일</label>
-                      <input 
-                        type="date" 
-                        value={ocrForm.delivery_date}
-                        onChange={e => setOcrForm(prev => ({ ...prev, delivery_date: e.target.value }))}
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
-                      />
-                    </div>
-                  </div>
-
+                  {/* 2. 세부 품목 및 단가 조율 */}
                   <div className="space-y-2 text-left">
-                    <label className="text-[10px] text-slate-400 font-bold block">상세 발주 품목 ({ocrForm.items.length}개)</label>
-                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] text-slate-400 font-bold block">
+                        2. 세부 품목 및 단가 조율 ({ocrForm.items.length}개 품목)
+                      </label>
+                      <span className="text-[10px] text-indigo-600 font-semibold">수량/단가 변경 시 총액 자동 계산</span>
+                    </div>
+
+                    <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
                       {ocrForm.items.map((item, idx) => (
-                        <div key={idx} className="bg-white p-3 rounded-2xl border border-slate-200 flex items-center justify-between text-xs font-semibold">
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-slate-800">{item.product_name}</span>
-                              {item.validItemCode && (
-                                <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-black rounded">
+                        <div key={idx} className="bg-white p-3 rounded-2xl border border-slate-200 flex flex-col gap-2 text-xs font-semibold shadow-2xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex-1">
+                              <label className="block text-[9px] font-bold text-slate-500 mb-0.5">품명 *</label>
+                              <input 
+                                type="text" 
+                                value={item.product_name}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  const newItems = [...ocrForm.items];
+                                  newItems[idx] = { ...newItems[idx], product_name: val };
+                                  setOcrForm(prev => ({ ...prev, items: newItems }));
+                                  if (parsedGroups.length > 0) handleUpdateGroupItem(parsedGroups[0].id, idx, 'product_name', val);
+                                }}
+                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:bg-white focus:border-indigo-500"
+                                required
+                              />
+                            </div>
+                            {item.validItemCode && (
+                              <div className="shrink-0 self-end mb-1">
+                                <span className="px-2 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg border border-emerald-200 flex items-center gap-1">
+                                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
                                   {item.validItemCode}
                                 </span>
-                              )}
-                            </div>
-                            {item.spec && <span className="text-[10px] text-slate-400 block mt-0.5">규격: {item.spec}</span>}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-right">
-                            <span className="font-bold text-slate-700">{item.quantity}개 × {item.unit_price.toLocaleString()}원</span>
-                            <span className="text-xs font-black text-indigo-700 block mt-0.5">{(item.quantity * item.unit_price).toLocaleString()}원</span>
+
+                          <div className="grid grid-cols-4 gap-2">
+                            <div>
+                              <label className="block text-[9px] font-bold text-slate-500 mb-0.5">품목코드</label>
+                              <input 
+                                type="text" 
+                                value={item.item_code || ""}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  const newItems = [...ocrForm.items];
+                                  newItems[idx] = { ...newItems[idx], item_code: val };
+                                  setOcrForm(prev => ({ ...prev, items: newItems }));
+                                  if (parsedGroups.length > 0) handleUpdateGroupItem(parsedGroups[0].id, idx, 'item_code', val);
+                                }}
+                                placeholder="코드"
+                                className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold outline-none focus:bg-white focus:border-indigo-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold text-slate-500 mb-0.5">규격(Spec)</label>
+                              <input 
+                                type="text" 
+                                value={item.spec || ""}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  const newItems = [...ocrForm.items];
+                                  newItems[idx] = { ...newItems[idx], spec: val };
+                                  setOcrForm(prev => ({ ...prev, items: newItems }));
+                                  if (parsedGroups.length > 0) handleUpdateGroupItem(parsedGroups[0].id, idx, 'spec', val);
+                                }}
+                                placeholder="규격"
+                                className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold outline-none focus:bg-white focus:border-indigo-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold text-slate-500 mb-0.5">수량</label>
+                              <input 
+                                type="number" 
+                                value={item.quantity}
+                                onChange={e => {
+                                  const val = Math.max(1, parseInt(e.target.value) || 0);
+                                  const newItems = [...ocrForm.items];
+                                  newItems[idx] = { ...newItems[idx], quantity: val };
+                                  setOcrForm(prev => ({ ...prev, items: newItems }));
+                                  if (parsedGroups.length > 0) handleUpdateGroupItem(parsedGroups[0].id, idx, 'quantity', val);
+                                }}
+                                className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-right outline-none focus:bg-white focus:border-indigo-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold text-slate-500 mb-0.5">단가 (원)</label>
+                              <input 
+                                type="number" 
+                                value={item.unit_price}
+                                onChange={e => {
+                                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                                  const newItems = [...ocrForm.items];
+                                  newItems[idx] = { ...newItems[idx], unit_price: val };
+                                  setOcrForm(prev => ({ ...prev, items: newItems }));
+                                  if (parsedGroups.length > 0) handleUpdateGroupItem(parsedGroups[0].id, idx, 'unit_price', val);
+                                }}
+                                className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-right outline-none focus:bg-white focus:border-indigo-500"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                            <span className="text-slate-400">품목 합계 금액</span>
+                            <span className="font-black text-indigo-700 font-mono text-xs">
+                              {(item.quantity * item.unit_price).toLocaleString()}원
+                            </span>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* 총액 패널 */}
-                  <div className="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-100 flex items-center justify-between text-left">
-                    <span className="text-xs font-extrabold text-slate-600">수주 등록 총액 (총 {ocrForm.items.length}개 품목)</span>
+                  {/* 3. 총액 패널 */}
+                  <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-center justify-between text-left">
+                    <span className="text-xs font-extrabold text-slate-700">수주 등록 총액 (총 {ocrForm.items.length}개 품목)</span>
                     <span className="text-lg font-black text-indigo-700 font-mono">
                       {ocrForm.items.reduce((sum, it) => sum + (it.quantity * it.unit_price), 0).toLocaleString()}원
                     </span>

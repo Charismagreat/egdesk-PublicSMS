@@ -6,6 +6,8 @@ import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
 import { sendMail } from '../../../lib/email';
 import { checkRagApproval } from '../../../lib/rag-approval';
+import { getTenantSetting } from '@/lib/tenant';
+import { recordOcrCorrection } from '@/lib/ocr-fewshot-service';
 
 // 최고 관리자(SUPER_ADMIN) 권한 검증 헬퍼
 async function verifySuperAdmin() {
@@ -39,9 +41,9 @@ async function sendEstimateEmail(
     let providerHtml = '';
     let supplierName = '공급사';
     try {
-      const companySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
-      if (companySetting.rows?.[0]?.value) {
-        const p = JSON.parse(companySetting.rows[0].value);
+      const companySettingVal = await getTenantSetting('my_company_profile');
+      if (companySettingVal) {
+        const p = JSON.parse(companySettingVal);
         if (p.companyName) {
           supplierName = p.companyName;
         }
@@ -465,7 +467,8 @@ export async function POST(req: Request) {
 
       // 견적서 다이렉트 발송 채널 확장
       send_method = '',           // EMAIL, SMS, FAX
-      send_target = ''            // 수신 주소/번호
+      send_target = '',           // 수신 주소/번호
+      raw_ocr_data = null
     } = body;
 
     if (!partner_name) {
@@ -621,6 +624,31 @@ export async function POST(req: Request) {
 
     await insertRows('crm_estimate_items', detailRows);
 
+    // 🤖 사용자가 수정한 내용이 있을 경우 Few-shot 자율 학습 데이터로 자동 축적
+    if (raw_ocr_data) {
+      try {
+        await recordOcrCorrection({
+          tenantId,
+          documentType: isSalesOrderScan ? 'sales_order' : 'estimate',
+          partnerName: partner_name,
+          businessNumber: business_number,
+          rawData: raw_ocr_data,
+          correctedData: {
+            partner_name,
+            partner_phone,
+            partner_manager,
+            business_number,
+            representative,
+            address,
+            items: itemRows
+          },
+          operatorName: '운영자'
+        });
+      } catch (fdbErr: any) {
+        console.warn('Few-shot 피드백 저장 실패(무시됨):', fdbErr.message);
+      }
+    }
+
     // B2B 견적 발송 수단 연동 (이메일, 문자, 팩스)
     let emailSent = false;
     let smsSent = false;
@@ -642,9 +670,9 @@ export async function POST(req: Request) {
           // 본사 전화번호 조회
           let myCompanyPhone = '010-7216-5884';
           try {
-            const companySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
-            if (companySetting.rows?.[0]?.value) {
-              const p = JSON.parse(companySetting.rows[0].value);
+            const companySettingVal = await getTenantSetting('my_company_profile');
+            if (companySettingVal) {
+              const p = JSON.parse(companySettingVal);
               if (p.phone) myCompanyPhone = p.phone;
             }
           } catch (e) {}
@@ -673,22 +701,17 @@ export async function POST(req: Request) {
       else if (send_method === 'FAX' && send_target) {
         try {
           // 1. 시스템 설정에서 팩스 활성화 및 자격증명 조회
-          const faxEnableRes = await queryTable('system_settings', { filters: { key: 'fax_enable' } });
-          const faxEnable = faxEnableRes.rows?.[0]?.value === '1';
+          const faxEnableVal = await getTenantSetting('fax_enable');
+          const faxEnable = faxEnableVal === '1';
 
           if (!faxEnable) {
             throw new Error('시스템 설정에서 팩스 발신 기능이 비활성화 상태입니다. 설정 페이지를 확인해 주세요.');
           }
 
-          const faxProviderRes = await queryTable('system_settings', { filters: { key: 'fax_api_provider' } });
-          const faxLinkRes = await queryTable('system_settings', { filters: { key: 'fax_link_id' } });
-          const faxApiKeyRes = await queryTable('system_settings', { filters: { key: 'fax_api_key' } });
-          const faxSenderRes = await queryTable('system_settings', { filters: { key: 'fax_sender_number' } });
-
-          const provider = faxProviderRes.rows?.[0]?.value || 'popbill';
-          const linkId = faxLinkRes.rows?.[0]?.value || '';
-          const apiKey = faxApiKeyRes.rows?.[0]?.value || '';
-          const senderNum = faxSenderRes.rows?.[0]?.value || '';
+          const provider = (await getTenantSetting('fax_api_provider')) || 'popbill';
+          const linkId = (await getTenantSetting('fax_link_id')) || '';
+          const apiKey = (await getTenantSetting('fax_api_key')) || '';
+          const senderNum = (await getTenantSetting('fax_sender_number')) || '';
 
           if (!linkId || !apiKey || !senderNum) {
             throw new Error('팩스 API 연동을 위한 크레덴셜 정보(Link ID, API Key, 발신 번호)가 누락되었습니다.');

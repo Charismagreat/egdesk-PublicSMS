@@ -6,6 +6,7 @@ import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
 import crypto from 'crypto';
 import fs from 'fs';
+import { recordOcrCorrection } from '@/lib/ocr-fewshot-service';
 
 const dbPaths = [
   'C:/Users/CHARISMA/AppData/Roaming/EGDesk/user-data/development/projects/49a59fa4-40b6-40f4-8c3d-0231be79c7f9/user_data.db',
@@ -60,7 +61,8 @@ export async function POST(req: Request) {
       supplier_phone,
       transaction_type,
       document_memo,
-      items
+      items,
+      raw_ocr_data = null
     } = body;
 
     if (!document_type || !items || !Array.isArray(items) || items.length === 0) {
@@ -231,6 +233,29 @@ export async function POST(req: Request) {
 
     const result = runTransaction();
     console.log("Transaction successfully committed. Result:", result);
+
+    // 🤖 사용자가 수정한 내용이 있을 경우 Few-shot 자율 학습 데이터로 자동 축적
+    if (raw_ocr_data) {
+      try {
+        await recordOcrCorrection({
+          documentType: 'purchase_order',
+          partnerName: supplier_company,
+          rawData: raw_ocr_data,
+          correctedData: {
+            partner_name: supplier_company,
+            partner_phone: supplier_phone,
+            representative: supplier_owner,
+            address: supplier_address,
+            document_memo,
+            items
+          },
+          operatorName: username || '운영자'
+        });
+      } catch (fdbErr: any) {
+        console.warn('Few-shot 피드백 저장 실패(무시됨):', fdbErr.message);
+      }
+    }
+
     return NextResponse.json({ success: true, message: '거래 정보가 SCM 데이터베이스에 안전하게 등록되었습니다.', ...result });
 
   } catch (err: any) {

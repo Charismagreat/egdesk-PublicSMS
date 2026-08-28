@@ -20,7 +20,7 @@ export default function PurchaseOrderOcrModal({
   const [ocrFilename, setOcrFilename] = useState("");
   const [ocrScanStep, setOcrScanStep] = useState("");
   const [receiverMatched, setReceiverMatched] = useState<boolean>(true);
-  const [myCompanyName, setMyCompanyName] = useState<string>("주식회사 쿠스");
+  const [myCompanyName, setMyCompanyName] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("SUB_OPERATOR");
   const [userName, setUserName] = useState<string>("");
   const [forceBypass, setForceBypass] = useState<boolean>(false);
@@ -62,6 +62,7 @@ export default function PurchaseOrderOcrModal({
       };
     }>
   });
+  const [rawOcrData, setRawOcrData] = useState<any>(null);
 
   useEffect(() => {
     async function fetchUserRole() {
@@ -77,8 +78,24 @@ export default function PurchaseOrderOcrModal({
       }
     }
 
+    async function fetchCompanyProfile() {
+      try {
+        const res = await apiFetch("/api/settings?key=my_company_profile");
+        const data = await res.json();
+        if (data.success && data.value) {
+          const p = JSON.parse(data.value);
+          if (p.companyName) {
+            setMyCompanyName(p.companyName);
+          }
+        }
+      } catch (e) {
+        console.warn("회사 프로필 조회 실패:", e);
+      }
+    }
+
     if (isOpen) {
       fetchUserRole();
+      fetchCompanyProfile();
       // 기본 납기일 세팅 (7일 후)
       const future = new Date();
       future.setDate(future.getDate() + 7);
@@ -311,8 +328,23 @@ export default function PurchaseOrderOcrModal({
             items: parsedItems
           });
 
+          setRawOcrData({
+            partner_name: data.partner_name,
+            partner_phone: data.partner_phone,
+            partner_manager: data.partner_manager,
+            business_number: data.partner_business_number,
+            representative: data.partner_representative,
+            address: data.partner_address,
+            document_number: data.document_number,
+            document_date: data.document_date,
+            document_memo: memo,
+            items: parsedItems
+          });
+
           setReceiverMatched(data.receiver_matched !== false);
-          setMyCompanyName(data.my_company_name || "주식회사 쿠스");
+          if (data.my_company_name) {
+            setMyCompanyName(data.my_company_name);
+          }
           setOcrSuccess(true);
         } else {
           alert(data.error || "AI OCR 분석에 실패했습니다.");
@@ -393,7 +425,8 @@ export default function PurchaseOrderOcrModal({
         supplier_phone: ocrForm.partner_phone,
         transaction_type: ocrForm.transaction_type,
         document_memo: `[AI OCR] ${ocrForm.document_memo || ""}\n납기일: ${deliveryDate}`,
-        items: finalItems
+        items: finalItems,
+        raw_ocr_data: rawOcrData
       };
 
       const res = await apiFetch("/api/estimates/direct-register", {

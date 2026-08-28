@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { queryTable, insertRows, deleteRows, updateRows, uploadFile } from '../../../../egdesk-helpers';
 import { triggerAutomation } from '@/lib/automation-trigger';
 import { PointService } from '@/lib/point-service';
-import { getTenantId } from '@/lib/tenant';
+import { getTenantId, getTenantSetting } from '@/lib/tenant';
 import { gmAutomation } from '@/lib/google-messages';
 
 export async function GET(req: Request) {
@@ -119,10 +119,10 @@ export async function POST(req: Request) {
 
         // 🚨 [방법 A]: 테넌트 최고 관리자(사장님)에게 실시간 문자(SMS/LMS) 즉시 전송
         try {
-          const profileRes = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
           let adminPhone = '';
-          if (profileRes.rows && profileRes.rows.length > 0) {
-            const parsed = JSON.parse(profileRes.rows[0].value);
+          const profileVal = await getTenantSetting('my_company_profile');
+          if (profileVal) {
+            const parsed = JSON.parse(profileVal);
             adminPhone = parsed.phone || '';
           }
           

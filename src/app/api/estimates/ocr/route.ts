@@ -5,6 +5,8 @@ import { NextResponse } from 'next/server';
 import { queryTable, insertRows, AI_KEY_NAMES } from '../../../../../egdesk-helpers';
 import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
+import { getTenantSetting } from '@/lib/tenant';
+import { getFewShotPromptContext } from '@/lib/ocr-fewshot-service';
 
 // 현재 세션의 테넌트 ID 추출 헬퍼
 async function resolveTenantId(): Promise<string> {
@@ -33,12 +35,12 @@ export async function POST(req: Request) {
 
     console.log(`📌 [AI OCR SCAN (Estimate)]: 수신 파일명='${filename}', Base64 길이=${imageBase64.length}`);
 
-    // 본사 프로필 로드 (기본값 주식회사 원컨덕터트레이딩/2428700357)
+    // 본사 프로필 로드 (테넌트 격리 지원 getTenantSetting 활용)
     let myCompanyProfile = { companyName: '주식회사 원컨덕터트레이딩', businessNumber: '2428700357' };
     try {
-      const myCompanySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
-      if (myCompanySetting.rows && myCompanySetting.rows.length > 0) {
-        const parsed = JSON.parse(myCompanySetting.rows[0].value);
+      const myCompanySettingVal = await getTenantSetting('my_company_profile');
+      if (myCompanySettingVal) {
+        const parsed = JSON.parse(myCompanySettingVal);
         if (parsed.companyName) myCompanyProfile.companyName = parsed.companyName;
         if (parsed.businessNumber) myCompanyProfile.businessNumber = parsed.businessNumber;
       }
@@ -49,15 +51,8 @@ export async function POST(req: Request) {
     // 💡 수신인 검증 우회 설정 로드
     let bypassOcrReceiverCheck = false;
     try {
-      const tenantId = await resolveTenantId();
-      const cKey = `${tenantId}:bypass_ocr_receiver_check`;
-      let bypassSetting = await queryTable('system_settings', { filters: { key: cKey } });
-      if (!bypassSetting.rows || bypassSetting.rows.length === 0) {
-        bypassSetting = await queryTable('system_settings', { filters: { key: 'bypass_ocr_receiver_check' } });
-      }
-      if (bypassSetting.rows && bypassSetting.rows.length > 0) {
-        bypassOcrReceiverCheck = bypassSetting.rows[0].value === '1';
-      }
+      const bypassVal = await getTenantSetting('bypass_ocr_receiver_check', '0');
+      bypassOcrReceiverCheck = bypassVal === '1';
     } catch (e) {
       console.error('수신인 검증 우회 설정 조회 실패:', e);
     }
@@ -72,10 +67,7 @@ export async function POST(req: Request) {
     if (action === 'detect-orientation') {
       if (apiKey) {
         try {
-          const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
-          const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
-            ? modelRes.rows[0].value
-            : 'gemini-3.5-flash';
+          const selectedModel = (await getTenantSetting('google_ai_model')) || 'gemini-3.5-flash';
 
           console.log(`📌 [AI OCR Orientation Detect]: 수신 파일명='${filename}', 모델='${selectedModel}'`);
 
@@ -165,10 +157,7 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
         }
 
         // 1. DB에서 구글 AI 모델 설정 정보 로드
-        const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
-        const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
-          ? modelRes.rows[0].value
-          : 'gemini-3.5-flash';
+        const selectedModel = (await getTenantSetting('google_ai_model')) || 'gemini-3.5-flash';
 
         let ocrJson: any = {};
 
@@ -322,6 +311,18 @@ Do NOT output anything other than this JSON string. No markdown block wrapper.
 견적일
 견적 유효기간
 그 외 추출된 모든 내용`;
+            }
+
+            // 🤖 과거 사용자 교정 이력 기반 Few-Shot 자율 학습 가이드 로드
+            const tenantIdForFewShot = await resolveTenantId();
+            const fewShotGuide = await getFewShotPromptContext({
+              tenantId: tenantIdForFewShot,
+              documentType: document_type,
+              limit: 5
+            });
+
+            if (fewShotGuide) {
+              instruction = `${instruction}\n\n${fewShotGuide}`;
             }
 
             schemaProperties = {

@@ -60,7 +60,7 @@ export default function SalesOrderExcelModal({
   const [headerSignature, setHeaderSignature] = useState("");
   const [rememberFormat, setRememberFormat] = useState(true);
   
-  const [myCompanyName, setMyCompanyName] = useState<string>("주식회사 쿠스");
+  const [myCompanyName, setMyCompanyName] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("SUB_OPERATOR");
   const [userName, setUserName] = useState<string>("");
   const [deliveryDate, setDeliveryDate] = useState<string>("");
@@ -132,10 +132,13 @@ export default function SalesOrderExcelModal({
       }
 
       try {
-        const resSettings = await apiFetch("/api/production/grant");
-        const dataSettings = await resSettings.json();
-        if (dataSettings.success && dataSettings.companyProfile?.company_name) {
-          setMyCompanyName(dataSettings.companyProfile.company_name);
+        const res = await apiFetch("/api/settings?key=my_company_profile");
+        const data = await res.json();
+        if (data.success && data.value) {
+          const p = JSON.parse(data.value);
+          if (p.companyName) {
+            setMyCompanyName(p.companyName);
+          }
         }
       } catch (e) {
         console.error("회사 정보 조회 실패:", e);

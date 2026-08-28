@@ -47,6 +47,7 @@ export interface ParsedEstimateGroup {
     isValid?: boolean;
     warning?: string;
   }>;
+  raw_ocr_data?: any;
 }
 
 interface EstimateOcrModalProps {
@@ -72,7 +73,7 @@ export default function EstimateOcrModal({
   const [ocrFilename, setOcrFilename] = useState("");
   const [ocrScanStep, setOcrScanStep] = useState("");
   const [receiverMatched, setReceiverMatched] = useState<boolean>(true);
-  const [myCompanyName, setMyCompanyName] = useState<string>("주식회사 쿠스");
+  const [myCompanyName, setMyCompanyName] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("SUB_OPERATOR");
   const [userName, setUserName] = useState<string>("");
   const [forceBypass, setForceBypass] = useState<boolean>(false);
@@ -158,8 +159,24 @@ export default function EstimateOcrModal({
         setGoogleSheetUrl("");
       }
     }
+    async function fetchCompanyProfile() {
+      try {
+        const res = await apiFetch("/api/settings?key=my_company_profile");
+        const data = await res.json();
+        if (data.success && data.value) {
+          const p = JSON.parse(data.value);
+          if (p.companyName) {
+            setMyCompanyName(p.companyName);
+          }
+        }
+      } catch (e) {
+        console.warn("회사 프로필 조회 실패:", e);
+      }
+    }
+
     if (isOpen) {
       fetchUserRoleAndSettings();
+      fetchCompanyProfile();
       fetchPresetsList();
     }
   }, [isOpen]);
@@ -172,7 +189,6 @@ export default function EstimateOcrModal({
     setOcrFilename("");
     setOcrScanStep("");
     setReceiverMatched(true);
-    setMyCompanyName("주식회사 쿠스");
     setForceBypass(false);
     setBypassReason("");
     setParsedGroups([]);
@@ -719,7 +735,19 @@ export default function EstimateOcrModal({
             originalTotalAmount: data.originalTotalAmount || 0,
             originalTotalQuantity: data.originalTotalQuantity || 0,
             isValid: warnings.length === 0,
-            validationWarnings: warnings
+            validationWarnings: warnings,
+            raw_ocr_data: {
+              partner_name: data.partner_name,
+              partner_phone: data.partner_phone,
+              partner_manager: data.partner_manager,
+              business_number: data.partner_business_number,
+              representative: data.partner_representative,
+              address: data.partner_address,
+              document_number: data.document_number,
+              document_date: data.document_date,
+              document_memo: data.document_memo,
+              items: data.items
+            }
           };
           setParsedGroups([singleGroup]);
           setExpandedGroupId(singleGroup.id);
@@ -729,6 +757,10 @@ export default function EstimateOcrModal({
             isValid: warnings.length === 0,
             validationWarnings: warnings
           });
+          setReceiverMatched(data.receiver_matched !== false);
+          if (data.my_company_name) {
+            setMyCompanyName(data.my_company_name);
+          }
           setOcrScanning(false);
           setOcrSuccess(true);
         }
@@ -786,7 +818,8 @@ export default function EstimateOcrModal({
           force_bypass: forceBypass,
           bypass_reason: bypassReason,
           approver_name: userName || "시스템운영자",
-          approver_role: userRole
+          approver_role: userRole,
+          raw_ocr_data: group.raw_ocr_data || null
         };
 
         const res = await apiFetch("/api/estimates/save-ocr", {

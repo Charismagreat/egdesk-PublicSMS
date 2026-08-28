@@ -6,6 +6,8 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
 import { queryTable, insertRows, executeSQL, getGeminiApiKey, AI_KEY_NAMES } from '../../../../../egdesk-helpers';
+import { getTenantSetting } from '@/lib/tenant';
+import { getFewShotPromptContext } from '@/lib/ocr-fewshot-service';
 import fs from 'fs';
 import path from 'path';
 
@@ -114,8 +116,7 @@ export async function POST(req: Request) {
     const pdfFilePath = image;
 
     // 2. DB에서 AI 설정 정보 로드 및 이지데스크 연동 키 조회
-    const settingsRes = await queryTable('system_settings', { filters: { key: 'google_ai_api_key' } });
-    let googleApiKey = settingsRes.rows && settingsRes.rows.length > 0 ? settingsRes.rows[0].value : null;
+    let googleApiKey = await getTenantSetting('google_ai_api_key');
 
     // 만약 DB에 키가 없거나 실물 구글 API 키 형식이 아닌 경우 (SaaS 환경 / ai-caller 활용 등)
     // 이지데스크 프록시를 통해 복호화된 키를 수신하여 구동합니다.
@@ -133,10 +134,7 @@ export async function POST(req: Request) {
     // 여전히 키가 없다면 이지데스크가 중계할 수 있도록 AI_KEY_NAMES[0]로 폴백 세팅합니다.
     const apiKey = googleApiKey || ((AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'wonconduct');
 
-    const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
-    const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
-      ? modelRes.rows[0].value
-      : 'gemini-3.5-flash';
+    const selectedModel = (await getTenantSetting('google_ai_model')) || 'gemini-3.5-flash';
 
     // 2-1. 1차 작업 종류 추천 모드 지원
     if (action === 'detect_actions') {
@@ -226,8 +224,15 @@ export async function POST(req: Request) {
       typeFilterInstruction = `\n[중요 제약 조건] 반드시 사용자가 최종 선택한 다음 작업 타입들만 분석하여 detectedItems 배열 안에 채워주세요: ${JSON.stringify(selectedTypes)}\n그 외의 타입은 분석 대상에서 완전히 제외하고 출력하지 마십시오.\n`;
     }
 
+    // 🤖 과거 사용자 교정 이력 기반 Few-Shot 자율 학습 가이드 로드
+    const fewShotGuideForEasybot = await getFewShotPromptContext({
+      documentType: 'easybot',
+      limit: 5
+    });
+
     const geminiPrompt = `${typeFilterInstruction}제공된 문서 이미지나 PDF 속에는 여러 장의 명함, 사업자등록증, 영수증(지출 증빙), 재무제표, 거래명세서, 이력서(PDF/이미지), 병원 진단서/처방전, 매입 명세서(원가 청구서), 경쟁사 가격 캡처 화면, 설비 제조 명판, 설비 수기 점검표, 또는 법원 소장/송달장/판결문 등의 소송 법률 문서가 혼재되어 있을 수 있습니다.
 각 문서들을 지능적으로 개별 검출하여 detectedItems 배열 안에 순서대로 담아 응답해 주세요.
+${fewShotGuideForEasybot}
 
 각 아이템은 다음 13가지 타입 중 하나여야 합니다:
 1. 명함 ("BUSINESS_CARD"):
@@ -440,11 +445,7 @@ ${JSON.stringify(facilitiesListForRag)}
     }
 
     // 국세청 검증용 API 키 로드
-    const ntsKeyRes = await queryTable('system_settings', { filters: { key: 'nts_api_key' } });
-    let ntsApiKey = ntsKeyRes.rows && ntsKeyRes.rows.length > 0 ? ntsKeyRes.rows[0].value : null;
-    if (!ntsApiKey) {
-      ntsApiKey = process.env.NTS_BUSINESS_API_KEY || null;
-    }
+    let ntsApiKey = (await getTenantSetting('nts_api_key')) || process.env.NTS_BUSINESS_API_KEY || null;
 
     const inventoryItemsRes = await queryTable('inventory_items', {});
     const allInventoryItems = inventoryItemsRes.rows || [];
@@ -452,13 +453,13 @@ ${JSON.stringify(facilitiesListForRag)}
     const trackedItemsRes = await queryTable('tracked_items', {});
     const allTrackedItems = trackedItemsRes.rows || [];
 
-    // 본사 프로필 로드 (기본값 주식회사 원컨덕터트레이딩/2428700357)
+    // 본사 프로필 로드 (테넌트 격리 지원 getTenantSetting 활용)
     let myCompanyName = '주식회사 원컨덕터트레이딩';
     let myCompanyBizNo = '2428700357';
     try {
-      const myCompanySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
-      if (myCompanySetting.rows && myCompanySetting.rows.length > 0) {
-        const parsed = JSON.parse(myCompanySetting.rows[0].value);
+      const myCompanySettingVal = await getTenantSetting('my_company_profile');
+      if (myCompanySettingVal) {
+        const parsed = JSON.parse(myCompanySettingVal);
         if (parsed.companyName) myCompanyName = parsed.companyName;
         if (parsed.businessNumber) myCompanyBizNo = parsed.businessNumber;
       }
@@ -705,14 +706,14 @@ ${JSON.stringify(facilitiesListForRag)}
         let companyType = 'PARTNER';
         let matchedCompanyName = '';
 
-        const myCompanySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
         let myCompanyName = '';
-        if (myCompanySetting.rows && myCompanySetting.rows.length > 0) {
-          try {
-            const profile = JSON.parse(myCompanySetting.rows[0].value);
+        try {
+          const myCompanySettingVal = await getTenantSetting('my_company_profile');
+          if (myCompanySettingVal) {
+            const profile = JSON.parse(myCompanySettingVal);
             myCompanyName = profile.companyName || '';
-          } catch (e) {}
-        }
+          }
+        } catch (e) {}
 
         if (ocrInfo.companyName && myCompanyName && (ocrInfo.companyName.includes(myCompanyName) || myCompanyName.includes(ocrInfo.companyName))) {
           partnerId = 'MY-COMPANY';
@@ -1083,14 +1084,14 @@ ${JSON.stringify(facilitiesListForRag)}
 
     // 본사 및 전체 거래처 목록 조회
     const allPartners = [];
-    const myCompanySettingForList = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
     let myCompanyNameForList = '';
-    if (myCompanySettingForList.rows && myCompanySettingForList.rows.length > 0) {
-      try {
-        const profile = JSON.parse(myCompanySettingForList.rows[0].value);
+    try {
+      const myCompanySettingVal = await getTenantSetting('my_company_profile');
+      if (myCompanySettingVal) {
+        const profile = JSON.parse(myCompanySettingVal);
         myCompanyNameForList = profile.companyName || '';
-      } catch (e) {}
-    }
+      }
+    } catch (e) {}
     
     if (myCompanyNameForList) {
       allPartners.push({

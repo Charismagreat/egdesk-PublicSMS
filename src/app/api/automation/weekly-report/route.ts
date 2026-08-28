@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { queryTable } from '../../../../../egdesk-helpers';
 import { sendMail } from '../../../../lib/email';
 import { callAI } from '../../../../lib/ai-router';
+import { getTenantSetting } from '@/lib/tenant';
 
 /**
  * POST: AI 주간 경영 분석 리포트 자동 생성 및 사장님 이메일 발송
@@ -59,9 +60,9 @@ export async function POST(req: Request) {
     let bossEmail = 'chachogreat@gmail.com';
     let companyName = '이지데스크 본사';
     try {
-      const companySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
-      if (companySetting.rows?.[0]?.value) {
-        const p = JSON.parse(companySetting.rows[0].value);
+      const companySettingVal = await getTenantSetting('my_company_profile');
+      if (companySettingVal) {
+        const p = JSON.parse(companySettingVal);
         if (p.email) bossEmail = p.email;
         if (p.companyName) companyName = p.companyName;
       }

@@ -3,6 +3,8 @@ import { fetchGeminiWithFallback, repairJson } from '../../../../lib/gemini-fall
 import { executeSQL, insertRows, queryTable, listBusinessIdentitySnapshots, listKnowledgeDocuments, getKnowledgeDocument, getGeminiApiKey, AI_KEY_NAMES } from '../../../../../egdesk-helpers';
 import { cookies } from 'next/headers';
 import { decodeJwt } from 'jose';
+import { getTenantSetting } from '@/lib/tenant';
+import { recordOcrCorrection, getFewShotPromptContext } from '@/lib/ocr-fewshot-service';
 
 // 최고 관리자(SUPER_ADMIN/PRESIDENT) 권한 검증 헬퍼
 async function verifyAdminRole() {
@@ -54,7 +56,8 @@ export async function POST(req: Request) {
         partner_name, partner_phone, partner_manager, items = [], file_url, 
         business_number, representative, address, document_number, document_date, 
         delivery_date, document_memo, approvers = [],
-        force_bypass = false, bypass_reason = ''
+        force_bypass = false, bypass_reason = '',
+        raw_ocr_data = null
       } = body;
 
       const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
@@ -169,6 +172,35 @@ export async function POST(req: Request) {
         _version: 1
       }]);
 
+      // 🤖 사용자가 수정한 내용이 있을 경우 Few-shot 자율 학습 데이터로 자동 축적
+      if (raw_ocr_data) {
+        try {
+          await recordOcrCorrection({
+            tenantId,
+            documentType: 'sales_order',
+            partnerName: partner_name,
+            businessNumber: business_number,
+            rawData: raw_ocr_data,
+            correctedData: {
+              partner_name,
+              partner_phone,
+              partner_manager,
+              business_number,
+              representative,
+              address,
+              document_number,
+              document_date,
+              delivery_date,
+              document_memo,
+              items
+            },
+            operatorName: bypassApprovedBy || '운영자'
+          });
+        } catch (fdbErr: any) {
+          console.warn('Few-shot 피드백 저장 실패(무시됨):', fdbErr.message);
+        }
+      }
+
       return NextResponse.json({
         success: true,
         message: '발주서 스캔 및 수주 등록이 완료되었습니다.',
@@ -202,10 +234,7 @@ export async function POST(req: Request) {
     // 이지데스크 본사에서 제공하는 AI API 키 이름을 egdesk-helpers에서 동적으로 추출하여 사용합니다. (설치된 PC 환경 호환성 확보)
     const apiKey = (AI_KEY_NAMES && AI_KEY_NAMES.length > 0) ? AI_KEY_NAMES[0] : 'DUMMY_AI_CALLER_API_KEY';
 
-    const modelRes = await queryTable('system_settings', { filters: { key: 'google_ai_model' } });
-    const selectedModel = modelRes.rows && modelRes.rows.length > 0 && modelRes.rows[0].value
-      ? modelRes.rows[0].value
-      : 'gemini-3.5-flash';
+    const selectedModel = (await getTenantSetting('google_ai_model')) || 'gemini-3.5-flash';
 
     // RAG 지식 규정 마이닝 (사용자 요청에 따라 테스트 중 일시적 비활성화 처리)
     let rlsRulesText = '';
@@ -257,16 +286,16 @@ export async function POST(req: Request) {
     }
     */
 
-    // 본사 프로필 로드 (하드코딩 제거, DB 설정 조회로만 가동하며 없으면 검증을 우회합니다)
+    // 본사 프로필 로드 (테넌트 격리 지원 getTenantSetting 활용)
     let myCompanyProfile = { companyName: '', businessNumber: '' };
     let hasMyCompanyProfile = false;
     try {
-      const myCompanySetting = await queryTable('system_settings', { filters: { key: 'my_company_profile' } });
-      if (myCompanySetting && myCompanySetting.rows && myCompanySetting.rows.length > 0) {
-        const parsed = JSON.parse(myCompanySetting.rows[0].value);
+      const myCompanySettingVal = await getTenantSetting('my_company_profile');
+      if (myCompanySettingVal) {
+        const parsed = JSON.parse(myCompanySettingVal);
         if (parsed.companyName) myCompanyProfile.companyName = parsed.companyName;
         if (parsed.businessNumber) myCompanyProfile.businessNumber = parsed.businessNumber;
-        if (myCompanyProfile.companyName && myCompanyProfile.businessNumber) {
+        if (myCompanyProfile.companyName || myCompanyProfile.businessNumber) {
           hasMyCompanyProfile = true;
         }
       }
@@ -359,7 +388,15 @@ const geminiUrlPass1 = `https://generativelanguage.googleapis.com/v1beta/models/
       throw new Error('1차 AI 판독 결과 텍스트가 비어 있거나 올바르지 않습니다.');
     }
 
-    // 2차 호출: Pass 2 (NLP Structuring + RAG 규칙 연동 - 최종 JSON 빌드)
+    // 🤖 과거 사용자 교정 이력 기반 Few-Shot 자율 학습 가이드 로드
+    const tenantIdForFewShot = await resolveTenantId();
+    const fewShotGuide = await getFewShotPromptContext({
+      tenantId: tenantIdForFewShot,
+      documentType: 'sales_order',
+      limit: 5
+    });
+
+    // 2차 호출: Pass 2 (NLP Structuring + RAG 규칙 연동 + Few-Shot 자율 교정 - 최종 JSON 빌드)
     const promptPass2 = `
 당신은 B2B 전문 AI 수발주 오퍼레이터입니다. 제공된 수주서(받은 발주서) 파일에서 정보를 정밀하게 추출하여 지침에 따라 정제된 최종 JSON 데이터만 반환하세요. 문서에 없는 항목은 '문서 내에 기재되어 있지 않음' 또는 빈 값("")으로 처리합니다.
 
@@ -367,6 +404,7 @@ const geminiUrlPass1 = `https://generativelanguage.googleapis.com/v1beta/models/
 ---
 ${responseTextPass1}
 ---
+${fewShotGuide}
 
 [정제 및 비즈니스 룰]
 1. 거래처 식별: 공급 주체(수주처) 정보는 'supplier'에, 구매/발주 주체(발주처) 정보는 'buyer' 객체에 정확히 분리 매핑하세요. 담당자 정보나 전화번호가 교차 오인되지 않게 주의하세요. 
@@ -688,13 +726,7 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
       await executeSQL('ALTER TABLE crm_estimate_items ADD COLUMN delivery_date TEXT');
     } catch(e) {}
 
-    const tenantId = await resolveTenantId();
-    const cKey = `${tenantId}:bypass_ocr_receiver_check`;
-    let bypassCheckRes = await queryTable('system_settings', { filters: { key: cKey } });
-    if (!bypassCheckRes.rows || bypassCheckRes.rows.length === 0) {
-      bypassCheckRes = await queryTable('system_settings', { filters: { key: 'bypass_ocr_receiver_check' } });
-    }
-    const bypassCheck = bypassCheckRes.rows && bypassCheckRes.rows.length > 0 ? bypassCheckRes.rows[0].value : '0';
+    const bypassCheck = (await getTenantSetting('bypass_ocr_receiver_check', '0')) || '0';
     
     // 💡 [본사설정 부재 시 바이패스] 본사 프로필 설정이 없으면 무조건 검증을 바이패스(우회) 처리합니다.
     const receiverMatched = (bypassCheck === '1' || !hasMyCompanyProfile) ? true : (isSupplierMyCompany || isBuyerMyCompany);

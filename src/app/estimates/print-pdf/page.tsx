@@ -1,5 +1,6 @@
 import React from "react";
 import { queryTable } from "../../../../egdesk-helpers";
+import { getTenantSetting } from "@/lib/tenant";
 import { Metadata } from "next";
 
 interface PrintPdfPageProps {
@@ -76,9 +77,9 @@ export default async function PrintPdfPage({ searchParams }: PrintPdfPageProps) 
     sealImages: [] as string[]
   };
   try {
-    const compProfile = await queryTable("system_settings", { filters: { key: "my_company_profile" } });
-    if (compProfile.rows?.[0]?.value) {
-      const parsed = JSON.parse(compProfile.rows[0].value);
+    const compProfileVal = await getTenantSetting("my_company_profile");
+    if (compProfileVal) {
+      const parsed = JSON.parse(compProfileVal);
       supplier = { ...supplier, ...parsed };
     }
   } catch (e) {

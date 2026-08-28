@@ -153,5 +153,17 @@ See `.agents/rules/egdesk-dev-context.md` for full details.
    - 열 너비 자동 맞춤, 통화 금액 포맷팅, 일관된 파일명 명명 규칙(`YYYY-MM-DD_대장명.xlsx`)을 준수해야 합니다.
 <!-- END:data-export-and-sync-rules -->
 
+<!-- BEGIN:ocr-fewshot-correction-rules -->
+## 전사 OCR 기능 개발 및 페이지 신설 시 Few-shot 자율 교정 엔진 의무 적용 규칙
+
+1. **중앙 Few-shot 교정 서비스(`@/lib/ocr-fewshot-service.ts`) 의무 연동**:
+   - 발주서, 견적서, 거래명세서, 영수증, 사업자등록증, 명함, 통관서류 등 시스템 내 모든 OCR 기능 및 신규 입력 페이지에서는 반드시 `@/lib/ocr-fewshot-service.ts`의 자율 교정 엔진을 적용해야 합니다.
+2. **OCR 분석 시 Few-shot 프롬프트 가이드 동적 주입**:
+   - Vision AI / Gemini 프롬프트 생성 시 `getFewShotPromptContext({ tenantId, documentType, partnerName })`를 호출하여 과거 사용자가 직접 교정한 규칙 및 오인식 방지 지침을 프롬프트 상단에 필수로 주입해야 합니다.
+3. **저장 및 확정 승인 시 원시 스냅샷(`raw_ocr_data`) 대조 및 피드백 자동 적재**:
+   - OCR 프론트엔드 모달/화면은 최초 AI 분석 결과를 `raw_ocr_data`로 보존하고 저장 API 호출 시 함께 전송해야 합니다.
+   - 백엔드 API 라우트는 `recordOcrCorrection`을 호출하여 원시 판독값과 사용자 최종 수정값 간의 차이점(Diff)을 자동 감지하고 `ai_ocr_feedback_corrections` 테이블에 적재하여 다음 OCR 분석 시 스스로 보정하도록 자율 학습 피드백 루프를 보장해야 합니다.
+<!-- END:ocr-fewshot-correction-rules -->
+
 
 
