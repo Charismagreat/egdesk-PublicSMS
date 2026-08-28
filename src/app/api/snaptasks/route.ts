@@ -205,14 +205,20 @@ console.log("[DEBUG 2] govLogs active length:", govLogs.length);
                 }
               } catch (pe) {}
             }
-            // 💡 취소 요청 로그가 존재하는 경우 원본 카드 상태를 PENDING_APPROVAL로 전파
+            // 💡 취소 요청 로그가 존재하는 경우 원본 카드 상태를 PENDING_APPROVAL 또는 CANCELLED/DONE으로 전파
             if (isCancelLog) {
               if (log.status !== 'APPROVED' && log.status !== 'RESOLVED' && log.status !== 'REJECTED') {
                 existingTask.status = 'PENDING_APPROVAL';
                 existingTask.has_cancel_request = true;
+              } else if (log.status === 'APPROVED' || log.status === 'RESOLVED') {
+                existingTask.status = 'DONE';
+                existingTask.is_cancelled = true;
+                existingTask.cancel_status = 'APPROVED';
+                if (!existingTask.description || !existingTask.description.includes('취소')) {
+                  existingTask.description = '최고관리자에 의해 취소 승인 완료 (데이터 삭제 및 폐기 처리)';
+                }
               }
-            }
-            if (log.status === 'APPROVED' || log.status === 'FORCE_APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED') {
+            } else if (log.status === 'APPROVED' || log.status === 'FORCE_APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED') {
               existingTask.status = 'DONE';
             }
           } else if (!isCancelLog) {

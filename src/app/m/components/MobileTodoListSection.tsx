@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CheckSquare, Square, Search, AlertCircle, Plus, Calendar, Folder, ShieldCheck, Clock, FileText, ExternalLink } from "lucide-react";
+import { CheckSquare, Square, Search, AlertCircle, Plus, Calendar, Folder, ShieldCheck, Clock, FileText, ExternalLink, XCircle, Trash2, Ban } from "lucide-react";
 
 interface MobileTodoListSectionProps {
   todoTab: "active" | "completed" | "folders";
@@ -289,6 +289,17 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
             ) : (
               filteredTasks.map((t) => {
                 const isDone = t.status === "DONE";
+                const isCancelledTask = Boolean(
+                  t.is_cancelled ||
+                  t.cancel_status === 'APPROVED' ||
+                  t.status === 'CANCELLED' ||
+                  (isDone && t.has_cancel_request) ||
+                  (isDone && (t.description || '').includes('삭제 승인')) ||
+                  (isDone && (t.description || '').includes('취소 승인')) ||
+                  (isDone && (t.description || '').includes('폐기')) ||
+                  (isDone && (t.title || '').includes('취소'))
+                );
+
                 const isAdminAssigned = 
                   t.created_by?.includes('최고관리자') || 
                   t.category === 'ADMIN_DIRECTIVE' || 
@@ -303,7 +314,9 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                     key={t.id}
                     onClick={() => onSelectTask && onSelectTask(t)}
                     className={`p-3 rounded-xl border transition-all flex items-start gap-2.5 text-left cursor-pointer active:scale-[0.99] ${
-                      isDone
+                      isCancelledTask
+                        ? "bg-rose-50/30 border-rose-200/80 hover:border-rose-300 shadow-2xs"
+                        : isDone
                         ? "bg-slate-50/70 border-slate-200/60 opacity-80"
                         : "bg-white border-slate-200 hover:border-indigo-300 shadow-2xs"
                     }`}
@@ -316,9 +329,11 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                         handleTaskCheckClick(t);
                       }}
                       className="mt-0.5 text-slate-400 border-none bg-transparent cursor-pointer shrink-0"
-                      title={isDone ? "완료됨" : isAdminAssigned ? "클릭하여 업무 완료 처리" : "최고관리자 관제 승인 대기"}
+                      title={isCancelledTask ? "취소 승인 완료됨" : isDone ? "정상 완료됨" : isAdminAssigned ? "클릭하여 업무 완료 처리" : "최고관리자 관제 승인 대기"}
                     >
-                      {isDone ? (
+                      {isCancelledTask ? (
+                        <XCircle className="w-4 h-4 text-rose-500" />
+                      ) : isDone ? (
                         <CheckSquare className="w-4 h-4 text-emerald-600" />
                       ) : (
                         <Square className="w-4 h-4 text-slate-400 hover:text-indigo-600" />
@@ -329,16 +344,25 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                       <div className="flex items-center justify-between gap-1">
                         <p
                           className={`text-xs font-extrabold leading-snug ${
-                            isDone ? "line-through text-slate-400" : "text-slate-800"
+                            isCancelledTask
+                              ? "line-through text-rose-950/70"
+                              : isDone
+                              ? "line-through text-slate-400"
+                              : "text-slate-800"
                           }`}
                         >
                           {displayTitle}
                         </p>
                         {/* 관제 상태 뱃지 및 취소 요청 버튼 */}
-                        {isDone ? (
-                          <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center gap-0.5 shrink-0">
+                        {isCancelledTask ? (
+                          <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-rose-100 text-rose-700 border border-rose-200/80 flex items-center gap-0.5 shrink-0 shadow-3xs">
+                            <XCircle className="w-3 h-3 text-rose-600" />
+                            <span>취소 승인</span>
+                          </span>
+                        ) : isDone ? (
+                          <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center gap-0.5 shrink-0 shadow-3xs">
                             <ShieldCheck className="w-3 h-3" />
-                            <span>완료</span>
+                            <span>정상 완료</span>
                           </span>
                         ) : t.status === 'PENDING_APPROVAL' ? (
                           <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-0.5 shrink-0">

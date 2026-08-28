@@ -60,7 +60,26 @@ export default function MobileTaskDetailModal({
     }
   });
 
+  const isCancelledTask = Boolean(
+    task.is_cancelled ||
+    task.cancel_status === 'APPROVED' ||
+    task.status === 'CANCELLED' ||
+    (isDone && task.has_cancel_request) ||
+    (isDone && (task.description || '').includes('삭제 승인')) ||
+    (isDone && (task.description || '').includes('취소 승인')) ||
+    (isDone && (task.description || '').includes('폐기')) ||
+    (isDone && (task.title || '').includes('취소'))
+  );
+
   const getStatusBadge = () => {
+    if (isCancelledTask) {
+      return (
+        <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-800 border border-rose-200/80 px-2.5 py-0.5 rounded-full text-xs font-black">
+          <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+          <span>🚫 취소 승인 완료 (데이터 폐기)</span>
+        </span>
+      );
+    }
     if (isPendingCancel) {
       return (
         <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-800 border border-rose-200/80 px-2.5 py-0.5 rounded-full text-xs font-black">
@@ -73,7 +92,7 @@ export default function MobileTaskDetailModal({
       return (
         <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 px-2.5 py-0.5 rounded-full text-xs font-black">
           <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-          <span>🟢 완료됨</span>
+          <span>🟢 정상 완료됨</span>
         </span>
       );
     }
