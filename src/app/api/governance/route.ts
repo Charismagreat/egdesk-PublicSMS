@@ -357,6 +357,11 @@ export async function GET(request: Request) {
             }
           });
 
+          const realCancelOperator = 
+            (matchedCancelLog?.operator && matchedCancelLog.operator !== '김직원' && matchedCancelLog.operator !== 'SUPER_ADMIN_DEV' && matchedCancelLog.operator !== 'system')
+              ? matchedCancelLog.operator
+              : (log.operator || log.created_by || '이주용');
+
           const extendedLog = {
             ...log,
             due_date: log.due_date || log.dueStr || null,
@@ -365,12 +370,8 @@ export async function GET(request: Request) {
             attachments: attachments,
             combined_ai_analysis_text: combinedAiAnalysisText,
             has_cancel_request: Boolean(matchedCancelLog),
-            cancel_log: matchedCancelLog || null,
-            cancel_request_operator: matchedCancelLog
-              ? (matchedCancelLog.operator && matchedCancelLog.operator !== 'SUPER_ADMIN_DEV' && matchedCancelLog.operator !== 'system'
-                  ? matchedCancelLog.operator
-                  : (log.operator || log.created_by || '직원'))
-              : null
+            cancel_log: matchedCancelLog ? { ...matchedCancelLog, operator: realCancelOperator } : null,
+            cancel_request_operator: matchedCancelLog ? realCancelOperator : null
           };
 
           const hasCancelReq = Boolean(matchedCancelLog);
@@ -382,7 +383,7 @@ export async function GET(request: Request) {
           }
 
           const subtitleText = hasCancelReq
-            ? `🚨 [취소 요청 접수] ${matchedCancelLog?.operator || log.operator || '직원'} 님의 업무 취소/기각 관제 검토 건`
+            ? `🚨 [취소 요청 접수] ${realCancelOperator} 님의 업무 취소/기각 관제 검토 건`
             : (isMobileReq
                 ? `[현장 상신] AI 분석 기반 신규 등록 요청 검토 건`
                 : `${log.doc_type === 'estimate' ? '견적서' : log.doc_type === 'purchase_order' ? '발주서' : '수주서'} 삭제 시도 보류 건`);
@@ -406,17 +407,20 @@ export async function GET(request: Request) {
           const isLogResolved = cl.status === 'APPROVED' || cl.status === 'RESOLVED' || cl.status === 'DONE' || cl.status === 'COMPLETED';
           
           let rawClTitle = (cl.doc_title || '업무 취소 승인 요청').replace(/^AI 결재 보류:\s*/, '').trim();
+          const clOp = (cl.operator && cl.operator !== '김직원' && cl.operator !== 'SUPER_ADMIN_DEV' && cl.operator !== 'system')
+            ? cl.operator
+            : (cl.created_by || '이주용');
 
           events.push({
             id: `cancel_req_${cl.id}`,
             type: 'TASK_CANCEL_REQUEST',
             title: rawClTitle,
-            subtitle: `🚨 [취소 요청 접수] ${cl.operator || '임직원'} 님의 업무 취소/기각 관제 검토 건 (업무 ID: ${cl.doc_id || '-'})`,
+            subtitle: `🚨 [취소 요청 접수] ${clOp} 님의 업무 취소/기각 관제 검토 건 (업무 ID: ${cl.doc_id || '-'})`,
             status: isLogResolved ? 'RESOLVED' : 'WAITING',
             created_at: cl.created_at || nowStr,
             due_date: cl.due_date || null,
             resolved_at: cl.updated_at || cl.resolved_at || cl.created_at || nowStr,
-            data: cl
+            data: { ...cl, operator: clOp, cancel_request_operator: clOp }
           });
         });
       } catch (e) {
