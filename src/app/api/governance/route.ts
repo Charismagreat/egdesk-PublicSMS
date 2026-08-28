@@ -2891,7 +2891,22 @@ ${JSON.stringify(operators || [], null, 2)}
         }
       }
 
-      // 최종 상태 해결 완료 전환 처리
+      // 최종 상태 해결 완료 전환 처리 (관제 원장 상태 RESOLVED 완결)
+      if (eventId) {
+        const logRawId = eventId
+          .replace('event_rag_hold_', '')
+          .replace('rag_hold_', '')
+          .replace('event_cancel_req_', '')
+          .replace('cancel_req_', '');
+
+        await updateRows('crm_governance_logs', {
+          status: 'RESOLVED',
+          updated_at: nowStr,
+          updated_by: adminUser,
+          resolved_at: nowStr
+        }, { filters: { id: logRawId } });
+      }
+
       if (eventType === 'STORE_ORDER' && docId) {
         await updateRows('crm_orders', { status: '배송준비' }, { filters: { id: docId } });
       }
