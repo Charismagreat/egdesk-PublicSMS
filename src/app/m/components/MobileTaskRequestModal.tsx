@@ -441,19 +441,12 @@ export function MobileTaskRequestModal({
                   <span>{targetType === "TODO" ? "할 일에 상신 등록하기 🚀" : "태스크 폴더에 저장하기 📁"}</span>
                 </>
               )}
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
+            </button>
+          </div>
+        </form>
       </div>
-
-      {/* 🔍 수집 항목 파일명 터치 시 팝업 미리보기 모달 */}
-      <MobileItemViewerModal
-        isOpen={isViewerOpen}
-        onClose={() => setIsViewerOpen(false)}
-        item={viewerItem}
-      />
-    </>
+    </div>
   );
-};
+}
+
+export default MobileTaskRequestModal;
