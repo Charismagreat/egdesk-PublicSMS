@@ -1,4 +1,4 @@
-import { queryTable, insertRows, executeSQL } from '../../egdesk-helpers';
+import { queryTable, insertRows, executeSQL, createTable } from '../../egdesk-helpers';
 
 export interface OcrCorrectionParams {
   tenantId?: string;
@@ -15,37 +15,45 @@ export interface FewShotQueryParams {
   documentType: string;
   partnerName?: string;
   businessNumber?: string;
+  rawText?: string;
   limit?: number;
 }
 
+let isTableInitialized = false;
+
 /**
- * 테이블 생성 및 7종 감사 컬럼 자동 보장
+ * 테이블 생성 및 메타데이터 정식 등록 (egdesk-helpers의 createTable 사용)
  */
 async function ensureFeedbackTableExists() {
+  if (isTableInitialized) return;
   try {
-    await executeSQL(`
-      CREATE TABLE IF NOT EXISTS ai_ocr_feedback_corrections (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT,
-        document_type TEXT,
-        partner_name TEXT,
-        business_number TEXT,
-        raw_data TEXT,
-        corrected_data TEXT,
-        diff_summary TEXT,
-        created_by TEXT,
-        created_at TEXT,
-        uuid TEXT,
-        updated_at TEXT,
-        updated_by TEXT,
-        deleted_at TEXT,
-        deleted_by TEXT,
-        restored_at TEXT,
-        restored_by TEXT
-      )
-    `);
-  } catch (e) {
-    // 이미 존재하는 경우 무시
+    await createTable('AI OCR 피드백 자율 교정 대장', [
+      { name: 'id', type: 'TEXT', notNull: true },
+      { name: 'tenant_id', type: 'TEXT' },
+      { name: 'document_type', type: 'TEXT' },
+      { name: 'partner_name', type: 'TEXT' },
+      { name: 'business_number', type: 'TEXT' },
+      { name: 'raw_data', type: 'TEXT' },
+      { name: 'corrected_data', type: 'TEXT' },
+      { name: 'diff_summary', type: 'TEXT' },
+      { name: 'created_by', type: 'TEXT' },
+      { name: 'created_at', type: 'TEXT' },
+      { name: 'uuid', type: 'TEXT' },
+      { name: 'updated_at', type: 'TEXT' },
+      { name: 'updated_by', type: 'TEXT' },
+      { name: 'deleted_at', type: 'TEXT' },
+      { name: 'deleted_by', type: 'TEXT' },
+      { name: 'restored_at', type: 'TEXT' },
+      { name: 'restored_by', type: 'TEXT' }
+    ], {
+      tableName: 'ai_ocr_feedback_corrections',
+      uniqueKeyColumns: ['id'],
+      description: 'OCR 판독 결과에 대한 사용자 수정 이력 및 Few-shot 자율 교정 지식 저장소'
+    });
+    isTableInitialized = true;
+  } catch (e: any) {
+    // 이미 존재하는 경우
+    isTableInitialized = true;
   }
 }
 
@@ -57,20 +65,20 @@ function computeDiffSummary(raw: any, corrected: any): string[] {
   if (!raw || !corrected) return diffs;
 
   // 거래처 메타 필드 비교
-  if (raw.partner_name && corrected.partner_name && raw.partner_name !== corrected.partner_name) {
-    diffs.push(`[거래처 상호] 원본 '${raw.partner_name}' ➔ 교정 '${corrected.partner_name}'`);
+  if (corrected.partner_name && (!raw.partner_name || raw.partner_name.trim() !== corrected.partner_name.trim())) {
+    diffs.push(`[거래처 상호] 원본 '${raw.partner_name || '미기재'}' ➔ 교정 '${corrected.partner_name}'`);
   }
-  if (raw.business_number && corrected.business_number && raw.business_number !== corrected.business_number) {
-    diffs.push(`[사업자번호] 원본 '${raw.business_number}' ➔ 교정 '${corrected.business_number}'`);
+  if (corrected.business_number && (!raw.business_number || raw.business_number.trim() !== corrected.business_number.trim())) {
+    diffs.push(`[사업자번호] 원본 '${raw.business_number || '미기재'}' ➔ 교정 '${corrected.business_number}'`);
   }
-  if (raw.representative && corrected.representative && raw.representative !== corrected.representative) {
-    diffs.push(`[대표자명] 원본 '${raw.representative}' ➔ 교정 '${corrected.representative}'`);
+  if (corrected.representative && (!raw.representative || raw.representative.trim() !== corrected.representative.trim())) {
+    diffs.push(`[대표자명] 원본 '${raw.representative || '미기재'}' ➔ 교정 '${corrected.representative}'`);
   }
-  if (raw.document_number && corrected.document_number && raw.document_number !== corrected.document_number) {
-    diffs.push(`[문서번호] 원본 '${raw.document_number}' ➔ 교정 '${corrected.document_number}'`);
+  if (corrected.document_number && (!raw.document_number || raw.document_number.trim() !== corrected.document_number.trim())) {
+    diffs.push(`[문서번호] 원본 '${raw.document_number || '미기재'}' ➔ 교정 '${corrected.document_number}'`);
   }
-  if (raw.address && corrected.address && raw.address !== corrected.address) {
-    diffs.push(`[주소] 원본 '${raw.address}' ➔ 교정 '${corrected.address}'`);
+  if (corrected.address && (!raw.address || raw.address.trim() !== corrected.address.trim())) {
+    diffs.push(`[주소] 원본 '${raw.address || '미기재'}' ➔ 교정 '${corrected.address}'`);
   }
 
   // 품목 리스트 비교
@@ -79,23 +87,35 @@ function computeDiffSummary(raw: any, corrected: any): string[] {
 
   correctedItems.forEach((cItem: any, idx: number) => {
     const rItem = rawItems[idx];
-    const cName = cItem.product_name || cItem.itemName || '';
-    const rName = rItem ? (rItem.product_name || rItem.itemName || '') : '';
+    const cName = (cItem.product_name || cItem.itemName || '').trim();
+    const rName = (rItem ? (rItem.product_name || rItem.itemName || '') : '').trim();
 
-    if (rName && cName && rName !== cName) {
-      diffs.push(`[품목명 #${idx + 1}] 원본 '${rName}' ➔ 교정 '${cName}'`);
+    if (cName && (!rName || rName !== cName)) {
+      diffs.push(`[품목명 #${idx + 1}] 원본 '${rName || '미기재/공란'}' ➔ 교정 '${cName}'`);
     }
 
-    const cCode = cItem.item_code || cItem.itemCode || cItem.validItemCode || '';
-    const rCode = rItem ? (rItem.item_code || rItem.itemCode || rItem.validItemCode || '') : '';
-    if (rCode && cCode && rCode !== cCode) {
-      diffs.push(`[품목코드 #${idx + 1}] 원본 '${rCode}' ➔ 교정 '${cCode}'`);
+    const cCode = (cItem.item_code || cItem.itemCode || cItem.validItemCode || '').trim();
+    const rCode = (rItem ? (rItem.item_code || rItem.itemCode || rItem.validItemCode || '') : '').trim();
+    if (cCode && (!rCode || rCode !== cCode)) {
+      diffs.push(`[품목코드 #${idx + 1}] 원본 '${rCode || '미기재'}' ➔ 교정 '${cCode}'`);
+    }
+
+    const cSpec = (cItem.spec || '').trim();
+    const rSpec = (rItem ? (rItem.spec || '') : '').trim();
+    if (cSpec && (!rSpec || rSpec !== cSpec)) {
+      diffs.push(`[규격 #${idx + 1}] 원본 '${rSpec || '미기재'}' ➔ 교정 '${cSpec}'`);
     }
 
     const cPrice = Number(cItem.unit_price || cItem.unitPrice || 0);
     const rPrice = Number(rItem ? (rItem.unit_price || rItem.unitPrice || 0) : 0);
-    if (rPrice > 0 && cPrice > 0 && rPrice !== cPrice) {
+    if (cPrice > 0 && rPrice !== cPrice) {
       diffs.push(`[단가 #${idx + 1}] 원본 ${rPrice.toLocaleString()}원 ➔ 교정 ${cPrice.toLocaleString()}원`);
+    }
+
+    const cQty = Number(cItem.quantity || 0);
+    const rQty = Number(rItem ? (rItem.quantity || 0) : 0);
+    if (cQty > 0 && rQty !== cQty) {
+      diffs.push(`[수량 #${idx + 1}] 원본 ${rQty}개 ➔ 교정 ${cQty}개`);
     }
   });
 
@@ -171,37 +191,58 @@ export async function getFewShotPromptContext(params: FewShotQueryParams): Promi
       documentType,
       partnerName = '',
       businessNumber = '',
+      rawText = '',
       limit = 5
     } = params;
 
     // 해당 테넌트 및 문서 유형에 대한 최근 교정 이력 조회
     const filters: any = {
-      tenant_id: tenantId,
       document_type: documentType
     };
+    if (tenantId && tenantId !== 'all') {
+      filters.tenant_id = tenantId;
+    }
 
-    const res = await queryTable('ai_ocr_feedback_corrections', {
-      filters,
-      orderBy: 'created_at',
-      orderDirection: 'DESC',
-      limit: 20
-    });
+    let rows: any[] = [];
+    try {
+      const res = await queryTable('ai_ocr_feedback_corrections', {
+        filters,
+        orderBy: 'created_at',
+        orderDirection: 'DESC',
+        limit: 30
+      });
+      rows = (res?.rows || []).filter((r: any) => !r.deleted_at);
+    } catch (qErr: any) {
+      console.warn('ai_ocr_feedback_corrections 조회 실패(테이블 미생성 가능성):', qErr.message);
+      return '';
+    }
 
-    const rows = (res?.rows || []).filter((r: any) => !r.deleted_at);
     if (rows.length === 0) {
       return '';
     }
 
-    // 동일 거래처 우선 정렬
+    // 거래처 매칭 정렬 (파라미터 partnerName 우선, 그 다음 rawText 내 상호명 포함 여부)
     const cleanComp = (s: string) => (s || '').replace(/[^가-힣a-zA-Z0-9]/g, '');
     const targetComp = cleanComp(partnerName);
+    const cleanRawText = cleanComp(rawText);
 
-    const relevantRows = rows.filter((r: any) => {
-      if (!targetComp) return true;
+    // 가중치 점수 매기기
+    const scoredRows = rows.map((r: any) => {
+      let score = 0;
       const rowComp = cleanComp(r.partner_name);
-      return !rowComp || rowComp.includes(targetComp) || targetComp.includes(rowComp);
-    }).slice(0, limit);
 
+      if (targetComp && rowComp && (rowComp.includes(targetComp) || targetComp.includes(rowComp))) {
+        score += 100;
+      } else if (cleanRawText && rowComp && rowComp.length >= 2 && cleanRawText.includes(rowComp)) {
+        score += 80;
+      }
+
+      return { row: r, score };
+    });
+
+    scoredRows.sort((a, b) => b.score - a.score);
+
+    const relevantRows = scoredRows.slice(0, limit).map(s => s.row);
     if (relevantRows.length === 0) return '';
 
     const instructionItems: string[] = [];

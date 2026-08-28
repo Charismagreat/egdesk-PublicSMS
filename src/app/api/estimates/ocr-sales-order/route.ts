@@ -393,7 +393,8 @@ const geminiUrlPass1 = `https://generativelanguage.googleapis.com/v1beta/models/
     const fewShotGuide = await getFewShotPromptContext({
       tenantId: tenantIdForFewShot,
       documentType: 'sales_order',
-      limit: 5
+      rawText: responseTextPass1,
+      limit: 8
     });
 
     // 2차 호출: Pass 2 (NLP Structuring + RAG 규칙 연동 + Few-Shot 자율 교정 - 최종 JSON 빌드)

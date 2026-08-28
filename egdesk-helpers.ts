@@ -65,9 +65,12 @@ function buildServerEgdeskHeaders(): Record<string, string> {
     (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_KEY) ||
     EGDESK_CONFIG.apiKey;
   const projectId =
-    typeof process !== 'undefined' ? process.env?.NEXT_PUBLIC_EGDESK_PROJECT_ID : undefined;
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_PROJECT_ID) ||
+    (EGDESK_CONFIG as any).projectId;
   const egdeskEnv =
-    typeof process !== 'undefined' ? process.env?.NEXT_PUBLIC_EGDESK_ENV : undefined;
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_ENV) ||
+    (EGDESK_CONFIG as any).environment ||
+    'development';
   if (apiKey) headers['X-Api-Key'] = apiKey;
   if (projectId) headers['X-EGDesk-Project-Id'] = projectId;
   if (egdeskEnv) headers['X-EGDesk-Env'] = egdeskEnv;

@@ -773,6 +773,29 @@ export async function setupDatabase() {
     console.error('⚠️ 실시간 대기자 관리 테이블 생성 에러:', err.message);
   }
 
+  // 🤖 AI OCR 피드백 자율 교정 대장 생성 (7종 감사 컬럼 주입)
+  try {
+    await safeCreateTable('AI OCR 피드백 자율 교정 대장', [
+      { name: 'id', type: 'TEXT', notNull: true },
+      { name: 'tenant_id', type: 'TEXT' },
+      { name: 'document_type', type: 'TEXT' },
+      { name: 'partner_name', type: 'TEXT' },
+      { name: 'business_number', type: 'TEXT' },
+      { name: 'raw_data', type: 'TEXT' },
+      { name: 'corrected_data', type: 'TEXT' },
+      { name: 'diff_summary', type: 'TEXT' },
+      { name: 'created_by', type: 'TEXT' },
+      { name: 'created_at', type: 'TEXT' }
+    ], { 
+      tableName: 'ai_ocr_feedback_corrections', 
+      uniqueKeyColumns: ['id'],
+      description: 'OCR 판독 결과에 대한 사용자 수정 이력 및 Few-shot 자율 교정 지식 저장소'
+    });
+    console.log('✓ AI OCR 피드백 자율 교정(ai_ocr_feedback_corrections) 테이블 신설 완료.');
+  } catch (err: any) {
+    console.error('⚠️ AI OCR 피드백 자율 교정 테이블 생성 에러:', err.message);
+  }
+
   console.log('Database setup complete.');
 }
 
