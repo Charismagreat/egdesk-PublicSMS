@@ -1906,6 +1906,7 @@ ${JSON.stringify(operators || [], null, 2)}
         return NextResponse.json({ success: false, error: '수행할 액션 배열(actions)이 누락되었습니다.' }, { status: 400 });
       }
 
+      const tenantId = originalData?.tenant_id || originalData?.tenantId || await resolveTenantId() || 'tenant-wontrading';
       const actionReports: { action: string; success: boolean; detail: string }[] = [];
 
       let sharedSoId = '';
