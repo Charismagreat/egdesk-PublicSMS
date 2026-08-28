@@ -140,15 +140,21 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
 
     setIsSubmitting(true);
     try {
+      const smartTitle = 
+        title.trim() || 
+        (files.length > 0 && files[0]?.name ? files[0].name.replace(/\.[^/.]+$/, "") : "") || 
+        (photos.length > 0 && photos[0]?.name ? photos[0].name.replace(/\.[^/.]+$/, "") : "") || 
+        (voiceText.trim() ? voiceText.trim().substring(0, 30) : "현장 업무 접수");
+
       if (targetType === "TODO") {
-        await onSendGovernanceRequest(title || "자료 & 업무 등록 상신", voiceText, photos, files);
+        await onSendGovernanceRequest(smartTitle, voiceText, photos, files);
       } else {
         if (!selectedFolderId) {
           alert("보관할 태스크 폴더를 선택해 주세요.");
           setIsSubmitting(false);
           return;
         }
-        await onSaveToTaskFolder(selectedFolderId, title || "등록 자료", photos, files);
+        await onSaveToTaskFolder(selectedFolderId, smartTitle, photos, files);
       }
       setTitle("");
       setVoiceText("");

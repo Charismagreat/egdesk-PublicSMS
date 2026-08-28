@@ -1351,9 +1351,9 @@ export async function POST(request: Request) {
         }
       });
 
-      // 💡 모바일 현장 상신자 이름 정제 (body의 operator/submitter/user_name 우선 -> auth_token 쿠키 -> fallback '김직원')
+      // 💡 모바일 현장 상신자 이름 정제 (body의 operator/submitter/user_name 우선 -> auth_token 쿠키 -> fallback '이주용')
       let finalOperator = (operator || submitter || user_name || '').trim();
-      if (!finalOperator || finalOperator === 'SUPER_ADMIN_DEV') {
+      if (!finalOperator || finalOperator === 'SUPER_ADMIN_DEV' || finalOperator === '김직원') {
         try {
           const cookieStore = await cookies();
           const token = cookieStore.get('auth_token')?.value;
@@ -1368,19 +1368,20 @@ export async function POST(request: Request) {
           }
         } catch (e) {}
       }
-      if (!finalOperator || finalOperator === 'SUPER_ADMIN_DEV') {
-        finalOperator = '김직원';
+      if (!finalOperator || finalOperator === 'SUPER_ADMIN_DEV' || finalOperator === '김직원') {
+        finalOperator = '이주용';
       }
       
       // 💡 제목 자동 폴백 가드: 파일/사진이 첨부되어 있거나 제목이 공백인 경우 스마트 기본 타이틀 자동 할당
       if (!requestTitle) {
         if (allFiles.length > 0) {
           const firstFileName = allFiles[0]?.name || allFiles[0]?.filename || '현장 첨부 자료';
-          requestTitle = `[상신] ${firstFileName}`;
+          const pureFileName = firstFileName.replace(/\.[^/.]+$/, '');
+          requestTitle = `[상신] ${pureFileName}`;
         } else if (requestReason) {
           requestTitle = `[상신] ${requestReason.substring(0, 30)}`;
         } else {
-          requestTitle = `[상신] 모바일 현장 업무 및 수주 접수`;
+          requestTitle = `[상신] 현장 수주 및 업무 접수`;
         }
       }
 

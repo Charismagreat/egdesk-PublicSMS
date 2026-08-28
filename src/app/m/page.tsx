@@ -576,12 +576,23 @@ export default function MobileHubPage() {
   // AI 관제 상신 & 스냅태스크 발급 처리 함수
   const handleSendGovernanceRequest = async (titleInput: string, note: string, photosInput?: any[], filesInput?: any[]) => {
     try {
-      const rawTitle = (titleInput || "").trim() || "수주 등록 및 현장 접수";
-      const formattedTitle = rawTitle.startsWith("[상신]") ? rawTitle : `[상신] ${rawTitle}`;
       const photosToSend = photosInput && photosInput.length > 0 ? photosInput : requestPhotos;
       const filesToSend = filesInput && filesInput.length > 0 ? filesInput : requestFiles;
 
-      const currentOperator = (session as any)?.user?.name || (session as any)?.name || (session as any)?.username || "김직원";
+      let rawTitle = (titleInput || "").trim();
+      if (!rawTitle) {
+        const firstFile = (filesToSend[0] || photosToSend[0]);
+        if (firstFile?.name) {
+          rawTitle = firstFile.name.replace(/\.[^/.]+$/, "");
+        } else if (note?.trim()) {
+          rawTitle = note.trim().substring(0, 30);
+        } else {
+          rawTitle = "현장 수주 및 업무 접수";
+        }
+      }
+
+      const formattedTitle = rawTitle.startsWith("[상신]") ? rawTitle : `[상신] ${rawTitle}`;
+      const currentOperator = currentEmployee?.name || (session as any)?.name || (session as any)?.username || "이주용";
       const res = await apiFetch("/api/governance?action=create_log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

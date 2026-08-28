@@ -135,23 +135,37 @@ console.log("[DEBUG 1] snaptasksRows length:", snaptasksRows.length, "active:", 
         .map((t: any) => {
           const matchedPartner = partnersRows.find(p => String(p.id) === String(t.partner_id));
           
-          // 해당 스냅태스크의 실물 첨부 파일들 추출
-          const taskItems = itemsRows.filter(it => String(it.task_id) === String(t.id) && it.file_url && it.file_url.trim() !== '');
+          // 해당 스냅태스크의 실물 첨부 파일들 추출 (IMAGE, DOCUMENT, 파일 URL, 상신 첨부 텍스트 모두 지원)
+          const taskItems = itemsRows.filter(it => 
+            String(it.task_id) === String(t.id) && 
+            (it.file_type === 'IMAGE' || it.file_type === 'DOCUMENT' || (it.file_url && it.file_url.trim() !== '') || (it.content_text && it.content_text.startsWith('[상신 첨부]')))
+          );
+
           const attachments = taskItems.map(it => {
-            const fileName = it.content_text ? it.content_text.replace('[상신 첨부] ', '').trim() : `첨부서류_${it.id}`;
-            // 💡 Next.js 정적 public/ 폴더 서빙 꼬임 방지를 위해 100% 동적 통합 게이트웨이 엔드포인트로 파일 서빙
-            const downloadUrl = `/api/shared/files?tableName=crm_snaptask_items&rowId=${it.id}&columnName=file_url`;
+            const fileName = it.content_text ? it.content_text.replace('[상신 첨부] ', '').trim() : `첨부파일_${it.id}`;
+            const downloadUrl = it.file_url && (it.file_url.startsWith('http') || it.file_url.startsWith('data:'))
+              ? it.file_url
+              : `/api/shared/files?tableName=crm_snaptask_items&rowId=${it.id}&columnName=file_url`;
             
             return {
               id: it.id,
               name: fileName,
               url: downloadUrl,
-              fileType: it.file_type || 'DOCUMENT'
+              fileType: it.file_type || (fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? 'IMAGE' : 'DOCUMENT')
             };
           });
 
+          let displayTitle = t.title;
+          if (displayTitle === '[상신] 모바일 현장 업무 및 수주 접수' || displayTitle === '모바일 현장 업무 및 수주 접수') {
+            if (attachments.length > 0) {
+              const pureName = attachments[0].name.replace(/\.[^/.]+$/, '');
+              displayTitle = `[상신] ${pureName}`;
+            }
+          }
+
           return {
             ...t,
+            title: displayTitle,
             partner_company_name: matchedPartner ? matchedPartner.company_name : null,
             attachments: attachments
           };
@@ -231,20 +245,22 @@ console.log("[DEBUG 2] govLogs active length:", govLogs.length);
             const pureDocId = String(log.doc_id || '').replace(/^(mobile_req_|REQ-|ST-)/, '');
 
             const logMatchedItems = itemsRows.filter((it: any) => {
-              if (!it.file_url || it.file_url.trim() === '') return false;
               const pureItemId = String(it.task_id || '').replace(/^(mobile_req_|REQ-|ST-)/, '');
-              
-              return (
+              const isTaskMatch = 
                 String(it.task_id) === String(log.id) ||
                 String(it.task_id) === String(log.doc_id) ||
                 String(it.task_id) === String(log.uuid) ||
-                Boolean(pureItemId && (pureItemId === pureLogId || pureItemId === pureDocId))
-              );
+                Boolean(pureItemId && (pureItemId === pureLogId || pureItemId === pureDocId));
+              
+              if (!isTaskMatch) return false;
+              return it.file_type === 'IMAGE' || it.file_type === 'DOCUMENT' || (it.file_url && it.file_url.trim() !== '') || (it.content_text && it.content_text.startsWith('[상신 첨부]'));
             });
 
             const logAttachments = logMatchedItems.map((it: any) => {
-              const fileName = it.content_text ? it.content_text.replace('[상신 첨부] ', '').trim() : `첨부서류_${it.id}`;
-              const downloadUrl = `/api/shared/files?tableName=crm_snaptask_items&rowId=${it.id}&columnName=file_url`;
+              const fileName = it.content_text ? it.content_text.replace('[상신 첨부] ', '').trim() : `첨부파일_${it.id}`;
+              const downloadUrl = it.file_url && (it.file_url.startsWith('http') || it.file_url.startsWith('data:'))
+                ? it.file_url
+                : `/api/shared/files?tableName=crm_snaptask_items&rowId=${it.id}&columnName=file_url`;
               return {
                 id: it.id,
                 name: fileName,
