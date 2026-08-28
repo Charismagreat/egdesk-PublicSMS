@@ -216,7 +216,12 @@ export default function GovernanceDetailModal({
           setMatchedSmsAction(newSmsAction);
           setSelectedActions(prev => {
             const withoutNotify = prev.filter(c => c !== "NOTIFY_USER");
-            return withoutNotify.includes("SMS_AUTO_NOTIFY") ? withoutNotify : ["SMS_AUTO_NOTIFY", ...withoutNotify];
+            const newSet = new Set(withoutNotify);
+            newSet.add("SMS_AUTO_NOTIFY");
+            if (!isExplicitDelete) {
+              newSet.add("auto_register_sales_order");
+            }
+            return Array.from(newSet);
           });
 
           // 1회성 문자 기본 추천 문구 프리필
@@ -297,15 +302,18 @@ export default function GovernanceDetailModal({
     titleText.includes('발주') || 
     docTitleText.includes('수주') || 
     docTitleText.includes('발주') ||
-    modalFiles.length > 0
+    selectedEvent.doc_type === 'mobile_request' ||
+    selectedEvent.type === 'RAG_HOLD' ||
+    modalFiles.length > 0 ||
+    modalPhotos.length > 0
   );
 
-  const attachedFileName = modalFiles[0]?.name || modalPhotos[0]?.name || selectedEvent.data?.matched_filename || 'LS발주서.xlsx';
+  const attachedFileName = modalFiles[0]?.name || modalPhotos[0]?.name || selectedEvent.data?.matched_filename || '동양특수금속.jpg';
 
   const orderRegisterAction = isSalesOrderEvent ? {
     code: "auto_register_sales_order",
     label: `[📦 B2B 수주 대장 자동 등록] ${attachedFileName ? `${attachedFileName} 실물 분석` : '발주서 파싱'}`,
-    description: `상신 첨부 파일(${attachedFileName})의 실물 품목·수량·금액을 AI가 정밀 분석하여 수주 대장(crm_sales_orders)에 수주서 즉시 자동 적재`,
+    description: `상신 첨부 파일(${attachedFileName})의 실물 품목·수량·금액을 AI가 정밀 분석하여 견적/수주 대장(crm_sales_orders)에 수주서 즉시 자동 적재`,
     isOrderAction: true,
     fileName: attachedFileName
   } : null;
