@@ -2934,6 +2934,28 @@ ${JSON.stringify(operators || [], null, 2)}
           updated_by: adminUser,
           resolved_at: nowStr
         }, { filters: { id: logRawId } });
+
+        // 💡 연동된 모바일 스냅태스크(할 일)도 '완료(COMPLETE)' 상태로 자동 전이하여 [한 일] 탭으로 이동
+        const expectedTaskId = `ST-${logRawId.replace('mobile_req_', '')}`;
+        await updateRows('crm_snaptasks', {
+          status: 'COMPLETE',
+          updated_at: nowStr,
+          updated_by: adminUser
+        }, { filters: { id: expectedTaskId } });
+
+        // 스냅태스크 타임라인에 완료 안내 로그 기입
+        await insertRows('crm_snaptask_items', [{
+          id: Date.now(),
+          task_id: expectedTaskId,
+          content_text: `[관제 완료] 최고관리자(${adminUser})의 관제 조치 및 자율 작업 실행이 성공적으로 완료되어 본 안건이 종결(한 일) 처리되었습니다.`,
+          file_type: 'TEXT',
+          ai_analysis: JSON.stringify({ message: "Task resolved by governance" }),
+          created_at: nowStr,
+          tenant_id: tenantId,
+          uuid: `STI-${Date.now()}-resolved`,
+          updated_at: nowStr,
+          updated_by: adminUser
+        }]).catch(() => {});
       }
 
       if (eventType === 'STORE_ORDER' && docId) {
