@@ -919,7 +919,7 @@ export default function MobileHubPage() {
       const isInCurrentWeek = taskDate.getTime() >= startOfWeek.getTime() && taskDate.getTime() <= endOfWeek.getTime();
 
       if (tab === "active") {
-        if (period === "TODAY") return diffDays <= 0; // 오늘 및 마감 지난 지연건 포함
+        if (period === "TODAY") return t.due_date ? diffDays <= 0 : diffDays === 0;
         if (period === "TOMORROW") return diffDays === 1;
         if (period === "WEEK") return isInCurrentWeek && diffDays >= 0;
         if (period === "MONTH") {

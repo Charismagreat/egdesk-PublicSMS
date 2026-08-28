@@ -111,7 +111,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
         const isInCurrentWeek = taskDate.getTime() >= startOfWeek.getTime() && taskDate.getTime() <= endOfWeek.getTime();
 
         if (tabType === "active") {
-          if (periodId === "TODAY") return diffDays <= 0;
+          if (periodId === "TODAY") return t.due_date ? diffDays <= 0 : diffDays === 0;
           if (periodId === "TOMORROW") return diffDays === 1;
           if (periodId === "WEEK") return isInCurrentWeek && diffDays >= 0;
           if (periodId === "MONTH") {

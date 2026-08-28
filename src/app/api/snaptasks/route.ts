@@ -100,6 +100,7 @@ export async function GET(req: Request) {
     // ────────────────────────────────────────────────────────
     // 2. 활성 스냅태스크 목록 전체 조회 (B2B 파트너 상호명 레프트조인)
     // ────────────────────────────────────────────────────────
+    const targetTenant = userTenantId && userTenantId !== 'default' ? userTenantId : 'tenant-wontrading';
     let tasks: any[] = [];
     try {
       // 1) crm_snaptasks 테이블 조회
@@ -108,7 +109,9 @@ export async function GET(req: Request) {
         orderDirection: 'DESC',
         limit: 10000
       }).catch(() => ({ rows: [] }));
-      const snaptasksRows = snaptasksRes.rows || [];
+      const snaptasksRows = (snaptasksRes.rows || []).filter((t: any) => 
+        !t.deleted_at && (t.tenant_id === targetTenant || (!t.tenant_id && targetTenant === 'tenant-wontrading'))
+      );
 
       // 2) crm_partners 및 crm_snaptask_items 대장 미리 조회
       let partnersRows: any[] = [];
@@ -129,7 +132,6 @@ export async function GET(req: Request) {
 
       // 3) 조인 및 소프트 삭제 필터링 메모리 연산 + 첨부 파일 맵핑
       tasks = snaptasksRows
-        .filter((t: any) => !t.deleted_at)
         .map((t: any) => {
           const matchedPartner = partnersRows.find(p => String(p.id) === String(t.partner_id));
           
@@ -172,7 +174,9 @@ export async function GET(req: Request) {
       // 4) crm_governance_logs 상신 및 관제 로그 결합 동기화
       try {
         const govLogsRes = await queryTable('crm_governance_logs', { limit: 10000 }).catch(() => ({ rows: [] }));
-        const govLogs = (govLogsRes.rows || []).filter((l: any) => !l.deleted_at && l.deleted_at !== 'null');
+        const govLogs = (govLogsRes.rows || []).filter((l: any) => 
+          !l.deleted_at && l.deleted_at !== 'null' && (l.tenant_id === targetTenant || (!l.tenant_id && targetTenant === 'tenant-wontrading'))
+        );
 
         // 제목 정제 함수
         const getPureTitle = (titleStr: string) => {
