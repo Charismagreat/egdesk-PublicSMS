@@ -203,63 +203,82 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
     const fileList = Array.from(selectedFiles);
 
     try {
-      const readPromises = fileList.map((file) => {
-        return new Promise<AttachmentItem>((resolve, reject) => {
-          const category = detectFileCategory(file.name, file.type);
-          const sizeStr = file.size > 1024 * 1024 
-            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
-            : `${(file.size / 1024).toFixed(0)} KB`;
+      const uploadPromises = fileList.map(async (file) => {
+        const category = detectFileCategory(file.name, file.type);
+        const sizeStr = file.size > 1024 * 1024 
+          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+          : `${(file.size / 1024).toFixed(0)} KB`;
 
-          const reader = new FileReader();
-          reader.onload = async () => {
-            let base64Str = reader.result as string;
+        let uploadedUrl = "";
+        let previewStr = "";
 
-            // 이미지가 너무 큰 경우 캔버스로 리사이징/압축하여 초고속 전송
-            if (category === "IMAGE" && base64Str.startsWith("data:image")) {
-              try {
-                const img = new Image();
-                img.src = base64Str;
-                await new Promise((resImg) => { img.onload = resImg; });
-                const canvas = document.createElement("canvas");
-                const maxDim = 1200;
-                let width = img.width;
-                let height = img.height;
-                if (width > maxDim || height > maxDim) {
-                  if (width > height) {
-                    height = Math.round((height * maxDim) / width);
-                    width = maxDim;
-                  } else {
-                    width = Math.round((width * maxDim) / height);
-                    height = maxDim;
+        // 1. 대용량 실물 파일은 FormData로 서버에 직접 스트리밍 업로드
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+          const uploadRes = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const uploadData = await uploadRes.json();
+          if (uploadData.success && uploadData.url) {
+            uploadedUrl = uploadData.url;
+          }
+        } catch (upErr) {
+          console.warn("직접 업로드 폴백 진행:", upErr);
+        }
+
+        // 2. 이미지 썸네일 프리뷰 생성
+        if (category === "IMAGE") {
+          try {
+            previewStr = await new Promise<string>((resPrev) => {
+              const reader = new FileReader();
+              reader.onload = async () => {
+                const rawBase64 = reader.result as string;
+                try {
+                  const img = new Image();
+                  img.src = rawBase64;
+                  await new Promise((imgDone) => { img.onload = imgDone; });
+                  const canvas = document.createElement("canvas");
+                  const maxDim = 600;
+                  let width = img.width;
+                  let height = img.height;
+                  if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                      height = Math.round((height * maxDim) / width);
+                      width = maxDim;
+                    } else {
+                      width = Math.round((width * maxDim) / height);
+                      height = maxDim;
+                    }
                   }
+                  canvas.width = width;
+                  canvas.height = height;
+                  const ctx = canvas.getContext("2d");
+                  ctx?.drawImage(img, 0, 0, width, height);
+                  resPrev(canvas.toDataURL("image/jpeg", 0.8));
+                } catch {
+                  resPrev(rawBase64);
                 }
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext("2d");
-                ctx?.drawImage(img, 0, 0, width, height);
-                base64Str = canvas.toDataURL("image/jpeg", 0.85);
-              } catch (canvasErr) {
-                console.warn("이미지 압축 스킵, 원본 유지:", canvasErr);
-              }
-            }
-
-            resolve({
-              id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-              name: file.name,
-              size: sizeStr,
-              type: file.type || (category === "IMAGE" ? "image/jpeg" : "application/octet-stream"),
-              category: category,
-              base64: base64Str,
-              preview: base64Str,
-              url: base64Str,
+              };
+              reader.readAsDataURL(file);
             });
-          };
-          reader.onerror = (err) => reject(err);
-          reader.readAsDataURL(file);
-        });
+          } catch {}
+        }
+
+        return {
+          id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          name: file.name,
+          size: sizeStr,
+          type: file.type || "application/octet-stream",
+          category: category,
+          base64: previewStr || uploadedUrl,
+          preview: previewStr || uploadedUrl,
+          url: uploadedUrl || previewStr,
+        } as AttachmentItem;
       });
 
-      const newItems = await Promise.all(readPromises);
+      const newItems = await Promise.all(uploadPromises);
       setAttachments((prev) => [...prev, ...newItems]);
 
       if (!title.trim() && newItems.length > 0) {
