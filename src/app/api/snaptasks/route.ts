@@ -102,20 +102,18 @@ export async function GET(req: Request) {
     // ────────────────────────────────────────────────────────
     let tasks: any[] = [];
     try {
-      // 1) crm_snaptasks 테이블 조회 (테넌트 격리)
+      // 1) crm_snaptasks 테이블 조회
       const snaptasksRes = await queryTable('crm_snaptasks', {
-        filters: { tenant_id: userTenantId },
         orderBy: 'id',
         orderDirection: 'DESC',
         limit: 10000
       }).catch(() => ({ rows: [] }));
       const snaptasksRows = snaptasksRes.rows || [];
-console.log("[DEBUG 1] snaptasksRows length:", snaptasksRows.length, "active:", snaptasksRows.filter((t: any) => !t.deleted_at).length);
 
-      // 2) crm_partners 및 crm_snaptask_items 대장 미리 조회 (테넌트 격리)
+      // 2) crm_partners 및 crm_snaptask_items 대장 미리 조회
       let partnersRows: any[] = [];
       try {
-        const partnersRes = await queryTable('crm_partners', { filters: { tenant_id: userTenantId }, limit: 10000 });
+        const partnersRes = await queryTable('crm_partners', { limit: 10000 });
         partnersRows = partnersRes.rows || [];
       } catch (pe) {
         console.error('파트너 목록 조회 실패:', pe);
@@ -123,19 +121,19 @@ console.log("[DEBUG 1] snaptasksRows length:", snaptasksRows.length, "active:", 
 
       let itemsRows: any[] = [];
       try {
-        const itemsRes = await queryTable('crm_snaptask_items', { filters: { tenant_id: userTenantId }, limit: 10000, orderBy: 'id', orderDirection: 'DESC' });
+        const itemsRes = await queryTable('crm_snaptask_items', { limit: 10000, orderBy: 'id', orderDirection: 'DESC' });
         itemsRows = (itemsRes.rows || []).filter((it: any) => !it.deleted_at);
       } catch (ie) {
         console.error('스냅태스크 아이템 목록 조회 실패:', ie);
       }
 
-      // 3) 조인 및 소프트 삭제 필터링 메모리 연산 + 첨부 파일 맵핑 + 테넌트 격리 가드 추가
+      // 3) 조인 및 소프트 삭제 필터링 메모리 연산 + 첨부 파일 맵핑
       tasks = snaptasksRows
         .filter((t: any) => !t.deleted_at)
         .map((t: any) => {
           const matchedPartner = partnersRows.find(p => String(p.id) === String(t.partner_id));
           
-          // 해당 스냅태스크의 실물 첨부 파일들 추출 (IMAGE, DOCUMENT, 파일 URL, 상신 첨부 텍스트 모두 지원)
+          // 해당 스냅태스크의 실물 첨부 파일들 추출
           const taskItems = itemsRows.filter(it => 
             String(it.task_id) === String(t.id) && 
             (it.file_type === 'IMAGE' || it.file_type === 'DOCUMENT' || (it.file_url && it.file_url.trim() !== '') || (it.content_text && it.content_text.startsWith('[상신 첨부]')))
@@ -171,19 +169,16 @@ console.log("[DEBUG 1] snaptasksRows length:", snaptasksRows.length, "active:", 
           };
         });
 
-      // 4) crm_governance_logs 상신 및 관제 로그 due_date 결합 동기화 (테넌트 격리)
+      // 4) crm_governance_logs 상신 및 관제 로그 결합 동기화
       try {
-        const govLogsRes = await queryTable('crm_governance_logs', { filters: { tenant_id: userTenantId }, limit: 10000 }).catch(() => ({ rows: [] }));
+        const govLogsRes = await queryTable('crm_governance_logs', { limit: 10000 }).catch(() => ({ rows: [] }));
         const govLogs = (govLogsRes.rows || []).filter((l: any) => !l.deleted_at && l.deleted_at !== 'null');
-console.log("[DEBUG 2] govLogs active length:", govLogs.length);
 
-        // 제목 정제 함수 (모든 접두어 전면 제거하여 순수 핵심 제목 추출)
+        // 제목 정제 함수
         const getPureTitle = (titleStr: string) => {
           if (!titleStr) return '';
           return titleStr
             .replace(/AI 결재 보류:\s*/g, '')
-            .replace(/\[(업무 취소 요청|취소 요청|상신|현장 상신)\]\s*/g, '')
-            .replace(/\[(업무 취소 요청|취소 요청|상신|현장 상신)\]\s*/g, '')
             .replace(/\[(업무 취소 요청|취소 요청|상신|현장 상신)\]\s*/g, '')
             .trim();
         };
@@ -193,7 +188,7 @@ console.log("[DEBUG 2] govLogs active length:", govLogs.length);
           const isCancelLog = log.doc_type === 'TASK_CANCEL_REQUEST' || (log.doc_title || '').includes('취소 요청');
           const logPure = getPureTitle(log.doc_title);
 
-          // 1:1 매칭 태스크 탐색 (순수 제목 및 ID 상호 대조)
+          // 1:1 매칭 태스크 탐색
           const existingTask = tasks.find((t: any) => {
             const tPure = getPureTitle(t.title);
             if (logPure && tPure && logPure === tPure) return true;
@@ -219,28 +214,17 @@ console.log("[DEBUG 2] govLogs active length:", govLogs.length);
                 }
               } catch (pe) {}
             }
-            // 💡 취소 요청 로그가 존재하는 경우 원본 카드 상태를 PENDING_APPROVAL 또는 CANCELLED/DONE으로 전파
             if (isCancelLog) {
-              if (log.status !== 'APPROVED' && log.status !== 'RESOLVED' && log.status !== 'REJECTED') {
-                existingTask.status = 'PENDING_APPROVAL';
-                existingTask.has_cancel_request = true;
-              } else if (log.status === 'APPROVED' || log.status === 'RESOLVED') {
-                existingTask.status = 'DONE';
-                existingTask.is_cancelled = true;
-                existingTask.cancel_status = 'APPROVED';
-                if (!existingTask.description || !existingTask.description.includes('취소')) {
-                  existingTask.description = '최고관리자에 의해 취소 승인 완료 (데이터 삭제 및 폐기 처리)';
-                }
-              }
+              existingTask.has_cancel_request = true;
+              existingTask.cancel_status = log.status;
+              existingTask.cancel_reason = log.reason;
             } else if (log.status === 'APPROVED' || log.status === 'FORCE_APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED') {
               existingTask.status = 'DONE';
             }
           } else if (!isCancelLog) {
-            // 💡 취소 요청 로그(isCancelLog)는 독립 신규 카드를 절대 추가 생성하지 않음!
             const isLogApproved = log.status === 'APPROVED' || log.status === 'FORCE_APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED';
             const logNowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
-            // 💡 crm_governance_logs에 연동된 실물 첨부파일 및 서류 마이닝 조인 (ST-, REQ-, mobile_req_ 접두사 흡수)
             const pureLogId = String(log.id || '').replace(/^(mobile_req_|REQ-|ST-)/, '');
             const pureDocId = String(log.doc_id || '').replace(/^(mobile_req_|REQ-|ST-)/, '');
 
@@ -265,7 +249,7 @@ console.log("[DEBUG 2] govLogs active length:", govLogs.length);
                 id: it.id,
                 name: fileName,
                 url: downloadUrl,
-                fileType: it.file_type || 'DOCUMENT'
+                fileType: it.file_type || (fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? 'IMAGE' : 'DOCUMENT')
               };
             });
 
@@ -283,33 +267,47 @@ console.log("[DEBUG 2] govLogs active length:", govLogs.length);
               } catch (pe) {}
             }
 
+            let logDisplayTitle = log.doc_title || '관제 업무';
+            if (logDisplayTitle === '[상신] 모바일 현장 업무 및 수주 접수' || logDisplayTitle === '모바일 현장 업무 및 수주 접수') {
+              if (logAttachments.length > 0) {
+                const pureName = logAttachments[0].name.replace(/\.[^/.]+$/, '');
+                logDisplayTitle = `[상신] ${pureName}`;
+              }
+            }
+
             tasks.push({
               id: log.id || log.doc_id,
-              title: log.doc_title || '관제 업무',
+              title: logDisplayTitle,
               status: isLogApproved ? 'DONE' : 'ACTIVE',
               description: log.reason || '모바일 현장 수동 접수 요청 건',
-              assignee_name: log.operator || '김직원',
+              assignee_name: log.operator || '이주용',
+              attachments: logAttachments,
               created_at: log.created_at || logNowStr,
-              due_date: log.due_date || null,
-              attachments: logAttachments
+              due_date: log.due_date || null
             });
           }
         });
 
         // 💡 [중복 태스크 1:1 완벽 병합 정제 (De-duplication)]
-        // 동일 고유 식별자 키(pureSeed) 기준으로 crm_governance_logs와 crm_snaptasks를 1개로 합침
         const mergedTasksMap = new Map<string, any>();
         tasks.forEach((t: any) => {
-          const pureTitle = getPureTitle(t.title);
           const pureSeed = String(t.id || t.uuid || '').replace(/^(mobile_req_|REQ-|ST-)/, '');
           const key = pureSeed || String(t.id);
 
           const isCancelTask = (t.title || '').includes('취소 요청') || t.status === 'PENDING_APPROVAL' || t.has_cancel_request;
 
+          let finalTitle = t.title;
+          if (finalTitle === '[상신] 모바일 현장 업무 및 수주 접수' || finalTitle === '모바일 현장 업무 및 수주 접수') {
+            if (t.attachments && t.attachments.length > 0) {
+              const pureName = t.attachments[0].name.replace(/\.[^/.]+$/, '');
+              finalTitle = `[상신] ${pureName}`;
+            }
+          }
+
           if (!mergedTasksMap.has(key)) {
             mergedTasksMap.set(key, {
               ...t,
-              title: `[상신] ${pureTitle}`,
+              title: finalTitle,
               status: isCancelTask ? 'PENDING_APPROVAL' : t.status,
               has_cancel_request: isCancelTask ? true : t.has_cancel_request,
               attachments: Array.isArray(t.attachments) ? [...t.attachments] : []
