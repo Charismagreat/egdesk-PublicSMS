@@ -257,7 +257,18 @@ export async function GET(req: Request) {
 
     // 직원 정보와 근태 상태 바인딩
     const mappedEmployees = employees.map((emp: any) => {
-      const att = attendanceList.find((a: any) => String(a.operator_id) === String(emp.id));
+      let att = attendanceList.find((a: any) => String(a.operator_id) === String(emp.id));
+
+      // 🌟 [야간/익일 근무 스마트 지원] 당일 근태가 없는데 과거 미퇴근 세션(clock_in O, clock_out X)이 있으면 바인딩
+      if (!att) {
+        const openAtt = allAttendance
+          .filter((a: any) => String(a.operator_id) === String(emp.id) && a.clock_in && !a.clock_out)
+          .sort((a: any, b: any) => (b.work_date || '').localeCompare(a.work_date || ''))[0];
+        if (openAtt) {
+          att = openAtt;
+        }
+      }
+
       const bal = balancesList.find((b: any) => String(b.operator_id) === String(emp.id));
 
       return {
@@ -270,6 +281,7 @@ export async function GET(req: Request) {
         phone: emp.phone || '',
         work_start_time: emp.work_start_time || '09:00',
         work_end_time: emp.work_end_time || '18:00',
+        work_date: att ? att.work_date : workDate,
         clock_in: att ? att.clock_in : null,
         clock_out: att ? att.clock_out : null,
         status: att ? att.status : 'ABSENT', // 기록 없으면 결근
@@ -408,34 +420,64 @@ export async function POST(req: Request) {
     }
 
     if (action === 'CLOCK_OUT') {
-      if (records.length === 0) {
-        return NextResponse.json({ success: false, error: '출근 스탬프를 먼저 찍어주세요.' }, { status: 400 });
+      let targetAttRecord = records.find((r: any) => r.clock_in && !r.clock_out);
+
+      // 🌟 [야간/익일 근무 스마트 지원] 당일에 미퇴근 세션이 없을 경우, 직전 일자의 미퇴근 세션 역순 탐색
+      if (!targetAttRecord) {
+        try {
+          const pastRes = await queryTable('crm_attendance', {
+            filters: { operator_id: operatorId, tenant_id: tenantId },
+            orderBy: 'work_date',
+            orderDirection: 'DESC',
+            limit: 10
+          });
+          const pastOpenRecords = (pastRes.rows || []).filter((r: any) => !r.deleted_at && r.clock_in && !r.clock_out);
+          if (pastOpenRecords.length > 0) {
+            targetAttRecord = pastOpenRecords[0];
+          }
+        } catch (e) {
+          console.error("과거 미퇴근 세션 탐색 실패:", e);
+        }
       }
 
-      const attRecord = records[0];
-      if (attRecord.clock_out) {
-        return NextResponse.json({ success: false, error: '이미 오늘의 퇴근 스탬프가 기록되어 있습니다.' }, { status: 400 });
+      if (!targetAttRecord) {
+        return NextResponse.json({ success: false, error: '진행 중인 출근 기록이 없습니다. 출근 스탬프를 먼저 찍어주세요.' }, { status: 400 });
       }
 
-      // 실제 근무 시간(H) 동적 계산
+      const attRecord = targetAttRecord;
+      const isOvernight = attRecord.work_date !== workDate;
+
+      // 🌟 실제 출근 일시부터 현재 퇴근 일시까지의 실제 근무 시간(H) 정밀 계산
       let workingHours = 8;
       if (attRecord.clock_in) {
-        const [inH, inM, inS] = attRecord.clock_in.split(':').map(Number);
-        const [outH, outM, outS] = timeStr.split(':').map(Number);
-        const diffMs = (outH * 3600 + outM * 60 + outS) - (inH * 3600 + inM * 60 + inS);
-        workingHours = Math.max(0, Math.round((diffMs / 3600) * 10) / 10); // 소수점 첫째자리
+        const inDate = attRecord.work_date || workDate;
+        const inTime = attRecord.clock_in.length === 5 ? `${attRecord.clock_in}:00` : attRecord.clock_in;
+        // KST 기준 Date 객체 생성
+        const inDateObj = new Date(`${inDate}T${inTime}+09:00`);
+        const diffMs = now.getTime() - inDateObj.getTime();
+        if (diffMs > 0) {
+          workingHours = Math.round((diffMs / (1000 * 3600)) * 10) / 10; // 소수점 첫째자리
+        }
       }
 
-      // 조퇴 판별 기준 (사원 설정 퇴근 시각 이전 퇴근 시 동적 적용)
+      // 조퇴 판별 기준 (당일 근무일 때만 사원 설정 퇴근 시각 이전 퇴근 시 적용)
       let currentStatus = attRecord.status;
-      if (timeStr < workEndTime) {
+      if (!isOvernight && timeStr < workEndTime) {
         currentStatus = 'EARLY_LEAVE';
+      } else if (workingHours >= 8) {
+        currentStatus = 'NORMAL';
       }
+
+      const memoSuffix = isOvernight ? `[야간/익일 퇴근 ${workDate} ${timeStr}]` : '';
+      const finalMemo = attRecord.memo
+        ? (isOvernight && !attRecord.memo.includes('익일 퇴근') ? `${attRecord.memo} ${memoSuffix}`.trim() : attRecord.memo)
+        : (isOvernight ? memoSuffix : '정상 퇴근');
 
       const updates = {
         clock_out: timeStr,
         status: currentStatus,
         working_hours: workingHours,
+        memo: finalMemo,
         updated_at: now.toISOString()
       };
 
@@ -443,9 +485,11 @@ export async function POST(req: Request) {
       updateFilters.tenant_id = tenantId;
       await updateRows('crm_attendance', updates, { filters: updateFilters });
 
+      const overnightMsg = isOvernight ? ` (야간·철야 근무 인정, 총 ${workingHours}시간)` : ` (총 ${workingHours}시간 근무)`;
+
       return NextResponse.json({
         success: true,
-        message: `${operatorName}님, 퇴근 스탬프가 찍혔습니다. 고생하셨습니다! (${timeStr}, 총 ${workingHours}시간 근무)`,
+        message: `${operatorName}님, 퇴근 스탬프가 찍혔습니다. 고생하셨습니다! (${timeStr}${overnightMsg})`,
         record: { ...attRecord, ...updates }
       });
     }

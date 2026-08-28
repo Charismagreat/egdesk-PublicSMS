@@ -55,9 +55,10 @@ export async function GET() {
     const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const thisMonth = today.slice(0, 7); // YYYY-MM
 
-    // 1. 오늘 출근 시각 및 이달 근무일수 / 누적 근무시간 집계 (테넌트 격리)
+    // 1. 오늘 출근 시각 및 야간 미퇴근 세션 감지 (테넌트 격리)
     let todayClockIn: string | null = null;
     let todayClockOut: string | null = null;
+    let clockInDate: string | null = null;
     let monthlyDays = 0;
     let monthlyHours = 0;
     try {
@@ -67,6 +68,21 @@ export async function GET() {
       if (todayAttRes.rows && todayAttRes.rows.length > 0) {
         todayClockIn = todayAttRes.rows[0].clock_in || null;
         todayClockOut = todayAttRes.rows[0].clock_out || null;
+        clockInDate = todayAttRes.rows[0].work_date || today;
+      } else {
+        // 당일 출근이 없는 경우, 직전 일자의 미퇴근(야간 근무) 세션 탐색
+        const recentAttRes = await queryTable('crm_attendance', {
+          filters: { operator_id: String(operatorId), tenant_id: tenantId },
+          orderBy: 'work_date',
+          orderDirection: 'DESC',
+          limit: 5
+        });
+        const openRecord = (recentAttRes.rows || []).find((r: any) => !r.deleted_at && r.clock_in && !r.clock_out);
+        if (openRecord) {
+          todayClockIn = openRecord.clock_in;
+          todayClockOut = null;
+          clockInDate = openRecord.work_date;
+        }
       }
 
       const allAttRes = await queryTable('crm_attendance', {
@@ -198,6 +214,7 @@ export async function GET() {
         attendance: {
           clockIn: todayClockIn,
           clockOut: todayClockOut,
+          clockInDate: clockInDate,
           monthlyDays,
           monthlyHours
         },

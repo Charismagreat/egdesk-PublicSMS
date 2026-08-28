@@ -313,11 +313,12 @@ export default function MobileHubPage() {
                   setAttendanceStatus("done");
                 } else {
                   setAttendanceStatus("working");
-                  // 출근시각 기반 경과시간 계산
+                  // 🌟 출근일시 기반 경과시간 정밀 계산 (야간/철야 근무 지원)
                   const [h, m, s] = myRecord.clock_in.split(':').map(Number);
-                  const now = new Date();
-                  const startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, s || 0);
+                  const inDateParts = (myRecord.work_date || todayStr).split('-').map(Number);
+                  const startTime = new Date(inDateParts[0], inDateParts[1] - 1, inDateParts[2], h, m, s || 0);
                   setWorkStartTime(startTime.getTime());
+                  const now = new Date();
                   const diffSec = Math.floor((now.getTime() - startTime.getTime()) / 1000);
                   setElapsedSeconds(diffSec > 0 ? diffSec : 0);
                 }
