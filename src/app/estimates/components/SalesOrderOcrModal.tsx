@@ -1427,9 +1427,9 @@ export default function SalesOrderOcrModal({
                                 <textarea
                                   value={group.document_memo}
                                   placeholder="특기사항, 결제조건 등"
-                                  rows={2}
+                                  rows={4}
                                   onChange={(e) => handleUpdateGroupField(group.id, 'document_memo', e.target.value)}
-                                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none resize-none"
+                                  className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none resize-y min-h-[85px] leading-relaxed"
                                 />
                               </div>
                             </div>
@@ -1666,9 +1666,9 @@ export default function SalesOrderOcrModal({
                           setOcrForm(prev => ({ ...prev, document_memo: val }));
                           if (parsedGroups.length > 0) handleUpdateGroupField(parsedGroups[0].id, 'document_memo', val);
                         }}
-                        rows={2}
+                        rows={4}
                         placeholder="비고 내용을 입력해 주세요."
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 resize-none"
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 resize-y min-h-[95px] leading-relaxed"
                       />
                     </div>
                   </div>

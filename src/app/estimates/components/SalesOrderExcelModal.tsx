@@ -808,12 +808,12 @@ export default function SalesOrderExcelModal({
                 </div>
 
                 <div className="text-left">
-                  {renderLabel("기타 비고", "document_memo")}
+                  {renderLabel("기타 비고 및 특기사항", "document_memo")}
                   <textarea 
                     value={form.document_memo}
                     onChange={e => setForm({ ...form, document_memo: e.target.value })}
-                    className={`${getInputClassName("document_memo")} resize-none`}
-                    rows={2}
+                    className={`${getInputClassName("document_memo")} resize-y min-h-[95px] leading-relaxed`}
+                    rows={4}
                     placeholder="비고 내용을 입력해 주세요."
                   />
                 </div>
