@@ -2,6 +2,7 @@
 
 import React from "react";
 import { CheckSquare, Square, Search, AlertCircle, Plus, Calendar, Folder, ShieldCheck, Clock, FileText, ExternalLink, XCircle, Trash2, Ban, Image as ImageIcon, Film, Music, Compass } from "lucide-react";
+import { isTaskInPeriod } from "../utils/mobileTaskUtils";
 
 interface MobileTodoListSectionProps {
   todoTab: "active" | "completed" | "folders";
@@ -79,64 +80,12 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
     return null;
   };
 
-  const getSubTabCount = (periodId: string, tabType: "active" | "completed") => {
+  const getSubTabCount = (periodId: any, tabType: "active" | "completed") => {
     if (!allTasks || allTasks.length === 0) return 0;
     const targetTasks = allTasks.filter((t) => (tabType === "active" ? t.status !== "DONE" : t.status === "DONE"));
     if (periodId === "ALL") return targetTasks.length;
 
-    return targetTasks.filter((t) => {
-      const rawDate = (tabType === "active" ? (t.due_date || t.created_at) : (t.resolved_at || t.completed_at || t.updated_at || t.created_at)) || '';
-      const dateMatch = String(rawDate).match(/\b(20\d{2}-\d{2}-\d{2})\b/);
-
-      if (dateMatch) {
-        const [y, m, d] = dateMatch[1].split('-').map(Number);
-        const taskDate = new Date(y, m - 1, d);
-        taskDate.setHours(0, 0, 0, 0);
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const diffDays = Math.round((taskDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-        // 🗓️ 캘린더 기준 이번 주 (일요일 ~ 토요일) 범위 산출
-        const dayOfWeek = today.getDay(); // 0(일) ~ 6(토)
-        const sundayTime = new Date(today).setDate(today.getDate() - dayOfWeek);
-        const startOfWeek = new Date(sundayTime);
-        startOfWeek.setHours(0, 0, 0, 0);
-
-        const saturdayTime = new Date(startOfWeek).setDate(startOfWeek.getDate() + 6);
-        const endOfWeek = new Date(saturdayTime);
-        endOfWeek.setHours(23, 59, 59, 999);
-
-        const isInCurrentWeek = taskDate.getTime() >= startOfWeek.getTime() && taskDate.getTime() <= endOfWeek.getTime();
-
-        if (tabType === "active") {
-          if (periodId === "TODAY") return t.due_date ? diffDays <= 0 : diffDays === 0;
-          if (periodId === "TOMORROW") return diffDays === 1;
-          if (periodId === "WEEK") return isInCurrentWeek && diffDays >= 0;
-          if (periodId === "MONTH") {
-            return taskDate.getFullYear() === today.getFullYear() && taskDate.getMonth() === today.getMonth();
-          }
-          if (periodId === "NEXT_MONTH") {
-            const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-            return taskDate.getFullYear() === nextMonth.getFullYear() && taskDate.getMonth() === nextMonth.getMonth();
-          }
-        } else {
-          if (periodId === "TODAY") return diffDays === 0;
-          if (periodId === "YESTERDAY") return diffDays === -1;
-          if (periodId === "WEEK") return isInCurrentWeek && diffDays <= 0;
-          if (periodId === "MONTH") {
-            return taskDate.getFullYear() === today.getFullYear() && taskDate.getMonth() === today.getMonth();
-          }
-          if (periodId === "LAST_MONTH") {
-            const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-            return taskDate.getFullYear() === lastMonth.getFullYear() && taskDate.getMonth() === lastMonth.getMonth();
-          }
-        }
-        return false;
-      }
-      return periodId === "TODAY";
-    }).length;
+    return targetTasks.filter((t) => isTaskInPeriod(t, periodId, tabType)).length;
   };
 
   return (

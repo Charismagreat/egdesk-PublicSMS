@@ -105,7 +105,7 @@ export async function GET(req: Request) {
     try {
       // 1) crm_snaptasks 테이블 조회
       const snaptasksRes = await queryTable('crm_snaptasks', {
-        orderBy: 'id',
+        orderBy: 'created_at',
         orderDirection: 'DESC',
         limit: 10000
       }).catch(() => ({ rows: [] }));

@@ -14,14 +14,27 @@ export const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2
 
 // 🗓️ 마감일 추출 헬퍼 함수
 export const extractDueDate = (t: any): string | null => {
-  if (t.due_date) return t.due_date;
-  if (t.created_at) return t.created_at;
+  if (t.due_date && String(t.due_date).trim() !== "") {
+    const cleaned = String(t.due_date).trim().replace(/[\.\/]/g, "-");
+    const match = cleaned.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+    if (match) return match[1];
+  }
 
-  const searchTarget = `${t.title || ""} ${t.description || ""}`;
+  // 제목 및 설명문에서 마감/납기일자(YYYY-MM-DD) 우선 파싱
+  const searchTarget = `${t.title || ""} ${t.description || ""} ${t.note || ""}`;
   const match = searchTarget.match(/\b(20\d{2}[-/.]\d{1,2}[-/.]\d{1,2})\b/);
   if (match) {
     return match[1].replace(/[/.]/g, "-");
   }
+
+  // 날짜 명시가 전혀 없는 경우 생성일자로 폴백
+  if (t.created_at) {
+    const cleaned = String(t.created_at).trim().replace(/[\.\/]/g, "-");
+    const createdMatch = cleaned.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+    if (createdMatch) return createdMatch[1];
+    return t.created_at;
+  }
+
   return null;
 };
 
