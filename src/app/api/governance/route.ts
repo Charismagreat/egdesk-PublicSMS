@@ -1941,7 +1941,8 @@ ${JSON.stringify(operators || [], null, 2)}
             }
           }
 
-          // 2. crm_snaptask_items 에서 첨부 파일 목록 조회 (이미지뿐 아니라 EXCEL/DOCUMENT 전체 검색)
+          // 2. crm_snaptask_items 에서 해당 상신 태스크(taskId)에 1:1 바인딩된 첨부 파일 조회
+          const expectedTaskId = `ST-${logRawId.replace('mobile_req_', '')}`;
           const tenantId = originalData?.tenant_id || originalData?.tenantId || await resolveTenantId() || 'tenant-wontrading';
           const itemsRes = await queryTable('crm_snaptask_items', { 
             filters: tenantId ? { tenant_id: tenantId } : {},
@@ -1951,8 +1952,8 @@ ${JSON.stringify(operators || [], null, 2)}
           });
           const itemsRows = (itemsRes.rows || []).filter((it: any) => it.file_url && it.file_url.trim() !== '');
 
-          let targetItem = null;
-          if (matchedFilename && itemsRows.length > 0) {
+          let targetItem = itemsRows.find((item: any) => String(item.task_id) === expectedTaskId);
+          if (!targetItem && matchedFilename && itemsRows.length > 0) {
             targetItem = itemsRows.find((item: any) => item.content_text?.includes(matchedFilename) || item.file_url?.includes(matchedFilename));
           }
           if (!targetItem && itemsRows.length > 0) {
@@ -1965,7 +1966,11 @@ ${JSON.stringify(operators || [], null, 2)}
             return;
           }
 
-          targetFilename = targetItem.content_text?.replace('[상신 첨부] ', '') || targetItem.file_url?.split('/').pop() || targetFilename;
+          targetFilename = targetItem.content_text?.replace('[상신 첨부] ', '') || targetItem.file_url?.split('/').pop() || '첨부파일';
+          const pureFileName = targetFilename.replace(/\.[^/.]+$/, '').replace(/^[0-9_]+/, '').trim();
+          if (pureFileName && pureFileName !== '첨부파일') {
+            sharedPartnerName = pureFileName;
+          }
 
           // 3. 실물 엑셀 파일 로컬 직접 판독 시도 (.xlsx, .xls)
           const isExcel = targetFilename.toLowerCase().endsWith('.xlsx') || targetFilename.toLowerCase().endsWith('.xls') || targetItem.file_type === 'DOCUMENT';
@@ -2374,9 +2379,9 @@ ${JSON.stringify(operators || [], null, 2)}
             let orderId = sharedSoId;
             if (!orderId) {
               // 상신 데이터 및 첨부 파일 기반 수주서 즉시 자동 적재
-              const partnerName = originalData?.partner_name || originalData?.customer_name || '엘에스';
-              const itemName = originalData?.item_name || 'LS발주 품목 일체';
-              const totalAmount = Number(originalData?.total_amount || originalData?.amount || 1500000);
+              const partnerName = originalData?.partner_name || originalData?.customer_name || sharedPartnerName || (originalData?.doc_title && !originalData.doc_title.startsWith('[상신]') ? originalData.doc_title : '') || '현장 발주처';
+              const itemName = originalData?.item_name || sharedItemName || `${partnerName} 수주 품목`;
+              const totalAmount = Number(originalData?.total_amount || originalData?.amount || sharedAmount || 1500000);
               orderId = `SO-${Date.now().toString().slice(-6)}`;
 
               const nowObj = new Date();
@@ -2586,7 +2591,7 @@ ${JSON.stringify(operators || [], null, 2)}
                   templateTitle = tmpl?.title || '수주등록';
                   const baseMsg = tmpl?.content || '새로운 수주가 접수되었습니다. {거래처명}';
 
-                  const partnerName = originalData?.partner_name || originalData?.customer_name || sharedPartnerName || '엘에스';
+                  const partnerName = originalData?.partner_name || originalData?.customer_name || sharedPartnerName || (originalData?.doc_title && !originalData.doc_title.startsWith('[상신]') ? originalData.doc_title : '') || '현장 발주처';
                   const submitterName = originalData?.created_by || originalData?.operator || '이주용';
 
                   finalMsg = baseMsg
