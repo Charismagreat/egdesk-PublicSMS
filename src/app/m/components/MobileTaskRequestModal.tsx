@@ -91,7 +91,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
 
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
 
-  // 모달이 열릴 때 props로 전달된 photos/files를 attachments에 병합
+  // 모달이 닫힐 때만 초기화하고, 열려있는 동안 props로 들어오는 photos/files를 attachments에 누적 병합
   useEffect(() => {
     if (!isOpen) {
       setTitle("");
@@ -104,7 +104,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
     (photos || []).forEach((p, idx) => {
       if (p.base64 || p.preview) {
         itemsFromProps.push({
-          id: `prop_p_${idx}_${Date.now()}`,
+          id: `prop_p_${p.name}_${idx}`,
           name: p.name || `사진_${idx + 1}.jpg`,
           size: "이미지",
           type: p.type || "image/jpeg",
@@ -118,7 +118,7 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
     (files || []).forEach((f, idx) => {
       const category = detectFileCategory(f.name, f.type);
       itemsFromProps.push({
-        id: `prop_f_${idx}_${Date.now()}`,
+        id: `prop_f_${f.name}_${idx}`,
         name: f.name || `첨부파일_${idx + 1}`,
         size: f.size || "파일",
         type: f.type || "application/octet-stream",
@@ -132,14 +132,23 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
       setAttachments((prev) => {
         const next = [...prev];
         itemsFromProps.forEach((it) => {
-          if (!next.some((n) => n.name === it.name && (n.base64 === it.base64 || n.preview === it.preview))) {
+          const exists = next.some((n) => n.name === it.name && (n.base64 === it.base64 || n.preview === it.preview));
+          if (!exists) {
             next.push(it);
           }
         });
         return next;
       });
+
+      // 제목이 비어있다면 첫 파일명으로 자동 추천
+      setTitle((prevTitle) => {
+        if (!prevTitle.trim() && itemsFromProps.length > 0) {
+          return itemsFromProps[0].name.replace(/\.[^/.]+$/, "");
+        }
+        return prevTitle;
+      });
     }
-  }, [isOpen]);
+  }, [isOpen, photos, files]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [viewerItem, setViewerItem] = useState<any>(null);
