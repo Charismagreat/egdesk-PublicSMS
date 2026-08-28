@@ -1227,13 +1227,39 @@ export async function POST(request: Request) {
     const { searchParams } = new URL(request.url);
     
     let body: any = {};
-    try {
-      const text = await request.text();
-      if (text) {
-        body = JSON.parse(text);
+    const contentType = request.headers.get('content-type') || '';
+    const isMultipart = contentType.includes('multipart/form-data');
+    let uploadedFilesList: Array<{ name: string; type: string; size: number; buffer: Buffer }> = [];
+
+    if (isMultipart) {
+      try {
+        const formData = await request.formData();
+        body = {};
+        for (const [key, value] of formData.entries()) {
+          if (value instanceof File) {
+            const bytes = await value.arrayBuffer();
+            uploadedFilesList.push({
+              name: value.name,
+              type: value.type || 'application/octet-stream',
+              size: value.size,
+              buffer: Buffer.from(bytes)
+            });
+          } else {
+            body[key] = value;
+          }
+        }
+      } catch (fErr) {
+        console.warn('FormData 파싱 에러:', fErr);
       }
-    } catch (e) {
-      console.warn('Failed to parse JSON body, fallback to empty object.');
+    } else {
+      try {
+        const text = await request.text();
+        if (text) {
+          body = JSON.parse(text);
+        }
+      } catch (e) {
+        console.warn('Failed to parse JSON body, fallback to empty object.');
+      }
     }
 
     const action = searchParams.get('action') || body?.action;

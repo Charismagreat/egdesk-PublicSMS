@@ -2,466 +2,445 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { 
-  X, Send, Sparkles, FileText, Trash2, Eye, Mic, 
-  Image as ImageIcon, Film, Music, Compass, Loader2 
+  X, UploadCloud, FileText, Image as ImageIcon, Film, Music, 
+  Compass, Trash2, Loader2, Plus, Sparkles, Folder, CheckCircle2,
+  Mic, MicOff
 } from "lucide-react";
-import { MobileItemViewerModal } from "./MobileItemViewerModal";
 
 export type FileCategory = "IMAGE" | "VIDEO" | "AUDIO" | "CAD" | "DOCUMENT";
 
-export interface AttachmentItem {
-  id: string;
-  name: string;
-  size: string;
-  type: string;
-  category: FileCategory;
-  base64: string;
-  preview: string;
-  url?: string;
-}
-
-export interface RequestPhoto {
-  name: string;
-  preview: string;
-  base64: string;
-  type?: string;
-}
-
-export interface RequestFile {
-  name: string;
-  size: string;
-  type: string;
-  isLink?: boolean;
-  url?: string;
-  preview?: string;
-  base64?: string;
-}
-
-interface MobileTaskRequestModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  photos?: RequestPhoto[];
-  files?: RequestFile[];
-  voiceText: string;
-  setVoiceText: (text: string | ((prev: string) => string)) => void;
-  onRemovePhoto?: (index: number) => void;
-  onRemoveFile?: (index: number) => void;
-  onAddPhoto?: (photo: RequestPhoto) => void;
-  onAddFile?: (file: RequestFile) => void;
-  taskFolders: any[];
-  onSendGovernanceRequest: (title: string, note: string, photos?: any[], files?: any[]) => Promise<void>;
-  onSaveToTaskFolder: (folderId: string, title: string, photos?: any[], files?: any[]) => Promise<void>;
-}
-
 export function detectFileCategory(fileName: string, mimeType?: string): FileCategory {
-  const ext = (fileName.split(".").pop() || "").toLowerCase();
+  const name = (fileName || "").toLowerCase();
   const mime = (mimeType || "").toLowerCase();
 
-  if (mime.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "heic", "gif", "svg"].includes(ext)) {
+  if (mime.startsWith("image/") || name.match(/\.(jpg|jpeg|png|gif|webp|heic|bmp|svg)$/i)) {
     return "IMAGE";
   }
-  if (mime.startsWith("video/") || ["mp4", "mov", "avi", "webm", "mkv", "wmv"].includes(ext)) {
+  if (mime.startsWith("video/") || name.match(/\.(mp4|mov|avi|mkv|wmv|webm|3gp)$/i)) {
     return "VIDEO";
   }
-  if (mime.startsWith("audio/") || ["mp3", "m4a", "wav", "aac", "ogg", "flac"].includes(ext)) {
+  if (mime.startsWith("audio/") || name.match(/\.(mp3|m4a|wav|aac|ogg|flac)$/i)) {
     return "AUDIO";
   }
-  if (["dwg", "dxf", "stp", "step", "iges", "igs", "sldprt", "catpart"].includes(ext)) {
+  if (name.match(/\.(dwg|dxf|stp|step|iges|igs|sldprt|catpart|stl)$/i)) {
     return "CAD";
   }
   return "DOCUMENT";
 }
 
-export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
+interface MobileTaskRequestModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSendGovernanceRequest?: (title: string, note: string, photos?: any[], files?: any[]) => Promise<void>;
+  onSaveToTaskFolder?: (folderId: string, title: string, photos?: any[], files?: any[]) => Promise<void>;
+  taskFolders?: Array<{ id: string; name: string; title?: string }>;
+  photos?: any[];
+  files?: any[];
+  voiceText?: string;
+  setVoiceText?: (text: string) => void;
+  onRemovePhoto?: (idx: number) => void;
+  onRemoveFile?: (idx: number) => void;
+  onAddPhoto?: (p: any) => void;
+  onAddFile?: (f: any) => void;
+}
+
+export function MobileTaskRequestModal({
   isOpen,
   onClose,
-  photos = [],
-  files = [],
-  voiceText,
-  setVoiceText,
-  taskFolders,
   onSendGovernanceRequest,
-  onSaveToTaskFolder,
-}) => {
+  taskFolders = [],
+}: MobileTaskRequestModalProps) {
   const [targetType, setTargetType] = useState<"TODO" | "FOLDER">("TODO");
   const [title, setTitle] = useState("");
-  const [selectedFolderId, setSelectedFolderId] = useState<string>("");
+  const [note, setNote] = useState("");
+  const [selectedFolderId, setSelectedFolderId] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isReadingFiles, setIsReadingFiles] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
-  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
 
-  // 모달이 닫힐 때만 초기화하고, 열려있는 동안 props로 들어오는 photos/files를 attachments에 누적 병합
+  // 모달 닫힐 때 폼 초기화
   useEffect(() => {
     if (!isOpen) {
       setTitle("");
-      setAttachments([]);
-      return;
+      setNote("");
+      setSelectedFiles([]);
+      setIsSubmitting(false);
+      setIsRecording(false);
     }
-
-    const itemsFromProps: AttachmentItem[] = [];
-
-    (photos || []).forEach((p, idx) => {
-      if (p.base64 || p.preview) {
-        itemsFromProps.push({
-          id: `prop_p_${p.name}_${idx}`,
-          name: p.name || `사진_${idx + 1}.jpg`,
-          size: "이미지",
-          type: p.type || "image/jpeg",
-          category: "IMAGE",
-          base64: p.base64 || p.preview,
-          preview: p.preview || p.base64,
-        });
-      }
-    });
-
-    (files || []).forEach((f, idx) => {
-      const category = detectFileCategory(f.name, f.type);
-      itemsFromProps.push({
-        id: `prop_f_${f.name}_${idx}`,
-        name: f.name || `첨부파일_${idx + 1}`,
-        size: f.size || "파일",
-        type: f.type || "application/octet-stream",
-        category: category,
-        base64: f.base64 || f.preview || f.url || "",
-        preview: f.preview || f.base64 || f.url || "",
-      });
-    });
-
-    if (itemsFromProps.length > 0) {
-      setAttachments((prev) => {
-        const next = [...prev];
-        itemsFromProps.forEach((it) => {
-          const exists = next.some((n) => n.name === it.name && (n.base64 === it.base64 || n.preview === it.preview));
-          if (!exists) {
-            next.push(it);
-          }
-        });
-        return next;
-      });
-
-      // 제목이 비어있다면 첫 파일명으로 자동 추천
-      setTitle((prevTitle) => {
-        if (!prevTitle.trim() && itemsFromProps.length > 0) {
-          return itemsFromProps[0].name.replace(/\.[^/.]+$/, "");
-        }
-        return prevTitle;
-      });
-    }
-  }, [isOpen, photos, files]);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [viewerItem, setViewerItem] = useState<any>(null);
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [isSTTListening, setIsSTTListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const startSTT = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  // 파일 선택 핸들러
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const incomingFiles = Array.from(e.target.files);
+    
+    setSelectedFiles((prev) => [...prev, ...incomingFiles]);
+
+    // 제목이 비어있다면 첫 번째 파일명으로 자동 추천
+    setTitle((prev) => {
+      if (!prev.trim() && incomingFiles.length > 0) {
+        return incomingFiles[0].name.replace(/\.[^/.]+$/, "");
+      }
+      return prev;
+    });
+
+    if (e.target) e.target.value = "";
+  };
+
+  // 파일 삭제 핸들러
+  const handleRemoveFile = (indexToRemove: number) => {
+    setSelectedFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  // 음성 녹음 토글
+  const toggleVoiceRecording = () => {
+    if (typeof window === "undefined") return;
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
     if (!SpeechRecognition) {
-      alert("현재 브라우저에서 음성 인식을 지원하지 않습니다.");
+      alert("현재 브라우저는 음성 인식을 지원하지 않습니다.");
       return;
     }
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.lang = "ko-KR";
-      recognition.interimResults = false;
-      recognition.continuous = false;
 
-      recognition.onstart = () => setIsSTTListening(true);
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        if (transcript) {
-          setVoiceText((prev: string) => (prev ? `${prev} ${transcript}` : transcript));
-        }
-      };
-      recognition.onerror = () => setIsSTTListening(false);
-      recognition.onend = () => setIsSTTListening(false);
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+    } else {
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.lang = "ko-KR";
+        recognition.continuous = true;
+        recognition.interimResults = true;
 
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (e) {
-      console.error(e);
-      setIsSTTListening(false);
-    }
-  };
-
-  const stopSTT = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsSTTListening(false);
-    }
-  };
-
-  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = e.target.files;
-    if (!selectedFiles || selectedFiles.length === 0) return;
-
-    setIsReadingFiles(true);
-    const fileList = Array.from(selectedFiles);
-
-    try {
-      const uploadPromises = fileList.map(async (file) => {
-        const category = detectFileCategory(file.name, file.type);
-        const sizeStr = file.size > 1024 * 1024 
-          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
-          : `${(file.size / 1024).toFixed(0)} KB`;
-
-        let serverFileUrl = "";
-        let previewDataUrl = "";
-
-        // 1. 빠른 DataURL 프리뷰 생성
-        try {
-          previewDataUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = () => resolve("");
-            reader.readAsDataURL(file);
-          });
-        } catch {
-          previewDataUrl = "";
-        }
-
-        // 2. 실물 파일을 서버 /api/upload 로 전송하여 영구 정적 URL 획득
-        try {
-          const formData = new FormData();
-          formData.append("file", file);
-          const uploadRes = await fetch("/api/upload", {
-            method: "POST",
-            body: formData,
-          });
-          if (uploadRes.ok) {
-            const uploadData = await uploadRes.json();
-            if (uploadData.success && uploadData.url) {
-              serverFileUrl = uploadData.url;
-            }
+        recognition.onresult = (event: any) => {
+          let currentTranscript = "";
+          for (let i = 0; i < event.results.length; i++) {
+            currentTranscript += event.results[i][0].transcript;
           }
-        } catch (upErr) {
-          console.warn("실물 업로드 통신 에러:", upErr);
-        }
+          setNote((prev) => (prev ? `${prev} ${currentTranscript}` : currentTranscript));
+        };
 
-        const finalUrl = serverFileUrl || previewDataUrl;
+        recognition.onerror = () => {
+          setIsRecording(false);
+        };
 
-        return {
-          id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          name: file.name,
-          size: sizeStr,
-          type: file.type || "application/octet-stream",
-          category: category,
-          base64: serverFileUrl || previewDataUrl,
-          preview: previewDataUrl || serverFileUrl,
-          url: serverFileUrl || previewDataUrl,
-        } as AttachmentItem;
-      });
+        recognition.onend = () => {
+          setIsRecording(false);
+        };
 
-      const newItems = await Promise.all(uploadPromises);
-      setAttachments((prev) => [...prev, ...newItems]);
-
-      // 💡 함수형 업데이터로 최신 title 상태를 검사하여 사용자가 이미 입력한 제목을 절대 덮어쓰지 않음
-      setTitle((prevTitle) => {
-        if (!prevTitle.trim() && newItems.length > 0) {
-          return newItems[0].name.replace(/\.[^/.]+$/, "");
-        }
-        return prevTitle;
-      });
-    } catch (readErr) {
-      console.error("파일 처리 중 오류:", readErr);
-      alert("파일을 처리하는 도중 오류가 발생했습니다.");
-    } finally {
-      setIsReadingFiles(false);
-      if (e.target) e.target.value = "";
+        recognition.start();
+        recognitionRef.current = recognition;
+        setIsRecording(true);
+      } catch (err) {
+        console.error("음성 녹음 시작 실패:", err);
+        setIsRecording(false);
+      }
     }
   };
 
-  const handleOpenPreview = (item: AttachmentItem) => {
-    setViewerItem({
-      name: item.name,
-      url: item.base64 || item.preview,
-      preview: item.preview || item.base64,
-      type: item.category,
-      category: item.category
-    });
-    setIsViewerOpen(true);
-  };
-
-  const handleRemoveAttachment = (id: string) => {
-    setAttachments((prev) => prev.filter((it) => it.id !== id));
-  };
-
+  // 🚀 최종 제출 핸들러 (브라우저 표준 FormData 단일 직송 전송 + 이지데스크 MCP 스토리지 자동 연동)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (isReadingFiles) {
-      alert("⏳ 첨부 파일을 변환 중입니다. 잠시 후 다시 시도해 주세요.");
-      return;
-    }
-
     const trimmedTitle = title.trim();
-    if (!trimmedTitle && !voiceText.trim() && attachments.length === 0) {
+    if (!trimmedTitle && !note.trim() && selectedFiles.length === 0) {
       alert("상신할 업무 제목 또는 수집 자료를 첨부해 주세요.");
       return;
     }
 
+    if (targetType === "FOLDER" && !selectedFolderId) {
+      alert("자료를 보관할 태스크 폴더를 선택해 주세요.");
+      return;
+    }
+
     setIsSubmitting(true);
+
     try {
-      const smartTitle = 
+      const finalTitle = 
         trimmedTitle || 
-        (attachments.length > 0 ? attachments[0].name.replace(/\.[^/.]+$/, "") : "") || 
-        (voiceText.trim() ? voiceText.trim().substring(0, 30) : "현장 업무 접수");
+        (selectedFiles.length > 0 ? selectedFiles[0].name.replace(/\.[^/.]+$/, "") : "") || 
+        (note.trim() ? note.trim().substring(0, 30) : "현장 업무 접수");
 
-      const photosPayload = attachments
-        .filter((a) => a.category === "IMAGE")
-        .map((a) => ({ 
-          name: a.name, 
-          url: a.url || a.base64,
-          preview: a.preview || a.url, 
-          base64: a.base64, 
-          type: a.type 
-        }));
-
-      const filesPayload = attachments
-        .map((a) => ({
-          name: a.name,
-          size: a.size,
-          type: a.type,
-          category: a.category,
-          url: a.url || a.base64,
-          preview: a.preview || a.url,
-          base64: a.base64,
-        }));
-
-      if (targetType === "TODO") {
-        await onSendGovernanceRequest(smartTitle, voiceText, photosPayload, filesPayload);
-      } else {
-        if (!selectedFolderId) {
-          alert("보관할 태스크 폴더를 선택해 주세요.");
-          setIsSubmitting(false);
-          return;
-        }
-        await onSaveToTaskFolder(selectedFolderId, smartTitle, photosPayload, filesPayload);
+      // 📦 브라우저 표준 FormData 패키징 (Base64 변환 없음, 용량 팽창 0%)
+      const formData = new FormData();
+      formData.append("title", finalTitle);
+      formData.append("doc_title", finalTitle);
+      formData.append("note", note.trim());
+      formData.append("reason", note.trim());
+      formData.append("targetType", targetType);
+      
+      if (targetType === "FOLDER") {
+        formData.append("folder_id", selectedFolderId);
       }
 
-      setTitle("");
-      setVoiceText("");
-      setAttachments([]);
+      // 실물 파일 바이너리 직송
+      selectedFiles.forEach((file) => {
+        formData.append("files", file);
+      });
+
+      const res = await fetch("/api/governance?action=create_log", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "서버 응답 오류가 발생했습니다.");
+      }
+
+      alert("🎉 업무 상신 및 실물 파일 첨부가 완벽하게 등록되었습니다!");
+      
+      // 화면 갱신
+      if (onSendGovernanceRequest) {
+        // 부모의 fetchTasks() 유도를 위한 완료 트리거
+        try {
+          await onSendGovernanceRequest(finalTitle, note.trim(), [], []);
+        } catch {}
+      }
+      
       onClose();
     } catch (err: any) {
+      console.error("상신 제출 실패:", err);
       alert("등록 실패: " + (err.message || "오류가 발생했습니다."));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const renderCategoryBadge = (category: FileCategory) => {
+  // 파일 카테고리 아이콘 렌더러
+  const renderCategoryIcon = (category: FileCategory) => {
     switch (category) {
       case "IMAGE":
-        return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><ImageIcon className="w-3 h-3" /> 사진</span>;
+        return <ImageIcon className="w-4 h-4 text-emerald-500" />;
       case "VIDEO":
-        return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200"><Film className="w-3 h-3" /> 동영상</span>;
+        return <Film className="w-4 h-4 text-purple-500" />;
       case "AUDIO":
-        return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200"><Music className="w-3 h-3" /> 녹음</span>;
+        return <Music className="w-4 h-4 text-rose-500" />;
       case "CAD":
-        return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"><Compass className="w-3 h-3" /> CAD도면</span>;
+        return <Compass className="w-4 h-4 text-indigo-500" />;
       default:
-        return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><FileText className="w-3 h-3" /> 문서</span>;
+        return <FileText className="w-4 h-4 text-slate-500" />;
     }
   };
 
   return (
-    <>
-      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-5 space-y-4 text-left animate-scale-in max-h-[85vh] overflow-y-auto">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><Sparkles className="w-5 h-5" /></div>
-              <h3 className="font-extrabold text-base text-slate-800">자료 & 업무 등록</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl max-w-lg w-full p-5 md:p-6 shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col relative">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+              <UploadCloud className="w-5 h-5" />
             </div>
-            <button type="button" onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 border-none bg-transparent cursor-pointer"><X className="w-5 h-5" /></button>
+            <div>
+              <h3 className="text-base font-black text-slate-800 tracking-tight">현장 업무 자료 상신</h3>
+              <p className="text-[11px] text-slate-400 font-bold">실물 파일 첨부 및 태스크 자동 발급</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* 폼 본문 */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pt-4 space-y-4 pr-1">
+          {/* 목적지 선택: 할 일 등록 vs 태스크 폴더 */}
+          <div className="grid grid-cols-2 gap-2 bg-slate-100/80 p-1 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setTargetType("TODO")}
+              className={`py-2 rounded-xl text-xs font-black transition-all border-none cursor-pointer flex items-center justify-center gap-1.5 ${
+                targetType === "TODO"
+                  ? "bg-white text-indigo-600 shadow-xs"
+                  : "text-slate-500 hover:text-slate-700 bg-transparent"
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>할 일 대장에 상신</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTargetType("FOLDER")}
+              className={`py-2 rounded-xl text-xs font-black transition-all border-none cursor-pointer flex items-center justify-center gap-1.5 ${
+                targetType === "FOLDER"
+                  ? "bg-white text-indigo-600 shadow-xs"
+                  : "text-slate-500 hover:text-slate-700 bg-transparent"
+              }`}
+            >
+              <Folder className="w-4 h-4" />
+              <span>태스크 폴더에 저장</span>
+            </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3.5">
+          {/* 태스크 폴더 선택 (FOLDER 모드일 때) */}
+          {targetType === "FOLDER" && (
             <div>
-              <label className="text-[10px] font-extrabold text-slate-400 block mb-1.5 uppercase tracking-wider">등록 대상 선택</label>
-              <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl">
-                <button type="button" onClick={() => setTargetType("TODO")} className={`py-2 px-3 text-xs font-black rounded-xl transition-all border-none cursor-pointer ${targetType === "TODO" ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900 bg-transparent"}`}>📌 할 일에 등록</button>
-                <button type="button" onClick={() => setTargetType("FOLDER")} className={`py-2 px-3 text-xs font-black rounded-xl transition-all border-none cursor-pointer ${targetType === "FOLDER" ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900 bg-transparent"}`}>📁 태스크 폴더</button>
-              </div>
+              <label className="text-[11px] font-black text-slate-500 block mb-1">
+                저장할 태스크 폴더 <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={selectedFolderId}
+                onChange={(e) => setSelectedFolderId(e.target.value)}
+                required
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white"
+              >
+                <option value="">태스크 폴더를 선택하세요</option>
+                {taskFolders.map((tf) => (
+                  <option key={tf.id} value={tf.id}>
+                    {tf.name || tf.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 제목 입력 */}
+          <div>
+            <label className="text-[11px] font-black text-slate-500 block mb-1">
+              업무 / 자료 제목 <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="예: [상신] 동양특수금속 수주 접수 (또는 777)"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+            />
+          </div>
+
+          {/* 파일 첨부 영역 */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-black text-slate-500">
+                첨부 자료 ({selectedFiles.length}건)
+              </label>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-black text-[11px] rounded-xl border border-indigo-200/80 cursor-pointer flex items-center gap-1 transition-all active:scale-95 shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>사진 / 동영상 / 음성 / CAD / 문서 첨부</span>
+              </button>
             </div>
 
-            {targetType === "TODO" ? (
-              <div>
-                <label className="text-[10px] font-extrabold text-slate-400 block mb-1">할 일 / 업무 제목 <span className="text-rose-500">*</span></label>
-                <input type="text" required placeholder="예: [상신] 동양특수금속 수주 접수" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white" />
+            <input
+              type="file"
+              ref={fileInputRef}
+              multiple
+              accept="*/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+
+            {/* 선택된 파일 목록 */}
+            {selectedFiles.length > 0 ? (
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5 space-y-2 max-h-48 overflow-y-auto">
+                {selectedFiles.map((file, idx) => {
+                  const category = detectFileCategory(file.name, file.type);
+                  const sizeStr = file.size > 1024 * 1024
+                    ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                    : `${(file.size / 1024).toFixed(0)} KB`;
+
+                  return (
+                    <div
+                      key={`${file.name}_${idx}`}
+                      className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 text-xs shadow-2xs gap-2"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200/60">
+                          {renderCategoryIcon(category)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-slate-800 text-xs truncate">{file.name}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">{sizeStr}</p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(idx)}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 border-none bg-transparent cursor-pointer shrink-0 transition-colors"
+                        title="첨부 파일 삭제"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="space-y-2">
-                <div>
-                  <label className="text-[10px] font-extrabold text-slate-400 block mb-1">보관할 태스크 폴더 선택</label>
-                  <select required value={selectedFolderId} onChange={(e) => setSelectedFolderId(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500">
-                    <option value="">태스크 폴더를 선택하세요</option>
-                    {taskFolders.map((tf) => <option key={tf.id} value={tf.id}>{tf.name || tf.title}</option>)}
-                  </select>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="p-5 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer transition-colors"
+              >
+                <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
+                  <UploadCloud className="w-5 h-5" />
                 </div>
-                <div>
-                  <label className="text-[10px] font-extrabold text-slate-400 block mb-1">자료 구분 제목</label>
-                  <input type="text" placeholder="예: 현장 시방서 및 도면 자료 수집" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white" />
-                </div>
+                <p className="text-xs font-bold text-slate-600">터치하여 파일 및 사진을 첨부하세요</p>
+                <p className="text-[10px] text-slate-400">고화질 사진(7MB+), 동영상, CAD 도면, 녹음 파일 등 원본 그대로 전송</p>
               </div>
             )}
+          </div>
 
-            <input type="file" ref={fileInputRef} accept="*/*" multiple className="hidden" onChange={handleFilesSelected} />
+          {/* 상세 메모 및 음성 입력 */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-black text-slate-500">
+                상세 메모 / 현장 지시 사항
+              </label>
+              <button
+                type="button"
+                onClick={toggleVoiceRecording}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border-none cursor-pointer flex items-center gap-1 transition-all ${
+                  isRecording
+                    ? "bg-rose-500 text-white animate-pulse"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {isRecording ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                <span>{isRecording ? "음성 인식 중..." : "음성 입력"}</span>
+              </button>
+            </div>
+            <textarea
+              rows={3}
+              placeholder="현장 특이사항, 납기 요청 또는 전달 사항을 작성하세요..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-semibold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-colors resize-none"
+            />
+          </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-extrabold text-slate-400 flex items-center gap-1">첨부 자료 ({attachments.length}건) {isReadingFiles && <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />}</span>
-                <button type="button" disabled={isReadingFiles} onClick={() => fileInputRef.current?.click()} className="px-2.5 py-1 bg-gradient-to-r from-indigo-50 to-indigo-100 hover:from-indigo-100 hover:to-indigo-200 text-indigo-700 font-extrabold text-[11px] rounded-xl border border-indigo-200/80 cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95">➕ 파일 / 사진 / 동영상 / CAD 첨부</button>
-              </div>
-
-              {attachments.length > 0 ? (
-                <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-2 space-y-1.5 max-h-48 overflow-y-auto">
-                  {attachments.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-150 text-xs shadow-2xs">
-                      <div onClick={() => handleOpenPreview(item)} className="flex items-center gap-2 truncate cursor-pointer hover:text-indigo-600 transition-colors flex-1">
-                        {item.category === "IMAGE" ? <img src={item.preview} alt={item.name} className="w-7 h-7 object-cover rounded-lg border border-slate-200 shrink-0" /> : <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">{renderCategoryBadge(item.category)}</div>}
-                        <div className="truncate flex flex-col"><span className="truncate max-w-[140px] font-bold text-slate-800 text-[11px]">{item.name}</span><span className="text-[9px] text-slate-400 font-mono">{item.size}</span></div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button type="button" onClick={() => handleOpenPreview(item)} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"><Eye className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => handleRemoveAttachment(item.id)} className="p-1 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 border-none bg-transparent cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          {/* 하단 버튼 */}
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-2xl font-black text-sm transition-all shadow-md active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border-none cursor-pointer"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>실물 파일 업로드 및 상신 중...</span>
+                </>
               ) : (
-                <div onClick={() => fileInputRef.current?.click()} className="p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-1 text-center cursor-pointer transition-colors">
-                  <span className="text-xs font-bold text-slate-600">📷 사진, 🎬 영상, 🎙️ 녹음, 📐 CAD, 📄 문서</span>
-                  <span className="text-[10px] text-slate-400">여기를 터치하여 파일을 첨부하세요</span>
-                </div>
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>{targetType === "TODO" ? "할 일에 상신 등록하기 🚀" : "태스크 폴더에 저장하기 📁"}</span>
+                </>
               )}
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] font-extrabold text-slate-400">음성 / 추가 메모</label>
-                <button type="button" onClick={isSTTListening ? stopSTT : startSTT} className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border-none cursor-pointer flex items-center gap-1 transition-all ${isSTTListening ? "bg-rose-500 text-white animate-pulse" : "bg-indigo-50 hover:bg-indigo-100 text-indigo-600"}`}>
-                  <Mic className="w-3 h-3" />
-                  <span>{isSTTListening ? "🔴 음성 인식 중" : "🎤 음성으로 입력"}</span>
-                </button>
-              </div>
-              <textarea rows={2} placeholder="현장 특이사항 및 세부 메모를 입력하세요." value={voiceText} onChange={(e) => setVoiceText(e.target.value)} className={`w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-medium text-slate-800 outline-none resize-none transition-all ${isSTTListening ? "border-rose-400 ring-2 ring-rose-100 bg-rose-50/30" : "border-slate-200 focus:border-indigo-500 focus:bg-white"}`} />
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl border-none cursor-pointer">취소</button>
-              <button type="submit" disabled={isSubmitting || isReadingFiles} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-350 text-white font-black text-xs rounded-xl shadow-xs border-none cursor-pointer flex items-center justify-center gap-1.5 active:scale-95">
-                {isReadingFiles ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>자료 변환 중...</span></>
-                ) : isSubmitting ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>등록 중...</span></>
-                ) : (
-                  <><Send className="w-3.5 h-3.5" /><span>{targetType === "TODO" ? "할 일에 등록" : "태스크 폴더에 저장"}</span></>
                 )}
               </button>
             </div>
