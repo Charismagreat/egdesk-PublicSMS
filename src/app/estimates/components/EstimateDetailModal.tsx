@@ -980,7 +980,7 @@ export default function EstimateDetailModal({
                 return targetFileUrl ? (
                   <div className="flex-1 flex flex-col justify-between h-full">
                     {/* 이미지 파일 미리보기 */}
-                    {/\.(jpg|jpeg|png|webp|heic|gif)$/i.test(targetFileUrl) || targetFileUrl.startsWith('data:image/') ? (
+                    {/\.(jpg|jpeg|png|webp|heic|gif)$/i.test(targetFileUrl) || targetFileUrl.startsWith('data:image/') || targetFileUrl.includes('crm_snaptask_items') || targetFileUrl.includes('/uploads/customs/') ? (
                       <div className="flex-1 bg-transparent overflow-hidden flex items-center justify-center relative group h-[620px] p-0">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img 

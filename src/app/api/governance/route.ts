@@ -2086,21 +2086,47 @@ ${JSON.stringify(operators || [], null, 2)}
             }
           }
 
-          // 3. 파일 바이너리 다운로드 (egdesk-helpers 의 downloadFile 1순위 사용 및 통합 게이트웨이 폴백 연동)
+          // 3. 파일 바이너리 추출 (로컬 디스크 직접 로드 1순위 -> downloadFile MCP -> 통합 게이트웨이 폴백)
           let downloadSuccess = false;
           let downloadErrorMsg = '';
+          let imageBase64 = '';
+          const imageFilename = targetFilename || '상신사진.jpg';
+          const ext = imageFilename.split('.').pop()?.toLowerCase() || 'jpg';
+          const imageMime = ext === 'png' ? 'image/png' : (ext === 'webp' ? 'image/webp' : 'image/jpeg');
 
-          const downloadRes = await downloadFile({
-            tableName: 'crm_snaptask_items',
-            rowId: Number(targetItem.id),
-            columnName: 'file_url'
-          });
-          
-          if (downloadRes.success && downloadRes.data) {
-            imageBase64 = downloadRes.data;
-            downloadSuccess = true;
-          } else {
-            downloadErrorMsg = downloadRes.error || '바이너리 데이터 부재';
+          // (1) 로컬 디스크 파일 직접 로드 (가장 빠르고 100% 신뢰성)
+          if (targetItem.file_url) {
+            try {
+              const fs = require('fs');
+              const path = require('path');
+              const cleanUrl = targetItem.file_url.startsWith('/') ? targetItem.file_url : `/${targetItem.file_url}`;
+              const localDiskPath = path.join(process.cwd(), 'public', cleanUrl);
+              if (fs.existsSync(localDiskPath)) {
+                const fBuf = fs.readFileSync(localDiskPath);
+                if (fBuf && fBuf.length > 0) {
+                  imageBase64 = fBuf.toString('base64');
+                  downloadSuccess = true;
+                }
+              }
+            } catch (diskErr: any) {
+              console.warn("로컬 디스크 파일 직접 읽기 실패:", diskErr.message);
+            }
+          }
+
+          // (2) egdesk-helpers 의 downloadFile 2차 시도
+          if (!downloadSuccess) {
+            const downloadRes = await downloadFile({
+              tableName: 'crm_snaptask_items',
+              rowId: Number(targetItem.id),
+              columnName: 'file_url'
+            });
+            
+            if (downloadRes.success && downloadRes.data) {
+              imageBase64 = downloadRes.data;
+              downloadSuccess = true;
+            } else {
+              downloadErrorMsg = downloadRes.error || '바이너리 데이터 부재';
+            }
           }
 
           // 💡 [동적 Base URL 추출] 현재 구동 중인 정확한 도메인과 포트를 획득하여 Connection Refused 차단
@@ -2108,7 +2134,7 @@ ${JSON.stringify(operators || [], null, 2)}
           const protocol = request.url.startsWith('https') ? 'https' : 'http';
           const baseUrl = `${protocol}://${host}`;
 
-          // 💡 [게이트웨이 폴백 가드] downloadFile이 실패할 경우 본사 통합 파일 게이트웨이 API로 2차 연동 호출 시도
+          // (3) 통합 게이트웨이 폴백 가드
           if (!downloadSuccess) {
             try {
               const cookieStore = await cookies();
@@ -2143,8 +2169,6 @@ ${JSON.stringify(operators || [], null, 2)}
             sharedOcrDetail = `[바이너리 다운로드 실패] 스토리지로부터 이미지 파일('${targetItem.content_text}')의 실물 바이너리를 로드하는 데 실패했습니다. 에러: ${downloadErrorMsg}. 수동 등록 또는 반려 처리가 필요합니다.`;
             return;
           }
-
-          imageFilename = targetItem.content_text?.replace('[상신 첨부] ', '') || imageFilename;
 
           // 4. 로컬 OCR API 호출 및 분석 (동적 baseUrl 적용 - 1단계: analyze 호출)
           const cookieStore = await cookies();
