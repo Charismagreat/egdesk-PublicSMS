@@ -277,17 +277,15 @@ export default function MobileHubPage() {
         {/* 2-1. 스마트 출퇴근 및 근태 위젯 */}
         <MobileAttendanceWidget
           currentTime={attendance.currentTime}
-          selectedWorkplace={selectedWorkplace}
-          allWorkplaces={allWorkplaces}
-          setSelectedWorkplace={setSelectedWorkplace}
+          workplaceName={selectedWorkplace?.name || "본사 (KST)"}
           attendanceStatus={attendance.attendanceStatus}
-          clockInTime={attendance.clockInTime}
-          clockOutTime={attendance.clockOutTime}
-          elapsedWorkTime={attendance.getElapsedWorkTimeStr()}
-          totalWorkTime={attendance.getTotalWorkTimeStr()}
+          checkInTime={attendance.clockInTime}
+          checkOutTime={attendance.clockOutTime}
+          elapsedTimeStr={attendance.getElapsedWorkTimeStr()}
+          totalWorkTimeStr={attendance.getTotalWorkTimeStr()}
           onClockIn={attendance.handleClockIn}
           onClockOut={attendance.handleClockOut}
-          onOpenMapModal={attendance.handleOpenLocationMap}
+          onOpenLocationMap={attendance.handleOpenLocationMap}
           pendingLeave={leave.pendingLeave}
           onOpenPendingLeaveModal={() => leave.setIsPendingLeaveModalOpen(true)}
           isTodayLate={attendance.isTodayLate}
@@ -295,19 +293,24 @@ export default function MobileHubPage() {
           lateReason={attendance.lateReason}
           setLateReason={attendance.setLateReason}
           isReportingLateReason={attendance.isReportingLateReason}
-          onReportLateReason={attendance.handleReportLateReason}
+          onReportLateReason={(e) => {
+            if (e && e.preventDefault) e.preventDefault();
+            attendance.handleReportLateReason();
+          }}
           isTodayEarlyLeave={attendance.isTodayEarlyLeave}
           isEarlyLeaveReasonReported={attendance.isEarlyLeaveReasonReported}
           earlyLeaveReason={attendance.earlyLeaveReason}
           setEarlyLeaveReason={attendance.setEarlyLeaveReason}
           isReportingEarlyLeaveReason={attendance.isReportingEarlyLeaveReason}
-          onReportEarlyLeaveReason={attendance.handleReportEarlyLeaveReason}
+          onReportEarlyLeaveReason={(e) => {
+            if (e && e.preventDefault) e.preventDefault();
+            attendance.handleReportEarlyLeaveReason();
+          }}
         />
 
         {/* 2-2. 일일 업무 보고서 카드 */}
         <MobileDailyReportCard
           todayReport={todayReport}
-          onOpenReportPage={() => router.push("/m/daily-report")}
         />
 
         {/* 2-3. 할 일 / 한 일 / 태스크 폴더 섹션 */}
