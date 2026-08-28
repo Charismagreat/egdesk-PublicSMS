@@ -663,11 +663,6 @@ export default function MobileHubPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newFolderName, description: newFolderDesc }),
       });
-      const data = await res.json();
-      if (data.success) {
-        alert("✨ 새로운 태스크 폴더가 생성되었습니다.");
-        setNewFolderName("");
-        setNewFolderDesc("");
         setIsNewFolderModalOpen(false);
         const updated = await reloadTaskFolders();
         if (updated.length > 0) setSelectedFolderId(String(updated[0].id));
@@ -806,7 +801,7 @@ export default function MobileHubPage() {
     }
   };
 
-  // 할 일 상태 안내 (직원 직접 토글 제한 & 최고관리자 관제 연동)
+  // 할 일 상태 안내
   const handleToggleTaskStatus = (taskId: string, currentStatus: string) => {
     if (currentStatus !== "DONE") {
       alert("📌 해당 업무는 최고관리자의 컨트롤타워 관제 및 승인 완료 후 '한 일'로 자동 전환됩니다.");
@@ -821,13 +816,12 @@ export default function MobileHubPage() {
       `📌 '${task.title}' 건에 대해 최고관리자 관제 취소 요청을 상신하시겠습니까?\n취소 사유를 입력해 주세요:`,
       "단가 또는 입력 정보 재검토를 위해 취소를 요청합니다."
     );
-    if (inputReason === null) return; // 취소 누름
+    if (inputReason === null) return;
 
     const actualReason = inputReason.trim() || `[모바일 현장 직원의 취소 요청] (${task.title})`;
-    const operatorName = currentEmployee?.name || task.operator || task.created_by || "이주용";
+    const operatorName = (session as any)?.user?.name || "임직원";
 
     try {
-      // 1) 백엔드 create_cancel_request 단일 파이프라인 호출 (원본 태스크 1:1 유지 및 상태 갱신)
       const res = await apiFetch("/api/governance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -879,37 +873,22 @@ export default function MobileHubPage() {
   const activeTasks = tasks.filter((t) => t.status !== "DONE");
   const completedTasks = tasks.filter((t) => t.status === "DONE");
 
-  // 📅 기간별 필터링 판별 함수 (관제 지정일 due_date / 제목 내 납기일 vs 일반 오늘 등록건)
-  const extractDueDate = (t: any): string | null => {
-    if (t.due_date && String(t.due_date).trim() !== '') {
-      const cleaned = String(t.due_date).trim().replace(/[\.\/]/g, '-');
-      const match = cleaned.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
-      if (match) return match[1];
-    }
-    if (t.title) {
-      const cleaned = String(t.title).trim().replace(/[\.\/]/g, '-');
-      const match = cleaned.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
-      if (match) return match[1];
-    }
-    return null;
-  };
-
+  // 📅 기간별 필터링 판별 함수 (실제 발생/완료일 기준 정밀 대조)
   const isTaskInPeriod = (t: any, period: string, tab: "active" | "completed") => {
     if (period === "ALL") return true;
 
-    const dueDateStr = extractDueDate(t);
-
-    // 1) 관제/수주납기에 의해 처리일시(due_date)가 존재하는 건 -> 지정된 해당 일자/월 탭에 정확히 노출
-    if (dueDateStr) {
-      const [y, m, d] = dueDateStr.split('-').map(Number);
+    const rawDate = (tab === "active" ? (t.due_date || t.created_at) : (t.resolved_at || t.completed_at || t.updated_at || t.created_at)) || '';
+    const dateMatch = String(rawDate).match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+    
+    if (dateMatch) {
+      const [y, m, d] = dateMatch[1].split('-').map(Number);
       const taskDate = new Date(y, m - 1, d);
+      taskDate.setHours(0, 0, 0, 0);
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const taskZero = new Date(taskDate);
-      taskZero.setHours(0, 0, 0, 0);
-
-      const diffDays = Math.round((taskZero.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      const diffDays = Math.round((taskDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
       // 🗓️ 캘린더 기준 이번 주 (일요일 ~ 토요일) 범위 산출
       const dayOfWeek = today.getDay(); // 0(일) ~ 6(토)
@@ -921,29 +900,24 @@ export default function MobileHubPage() {
       const endOfWeek = new Date(saturdayTime);
       endOfWeek.setHours(23, 59, 59, 999);
 
-      const isInCurrentWeek = taskZero.getTime() >= startOfWeek.getTime() && taskZero.getTime() <= endOfWeek.getTime();
+      const isInCurrentWeek = taskDate.getTime() >= startOfWeek.getTime() && taskDate.getTime() <= endOfWeek.getTime();
 
       if (tab === "active") {
-        if (period === "TODAY") return diffDays <= 0;
+        if (period === "TODAY") return diffDays <= 0; // 오늘 및 마감 지난 지연건 포함
         if (period === "TOMORROW") return diffDays === 1;
         if (period === "WEEK") return isInCurrentWeek && diffDays >= 0;
         if (period === "MONTH") {
-          return (
-            taskDate.getFullYear() === today.getFullYear() &&
-            taskDate.getMonth() === today.getMonth()
-          );
+          return taskDate.getFullYear() === today.getFullYear() && taskDate.getMonth() === today.getMonth();
         }
         if (period === "NEXT_MONTH") {
           const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-          return (
-            taskDate.getFullYear() === nextMonth.getFullYear() &&
-            taskDate.getMonth() === nextMonth.getMonth()
-          );
+          return taskDate.getFullYear() === nextMonth.getFullYear() && taskDate.getMonth() === nextMonth.getMonth();
         }
       } else {
-        if (period === "TODAY") return diffDays === 0;
-        if (period === "YESTERDAY") return diffDays === -1;
-        if (period === "WEEK") return isInCurrentWeek && diffDays <= 0;
+        // 한 일 (completed) 탭:
+        if (period === "TODAY") return diffDays === 0; // 오늘 완료 건만!
+        if (period === "YESTERDAY") return diffDays === -1; // 어제 완료 건만!
+        if (period === "WEEK") return isInCurrentWeek && diffDays <= 0; // 이번 주에 완료된 건만!
         if (period === "MONTH") {
           return taskDate.getFullYear() === today.getFullYear() && taskDate.getMonth() === today.getMonth();
         }
@@ -955,14 +929,11 @@ export default function MobileHubPage() {
       return false;
     }
 
-    // 2) 관제 지정일(due_date)이 없는 일반 오늘 등록건
+    // 날짜 정보가 전혀 없는 예외 건
     if (tab === "active") {
-      if (period === "TODAY") return true;
-      return false;
+      return period === "TODAY";
     } else {
-      // 한 일 (completed) 탭: 오늘 완결 건은 '오늘', '이번 주', '이번 달' 탭에도 포함 표시!
-      if (period === "TODAY" || period === "WEEK" || period === "MONTH") return true;
-      return false;
+      return period === "TODAY";
     }
   };
 

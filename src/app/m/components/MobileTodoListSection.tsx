@@ -85,17 +85,18 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
     if (periodId === "ALL") return targetTasks.length;
 
     return targetTasks.filter((t) => {
-      const dueDateStr = extractDueDate(t);
-      if (dueDateStr) {
-        const [y, m, d] = dueDateStr.split('-').map(Number);
+      const rawDate = (tabType === "active" ? (t.due_date || t.created_at) : (t.resolved_at || t.completed_at || t.updated_at || t.created_at)) || '';
+      const dateMatch = String(rawDate).match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+
+      if (dateMatch) {
+        const [y, m, d] = dateMatch[1].split('-').map(Number);
         const taskDate = new Date(y, m - 1, d);
+        taskDate.setHours(0, 0, 0, 0);
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const taskZero = new Date(taskDate);
-        taskZero.setHours(0, 0, 0, 0);
-
-        const diffDays = Math.round((taskZero.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const diffDays = Math.round((taskDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
         // 🗓️ 캘린더 기준 이번 주 (일요일 ~ 토요일) 범위 산출
         const dayOfWeek = today.getDay(); // 0(일) ~ 6(토)
@@ -107,7 +108,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
         const endOfWeek = new Date(saturdayTime);
         endOfWeek.setHours(23, 59, 59, 999);
 
-        const isInCurrentWeek = taskZero.getTime() >= startOfWeek.getTime() && taskZero.getTime() <= endOfWeek.getTime();
+        const isInCurrentWeek = taskDate.getTime() >= startOfWeek.getTime() && taskDate.getTime() <= endOfWeek.getTime();
 
         if (tabType === "active") {
           if (periodId === "TODAY") return diffDays <= 0;
@@ -134,7 +135,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
         }
         return false;
       }
-      return tabType === "active" ? periodId === "TODAY" : (periodId === "TODAY" || periodId === "WEEK" || periodId === "MONTH");
+      return periodId === "TODAY";
     }).length;
   };
 
