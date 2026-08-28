@@ -188,6 +188,12 @@ export async function GET(req: Request) {
             partner_company_name: matchedPartner ? matchedPartner.company_name : null,
             attachments: attachments
           };
+        }).filter((t: any) => {
+          // 첨부파일도 없고 유의미한 내용도 없는 과거 실패 placeholder 태스크 제외
+          if ((t.title === '[상신] 현장 수주 및 업무 접수' || t.title === '모바일 현장 업무 및 수주 접수') && (!t.attachments || t.attachments.length === 0)) {
+            return false;
+          }
+          return true;
         });
 
       // 4) crm_governance_logs 상신 및 관제 로그 결합 동기화
@@ -245,6 +251,11 @@ export async function GET(req: Request) {
               existingTask.status = 'DONE';
             }
           } else if (!isCancelLog) {
+            // 💡 제목이 기본 placeholder이고 첨부파일도 없는 빈 거버넌스 로그는 가상 태스크 생성 스킵
+            if (log.doc_title === '[상신] 현장 수주 및 업무 접수' || log.doc_title === '모바일 현장 업무 및 수주 접수' || (log.doc_title || '').includes('취소 요청')) {
+              return;
+            }
+
             const isLogApproved = log.status === 'APPROVED' || log.status === 'FORCE_APPROVED' || log.status === 'RESOLVED' || log.status === 'DONE' || log.status === 'COMPLETED';
             const logNowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
@@ -309,6 +320,7 @@ export async function GET(req: Request) {
               due_date: log.due_date || null
             });
           }
+
         });
 
         // 💡 [중복 태스크 1:1 완벽 병합 정제 (De-duplication)]
