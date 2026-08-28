@@ -1453,9 +1453,15 @@ export async function POST(request: Request) {
           if (!fileContent && !file.name) continue;
 
           const itemId = Date.now() + 100 + i;
-          const isImg = file.type?.startsWith('image/') || file.name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-          const isVid = file.type?.startsWith('video/') || file.name?.match(/\.(mp4|mov|avi)$/i);
-          const fType = isImg ? 'IMAGE' : (isVid ? 'VIDEO' : 'DOCUMENT');
+          const fileNameLower = (file.name || '').toLowerCase();
+          const mimeLower = (file.type || '').toLowerCase();
+          
+          const isImg = mimeLower.startsWith('image/') || fileNameLower.match(/\.(jpg|jpeg|png|gif|webp|heic|svg)$/i);
+          const isVid = mimeLower.startsWith('video/') || fileNameLower.match(/\.(mp4|mov|avi|webm|mkv|wmv)$/i);
+          const isAud = mimeLower.startsWith('audio/') || fileNameLower.match(/\.(mp3|m4a|wav|aac|ogg|flac)$/i);
+          const isCad = fileNameLower.match(/\.(dwg|dxf|stp|step|iges|igs|sldprt|catpart)$/i);
+          
+          const fType = isImg ? 'IMAGE' : (isVid ? 'VIDEO' : (isAud ? 'AUDIO' : (isCad ? 'CAD' : 'DOCUMENT')));
           const itemUuid = `STI-${Date.now()}-file-${i}`;
 
           let finalFileUrl = fileContent;
@@ -1464,7 +1470,9 @@ export async function POST(request: Request) {
             try {
               const base64Data = fileContent.split(';base64,').pop();
               if (base64Data) {
-                const safeName = `${Date.now()}_${i}_${(file.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+                const ext = (file.name || '').split('.').pop() || (isImg ? 'jpg' : (isVid ? 'mp4' : (isAud ? 'mp3' : 'dat')));
+                const pureBase = (file.name || 'file').replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9가-힣._-]/g, '_');
+                const safeName = `${Date.now()}_${i}_${pureBase}.${ext}`;
                 const diskPath = path.join(uploadDir, safeName);
                 fs.writeFileSync(diskPath, Buffer.from(base64Data, 'base64'));
                 finalFileUrl = `/uploads/customs/${safeName}`;

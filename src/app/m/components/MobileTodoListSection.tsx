@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CheckSquare, Square, Search, AlertCircle, Plus, Calendar, Folder, ShieldCheck, Clock, FileText, ExternalLink, XCircle, Trash2, Ban, Image as ImageIcon } from "lucide-react";
+import { CheckSquare, Square, Search, AlertCircle, Plus, Calendar, Folder, ShieldCheck, Clock, FileText, ExternalLink, XCircle, Trash2, Ban, Image as ImageIcon, Film, Music, Compass } from "lucide-react";
 
 interface MobileTodoListSectionProps {
   todoTab: "active" | "completed" | "folders";
@@ -405,23 +405,45 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                         </p>
                       )}
 
-                      {/* 📎 [상신 실물 첨부파일/서류 미리보기 & 다운로드 뱃지 목록] */}
+                      {/* 📎 [상신 실물 첨부파일/서류/미디어 미리보기 & 다운로드 뱃지 목록] */}
                       {t.attachments && t.attachments.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
                           {t.attachments.map((att: any, attIdx: number) => {
-                            const isImg = att.fileType === 'IMAGE' || att.name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                            const fType = att.fileType || 'DOCUMENT';
+                            let badgeStyle = "bg-blue-50/80 hover:bg-blue-100 text-blue-700 border-blue-200/80";
+                            let icon = <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />;
+                            let linkColor = "text-blue-400";
+
+                            if (fType === "IMAGE") {
+                              badgeStyle = "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-700 border-emerald-200/80";
+                              icon = <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
+                              linkColor = "text-emerald-400";
+                            } else if (fType === "VIDEO") {
+                              badgeStyle = "bg-purple-50/80 hover:bg-purple-100 text-purple-700 border-purple-200/80";
+                              icon = <Film className="w-3.5 h-3.5 text-purple-600 shrink-0" />;
+                              linkColor = "text-purple-400";
+                            } else if (fType === "AUDIO") {
+                              badgeStyle = "bg-amber-50/80 hover:bg-amber-100 text-amber-700 border-amber-200/80";
+                              icon = <Music className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+                              linkColor = "text-amber-400";
+                            } else if (fType === "CAD") {
+                              badgeStyle = "bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border-indigo-200/80";
+                              icon = <Compass className="w-3.5 h-3.5 text-indigo-600 shrink-0" />;
+                              linkColor = "text-indigo-400";
+                            }
+
                             return (
                               <a
                                 key={attIdx}
                                 href={att.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className={`inline-flex items-center gap-1.5 ${isImg ? 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-700 border-emerald-200/80' : 'bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border-indigo-200/80'} font-extrabold text-[10px] px-2 py-1 rounded-lg border transition-all text-decoration-none cursor-pointer`}
+                                className={`inline-flex items-center gap-1.5 ${badgeStyle} font-extrabold text-[10px] px-2 py-1 rounded-lg border transition-all text-decoration-none cursor-pointer`}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {isImg ? <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> : <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
+                                {icon}
                                 <span className="truncate max-w-[180px]">{att.name}</span>
-                                <ExternalLink className={`w-3 h-3 ${isImg ? 'text-emerald-400' : 'text-indigo-400'} shrink-0`} />
+                                <ExternalLink className={`w-3 h-3 ${linkColor} shrink-0`} />
                               </a>
                             );
                           })}

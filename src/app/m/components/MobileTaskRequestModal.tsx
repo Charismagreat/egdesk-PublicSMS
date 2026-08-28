@@ -1,13 +1,30 @@
 "use client";
 
-import React, { useState, useRef } from "react";
-import { X, Send, Sparkles, Link as LinkIcon, FileText, Trash2, Eye, Mic } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { 
+  X, Send, Sparkles, FileText, Trash2, Eye, Mic, 
+  Image as ImageIcon, Film, Music, Compass, Loader2 
+} from "lucide-react";
 import { MobileItemViewerModal } from "./MobileItemViewerModal";
+
+export type FileCategory = "IMAGE" | "VIDEO" | "AUDIO" | "CAD" | "DOCUMENT";
+
+export interface AttachmentItem {
+  id: string;
+  name: string;
+  size: string;
+  type: string;
+  category: FileCategory;
+  base64: string;
+  preview: string;
+  url?: string;
+}
 
 export interface RequestPhoto {
   name: string;
   preview: string;
   base64: string;
+  type?: string;
 }
 
 export interface RequestFile {
@@ -16,109 +33,137 @@ export interface RequestFile {
   type: string;
   isLink?: boolean;
   url?: string;
-  file?: File;
+  preview?: string;
+  base64?: string;
 }
 
 interface MobileTaskRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
-  photos: RequestPhoto[];
-  files: RequestFile[];
+  photos?: RequestPhoto[];
+  files?: RequestFile[];
   voiceText: string;
   setVoiceText: (text: string | ((prev: string) => string)) => void;
-  onRemovePhoto: (index: number) => void;
-  onRemoveFile: (index: number) => void;
+  onRemovePhoto?: (index: number) => void;
+  onRemoveFile?: (index: number) => void;
   onAddPhoto?: (photo: RequestPhoto) => void;
   onAddFile?: (file: RequestFile) => void;
   taskFolders: any[];
-  onSendGovernanceRequest: (title: string, note: string, photos?: RequestPhoto[], files?: RequestFile[]) => Promise<void>;
-  onSaveToTaskFolder: (folderId: string, title: string, photos?: RequestPhoto[], files?: RequestFile[]) => Promise<void>;
+  onSendGovernanceRequest: (title: string, note: string, photos?: any[], files?: any[]) => Promise<void>;
+  onSaveToTaskFolder: (folderId: string, title: string, photos?: any[], files?: any[]) => Promise<void>;
+}
+
+export function detectFileCategory(fileName: string, mimeType?: string): FileCategory {
+  const ext = (fileName.split(".").pop() || "").toLowerCase();
+  const mime = (mimeType || "").toLowerCase();
+
+  if (mime.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "heic", "gif", "svg"].includes(ext)) {
+    return "IMAGE";
+  }
+  if (mime.startsWith("video/") || ["mp4", "mov", "avi", "webm", "mkv", "wmv"].includes(ext)) {
+    return "VIDEO";
+  }
+  if (mime.startsWith("audio/") || ["mp3", "m4a", "wav", "aac", "ogg", "flac"].includes(ext)) {
+    return "AUDIO";
+  }
+  if (["dwg", "dxf", "stp", "step", "iges", "igs", "sldprt", "catpart"].includes(ext)) {
+    return "CAD";
+  }
+  return "DOCUMENT";
 }
 
 export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
   isOpen,
   onClose,
-  photos,
-  files,
+  photos = [],
+  files = [],
   voiceText,
   setVoiceText,
-  onRemovePhoto,
-  onRemoveFile,
-  onAddPhoto,
-  onAddFile,
   taskFolders,
   onSendGovernanceRequest,
   onSaveToTaskFolder,
 }) => {
-  // 등록 타겟: 'TODO' (할 일 상신) vs 'FOLDER' (태스크 폴더 보관)
   const [targetType, setTargetType] = useState<"TODO" | "FOLDER">("TODO");
   const [title, setTitle] = useState("");
-  const [localPhotos, setLocalPhotos] = useState<RequestPhoto[]>(photos || []);
-  const [localFiles, setLocalFiles] = useState<RequestFile[]>(files || []);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isReadingFiles, setIsReadingFiles] = useState(false);
 
-  // props가 외부에서 변경될 때 로컬 상태 동기화
-  React.useEffect(() => {
-    if (photos && photos.length > 0) setLocalPhotos(photos);
-  }, [photos]);
-  React.useEffect(() => {
-    if (files && files.length > 0) setLocalFiles(files);
-  }, [files]);
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
 
-  // 📸 모달 내부 파일/사진 선택 전용 ref
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const initialItems: AttachmentItem[] = [];
+    
+    photos.forEach((p, idx) => {
+      if (p.base64 || p.preview) {
+        initialItems.push({
+          id: `init_p_${idx}_${Date.now()}`,
+          name: p.name || `사진_${idx + 1}.jpg`,
+          size: "이미지",
+          type: p.type || "image/jpeg",
+          category: "IMAGE",
+          base64: p.base64 || p.preview,
+          preview: p.preview || p.base64,
+        });
+      }
+    });
+
+    files.forEach((f, idx) => {
+      const category = detectFileCategory(f.name, f.type);
+      initialItems.push({
+        id: `init_f_${idx}_${Date.now()}`,
+        name: f.name || `첨부파일_${idx + 1}`,
+        size: f.size || "파일",
+        type: f.type || "application/octet-stream",
+        category: category,
+        base64: f.base64 || f.url || "",
+        preview: f.preview || f.url || "",
+      });
+    });
+
+    if (initialItems.length > 0) {
+      setAttachments((prev) => {
+        const combined = [...prev];
+        initialItems.forEach((it) => {
+          if (!combined.some((c) => c.name === it.name && c.base64 === it.base64)) {
+            combined.push(it);
+          }
+        });
+        return combined;
+      });
+    }
+  }, [isOpen, photos, files]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // 🔍 미리보기 팝업 상태
   const [viewerItem, setViewerItem] = useState<any>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
-
-  // 🎤 실시간 음성-텍스트(STT) 인식 상태
   const [isSTTListening, setIsSTTListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
   if (!isOpen) return null;
 
-  // Web Speech API 실시간 음성-텍스트 받아쓰기 시작
   const startSTT = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("현재 브라우저에서 음성 인식을 지원하지 않습니다. 마이크 입력을 허용해 주세요.");
+      alert("현재 브라우저에서 음성 인식을 지원하지 않습니다.");
       return;
     }
-
     try {
       const recognition = new SpeechRecognition();
       recognition.lang = "ko-KR";
       recognition.interimResults = false;
       recognition.continuous = false;
 
-      recognition.onstart = () => {
-        setIsSTTListening(true);
-      };
-
+      recognition.onstart = () => setIsSTTListening(true);
       recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
         if (transcript) {
           setVoiceText((prev: string) => (prev ? `${prev} ${transcript}` : transcript));
         }
       };
-
-      recognition.onerror = (err: any) => {
-        const errorType = err?.error || err?.message || "unknown";
-        console.warn(`[STT] Speech recognition notice: ${errorType}`);
-        setIsSTTListening(false);
-        if (errorType === "not-allowed" || errorType === "service-not-allowed") {
-          alert("🎤 마이크 접근 권한이 거부되었습니다. 브라우저 주소창 마이크 권한을 허용해 주세요.");
-        } else if (errorType === "audio-capture") {
-          alert("🎤 마이크 장치를 찾을 수 없습니다. 마이크 연결 상태를 확인해 주세요.");
-        }
-      };
-
-      recognition.onend = () => {
-        setIsSTTListening(false);
-      };
+      recognition.onerror = () => setIsSTTListening(false);
+      recognition.onend = () => setIsSTTListening(false);
 
       recognitionRef.current = recognition;
       recognition.start();
@@ -128,7 +173,6 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
     }
   };
 
-  // 음성 인식 중지
   const stopSTT = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
@@ -136,17 +180,80 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
     }
   };
 
-  const handleOpenPreview = (item: any) => {
-    setViewerItem(item);
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles || selectedFiles.length === 0) return;
+
+    setIsReadingFiles(true);
+    const fileList = Array.from(selectedFiles);
+
+    try {
+      const readPromises = fileList.map((file) => {
+        return new Promise<AttachmentItem>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64Str = reader.result as string;
+            const category = detectFileCategory(file.name, file.type);
+            const sizeStr = file.size > 1024 * 1024 
+              ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+              : `${(file.size / 1024).toFixed(0)} KB`;
+
+            resolve({
+              id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              name: file.name,
+              size: sizeStr,
+              type: file.type || "application/octet-stream",
+              category: category,
+              base64: base64Str,
+              preview: base64Str,
+            });
+          };
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+        });
+      });
+
+      const newItems = await Promise.all(readPromises);
+      setAttachments((prev) => [...prev, ...newItems]);
+
+      if (!title.trim() && newItems.length > 0) {
+        const pureName = newItems[0].name.replace(/\.[^/.]+$/, "");
+        setTitle(pureName);
+      }
+    } catch (readErr) {
+      console.error("파일 로드 중 오류:", readErr);
+      alert("파일을 읽는 도중 오류가 발생했습니다.");
+    } finally {
+      setIsReadingFiles(false);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const handleOpenPreview = (item: AttachmentItem) => {
+    setViewerItem({
+      name: item.name,
+      url: item.base64 || item.preview,
+      preview: item.preview || item.base64,
+      type: item.category,
+      category: item.category
+    });
     setIsViewerOpen(true);
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((it) => it.id !== id));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const effectivePhotos = localPhotos.length > 0 ? localPhotos : photos;
-    const effectiveFiles = localFiles.length > 0 ? localFiles : files;
 
-    if (!title.trim() && !voiceText.trim() && effectivePhotos.length === 0 && effectiveFiles.length === 0) {
+    if (isReadingFiles) {
+      alert("⏳ 첨부 파일을 변환 중입니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle && !voiceText.trim() && attachments.length === 0) {
       alert("상신할 업무 제목 또는 수집 자료를 첨부해 주세요.");
       return;
     }
@@ -154,25 +261,39 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
     setIsSubmitting(true);
     try {
       const smartTitle = 
-        title.trim() || 
-        (effectiveFiles.length > 0 && effectiveFiles[0]?.name ? effectiveFiles[0].name.replace(/\.[^/.]+$/, "") : "") || 
-        (effectivePhotos.length > 0 && effectivePhotos[0]?.name ? effectivePhotos[0].name.replace(/\.[^/.]+$/, "") : "") || 
+        trimmedTitle || 
+        (attachments.length > 0 ? attachments[0].name.replace(/\.[^/.]+$/, "") : "") || 
         (voiceText.trim() ? voiceText.trim().substring(0, 30) : "현장 업무 접수");
 
+      const photosPayload = attachments
+        .filter((a) => a.category === "IMAGE")
+        .map((a) => ({ name: a.name, preview: a.preview, base64: a.base64, type: a.type }));
+
+      const filesPayload = attachments
+        .map((a) => ({
+          name: a.name,
+          size: a.size,
+          type: a.type,
+          category: a.category,
+          preview: a.preview,
+          base64: a.base64,
+          url: a.base64,
+        }));
+
       if (targetType === "TODO") {
-        await onSendGovernanceRequest(smartTitle, voiceText, effectivePhotos, effectiveFiles);
+        await onSendGovernanceRequest(smartTitle, voiceText, photosPayload, filesPayload);
       } else {
         if (!selectedFolderId) {
           alert("보관할 태스크 폴더를 선택해 주세요.");
           setIsSubmitting(false);
           return;
         }
-        await onSaveToTaskFolder(selectedFolderId, smartTitle, effectivePhotos, effectiveFiles);
+        await onSaveToTaskFolder(selectedFolderId, smartTitle, photosPayload, filesPayload);
       }
+
       setTitle("");
       setVoiceText("");
-      setLocalPhotos([]);
-      setLocalFiles([]);
+      setAttachments([]);
       onClose();
     } catch (err: any) {
       alert("등록 실패: " + (err.message || "오류가 발생했습니다."));
@@ -181,323 +302,115 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
     }
   };
 
+  const renderCategoryBadge = (category: FileCategory) => {
+    switch (category) {
+      case "IMAGE":
+        return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><ImageIcon className="w-3 h-3" /> 사진</span>;
+      case "VIDEO":
+        return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200"><Film className="w-3 h-3" /> 동영상</span>;
+      case "AUDIO":
+        return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200"><Music className="w-3 h-3" /> 녹음</span>;
+      case "CAD":
+        return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"><Compass className="w-3 h-3" /> CAD도면</span>;
+      default:
+        return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><FileText className="w-3 h-3" /> 문서</span>;
+    }
+  };
+
   return (
     <>
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
         <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-5 space-y-4 text-left animate-scale-in max-h-[85vh] overflow-y-auto">
-          {/* 헤더 */}
           <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
             <div className="flex items-center gap-2">
-              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-base text-slate-800">자료 & 업무 등록</h3>
-              </div>
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><Sparkles className="w-5 h-5" /></div>
+              <h3 className="font-extrabold text-base text-slate-800">자료 & 업무 등록</h3>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 border-none bg-transparent cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <button type="button" onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 border-none bg-transparent cursor-pointer"><X className="w-5 h-5" /></button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3.5">
-            {/* 등록 대상 선택 세그먼트 (할 일 vs 특정 태스크 폴더) */}
             <div>
-              <label className="text-[10px] font-extrabold text-slate-400 block mb-1.5 uppercase tracking-wider">
-                등록 대상 선택
-              </label>
+              <label className="text-[10px] font-extrabold text-slate-400 block mb-1.5 uppercase tracking-wider">등록 대상 선택</label>
               <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl">
-                <button
-                  type="button"
-                  onClick={() => setTargetType("TODO")}
-                  className={`py-2 px-3 text-xs font-black rounded-xl transition-all border-none cursor-pointer flex items-center justify-center gap-1.5 ${
-                    targetType === "TODO"
-                      ? "bg-indigo-600 text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900 bg-transparent"
-                  }`}
-                >
-                  <span>📌 할 일에 등록</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTargetType("FOLDER")}
-                  className={`py-2 px-3 text-xs font-black rounded-xl transition-all border-none cursor-pointer flex items-center justify-center gap-1.5 ${
-                    targetType === "FOLDER"
-                      ? "bg-indigo-600 text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900 bg-transparent"
-                  }`}
-                >
-                  <span>📁 태스크 폴더</span>
-                </button>
+                <button type="button" onClick={() => setTargetType("TODO")} className={`py-2 px-3 text-xs font-black rounded-xl transition-all border-none cursor-pointer ${targetType === "TODO" ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900 bg-transparent"}`}>📌 할 일에 등록</button>
+                <button type="button" onClick={() => setTargetType("FOLDER")} className={`py-2 px-3 text-xs font-black rounded-xl transition-all border-none cursor-pointer ${targetType === "FOLDER" ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900 bg-transparent"}`}>📁 태스크 폴더</button>
               </div>
             </div>
 
-            {/* 타겟별 동적 필드 */}
             {targetType === "TODO" ? (
               <div>
-                <label className="text-[10px] font-extrabold text-slate-400 block mb-1">
-                  할 일 / 업무 제목
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="예: [상신] 동우수주 현장 점검"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white"
-                />
+                <label className="text-[10px] font-extrabold text-slate-400 block mb-1">할 일 / 업무 제목 <span className="text-rose-500">*</span></label>
+                <input type="text" required placeholder="예: [상신] 동양특수금속 수주 접수" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white" />
               </div>
             ) : (
               <div className="space-y-2">
                 <div>
-                  <label className="text-[10px] font-extrabold text-slate-400 block mb-1">
-                    보관할 태스크 폴더 선택
-                  </label>
-                  <select
-                    required
-                    value={selectedFolderId}
-                    onChange={(e) => setSelectedFolderId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
-                  >
+                  <label className="text-[10px] font-extrabold text-slate-400 block mb-1">보관할 태스크 폴더 선택</label>
+                  <select required value={selectedFolderId} onChange={(e) => setSelectedFolderId(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500">
                     <option value="">태스크 폴더를 선택하세요</option>
-                    {taskFolders.map((tf) => (
-                      <option key={tf.id} value={tf.id}>
-                        {tf.name || tf.title}
-                      </option>
-                    ))}
+                    {taskFolders.map((tf) => <option key={tf.id} value={tf.id}>{tf.name || tf.title}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-extrabold text-slate-400 block mb-1">
-                    자료 구분 제목 (선택)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="예: 현장 시방서 및 사진 수집"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white"
-                  />
+                  <label className="text-[10px] font-extrabold text-slate-400 block mb-1">자료 구분 제목</label>
+                  <input type="text" placeholder="예: 현장 시방서 및 도면 자료 수집" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white" />
                 </div>
               </div>
             )}
 
-            {/* 📦 숨김 파일/사진 인풋 필드 */}
-            <input
-              type="file"
-              ref={photoInputRef}
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                const selectedFiles = e.target.files;
-                if (!selectedFiles || selectedFiles.length === 0) return;
-                Array.from(selectedFiles).forEach((file) => {
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    const base64Str = reader.result as string;
-                    const newPhoto = { name: file.name, preview: base64Str, base64: base64Str };
-                    setLocalPhotos((prev) => [...prev, newPhoto]);
-                    if (onAddPhoto) onAddPhoto(newPhoto);
-                  };
-                  reader.readAsDataURL(file);
-                });
-                if (e.target) e.target.value = "";
-              }}
-            />
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                const selectedFiles = e.target.files;
-                if (!selectedFiles || selectedFiles.length === 0) return;
-                Array.from(selectedFiles).forEach((file) => {
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    const base64Str = reader.result as string;
-                    const newFile = {
-                      name: file.name,
-                      size: (file.size / 1024).toFixed(1) + " KB",
-                      type: file.type || "application/octet-stream",
-                      preview: base64Str,
-                      base64: base64Str,
-                      url: base64Str,
-                    };
-                    setLocalFiles((prev) => [...prev, newFile]);
-                    if (onAddFile) onAddFile(newFile);
-                  };
-                  reader.readAsDataURL(file);
-                });
-                if (e.target) e.target.value = "";
-              }}
-            />
+            <input type="file" ref={fileInputRef} accept="*/*" multiple className="hidden" onChange={handleFilesSelected} />
 
-            {/* 📦 등록된 자료 목록 */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-extrabold text-slate-400">
-                  등록된 자료 ({localPhotos.length + localFiles.length}건)
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => photoInputRef.current?.click()}
-                    className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] rounded-lg border border-indigo-200/80 cursor-pointer"
-                  >
-                    📷 사진 추가
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-extrabold text-[10px] rounded-lg border border-amber-200/80 cursor-pointer"
-                  >
-                    📎 서류 첨부
-                  </button>
-                </div>
+                <span className="text-[10px] font-extrabold text-slate-400 flex items-center gap-1">첨부 자료 ({attachments.length}건) {isReadingFiles && <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />}</span>
+                <button type="button" disabled={isReadingFiles} onClick={() => fileInputRef.current?.click()} className="px-2.5 py-1 bg-gradient-to-r from-indigo-50 to-indigo-100 hover:from-indigo-100 hover:to-indigo-200 text-indigo-700 font-extrabold text-[11px] rounded-xl border border-indigo-200/80 cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95">➕ 파일 / 사진 / 동영상 / CAD 첨부</button>
               </div>
 
-              {localPhotos.length > 0 || localFiles.length > 0 ? (
-                <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-2 space-y-1.5 max-h-40 overflow-y-auto">
-                  {localPhotos.map((p, idx) => (
-                    <div
-                      key={`p_${idx}`}
-                      className="flex items-center justify-between bg-white p-1.5 px-2 rounded-xl border border-slate-150 text-xs"
-                    >
-                      <div
-                        onClick={() => handleOpenPreview({ name: p.name, preview: p.preview, type: "IMAGE" })}
-                        className="flex items-center gap-2 truncate cursor-pointer hover:text-indigo-600 transition-colors flex-1"
-                      >
-                        <img src={p.preview} alt={p.name} className="w-6 h-6 object-cover rounded-md border border-slate-200" />
-                        <span className="truncate max-w-[150px] font-bold text-slate-700 text-[11px]">{p.name}</span>
+              {attachments.length > 0 ? (
+                <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-2 space-y-1.5 max-h-48 overflow-y-auto">
+                  {attachments.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-150 text-xs shadow-2xs">
+                      <div onClick={() => handleOpenPreview(item)} className="flex items-center gap-2 truncate cursor-pointer hover:text-indigo-600 transition-colors flex-1">
+                        {item.category === "IMAGE" ? <img src={item.preview} alt={item.name} className="w-7 h-7 object-cover rounded-lg border border-slate-200 shrink-0" /> : <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">{renderCategoryBadge(item.category)}</div>}
+                        <div className="truncate flex flex-col"><span className="truncate max-w-[140px] font-bold text-slate-800 text-[11px]">{item.name}</span><span className="text-[9px] text-slate-400 font-mono">{item.size}</span></div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenPreview({ name: p.name, preview: p.preview, type: "IMAGE" })}
-                          className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
-                          title="미리보기"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLocalPhotos((prev) => prev.filter((_, i) => i !== idx));
-                            onRemovePhoto(idx);
-                          }}
-                          className="p-1 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 border-none bg-transparent cursor-pointer"
-                          title="삭제"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {localFiles.map((f, idx) => (
-                    <div
-                      key={`f_${idx}`}
-                      className="flex items-center justify-between bg-white p-1.5 px-2 rounded-xl border border-slate-150 text-xs"
-                    >
-                      <div
-                        onClick={() => handleOpenPreview({ name: f.name, preview: f.url || f.preview, type: "DOCUMENT" })}
-                        className="flex items-center gap-2 truncate cursor-pointer hover:text-indigo-600 transition-colors flex-1"
-                      >
-                        <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
-                        <span className="truncate max-w-[150px] font-bold text-slate-700 text-[11px]">{f.name}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenPreview({ name: f.name, preview: f.url || f.preview, type: "DOCUMENT" })}
-                          className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"
-                          title="미리보기"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLocalFiles((prev) => prev.filter((_, i) => i !== idx));
-                            onRemoveFile(idx);
-                          }}
-                          className="p-1 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 border-none bg-transparent cursor-pointer"
-                          title="삭제"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button type="button" onClick={() => handleOpenPreview(item)} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 border-none bg-transparent cursor-pointer"><Eye className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={() => handleRemoveAttachment(item.id)} className="p-1 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 border-none bg-transparent cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs font-bold">
-                  등록된 사진/음성/문서/링크가 없습니다. 하단 + 버튼을 눌러 추가하세요.
+                <div onClick={() => fileInputRef.current?.click()} className="p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-1 text-center cursor-pointer transition-colors">
+                  <span className="text-xs font-bold text-slate-600">📷 사진, 🎬 영상, 🎙️ 녹음, 📐 CAD, 📄 문서</span>
+                  <span className="text-[10px] text-slate-400">여기를 터치하여 파일을 첨부하세요</span>
                 </div>
               )}
             </div>
 
-            {/* 🎤 음성 및 추가 텍스트 메모 (실시간 음성-텍스트 변환 STT 연동) */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] font-extrabold text-slate-400">
-                  음성 / 추가 메모
-                </label>
-                <button
-                  type="button"
-                  onClick={isSTTListening ? stopSTT : startSTT}
-                  className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border-none cursor-pointer flex items-center gap-1 transition-all ${
-                    isSTTListening
-                      ? "bg-rose-500 text-white animate-pulse"
-                      : "bg-indigo-50 hover:bg-indigo-100 text-indigo-600"
-                  }`}
-                  title="음성으로 말하여 입력"
-                >
+                <label className="text-[10px] font-extrabold text-slate-400">음성 / 추가 메모</label>
+                <button type="button" onClick={isSTTListening ? stopSTT : startSTT} className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border-none cursor-pointer flex items-center gap-1 transition-all ${isSTTListening ? "bg-rose-500 text-white animate-pulse" : "bg-indigo-50 hover:bg-indigo-100 text-indigo-600"}`}>
                   <Mic className="w-3 h-3" />
-                  <span>{isSTTListening ? "🔴 음성 인식 중 (터치 시 정지)" : "🎤 음성으로 입력"}</span>
+                  <span>{isSTTListening ? "🔴 음성 인식 중" : "🎤 음성으로 입력"}</span>
                 </button>
               </div>
-              <textarea
-                rows={2}
-                onFocus={() => {
-                  if (!isSTTListening && !voiceText) {
-                    startSTT();
-                  }
-                }}
-                placeholder="입력 박스를 선택하거나 🎤 음성으로 입력 버튼을 누르고 말씀하시면 텍스트로 자동 변환됩니다."
-                value={voiceText}
-                onChange={(e) => setVoiceText(e.target.value)}
-                className={`w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-medium text-slate-800 outline-none resize-none transition-all ${
-                  isSTTListening
-                    ? "border-rose-400 ring-2 ring-rose-100 bg-rose-50/30"
-                    : "border-slate-200 focus:border-indigo-500 focus:bg-white"
-                }`}
-              />
+              <textarea rows={2} placeholder="현장 특이사항 및 세부 메모를 입력하세요." value={voiceText} onChange={(e) => setVoiceText(e.target.value)} className={`w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-medium text-slate-800 outline-none resize-none transition-all ${isSTTListening ? "border-rose-400 ring-2 ring-rose-100 bg-rose-50/30" : "border-slate-200 focus:border-indigo-500 focus:bg-white"}`} />
             </div>
 
-            {/* 액션 버튼 */}
             <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl border-none cursor-pointer"
-              >
-                취소
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-350 text-white font-black text-xs rounded-xl shadow-xs border-none cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>{isSubmitting ? "등록 중..." : targetType === "TODO" ? "할 일에 등록" : "태스크 폴더에 저장"}</span>
+              <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl border-none cursor-pointer">취소</button>
+              <button type="submit" disabled={isSubmitting || isReadingFiles} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-350 text-white font-black text-xs rounded-xl shadow-xs border-none cursor-pointer flex items-center justify-center gap-1.5 active:scale-95">
+                {isReadingFiles ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>자료 변환 중...</span></>
+                ) : isSubmitting ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>등록 중...</span></>
+                ) : (
+                  <><Send className="w-3.5 h-3.5" /><span>{targetType === "TODO" ? "할 일에 등록" : "태스크 폴더에 저장"}</span></>
+                )}
               </button>
             </div>
           </form>

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { X, ExternalLink, Download, FileText, Image as ImageIcon, Music, Link as LinkIcon } from "lucide-react";
+import { X, ExternalLink, Download, FileText, Image as ImageIcon, Music, Link as LinkIcon, Film, Compass } from "lucide-react";
 
 interface MobileItemViewerModalProps {
   isOpen: boolean;
@@ -14,6 +14,7 @@ interface MobileItemViewerModalProps {
     url?: string;
     file_url?: string;
     type?: string;
+    category?: string;
     content_type?: string;
     isLink?: boolean;
     date?: string;
@@ -30,14 +31,37 @@ export const MobileItemViewerModal: React.FC<MobileItemViewerModalProps> = ({
 
   const itemName = item.name || item.title || item.file_name || "수집 자료";
   const itemUrl = item.preview || item.url || item.file_url || "";
+  
   const isImage =
     item.type === "IMAGE" ||
+    item.category === "IMAGE" ||
     item.content_type?.includes("image") ||
     itemUrl.startsWith("data:image/") ||
-    /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(itemName) ||
-    /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(itemUrl);
+    /\.(jpg|jpeg|png|gif|webp|svg|heic)$/i.test(itemName) ||
+    /\.(jpg|jpeg|png|gif|webp|svg|heic)$/i.test(itemUrl);
 
-  const isAudio = item.type === "AUDIO" || item.content_type?.includes("audio") || /\.(mp3|wav|ogg|webm)$/i.test(itemUrl);
+  const isVideo =
+    item.type === "VIDEO" ||
+    item.category === "VIDEO" ||
+    item.content_type?.includes("video") ||
+    itemUrl.startsWith("data:video/") ||
+    /\.(mp4|mov|avi|webm|mkv|wmv)$/i.test(itemName) ||
+    /\.(mp4|mov|avi|webm|mkv|wmv)$/i.test(itemUrl);
+
+  const isAudio = 
+    item.type === "AUDIO" || 
+    item.category === "AUDIO" ||
+    item.content_type?.includes("audio") || 
+    itemUrl.startsWith("data:audio/") ||
+    /\.(mp3|m4a|wav|ogg|aac|flac)$/i.test(itemName) ||
+    /\.(mp3|m4a|wav|ogg|aac|flac)$/i.test(itemUrl);
+
+  const isCad =
+    item.type === "CAD" ||
+    item.category === "CAD" ||
+    /\.(dwg|dxf|stp|step|iges|igs|sldprt|catpart)$/i.test(itemName) ||
+    /\.(dwg|dxf|stp|step|iges|igs|sldprt|catpart)$/i.test(itemUrl);
+
   const isLink = item.isLink || item.type === "LINK" || itemUrl.startsWith("http://") || itemUrl.startsWith("https://");
 
   return (
@@ -47,13 +71,17 @@ export const MobileItemViewerModal: React.FC<MobileItemViewerModalProps> = ({
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
             {isImage ? (
-              <ImageIcon className="w-5 h-5 text-purple-600 shrink-0" />
+              <ImageIcon className="w-5 h-5 text-emerald-600 shrink-0" />
+            ) : isVideo ? (
+              <Film className="w-5 h-5 text-purple-600 shrink-0" />
             ) : isAudio ? (
-              <Music className="w-5 h-5 text-emerald-600 shrink-0" />
+              <Music className="w-5 h-5 text-amber-600 shrink-0" />
+            ) : isCad ? (
+              <Compass className="w-5 h-5 text-indigo-600 shrink-0" />
             ) : isLink ? (
               <LinkIcon className="w-5 h-5 text-amber-500 shrink-0" />
             ) : (
-              <FileText className="w-5 h-5 text-indigo-600 shrink-0" />
+              <FileText className="w-5 h-5 text-blue-600 shrink-0" />
             )}
             <h3 className="font-extrabold text-sm text-slate-800 truncate">{itemName}</h3>
           </div>
@@ -74,10 +102,36 @@ export const MobileItemViewerModal: React.FC<MobileItemViewerModalProps> = ({
               alt={itemName}
               className="max-h-[320px] max-w-full object-contain rounded-xl shadow-xs"
             />
+          ) : isVideo && itemUrl ? (
+            <div className="w-full space-y-2 text-center p-2">
+              <video controls src={itemUrl} className="w-full max-h-[300px] rounded-xl object-contain bg-black" />
+            </div>
           ) : isAudio && itemUrl ? (
             <div className="w-full space-y-2 text-center p-3">
-              <Music className="w-10 h-10 text-emerald-600 mx-auto animate-bounce" />
+              <Music className="w-10 h-10 text-amber-600 mx-auto animate-bounce" />
               <audio controls src={itemUrl} className="w-full" />
+            </div>
+          ) : isCad ? (
+            <div className="text-center p-4 space-y-3">
+              <Compass className="w-12 h-12 text-indigo-600 mx-auto" />
+              <div>
+                <span className="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md font-bold text-[10px] mb-1">
+                  CAD 도면 파일
+                </span>
+                <p className="text-xs font-extrabold text-slate-800">{itemName}</p>
+              </div>
+              {itemUrl && (
+                <a
+                  href={itemUrl}
+                  download={itemName}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold no-underline shadow-xs cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>CAD 도면 다운로드</span>
+                </a>
+              )}
             </div>
           ) : isLink ? (
             <div className="text-center p-4 space-y-3">
@@ -94,15 +148,16 @@ export const MobileItemViewerModal: React.FC<MobileItemViewerModalProps> = ({
               </a>
             </div>
           ) : (
-            <div className="text-center p-4 space-y-2">
-              <FileText className="w-12 h-12 text-indigo-500 mx-auto" />
+            <div className="text-center p-4 space-y-3">
+              <FileText className="w-12 h-12 text-blue-500 mx-auto" />
               <p className="text-xs font-extrabold text-slate-700">{itemName}</p>
               {itemUrl && (
                 <a
                   href={itemUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 text-white rounded-xl text-xs font-bold no-underline"
+                  download={itemName}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold no-underline cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>파일 열기 / 다운로드</span>

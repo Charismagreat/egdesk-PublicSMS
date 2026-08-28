@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Calendar, User, Building2, Paperclip, FileText, ExternalLink, Clock, AlertTriangle, CheckCircle2, Image as ImageIcon } from "lucide-react";
+import { X, Calendar, User, Building2, Paperclip, FileText, ExternalLink, Clock, AlertTriangle, CheckCircle2, Image as ImageIcon, Film, Music, Compass } from "lucide-react";
 
 interface MobileTaskDetailModalProps {
   task: any | null;
@@ -248,30 +248,50 @@ export default function MobileTaskDetailModal({
             </div>
           )}
 
-          {/* 📎 2. 상신 첨부 서류 및 실물 파일 목록 */}
+          {/* 📎 2. 상신 첨부 서류 / 동영상 / 음성 / CAD 파일 목록 */}
           {filesList.length > 0 && (
             <div className="bg-white p-3 rounded-xl border border-slate-200/60 space-y-2">
               <span className="text-[11px] font-black text-indigo-700 flex items-center gap-1">
                 <Paperclip className="w-3.5 h-3.5 text-indigo-600" />
-                <span>상신 첨부 서류 ({filesList.length}건)</span>
+                <span>첨부 자료 ({filesList.length}건)</span>
               </span>
               <div className="flex flex-col gap-1.5">
                 {filesList.map((att: any, idx: number) => {
                   const fileUrl = att.url || att.preview || att.base64;
-                  const fileName = att.name || att.filename || `서류파일_${idx + 1}`;
+                  const fileName = att.name || att.filename || `자료파일_${idx + 1}`;
+                  const fType = att.fileType || att.type || '';
+                  
+                  const isVid = fType === 'VIDEO' || fileName.match(/\.(mp4|mov|avi|webm|mkv)$/i);
+                  const isAud = fType === 'AUDIO' || fileName.match(/\.(mp3|m4a|wav|aac|ogg)$/i);
+                  const isCad = fType === 'CAD' || fileName.match(/\.(dwg|dxf|stp|step|iges|igs)$/i);
+
+                  let bgClass = "bg-indigo-50/70 hover:bg-indigo-100 text-indigo-900 border-indigo-200/80";
+                  let icon = <FileText className="w-4 h-4 text-indigo-600 shrink-0" />;
+
+                  if (isVid) {
+                    bgClass = "bg-purple-50/70 hover:bg-purple-100 text-purple-900 border-purple-200/80";
+                    icon = <Film className="w-4 h-4 text-purple-600 shrink-0" />;
+                  } else if (isAud) {
+                    bgClass = "bg-amber-50/70 hover:bg-amber-100 text-amber-900 border-amber-200/80";
+                    icon = <Music className="w-4 h-4 text-amber-600 shrink-0" />;
+                  } else if (isCad) {
+                    bgClass = "bg-cyan-50/70 hover:bg-cyan-100 text-cyan-900 border-cyan-200/80";
+                    icon = <Compass className="w-4 h-4 text-cyan-600 shrink-0" />;
+                  }
+
                   return (
                     <a
                       key={idx}
                       href={fileUrl || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between bg-indigo-50/70 hover:bg-indigo-100 text-indigo-900 font-extrabold text-xs p-2.5 rounded-xl border border-indigo-200/80 transition-all text-decoration-none"
+                      className={`flex items-center justify-between ${bgClass} font-extrabold text-xs p-2.5 rounded-xl border transition-all text-decoration-none`}
                     >
                       <div className="flex items-center gap-2 truncate pr-2">
-                        <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                        {icon}
                         <span className="truncate">{fileName}</span>
                       </div>
-                      <ExternalLink className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     </a>
                   );
                 })}

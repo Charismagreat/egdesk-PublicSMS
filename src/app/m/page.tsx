@@ -1040,7 +1040,7 @@ export default function MobileHubPage() {
         completedTaskCount={completedTasks.length}
         taskFolderCount={taskFolders.length}
         onToggleTaskStatus={handleToggleTaskStatus}
-        onOpenNewTaskModal={() => {}}
+        onOpenNewTaskModal={() => setIsTaskRequestModalOpen(true)}
         onCancelTaskRequest={handleCancelTaskRequest}
         onSelectTask={(task) => setSelectedTask(task)}
         taskFolderContent={

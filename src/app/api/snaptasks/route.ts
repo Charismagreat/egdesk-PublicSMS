@@ -143,15 +143,21 @@ export async function GET(req: Request) {
 
           const attachments = taskItems.map(it => {
             const fileName = it.content_text ? it.content_text.replace('[상신 첨부] ', '').trim() : `첨부파일_${it.id}`;
-            const downloadUrl = it.file_url && (it.file_url.startsWith('http') || it.file_url.startsWith('data:'))
+            const downloadUrl = it.file_url && (it.file_url.startsWith('http') || it.file_url.startsWith('data:') || it.file_url.startsWith('/uploads/'))
               ? it.file_url
               : `/api/shared/files?tableName=crm_snaptask_items&rowId=${it.id}&columnName=file_url`;
             
+            const isImg = it.file_type === 'IMAGE' || fileName.match(/\.(jpg|jpeg|png|gif|webp|heic|svg)$/i);
+            const isVid = it.file_type === 'VIDEO' || fileName.match(/\.(mp4|mov|avi|webm|mkv|wmv)$/i);
+            const isAud = it.file_type === 'AUDIO' || fileName.match(/\.(mp3|m4a|wav|aac|ogg|flac)$/i);
+            const isCad = it.file_type === 'CAD' || fileName.match(/\.(dwg|dxf|stp|step|iges|igs|sldprt|catpart)$/i);
+            const resolvedFileType = isImg ? 'IMAGE' : (isVid ? 'VIDEO' : (isAud ? 'AUDIO' : (isCad ? 'CAD' : 'DOCUMENT')));
+
             return {
               id: it.id,
               name: fileName,
               url: downloadUrl,
-              fileType: it.file_type || (fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? 'IMAGE' : 'DOCUMENT')
+              fileType: resolvedFileType
             };
           });
 
