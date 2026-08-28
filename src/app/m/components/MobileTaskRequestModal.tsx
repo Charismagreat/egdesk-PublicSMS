@@ -209,10 +209,17 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
           ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
           : `${(file.size / 1024).toFixed(0)} KB`;
 
-        let uploadedUrl = "";
-        let previewStr = "";
+        // 💡 0.001초 즉각 프리뷰 URL 생성 (메모리 누수 및 행 걸림 원천 방지)
+        let blobUrl = "";
+        try {
+          blobUrl = URL.createObjectURL(file);
+        } catch {
+          blobUrl = "";
+        }
 
-        // 1. 대용량 실물 파일은 FormData로 서버에 직접 스트리밍 업로드
+        let uploadedUrl = "";
+
+        // 💡 실물 파일 FormData 스트리밍 업로드
         try {
           const formData = new FormData();
           formData.append("file", file);
@@ -220,51 +227,17 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
             method: "POST",
             body: formData,
           });
-          const uploadData = await uploadRes.json();
-          if (uploadData.success && uploadData.url) {
-            uploadedUrl = uploadData.url;
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            if (uploadData.success && uploadData.url) {
+              uploadedUrl = uploadData.url;
+            }
           }
         } catch (upErr) {
-          console.warn("직접 업로드 폴백 진행:", upErr);
+          console.warn("실물 업로드 통신 에러:", upErr);
         }
 
-        // 2. 이미지 썸네일 프리뷰 생성
-        if (category === "IMAGE") {
-          try {
-            previewStr = await new Promise<string>((resPrev) => {
-              const reader = new FileReader();
-              reader.onload = async () => {
-                const rawBase64 = reader.result as string;
-                try {
-                  const img = new Image();
-                  img.src = rawBase64;
-                  await new Promise((imgDone) => { img.onload = imgDone; });
-                  const canvas = document.createElement("canvas");
-                  const maxDim = 600;
-                  let width = img.width;
-                  let height = img.height;
-                  if (width > maxDim || height > maxDim) {
-                    if (width > height) {
-                      height = Math.round((height * maxDim) / width);
-                      width = maxDim;
-                    } else {
-                      width = Math.round((width * maxDim) / height);
-                      height = maxDim;
-                    }
-                  }
-                  canvas.width = width;
-                  canvas.height = height;
-                  const ctx = canvas.getContext("2d");
-                  ctx?.drawImage(img, 0, 0, width, height);
-                  resPrev(canvas.toDataURL("image/jpeg", 0.8));
-                } catch {
-                  resPrev(rawBase64);
-                }
-              };
-              reader.readAsDataURL(file);
-            });
-          } catch {}
-        }
+        const finalUrl = uploadedUrl || blobUrl;
 
         return {
           id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -272,9 +245,9 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
           size: sizeStr,
           type: file.type || "application/octet-stream",
           category: category,
-          base64: previewStr || uploadedUrl,
-          preview: previewStr || uploadedUrl,
-          url: uploadedUrl || previewStr,
+          base64: finalUrl,
+          preview: blobUrl || finalUrl,
+          url: finalUrl,
         } as AttachmentItem;
       });
 
@@ -286,8 +259,8 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
         setTitle(pureName);
       }
     } catch (readErr) {
-      console.error("파일 로드 중 오류:", readErr);
-      alert("파일을 읽는 도중 오류가 발생했습니다.");
+      console.error("파일 처리 중 오류:", readErr);
+      alert("파일을 처리하는 도중 오류가 발생했습니다.");
     } finally {
       setIsReadingFiles(false);
       if (e.target) e.target.value = "";
