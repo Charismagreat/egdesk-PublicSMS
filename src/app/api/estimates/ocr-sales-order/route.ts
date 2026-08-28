@@ -412,7 +412,7 @@ ${fewShotGuide}
 2. 날짜 정규화: 문서 작성일(orderDate)과 납기일(deliveryDate)은 표준 ISO 형식(YYYY-MM-DD)으로 출력하세요. 연도가 생략된 경우 작성일 기준으로 연도를 추론하되, 납기 월이 작성일보다 이전 달인 경우에만 해를 넘긴 것으로 판단하여 +1년을 적용하세요.
 3. 품목 및 규격·코드 분리 정밀 검증:
    - 품명에 표 헤더(품명, 품목코드 등)가 섞이지 않게 하세요.
-   - 품목코드와 규격이 슬래시(/)나 공백으로 함께 기재된 경우(예: 'Ø49/X560014', 'Ø52/X560033' 등), 앞쪽 치수(예: 'Ø49', 'Ø52', '10T', '50A' 등)는 반드시 'spec' 필드로 분리하고, 순수 식별 코드(예: 'X560014', 'X560033' 등)는 'itemCode' 필드로 명확히 분리 추출하세요.
+   - 품목코드와 규격이 슬래시(/), 나누기 기호(÷, ∕, ⁄), 하이픈(-), 공백, 괄호 등으로 함께 기재된 경우(예: 'Ø49/X560014', 'Ø49÷X560014', 'Ø52-X560033', 'Ø49(X560014)' 등), 치수(예: 'Ø49', 'Ø52', '10T', '50A' 등)는 반드시 'spec' 필드로 분리하고, 순수 식별 코드(예: 'X560014', 'X560033' 등)는 'itemCode' 필드로 명확히 분리 추출하세요.
    - 수량(quantity), 단가(unitPrice), 금액(amount)은 원화 기호나 쉼표를 제외한 정수형태로 추출하세요. 단가와 수량을 최우선 기준으로 삼고, 총액에 오독이나 공백이 발견되면 반드시 [금액 = 수량 * 단가] 수식으로 직접 계산하여 보정하세요.
    - 품목 정보 내에서 'X로 시작하고 뒤에 6자리 숫자가 구성된 패턴(예: X123456)'이 발견되면 'validItemCode' 및 'itemCode'에 정확히 기재하세요.
 4. 비고 및 결재선: 모든 특기사항, 지불조건 등은 줄바꿈(\n)을 포함하여 원본 그대로 'memo'에 전사하고, 결재선 성명은 'approvers' 배열에 담으세요.
@@ -692,34 +692,37 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
       const amount = qty * price;
       total_amount += amount;
 
-      let itemCode = (item.itemCode || '').trim();
+      let rawCode = (item.itemCode || '').trim();
       let spec = (item.spec || '').trim();
+      if (spec === '규격') spec = '';
       const validItemCode = (item.validItemCode || '').trim();
       let productName = (item.itemName || '').trim();
 
-      // 💡 [지능형 규격·코드 자동 분리 가드] 'Ø49/X560014' 처럼 슬래시로 묶여 있는 경우
-      if (itemCode.includes('/')) {
-        const parts = itemCode.split('/');
-        if (parts.length === 2) {
-          const prefix = parts[0].trim();
-          const suffix = parts[1].trim();
-          // 앞부분이 치수/규격 기호(Ø, T, mm, A 등)이거나 숫자를 포함하고 뒷부분이 영문/숫자 코드인 경우
-          if (/^[ØøΦ\d]/i.test(prefix) && /^[A-Z0-9_-]+$/i.test(suffix)) {
-            itemCode = suffix;
-            if (!spec || spec === '규격') {
-              spec = prefix;
+      // 💡 [범용 지능형 규격·코드 분리 가드]
+      // 슬래시(/), 나누기 기호(÷, ∕, ⁄), 백슬래시(\), 파이프(|), 하이픈(-), 언더바(_), 공백, 괄호 등 모든 구분자 지원
+      const codePatternMatch = rawCode.match(/([A-Za-z]\d{5,8}|[A-Za-z]{2,}-\d+|\b[A-Za-z]\d+\b)/);
+      const matchedCode = validItemCode || (codePatternMatch ? codePatternMatch[1] : '');
+
+      if (matchedCode && rawCode.includes(matchedCode)) {
+        const leftover = rawCode.replace(matchedCode, '').replace(/[/÷∕⁄\\|\-_,\s\(\)\[\]]/g, '').trim();
+        if (leftover && !spec) {
+          spec = leftover;
+        }
+        rawCode = matchedCode;
+      } else {
+        const separatorRegex = /[/÷∕⁄\\|\-_,\s\(\)\[\]]+/;
+        if (separatorRegex.test(rawCode)) {
+          const parts = rawCode.split(separatorRegex).filter(Boolean);
+          if (parts.length >= 2) {
+            const specIndex = parts.findIndex(p => /^[ØøΦφ\d]|(mm|cm|m|T|t|A|a|EA|pi|파이)$/i.test(p));
+            const codeIndex = parts.findIndex((p, idx) => idx !== specIndex && /^[A-Za-z0-9_-]{3,}$/i.test(p));
+
+            if (specIndex !== -1 && codeIndex !== -1) {
+              if (!spec) spec = parts[specIndex];
+              rawCode = parts[codeIndex];
             }
           }
         }
-      }
-
-      // validItemCode(예: X560014)가 있는데 itemCode에 특수기호가 섞여있다면 validItemCode 우선 적용
-      if (validItemCode && itemCode !== validItemCode && itemCode.includes(validItemCode)) {
-        const remaining = itemCode.replace(validItemCode, '').replace(/[/_\-\s]/g, '').trim();
-        if (remaining && (!spec || spec === '규격')) {
-          spec = remaining;
-        }
-        itemCode = validItemCode;
       }
 
       // 품명이 비어있고 규격이나 코드가 존재할 때 기본 품명 유추 보완
@@ -728,14 +731,14 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
       }
 
       return {
-        item_code: itemCode,
+        item_code: rawCode,
         product_name: productName,
         spec: spec,
         quantity: qty,
         unit_price: price,
         amount: amount,
         delivery_date: item.deliveryDate || deliveryDate || '', // 품목별 개별 납기일이 파싱되면 쓰고, 없으면 마스터 납기일 폴백
-        valid_item_code: validItemCode || itemCode
+        valid_item_code: matchedCode || rawCode
       };
     });
 
