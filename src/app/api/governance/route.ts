@@ -1236,12 +1236,14 @@ export async function POST(request: Request) {
         const formData = await request.formData();
         body = {};
         for (const [key, value] of formData.entries()) {
-          if (value instanceof File) {
-            const bytes = await value.arrayBuffer();
+          const isFileObj = value && typeof value === 'object' && typeof (value as any).arrayBuffer === 'function';
+          if (isFileObj) {
+            const fileVal = value as any;
+            const bytes = await fileVal.arrayBuffer();
             uploadedFilesList.push({
-              name: value.name,
-              type: value.type || 'application/octet-stream',
-              size: value.size,
+              name: fileVal.name || '첨부파일',
+              type: fileVal.type || 'application/octet-stream',
+              size: fileVal.size || bytes.byteLength,
               buffer: Buffer.from(bytes)
             });
           } else {
@@ -1357,6 +1359,7 @@ export async function POST(request: Request) {
       const requestReason = (reason || note || voiceText || '').trim();
       
       const rawAllFiles = [
+        ...(Array.isArray(uploadedFilesList) ? uploadedFilesList : []),
         ...(Array.isArray(files) ? files : []), 
         ...(Array.isArray(photos) ? photos : []),
         ...(Array.isArray(attachments) ? attachments : []),
@@ -1370,9 +1373,9 @@ export async function POST(request: Request) {
       const allFiles: any[] = [];
       rawAllFiles.forEach((f: any) => {
         if (!f) return;
-        const fUrl = f.base64 || f.url || f.preview || f.data || '';
+        const fUrl = f.base64 || f.url || f.preview || f.data || (f.buffer ? 'buffer_present' : '');
         const fName = f.name || f.filename || '';
-        if (!allFiles.some(af => (af.name || af.filename) === fName && (af.base64 || af.url || af.preview) === fUrl)) {
+        if (!allFiles.some(af => (af.name || af.filename) === fName && (af.base64 || af.url || af.preview || (af.buffer ? 'buffer_present' : '')) === fUrl)) {
           allFiles.push(f);
         }
       });
@@ -1479,6 +1482,7 @@ export async function POST(request: Request) {
           if (!fileContent && !file.name) continue;
 
           const itemId = Date.now() + 100 + i;
+          const itemUuid = `STI-${Date.now()}-${i}`;
           const fileNameLower = (file.name || '').toLowerCase();
           const mimeLower = (file.type || '').toLowerCase();
           
@@ -1489,8 +1493,24 @@ export async function POST(request: Request) {
           
           const fType = isImg ? 'IMAGE' : (isVid ? 'VIDEO' : (isAud ? 'AUDIO' : (isCad ? 'CAD' : 'DOCUMENT')));
           let finalFileUrl = file.url || fileContent;
-          // Base64 데이터 URL인 경우 로컬 디스크 파일로 저장하여 정적 서빙 주소 생성
-          if (finalFileUrl && finalFileUrl.startsWith('data:')) {
+          let base64DataStr = '';
+
+          // 1) 직접 전송된 실물 Buffer 가 있는 경우 로컬 디스크 및 Base64 생성
+          if (file.buffer && Buffer.isBuffer(file.buffer)) {
+            try {
+              const ext = (file.name || '').split('.').pop() || (isImg ? 'jpg' : 'dat');
+              const pureBase = (file.name || 'file').replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9가-힣._-]/g, '_');
+              const safeName = `${Date.now()}_${i}_${pureBase}.${ext}`;
+              const diskPath = path.join(uploadDir, safeName);
+              fs.writeFileSync(diskPath, file.buffer);
+              finalFileUrl = `/uploads/customs/${safeName}`;
+              base64DataStr = file.buffer.toString('base64');
+            } catch (bufErr) {
+              console.warn("Buffer 디스크 저장 실패:", bufErr);
+            }
+          }
+          // 2) Base64 데이터 URL인 경우 로컬 디스크 파일로 저장하여 정적 서빙 주소 생성
+          else if (finalFileUrl && finalFileUrl.startsWith('data:')) {
             try {
               const base64Data = fileContent.split(';base64,').pop();
               if (base64Data) {
@@ -1500,6 +1520,7 @@ export async function POST(request: Request) {
                 const diskPath = path.join(uploadDir, safeName);
                 fs.writeFileSync(diskPath, Buffer.from(base64Data, 'base64'));
                 finalFileUrl = `/uploads/customs/${safeName}`;
+                base64DataStr = base64Data;
               }
             } catch (fsErr) {
               console.warn("Base64 디스크 저장 실패, raw URL 사용:", fsErr);
@@ -1530,7 +1551,7 @@ export async function POST(request: Request) {
             console.error('Failed to query inserted snaptask item real id:', queryErr);
           }
 
-          const fileDataToUpload = file.base64 || file.url || file.preview || fileContent;
+          const fileDataToUpload = base64DataStr || finalFileUrl || file.base64 || file.url || fileContent;
           if (fileDataToUpload && file.name) {
             try {
               await uploadFile('crm_snaptask_items', realDbId, 'file_url', file.name, fileDataToUpload);
