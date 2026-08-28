@@ -592,7 +592,7 @@ export default function MobileHubPage() {
       }
 
       const formattedTitle = rawTitle.startsWith("[상신]") ? rawTitle : `[상신] ${rawTitle}`;
-      const currentOperator = currentEmployee?.name || (session as any)?.name || (session as any)?.username || "이주용";
+      const currentOperator = (session as any)?.name || (session as any)?.username || (session as any)?.user?.name || "이주용";
       const res = await apiFetch("/api/governance?action=create_log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
