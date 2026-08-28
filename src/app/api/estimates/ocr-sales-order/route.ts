@@ -410,11 +410,11 @@ ${fewShotGuide}
 [정제 및 비즈니스 룰]
 1. 거래처 식별: 공급 주체(수주처) 정보는 'supplier'에, 구매/발주 주체(발주처) 정보는 'buyer' 객체에 정확히 분리 매핑하세요. 담당자 정보나 전화번호가 교차 오인되지 않게 주의하세요. 
 2. 날짜 정규화: 문서 작성일(orderDate)과 납기일(deliveryDate)은 표준 ISO 형식(YYYY-MM-DD)으로 출력하세요. 연도가 생략된 경우 작성일 기준으로 연도를 추론하되, 납기 월이 작성일보다 이전 달인 경우에만 해를 넘긴 것으로 판단하여 +1년을 적용하세요.
-3. 품목 및 금액 정밀 정합성 검증:
+3. 품목 및 규격·코드 분리 정밀 검증:
    - 품명에 표 헤더(품명, 품목코드 등)가 섞이지 않게 하세요.
-   - 품명 옆 규격 정보를 분리하지 말고 하나의 품목 및 규격('spec')으로 통합하세요. 수량/단가가 0인 유령 품목은 제외합니다.
+   - 품목코드와 규격이 슬래시(/)나 공백으로 함께 기재된 경우(예: 'Ø49/X560014', 'Ø52/X560033' 등), 앞쪽 치수(예: 'Ø49', 'Ø52', '10T', '50A' 등)는 반드시 'spec' 필드로 분리하고, 순수 식별 코드(예: 'X560014', 'X560033' 등)는 'itemCode' 필드로 명확히 분리 추출하세요.
    - 수량(quantity), 단가(unitPrice), 금액(amount)은 원화 기호나 쉼표를 제외한 정수형태로 추출하세요. 단가와 수량을 최우선 기준으로 삼고, 총액에 오독이나 공백이 발견되면 반드시 [금액 = 수량 * 단가] 수식으로 직접 계산하여 보정하세요.
-   - 품목 정보 내에서 'X로 시작하고 뒤에 6자리 숫자가 구성된 패턴(예: X123456)'이 발견되면 'validItemCode'에 기재하고, 없으면 빈 문자열("")을 반환하세요.
+   - 품목 정보 내에서 'X로 시작하고 뒤에 6자리 숫자가 구성된 패턴(예: X123456)'이 발견되면 'validItemCode' 및 'itemCode'에 정확히 기재하세요.
 4. 비고 및 결재선: 모든 특기사항, 지불조건 등은 줄바꿈(\n)을 포함하여 원본 그대로 'memo'에 전사하고, 결재선 성명은 'approvers' 배열에 담으세요.
 
 최종 JSON 응답 포맷: (Markdown 코드 블록 없이 순수 JSON만 반환)
@@ -692,15 +692,50 @@ Do NOT format or pretty-print the JSON. Return a single-line, compact JSON strin
       const amount = qty * price;
       total_amount += amount;
 
+      let itemCode = (item.itemCode || '').trim();
+      let spec = (item.spec || '').trim();
+      const validItemCode = (item.validItemCode || '').trim();
+      let productName = (item.itemName || '').trim();
+
+      // 💡 [지능형 규격·코드 자동 분리 가드] 'Ø49/X560014' 처럼 슬래시로 묶여 있는 경우
+      if (itemCode.includes('/')) {
+        const parts = itemCode.split('/');
+        if (parts.length === 2) {
+          const prefix = parts[0].trim();
+          const suffix = parts[1].trim();
+          // 앞부분이 치수/규격 기호(Ø, T, mm, A 등)이거나 숫자를 포함하고 뒷부분이 영문/숫자 코드인 경우
+          if (/^[ØøΦ\d]/i.test(prefix) && /^[A-Z0-9_-]+$/i.test(suffix)) {
+            itemCode = suffix;
+            if (!spec || spec === '규격') {
+              spec = prefix;
+            }
+          }
+        }
+      }
+
+      // validItemCode(예: X560014)가 있는데 itemCode에 특수기호가 섞여있다면 validItemCode 우선 적용
+      if (validItemCode && itemCode !== validItemCode && itemCode.includes(validItemCode)) {
+        const remaining = itemCode.replace(validItemCode, '').replace(/[/_\-\s]/g, '').trim();
+        if (remaining && (!spec || spec === '규격')) {
+          spec = remaining;
+        }
+        itemCode = validItemCode;
+      }
+
+      // 품명이 비어있고 규격이나 코드가 존재할 때 기본 품명 유추 보완
+      if (!productName && partnerName.includes('동양특수금속')) {
+        productName = '동양 특수금속 봉재';
+      }
+
       return {
-        item_code: item.itemCode || '',
-        product_name: item.itemName || '',
-        spec: item.spec || '',
+        item_code: itemCode,
+        product_name: productName,
+        spec: spec,
         quantity: qty,
         unit_price: price,
         amount: amount,
         delivery_date: item.deliveryDate || deliveryDate || '', // 품목별 개별 납기일이 파싱되면 쓰고, 없으면 마스터 납기일 폴백
-        valid_item_code: item.validItemCode || ''
+        valid_item_code: validItemCode || itemCode
       };
     });
 
