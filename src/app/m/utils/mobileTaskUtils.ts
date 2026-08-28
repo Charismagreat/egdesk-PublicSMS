@@ -42,7 +42,7 @@ export const isTaskInPeriod = (
   const dateMatch = targetDateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (!dateMatch) return false;
 
-  const [y, m, d] = dateMatch[1].split("-").map(Number);
+  const [y, m, d] = dateMatch[0].split("-").map(Number);
   const taskDate = new Date(y, m - 1, d);
   taskDate.setHours(0, 0, 0, 0);
 

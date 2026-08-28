@@ -257,18 +257,23 @@ export default function MobileHubPage() {
     return isTaskInPeriod(t, currentPeriod, todoTab);
   });
 
+  const currentUserName = (session as any)?.name || (session as any)?.username || "임직원";
+  const currentUserAvatar = (session as any)?.avatar_url || (session as any)?.my_card_image_url || null;
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 select-none font-sans">
-      {/* 1. 모바일 헤더 */}
-      <MobilePortalHeader
-        session={session}
-        leaveBalance={leave.leaveBalance}
-        onOpenLeaveModal={() => leave.setIsLeaveModalOpen(true)}
-        onLogout={handleLogout}
-      />
+      {/* 메인 컨테이너 */}
+      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
+        {/* 1. 모바일 헤더 */}
+        <MobilePortalHeader
+          userName={currentUserName}
+          avatarUrl={currentUserAvatar}
+          pendingLeave={leave.pendingLeave}
+          onOpenLeaveModal={() => leave.setIsLeaveModalOpen(true)}
+          onOpenPendingLeaveModal={() => leave.setIsPendingLeaveModalOpen(true)}
+          onLogout={handleLogout}
+        />
 
-      {/* 2. 메인 컨테이너 */}
-      <main className="max-w-md mx-auto px-4 pt-3 space-y-4">
         {/* 2-1. 스마트 출퇴근 및 근태 위젯 */}
         <MobileAttendanceWidget
           currentTime={attendance.currentTime}
