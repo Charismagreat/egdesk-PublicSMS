@@ -663,6 +663,11 @@ export default function MobileHubPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newFolderName, description: newFolderDesc }),
       });
+      const data = await res.json();
+      if (data.success) {
+        alert("✨ 새로운 태스크 폴더가 생성되었습니다.");
+        setNewFolderName("");
+        setNewFolderDesc("");
         setIsNewFolderModalOpen(false);
         const updated = await reloadTaskFolders();
         if (updated.length > 0) setSelectedFolderId(String(updated[0].id));
