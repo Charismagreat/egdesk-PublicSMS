@@ -205,22 +205,53 @@ export const MobileTaskRequestModal: React.FC<MobileTaskRequestModalProps> = ({
     try {
       const readPromises = fileList.map((file) => {
         return new Promise<AttachmentItem>((resolve, reject) => {
+          const category = detectFileCategory(file.name, file.type);
+          const sizeStr = file.size > 1024 * 1024 
+            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+            : `${(file.size / 1024).toFixed(0)} KB`;
+
           const reader = new FileReader();
-          reader.onload = () => {
-            const base64Str = reader.result as string;
-            const category = detectFileCategory(file.name, file.type);
-            const sizeStr = file.size > 1024 * 1024 
-              ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
-              : `${(file.size / 1024).toFixed(0)} KB`;
+          reader.onload = async () => {
+            let base64Str = reader.result as string;
+
+            // 이미지가 너무 큰 경우 캔버스로 리사이징/압축하여 초고속 전송
+            if (category === "IMAGE" && base64Str.startsWith("data:image")) {
+              try {
+                const img = new Image();
+                img.src = base64Str;
+                await new Promise((resImg) => { img.onload = resImg; });
+                const canvas = document.createElement("canvas");
+                const maxDim = 1200;
+                let width = img.width;
+                let height = img.height;
+                if (width > maxDim || height > maxDim) {
+                  if (width > height) {
+                    height = Math.round((height * maxDim) / width);
+                    width = maxDim;
+                  } else {
+                    width = Math.round((width * maxDim) / height);
+                    height = maxDim;
+                  }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d");
+                ctx?.drawImage(img, 0, 0, width, height);
+                base64Str = canvas.toDataURL("image/jpeg", 0.85);
+              } catch (canvasErr) {
+                console.warn("이미지 압축 스킵, 원본 유지:", canvasErr);
+              }
+            }
 
             resolve({
               id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
               name: file.name,
               size: sizeStr,
-              type: file.type || "application/octet-stream",
+              type: file.type || (category === "IMAGE" ? "image/jpeg" : "application/octet-stream"),
               category: category,
               base64: base64Str,
               preview: base64Str,
+              url: base64Str,
             });
           };
           reader.onerror = (err) => reject(err);
