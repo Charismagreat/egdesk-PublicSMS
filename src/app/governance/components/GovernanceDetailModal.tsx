@@ -532,9 +532,32 @@ export default function GovernanceDetailModal({
             </div>
           )}
 
-          {selectedEvent.type === 'RAG_HOLD' && (
+          {(selectedEvent.type === 'RAG_HOLD' || selectedEvent.type === 'TASK_CANCEL_REQUEST' || selectedEvent.data?.has_cancel_request) && (
             <div className="space-y-2">
-              {selectedEvent.data?.reason && (
+              {/* 취소 요청 건인 경우: 상신 취소 요청자 및 사유 강조 카드 */}
+              {(selectedEvent.type === 'TASK_CANCEL_REQUEST' || selectedEvent.data?.has_cancel_request) && (
+                <div className="bg-rose-50/70 p-3 rounded-2xl border border-rose-200/80 grid grid-cols-2 gap-2 text-[11px]">
+                  <div>
+                    <span className="text-rose-600 font-bold block text-[10px]">상신 취소 요청자</span>
+                    <span className="font-extrabold text-rose-800 bg-white px-2 py-0.5 rounded-lg border border-rose-200 inline-block shadow-2xs">
+                      👤 {selectedEvent.data?.cancel_request_operator || selectedEvent.data?.cancel_log?.operator || selectedEvent.data?.operator || selectedEvent.data?.created_by || '상신 직원'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-rose-600 font-bold block text-[10px]">대상 업무 ID</span>
+                    <span className="font-mono font-bold text-slate-800">{selectedEvent.data?.doc_id || selectedEvent.data?.id || '-'}</span>
+                  </div>
+                  <div className="col-span-2 border-t border-rose-200/60 pt-2 mt-0.5">
+                    <span className="text-rose-600 font-bold block text-[10px]">취소 신청 사유</span>
+                    <span className="font-bold text-rose-950 text-xs block leading-relaxed whitespace-pre-wrap bg-white/90 p-2.5 rounded-xl border border-rose-200 shadow-2xs">
+                      {selectedEvent.data?.cancel_log?.reason || selectedEvent.data?.cancel_log?.note || selectedEvent.data?.cancel_reason || selectedEvent.data?.reason || '단가 또는 입력 정보 재검토를 위해 취소를 요청합니다.'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* 일반 상신 음성 변환 사유 (취소 요청이 아닌 경우에만) */}
+              {!selectedEvent.data?.has_cancel_request && selectedEvent.type !== 'TASK_CANCEL_REQUEST' && selectedEvent.data?.reason && (
                 <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 space-y-1">
                   <span className="text-slate-400 font-medium block text-[10px]">현장 요청 사항 (음성 변환)</span>
                   <span className="font-semibold text-indigo-950 text-xs block leading-relaxed whitespace-pre-wrap">
@@ -543,7 +566,7 @@ export default function GovernanceDetailModal({
                 </div>
               )}
 
-              {/* 📷 1. [상신 첨부 현장 사진 썸네일 미리보기 리스트] */}
+              {/* 📷 1. [상신 첨부 현장 사진 썸네일 미리보기 리스트 (취소 건에서도 확인 가능)] */}
               {modalPhotos.length > 0 && (
                 <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 space-y-1.5">
                   <span className="text-[10px] font-black text-indigo-700 flex items-center gap-1">
@@ -575,7 +598,7 @@ export default function GovernanceDetailModal({
                 </div>
               )}
 
-              {/* 📎 2. [상신 첨부 서류 파일 다운로드/미리보기 리스트] */}
+              {/* 📎 2. [상신 첨부 서류 파일 다운로드/미리보기 리스트 (취소 건에서도 확인 가능)] */}
               {modalFiles.length > 0 && (
                 <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 space-y-1.5">
                   <span className="text-[10px] font-black text-indigo-700 flex items-center gap-1">
@@ -603,26 +626,6 @@ export default function GovernanceDetailModal({
                   </div>
                 </div>
               )}
-            </div>
-          )}
-          {(selectedEvent.type === 'TASK_CANCEL_REQUEST' || selectedEvent.data?.has_cancel_request) && (
-            <div className="bg-white p-2.5 rounded-xl border border-rose-200/80 grid grid-cols-2 gap-2 text-[11px]">
-              <div>
-                <span className="text-slate-400 font-medium block text-[10px]">상신 취소 요청자</span>
-                <span className="font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 inline-block">
-                  👤 {selectedEvent.data?.cancel_request_operator || selectedEvent.data?.operator || '임직원'}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-medium block text-[10px]">대상 업무 ID</span>
-                <span className="font-mono font-bold text-slate-800">{selectedEvent.data?.doc_id || selectedEvent.data?.id || '-'}</span>
-              </div>
-              <div className="col-span-2 border-t border-rose-100 pt-1.5 mt-0.5">
-                <span className="text-slate-400 font-medium block text-[10px]">취소 신청 사유</span>
-                <span className="font-semibold text-rose-950 text-xs block leading-relaxed whitespace-pre-wrap">
-                  {selectedEvent.data?.cancel_log?.note || selectedEvent.data?.reason || '직원 취소 요청 건입니다.'}
-                </span>
-              </div>
             </div>
           )}
           {selectedEvent.type === 'LOW_STOCK' && (
@@ -1184,10 +1187,10 @@ export default function GovernanceDetailModal({
                                 {act.label}
                               </span>
                               <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-black border border-rose-200">
-                                🗑️ 데이터 영구 폐기
+                                🛡️ 안전한 소프트 삭제 (복원 가능)
                               </span>
                               <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black border border-amber-200">
-                                🛡️ RAG 규정 준수 승인
+                                📋 거버넌스 감사 이력 보존
                               </span>
                             </div>
                           </div>

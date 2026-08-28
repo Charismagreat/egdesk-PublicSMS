@@ -817,10 +817,14 @@ export default function MobileHubPage() {
 
   // 🚨 관제 승인 대기 건에 대한 취소 요청 상신
   const handleCancelTaskRequest = async (task: any) => {
-    const confirmCancel = window.confirm(
-      `📌 '${task.title}' 건에 대해 최고관리자 관제 취소 요청을 상신하시겠습니까?`
+    const inputReason = window.prompt(
+      `📌 '${task.title}' 건에 대해 최고관리자 관제 취소 요청을 상신하시겠습니까?\n취소 사유를 입력해 주세요:`,
+      "단가 또는 입력 정보 재검토를 위해 취소를 요청합니다."
     );
-    if (!confirmCancel) return;
+    if (inputReason === null) return; // 취소 누름
+
+    const actualReason = inputReason.trim() || `[모바일 현장 직원의 취소 요청] (${task.title})`;
+    const operatorName = currentEmployee?.name || task.operator || task.created_by || "이주용";
 
     try {
       // 1) 백엔드 create_cancel_request 단일 파이프라인 호출 (원본 태스크 1:1 유지 및 상태 갱신)
@@ -830,7 +834,8 @@ export default function MobileHubPage() {
         body: JSON.stringify({
           action: "create_cancel_request",
           taskId: String(task.id),
-          reason: `[모바일 현장 직원의 취소 요청] (${task.title})`
+          reason: actualReason,
+          operator: operatorName
         }),
       });
 

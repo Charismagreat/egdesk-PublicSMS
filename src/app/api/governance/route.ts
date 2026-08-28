@@ -1541,7 +1541,7 @@ export async function POST(request: Request) {
       const task = taskRes.rows[0];
 
       const reqId = `cancel_req_${Date.now()}`;
-      const cancelOperator = body.operator || task.created_by || (currentUser !== 'SUPER_ADMIN_DEV' ? currentUser : '김직원');
+      const cancelOperator = body.operator || task.operator || task.created_by || (currentUser && currentUser !== 'SUPER_ADMIN_DEV' && currentUser !== 'system' ? currentUser : '상신자');
       const tenantId = await resolveTenantId();
       
       // 1. 거버넌스 승인 요청 로그 인서트
