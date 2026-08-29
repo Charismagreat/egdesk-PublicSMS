@@ -182,6 +182,14 @@ export default function MobileTaskDetailModal({
                 <span className="font-mono text-slate-700">{task.created_at}</span>
               </div>
             )}
+
+            {isDone && (task.completed_at || task.updated_at) && (
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="text-slate-500 font-medium">완료 일시:</span>
+                <span className="font-mono text-emerald-700 font-bold">{task.completed_at || task.updated_at}</span>
+              </div>
+            )}
           </div>
 
           {/* 📝 상세 설명 및 내용 */}
@@ -300,37 +308,27 @@ export default function MobileTaskDetailModal({
           )}
         </div>
 
-        {/* 푸터 액션 버튼 */}
-        <div className="flex items-center justify-between gap-2 pt-1">
-          {!isDone && (
-            <div>
-              {isPendingCancel ? (
-                <span className="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-2 rounded-xl border border-amber-200 block">
-                  🚨 취소 승인 대기 중입니다
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onCancelTaskRequest(task.id, task.title);
-                    onClose();
-                  }}
-                  className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-all cursor-pointer"
-                >
-                  🚨 업무 취소 요청
-                </button>
-              )}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="ml-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs"
-          >
-            닫기
-          </button>
-        </div>
+        {/* 푸터 액션 버튼 (취소 요청이 필요한 경우에만 렌더링) */}
+        {!isDone && (
+          <div className="flex items-center justify-start gap-2 pt-1">
+            {isPendingCancel ? (
+              <span className="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-2 rounded-xl border border-amber-200 block">
+                🚨 취소 승인 대기 중입니다
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  onCancelTaskRequest(task.id, task.title);
+                  onClose();
+                }}
+                className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-all cursor-pointer"
+              >
+                🚨 업무 취소 요청
+              </button>
+            )}
+          </div>
+        )}
 
       </div>
     </div>

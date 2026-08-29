@@ -70,7 +70,7 @@ export const MobileAttendanceWidget: React.FC<MobileAttendanceWidgetProps> = ({
   return (
     <>
       {/* 2. 콤팩트화된 가로형 실시간 근태 체크 위젯 */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 mb-4 flex items-center justify-between gap-3">
+      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-3.5 sm:p-4 mb-3 sm:mb-4 flex items-center justify-between gap-2.5 sm:gap-4">
         <div className="flex flex-col text-left shrink-0">
           <div className="flex items-center gap-1.5 whitespace-nowrap">
             <Clock className="w-4 h-4 text-indigo-600 animate-pulse shrink-0" />

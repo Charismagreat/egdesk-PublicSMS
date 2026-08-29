@@ -443,8 +443,11 @@ export async function POST(req: Request) {
         return h * 3600 + m * 60 + s;
       };
 
-      const isLate = parseTimeToSec(timeStr) > parseTimeToSec(workStartTime);
-      const status = isLate ? 'LATE' : 'NORMAL';
+      // 당일 이전에 이미 완료된 근무 기록이 있는 경우 -> 추가 출근 (재출근)으로 간주하여 지각 적용 제외
+      const isReClockIn = records.some((r: any) => r.clock_in && r.clock_out);
+      const isLate = !isReClockIn && parseTimeToSec(timeStr) > parseTimeToSec(workStartTime);
+      const status = isReClockIn ? 'NORMAL' : (isLate ? 'LATE' : 'NORMAL');
+      const defaultMemo = isReClockIn ? '추가 출근 (재출근)' : (isLate ? '지각 출근 기록' : '정상 출근');
 
       const newRecord = {
         id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -454,7 +457,7 @@ export async function POST(req: Request) {
         clock_out: null,
         status,
         working_hours: 0,
-        memo: memo || (isLate ? '지각 출근 기록' : '정상 출근'),
+        memo: memo || defaultMemo,
         tenant_id: tenantId,
         created_at: now.toISOString(),
         updated_at: now.toISOString()
@@ -462,9 +465,13 @@ export async function POST(req: Request) {
 
       await insertRows('crm_attendance', [newRecord]);
 
+      const successMsg = isReClockIn
+        ? `${operatorName}님, 🌙 추가 출근 등록이 완료되었습니다. (${timeStr})`
+        : `${operatorName}님, ${isLate ? '⚠️ 지각' : '🟢 정상'} 출근 완료 되었습니다. (${timeStr})`;
+
       return NextResponse.json({
         success: true,
-        message: `${operatorName}님, ${isLate ? '⚠️ 지각' : '🟢 정상'} 출근 완료 되었습니다. (${timeStr})`,
+        message: successMsg,
         record: newRecord
       });
     }

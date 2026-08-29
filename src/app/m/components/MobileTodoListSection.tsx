@@ -80,6 +80,21 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
     return null;
   };
 
+  const formatTaskDate = (dateStr?: string) => {
+    if (!dateStr) return "";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr.substring(0, 16);
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const h = String(d.getHours()).padStart(2, "0");
+      const min = String(d.getMinutes()).padStart(2, "0");
+      return `${m}.${day} ${h}:${min}`;
+    } catch (e) {
+      return dateStr.substring(0, 16);
+    }
+  };
+
   const getSubTabCount = (periodId: any, tabType: "active" | "completed") => {
     if (!allTasks || allTasks.length === 0) return 0;
     const targetTasks = allTasks.filter((t) => (tabType === "active" ? t.status !== "DONE" : t.status === "DONE"));
@@ -89,14 +104,14 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
   };
 
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 mb-4 text-left">
+    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-3.5 sm:p-4 mb-3 sm:mb-4 text-left">
       {/* 3가지 메인 탭 헤더: 할 일 (N) / 한 일 (N) / 태스크 폴더 (N) */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100 overflow-x-auto no-scrollbar">
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl shrink-0">
+      <div className="flex items-center pb-3 border-b border-slate-100 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full">
           <button
             type="button"
             onClick={() => setTodoTab("active")}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-black transition-all border-none cursor-pointer whitespace-nowrap ${
+            className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all border-none cursor-pointer whitespace-nowrap text-center ${
               todoTab === "active"
                 ? "bg-white text-indigo-600 shadow-2xs"
                 : "text-slate-500 hover:text-slate-800 bg-transparent"
@@ -107,7 +122,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
           <button
             type="button"
             onClick={() => setTodoTab("completed")}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-black transition-all border-none cursor-pointer whitespace-nowrap ${
+            className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all border-none cursor-pointer whitespace-nowrap text-center ${
               todoTab === "completed"
                 ? "bg-white text-indigo-600 shadow-2xs"
                 : "text-slate-500 hover:text-slate-800 bg-transparent"
@@ -118,7 +133,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
           <button
             type="button"
             onClick={() => setTodoTab("folders")}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-black transition-all border-none cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+            className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all border-none cursor-pointer whitespace-nowrap flex items-center justify-center gap-1 ${
               todoTab === "folders"
                 ? "bg-white text-indigo-600 shadow-2xs"
                 : "text-slate-500 hover:text-slate-800 bg-transparent"
@@ -128,17 +143,6 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
             <span>태스크 폴더 ({taskFolderCount})</span>
           </button>
         </div>
-
-        {todoTab !== "folders" && (
-          <button
-            type="button"
-            onClick={onOpenNewTaskModal}
-            className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-colors border-none cursor-pointer flex items-center justify-center shadow-3xs ml-2 shrink-0"
-            title="새 할 일 추가"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        )}
       </div>
 
       {/* 3번 탭: 태스크 폴더 선택 시 컨텐츠 바로 노출 */}
@@ -146,8 +150,8 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
         <div className="pt-2">{taskFolderContent}</div>
       ) : (
         <>
-          {/* 기간별 필터 세그먼트 스위치 바 (오늘, 내일, 이번주, 이번달, 다음달/지난달, 전체) */}
-          <div className="pt-3 pb-2 flex items-center gap-1 overflow-x-auto no-scrollbar">
+          {/* 기간별 필터 세그먼트 스위치 바 (오늘, 내일/어제, 이번주, 이번달, 다음달/지난달) */}
+          <div className="pt-3 pb-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {todoTab === "active" ? (
               <>
                 {[
@@ -156,7 +160,6 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                   { id: "WEEK", label: "이번 주" },
                   { id: "MONTH", label: "이번 달" },
                   { id: "NEXT_MONTH", label: "다음달" },
-                  { id: "ALL", label: "전체" },
                 ].map((item) => {
                   const count = getSubTabCount(item.id, "active");
                   return (
@@ -186,7 +189,6 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                   { id: "WEEK", label: "이번 주" },
                   { id: "MONTH", label: "이번 달" },
                   { id: "LAST_MONTH", label: "지난달" },
-                  { id: "ALL", label: "전체" },
                 ].map((item) => {
                   const count = getSubTabCount(item.id, "completed");
                   return (
@@ -399,16 +401,28 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                         </div>
                       )}
 
-                      <div className="flex items-center gap-2 mt-1.5 text-[10px] font-bold text-slate-400">
-                        {t.due_date && (
-                          <span className="flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200/80 px-2 py-0.5 rounded-md font-extrabold shrink-0" title="관제 대상 처리 일시">
+                      <div className="flex items-center flex-wrap gap-1.5 mt-2 text-[10px] font-bold">
+                        {/* 1. 마감일 (할 일인 경우) */}
+                        {!isDone && t.due_date && (
+                          <span className="flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200/80 px-2 py-0.5 rounded-md font-extrabold shrink-0" title="마감 예정일">
                             <Calendar className="w-3 h-3 text-purple-600 shrink-0" />
-                            <span>{t.due_date.substring(0, 10)}</span>
+                            <span>마감 {t.due_date.substring(0, 10)}</span>
                           </span>
                         )}
-                        {t.assignee_name && (
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded-md text-slate-600 font-extrabold">
-                            👤 {t.assignee_name}
+
+                        {/* 2. 등록일시 */}
+                        {t.created_at && (
+                          <span className="flex items-center gap-1 bg-slate-50 text-slate-500 border border-slate-200/80 px-2 py-0.5 rounded-md font-medium shrink-0" title="등록 일시">
+                            <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>등록 {formatTaskDate(t.created_at)}</span>
+                          </span>
+                        )}
+
+                        {/* 3. 완료일시 (한 일인 경우) */}
+                        {isDone && (t.completed_at || t.updated_at) && (
+                          <span className="flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 px-2 py-0.5 rounded-md font-bold shrink-0" title="완료 일시">
+                            <CheckSquare className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span>완료 {formatTaskDate(t.completed_at || t.updated_at)}</span>
                           </span>
                         )}
                       </div>

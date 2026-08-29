@@ -265,8 +265,8 @@ export default function MobileHubPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 select-none font-sans">
-      {/* 메인 컨테이너 */}
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
+      {/* 메인 컨테이너 (시원하고 모던한 반응형 폭 확장) */}
+      <main className="max-w-xl mx-auto px-3 sm:px-6 pt-3 space-y-3.5">
         {/* 1. 모바일 헤더 */}
         <MobilePortalHeader
           userName={currentUserName}
@@ -452,7 +452,11 @@ export default function MobileHubPage() {
           if (e.target) e.target.value = "";
         }}
         onAddVoiceTask={(audioBlob, note) => {
-          setRequestVoiceText(note || "현장 음성 녹음 메모");
+          const now = new Date();
+          const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+          const audioFile = new File([audioBlob], `현장녹음_${timestamp}.webm`, { type: audioBlob.type || "audio/webm" });
+          setRequestRawFiles([audioFile]);
+          setRequestVoiceText(note || "");
           setIsTaskRequestModalOpen(true);
         }}
         onAddLinkTask={(title, url) => {

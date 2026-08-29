@@ -1811,26 +1811,31 @@ ${JSON.stringify(event_info, null, 2)}
 ### 👥 사내 임직원 명단:
 ${JSON.stringify(operators || [], null, 2)}
 
-### 🎯 상황별 추천 지침 (사건의 본질을 정확히 파악하십시오):
-1. **[신규 접수 / 상신 / 첨부파일 파싱 요청인 경우]**:
-   - 예: 모바일 현장 상신, 엑셀/사진 첨부 수주 요청 건
-   - 1순위: "[📦 B2B 수주 대장 자동 등록] {첨부파일명} 실물 분석" (isOrderAction: true, code: "auto_register_sales_order")
-   - 2순위: "[📱 AI 자동 문자 발송] B2B 수주 확정 및 배정 알림" (isSmsAction: true, code: "SMS_AUTO_NOTIFY")
-   - 3순위: "감사 로그 보존" (code: "LOG_AUDIT")
+### 🎯 상황별 정밀 멀티모달 분류 지침 (첨부파일의 실제 확장자 및 본질을 최우선 확인하십시오):
+1. **[음성 녹음 / 현장 오디오 상신 건 (확장자: .webm, .mp3, .m4a, .wav, .ogg 또는 title에 녹음/음성/현장녹음 포함)]**:
+   - ⚠️ 절대 수주서/발주서로 오인하지 마십시오!
+   - 1순위: "[🎙️ AI 음성 전사(STT) 및 현장 브리핑 요약]" (code: "AUDIO_TRANSCRIBE_SUMMARY", isAudioAction: true, fileName: "{첨부파일명}")
+     - description: "현장 음성 녹음 파일({첨부파일명})을 AI가 전사(STT)하여 텍스트로 변환하고 핵심 브리핑 요약문 생성"
+   - 2순위: "[📋 현장 업무 일지 및 일일 보고서 반영]" (code: "APPLY_TO_DAILY_REPORT", description: "변환된 음성 브리핑 내용을 금일 일일 업무 보고서 및 현장 관리 대장에 자동 반영")
+   - 3순위: "[📱 AI 자동 문자 발송] 현장 브리핑 공유" (code: "SMS_AUTO_NOTIFY", isSmsAction: true)
 
-2. **[기존 데이터 삭제 / 취소 / 반품 요청인 경우]**:
-   - 예: RAG 규정에 의해 보류된 삭제 건, 임직원 업무 취소 요청 건
-   - 1순위: "[🗑️ 데이터 최종 삭제 승인 (Soft Delete)]" (isDeleteAction: true, code: "DELETE_APPROVED_DATA")
-   - 2순위: "[📱 AI 자동 문자 발송] 삭제/취소 승인 완료 알림" (isSmsAction: true, code: "SMS_AUTO_NOTIFY")
-   - 3순위: "[📝 거버넌스 삭제 승인 감사 로그 보존]" (code: "LOG_AUDIT")
+2. **[현장 실사 사진 / 시설 점검 / 설비 사진 상신 건 (확장자: .jpg, .png, .jpeg, .webp, .heic 및 현장 사진)]**:
+   - 1순위: "[📷 현장 실사 및 시설 점검 보고서 생성]" (code: "FIELD_PHOTO_REPORT", isPhotoAction: true, fileName: "{첨부파일명}")
+     - description: "현장 첨부 사진({첨부파일명})의 시각 데이터를 AI Vision으로 분석하여 현장 점검 대장에 아카이빙"
+   - 2순위: "[📱 AI 자동 문자 발송] 현장 실사 접수 알림" (code: "SMS_AUTO_NOTIFY", isSmsAction: true)
 
-3. **[휴가 / 근태 신청인 경우]**:
+3. **[실제 B2B 발주서 / 수주서 / 견적서 / 세금계산서 상신 건 (확장자: .xlsx, .xls, .pdf, .csv 또는 제목에 발주/수주/견적 포함)]**:
+   - 1순위: "[📦 B2B 수주 대장 자동 등록] {첨부파일명} 실물 분석" (code: "auto_register_sales_order", isOrderAction: true, fileName: "{첨부파일명}")
+     - description: "상신 첨부 파일({첨부파일명})의 실물 품목·수량·금액을 AI가 정밀 분석하여 수주 대장(crm_sales_orders)에 수주서 즉시 자동 적재"
+   - 2순위: "[📱 AI 자동 문자 발송] B2B 수주 확정 및 배정 알림" (code: "SMS_AUTO_NOTIFY", isSmsAction: true, templateTitle: "수주등록")
+
+4. **[기존 데이터 삭제 / 취소 / 반품 요청인 경우]**:
+   - 1순위: "[🗑️ 데이터 최종 삭제 승인 (Soft Delete)]" (code: "DELETE_APPROVED_DATA", isDeleteAction: true)
+   - 2순위: "[📱 AI 자동 문자 발송] 삭제/취소 승인 완료 알림" (code: "SMS_AUTO_NOTIFY", isSmsAction: true)
+
+5. **[휴가 / 근태 신청인 경우]**:
    - 1순위: "[휴가 최종 결재 승인]" (code: "APPROVE_LEAVE")
-   - 2순위: "[📱 AI 자동 문자 발송] 휴가 승인 알림" (isSmsAction: true, code: "SMS_AUTO_NOTIFY")
-
-4. **[재고 부족 / 안전재고 미달인 경우]**:
-   - 1순위: "[긴급 발주 품의서 자동 생성]" (code: "CREATE_PURCHASE_ORDER")
-   - 2순위: "[자재팀 긴급 알림]" (isSmsAction: true, code: "SMS_AUTO_NOTIFY")
+   - 2순위: "[📱 AI 자동 문자 발송] 휴가 승인 알림" (code: "SMS_AUTO_NOTIFY", isSmsAction: true)
 
 ### 📝 응답 형식 (반드시 Markdown 코드 블록 없이 순수 JSON만 반환):
 {

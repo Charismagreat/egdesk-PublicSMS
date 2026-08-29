@@ -90,12 +90,18 @@ export function useMobileAttendance(selectedWorkplace?: any) {
               setElapsedSeconds(Math.max(0, Math.floor((Date.now() - inTimeMs) / 1000)));
               setAttendanceStatus("working");
 
-              if (h > 9 || (h === 9 && m > 0)) {
+              const isLate = rec.status === "LATE";
+              if (isLate) {
                 setIsTodayLate(true);
                 if (hasReportedLate) {
                   setIsLateReasonReported(true);
                   setLateReason(rec.late_reason || memoText);
+                } else {
+                  setIsLateReasonReported(false);
                 }
+              } else {
+                setIsTodayLate(false);
+                setIsLateReasonReported(true);
               }
             } else if (rec.clock_in && rec.clock_out) {
               setClockInTime(rec.clock_in);
@@ -138,16 +144,17 @@ export function useMobileAttendance(selectedWorkplace?: any) {
           setElapsedSeconds(0);
           setAttendanceStatus("working");
 
-          const hours = now.getHours();
-          const minutes = now.getMinutes();
-          if (hours > 9 || (hours === 9 && minutes > 0)) {
+          const isLate = data.record?.status === "LATE";
+          if (isLate) {
             setIsTodayLate(true);
             setIsLateReasonReported(false);
             setLateReason("");
-            alert("⚠️ 09:00 이후 출근하셨습니다. 지각 사유를 등록해 주세요.");
+            alert("⚠️ 정규 출근 시간 이후 출근하셨습니다. 지각 사유를 등록해 주세요.");
           } else {
             setIsTodayLate(false);
-            alert("🎉 출근이 정상 등록되었습니다!");
+            setIsLateReasonReported(true);
+            setLateReason("");
+            alert(data.message || "🎉 출근이 정상 등록되었습니다!");
           }
         } else {
           alert("출근 등록 실패: " + (data.error || "오류가 발생했습니다."));

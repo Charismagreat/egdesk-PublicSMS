@@ -290,26 +290,50 @@ export default function GovernanceDetailModal({
   const docTitleText = selectedEvent.data?.doc_title || '';
   const reasonText = selectedEvent.data?.reason || '';
 
-  // 🎯 정밀 판별
+  // 🎯 멀티모달 실물 및 의도 정밀 판별
   const isExplicitDelete = 
     selectedEvent.type === 'TASK_CANCEL_REQUEST' ||
     selectedEvent.data?.has_cancel_request === true ||
     ((titleText.includes('삭제') || titleText.includes('취소') || docTitleText.includes('삭제') || docTitleText.includes('취소') || reasonText.includes('삭제') || reasonText.includes('취소')) && !titleText.includes('[상신]'));
 
-  const isSalesOrderEvent = !isExplicitDelete && (
-    titleText.includes('[상신]') ||
+  const attachedFileName = modalFiles[0]?.name || modalPhotos[0]?.name || selectedEvent.data?.matched_filename || '';
+  const isAudio = Boolean(
+    attachedFileName.match(/\.(webm|mp3|m4a|wav|ogg|weba)$/i) ||
+    titleText.includes('녹음') ||
+    titleText.includes('음성') ||
+    (selectedEvent.data?.note || '').includes('녹음')
+  );
+  const isPhoto = !isAudio && Boolean(
+    attachedFileName.match(/\.(jpg|jpeg|png|webp|heic|gif)$/i) ||
+    modalPhotos.length > 0
+  );
+  const isSalesOrderEvent = !isExplicitDelete && !isAudio && !isPhoto && Boolean(
     titleText.includes('수주') || 
     titleText.includes('발주') || 
     docTitleText.includes('수주') || 
     docTitleText.includes('발주') ||
-    selectedEvent.doc_type === 'mobile_request' ||
-    selectedEvent.type === 'RAG_HOLD' ||
-    modalFiles.length > 0 ||
-    modalPhotos.length > 0
+    attachedFileName.match(/\.(xlsx|xls|pdf|csv)$/i)
   );
 
-  const attachedFileName = modalFiles[0]?.name || modalPhotos[0]?.name || selectedEvent.data?.matched_filename || '동양특수금속.jpg';
+  // 🎙️ 음성 녹음 전용 추천 액션
+  const audioTranscribeAction = isAudio ? {
+    code: "AUDIO_TRANSCRIBE_SUMMARY",
+    label: `[🎙️ AI 음성 전사(STT) 및 현장 브리핑 요약]`,
+    description: `현장 음성 녹음 파일(${attachedFileName || '음성 메모'})을 AI가 전사(STT)하여 텍스트로 변환하고 핵심 브리핑 요약문 생성`,
+    isAudioAction: true,
+    fileName: attachedFileName
+  } : null;
 
+  // 📷 현장 실사 사진 전용 추천 액션
+  const photoReportAction = isPhoto ? {
+    code: "FIELD_PHOTO_REPORT",
+    label: `[📷 현장 실사 및 시설 점검 보고서 생성]`,
+    description: `현장 첨부 사진(${attachedFileName || '현장 사진'})의 시각 데이터를 AI Vision으로 분석하여 현장 점검 대장에 아카이빙`,
+    isPhotoAction: true,
+    fileName: attachedFileName
+  } : null;
+
+  // 📦 실제 수주서/발주서 전용 추천 액션
   const orderRegisterAction = isSalesOrderEvent ? {
     code: "auto_register_sales_order",
     label: `[📦 B2B 수주 대장 자동 등록] ${attachedFileName ? `${attachedFileName} 실물 분석` : '발주서 파싱'}`,
@@ -331,11 +355,13 @@ export default function GovernanceDetailModal({
     { code: "LOG_AUDIT", label: isExplicitDelete ? "[📝 거버넌스 삭제 승인 감사 로그 보존]" : "감사 로그 보존", description: "본 사건 처리 이력을 전사 거버넌스 원장에 기록" },
   ];
 
-  // 🤖 AI 동적 추천 목록이 있으면 우선 적용, 아니면 정밀 기본 폴백 적용
+  // 🤖 AI 동적 추천 목록이 있으면 우선 적용, 아니면 정밀 멀티모달 기본 폴백 적용
   const defaultActionsList = dynamicRecommendations && dynamicRecommendations.length > 0 
     ? dynamicRecommendations 
     : [
         ...(deleteApprovalAction ? [deleteApprovalAction] : []),
+        ...(audioTranscribeAction ? [audioTranscribeAction] : []),
+        ...(photoReportAction ? [photoReportAction] : []),
         ...(orderRegisterAction ? [orderRegisterAction] : []),
         ...(matchedSmsAction ? [matchedSmsAction] : []),
         ...baseDefaultActions.filter((a: any) => 
@@ -566,11 +592,11 @@ export default function GovernanceDetailModal({
               )}
 
               {/* 일반 상신 음성 변환 사유 (취소 요청이 아닌 경우에만) */}
-              {!selectedEvent.data?.has_cancel_request && selectedEvent.type !== 'TASK_CANCEL_REQUEST' && selectedEvent.data?.reason && (
+              {!selectedEvent.data?.has_cancel_request && selectedEvent.type !== 'TASK_CANCEL_REQUEST' && (selectedEvent.data?.note || selectedEvent.data?.voice_note || selectedEvent.data?.memo || selectedEvent.data?.reason || selectedEvent.description) && (
                 <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 space-y-1">
-                  <span className="text-slate-400 font-medium block text-[10px]">현장 요청 사항 (음성 변환)</span>
+                  <span className="text-slate-400 font-medium block text-[10px]">현장 요청 사항 (음성 메모 / 세부 내용)</span>
                   <span className="font-semibold text-indigo-950 text-xs block leading-relaxed whitespace-pre-wrap">
-                    {selectedEvent.data.reason}
+                    {selectedEvent.data?.note || selectedEvent.data?.voice_note || selectedEvent.data?.memo || selectedEvent.data?.reason || selectedEvent.description}
                   </span>
                 </div>
               )}

@@ -16,11 +16,11 @@ export function detectFileCategory(fileName: string, mimeType?: string): FileCat
   if (mime.startsWith("image/") || name.match(/\.(jpg|jpeg|png|gif|webp|heic|bmp|svg)$/i)) {
     return "IMAGE";
   }
-  if (mime.startsWith("video/") || name.match(/\.(mp4|mov|avi|mkv|wmv|webm|3gp)$/i)) {
-    return "VIDEO";
-  }
-  if (mime.startsWith("audio/") || name.match(/\.(mp3|m4a|wav|aac|ogg|flac)$/i)) {
+  if (mime.startsWith("audio/") || name.match(/\.(mp3|m4a|wav|aac|ogg|flac|webm|weba)$/i)) {
     return "AUDIO";
+  }
+  if (mime.startsWith("video/") || name.match(/\.(mp4|mov|avi|mkv|wmv|3gp)$/i)) {
+    return "VIDEO";
   }
   if (name.match(/\.(dwg|dxf|stp|step|iges|igs|sldprt|catpart|stl)$/i)) {
     return "CAD";

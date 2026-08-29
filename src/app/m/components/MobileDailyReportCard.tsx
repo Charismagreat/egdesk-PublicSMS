@@ -18,7 +18,7 @@ export const MobileDailyReportCard: React.FC<MobileDailyReportCardProps> = ({
     return (
       <div
         onClick={() => router.push("/m/daily-report")}
-        className="bg-white border border-slate-200/80 hover:border-indigo-200 hover:bg-indigo-50/5 rounded-2xl shadow-xs p-3.5 mb-4 flex items-center justify-between cursor-pointer transition-all hover:shadow-sm animate-scale-in text-left"
+        className="bg-white border border-slate-200/80 hover:border-indigo-200 hover:bg-indigo-50/5 rounded-2xl shadow-xs p-3.5 mb-3 sm:mb-4 flex items-center justify-between cursor-pointer transition-all hover:shadow-sm animate-scale-in text-left"
       >
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-indigo-50 text-indigo-650 rounded-xl flex items-center justify-center shadow-3xs shrink-0">
@@ -40,7 +40,7 @@ export const MobileDailyReportCard: React.FC<MobileDailyReportCardProps> = ({
     return (
       <div
         onClick={() => router.push("/m/daily-report")}
-        className="bg-amber-50/40 border border-amber-200 text-amber-800 rounded-2xl shadow-xs p-3.5 mb-4 flex items-center justify-between cursor-pointer transition-all hover:shadow-sm text-left"
+        className="bg-amber-50/40 border border-amber-200 text-amber-800 rounded-2xl shadow-xs p-3.5 mb-3 sm:mb-4 flex items-center justify-between cursor-pointer transition-all hover:shadow-sm text-left"
       >
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-amber-100/70 text-amber-700 rounded-xl flex items-center justify-center shadow-3xs shrink-0">
@@ -69,7 +69,7 @@ export const MobileDailyReportCard: React.FC<MobileDailyReportCardProps> = ({
   return (
     <div
       onClick={() => router.push("/m/daily-report")}
-      className="bg-emerald-50/40 border border-emerald-200 text-emerald-800 rounded-2xl shadow-xs p-3.5 mb-4 flex items-center justify-between cursor-pointer transition-all hover:shadow-sm text-left"
+      className="bg-emerald-50/40 border border-emerald-200 text-emerald-800 rounded-2xl shadow-xs p-3.5 mb-3 sm:mb-4 flex items-center justify-between cursor-pointer transition-all hover:shadow-sm text-left"
     >
       <div className="flex items-center gap-2.5">
         <div className="w-8 h-8 bg-emerald-100/70 text-emerald-700 rounded-xl flex items-center justify-center shadow-3xs shrink-0">
