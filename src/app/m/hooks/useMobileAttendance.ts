@@ -58,31 +58,55 @@ export function useMobileAttendance(selectedWorkplace?: any) {
           const data = await res.json();
           if (data.success && data.record) {
             const rec = data.record;
-            if (rec.clock_in) {
+            const todayStr = new Date().toISOString().split("T")[0];
+            const isOvernightCompleted = rec.work_date && rec.work_date !== todayStr && rec.clock_out;
+
+            // 이전 날짜의 야간근무 퇴근이 이미 완료된 경우 -> 오늘 출근은 대기(ready) 상태
+            if (isOvernightCompleted) {
+              setAttendanceStatus("ready");
+              setClockInTime(null);
+              setClockOutTime(null);
+              return;
+            }
+
+            const memoText = String(rec.memo || "");
+            const hasReportedLate = !!(
+              rec.late_reason ||
+              memoText.includes("[지각 사유]") ||
+              (memoText && !memoText.includes("정상 출근") && !memoText.includes("지각 출근 기록") && !memoText.includes("익일 퇴근") && rec.status === "LATE")
+            );
+            const hasReportedEarly = !!(
+              rec.early_leave_reason ||
+              memoText.includes("[조퇴 사유]")
+            );
+
+            if (rec.clock_in && !rec.clock_out) {
               setClockInTime(rec.clock_in);
-              const [h, m, s] = rec.clock_in.split(":").map(Number);
-              const inDate = new Date();
-              inDate.setHours(h, m, s || 0, 0);
-              setWorkStartTime(inDate.getTime());
+              const [h, m, s = 0] = rec.clock_in.split(":").map(Number);
+              const dateParts = (rec.work_date || todayStr).split("-").map(Number);
+              const inDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], h, m, s, 0);
+              const inTimeMs = inDate.getTime();
+              setWorkStartTime(inTimeMs);
+              setElapsedSeconds(Math.max(0, Math.floor((Date.now() - inTimeMs) / 1000)));
               setAttendanceStatus("working");
 
               if (h > 9 || (h === 9 && m > 0)) {
                 setIsTodayLate(true);
-                if (rec.late_reason) {
+                if (hasReportedLate) {
                   setIsLateReasonReported(true);
-                  setLateReason(rec.late_reason);
+                  setLateReason(rec.late_reason || memoText);
                 }
               }
-            }
-            if (rec.clock_out) {
+            } else if (rec.clock_in && rec.clock_out) {
+              setClockInTime(rec.clock_in);
               setClockOutTime(rec.clock_out);
               setAttendanceStatus("done");
               const [oh, om] = rec.clock_out.split(":").map(Number);
               if (oh < 18) {
                 setIsTodayEarlyLeave(true);
-                if (rec.early_leave_reason) {
+                if (hasReportedEarly) {
                   setIsEarlyLeaveReasonReported(true);
-                  setEarlyLeaveReason(rec.early_leave_reason);
+                  setEarlyLeaveReason(rec.early_leave_reason || memoText);
                 }
               }
             }
@@ -109,16 +133,21 @@ export function useMobileAttendance(selectedWorkplace?: any) {
           const now = new Date();
           const timeStr = data.record?.clock_in || now.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
           setClockInTime(timeStr);
+          setClockOutTime(null);
           setWorkStartTime(now.getTime());
+          setElapsedSeconds(0);
           setAttendanceStatus("working");
 
           const hours = now.getHours();
           const minutes = now.getMinutes();
           if (hours > 9 || (hours === 9 && minutes > 0)) {
             setIsTodayLate(true);
-            alert("⏰ 정상 출근 시간(09:00) 이후에 출근하셨습니다. 지각 사유를 등록해 주세요.");
+            setIsLateReasonReported(false);
+            setLateReason("");
+            alert("⚠️ 09:00 이후 출근하셨습니다. 지각 사유를 등록해 주세요.");
           } else {
-            alert("✨ 출근이 정상 등록되었습니다!");
+            setIsTodayLate(false);
+            alert("🎉 출근이 정상 등록되었습니다!");
           }
         } else {
           alert("출근 등록 실패: " + (data.error || "오류가 발생했습니다."));
@@ -143,15 +172,25 @@ export function useMobileAttendance(selectedWorkplace?: any) {
         if (data.success) {
           const now = new Date();
           const timeStr = data.record?.clock_out || now.toLocaleTimeString("ko-KR", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
-          setClockOutTime(timeStr);
-          setAttendanceStatus("done");
+          const isOvernight = data.record?.work_date && data.record?.work_date !== now.toISOString().split("T")[0];
 
-          const hours = now.getHours();
-          if (hours < 18) {
-            setIsTodayEarlyLeave(true);
-            alert("⚠️ 정규 퇴근 시간(18:00) 이전에 퇴근하셨습니다. 조퇴 사유를 등록해 주세요.");
+          if (isOvernight) {
+            // 어제 야간근무 건을 오늘 새벽에 퇴근한 경우 -> 알림 후 오늘 출근을 위해 준비 상태로 리셋
+            setClockOutTime(timeStr);
+            setAttendanceStatus("ready");
+            setClockInTime(null);
+            alert(`🌙 어제(${data.record.work_date}) 야간 근무 퇴근이 완료되었습니다! (근무시간: ${data.record.working_hours || ''}시간)\n오늘 새 출근을 하시려면 '출근하기'를 누르시면 됩니다.`);
           } else {
-            alert("🎉 퇴근이 정상 등록되었습니다. 수고하셨습니다!");
+            setClockOutTime(timeStr);
+            setAttendanceStatus("done");
+
+            const hours = now.getHours();
+            if (hours < 18) {
+              setIsTodayEarlyLeave(true);
+              alert("⚠️ 정규 퇴근 시간(18:00) 이전에 퇴근하셨습니다. 조퇴 사유를 등록해 주세요.");
+            } else {
+              alert("🎉 퇴근이 정상 등록되었습니다. 수고하셨습니다!");
+            }
           }
         } else {
           alert("퇴근 등록 실패: " + (data.error || "오류가 발생했습니다."));
@@ -229,9 +268,10 @@ export function useMobileAttendance(selectedWorkplace?: any) {
     if (!clockInTime || !clockOutTime) return "00:00:00";
     const [inH, inM, inS = 0] = clockInTime.split(":").map(Number);
     const [outH, outM, outS = 0] = clockOutTime.split(":").map(Number);
-    const inTotalSec = inH * 3600 + inM * 60 + inS;
-    const outTotalSec = outH * 3600 + outM * 60 + outS;
-    let diffSec = Math.max(0, outTotalSec - inTotalSec);
+    let diffSec = (outH * 3600 + outM * 60 + outS) - (inH * 3600 + inM * 60 + inS);
+    if (diffSec < 0) {
+      diffSec += 24 * 3600;
+    }
     const hours = Math.floor(diffSec / 3600);
     const minutes = Math.floor((diffSec % 3600) / 60);
     const seconds = diffSec % 60;

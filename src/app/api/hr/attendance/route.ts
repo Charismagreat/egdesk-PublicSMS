@@ -292,8 +292,57 @@ export async function GET(req: Request) {
       };
     });
 
+    // 현재 로그인된 사용자의 근태 기록 탐색:
+    // 1순위: 현재 진행 중인(미퇴근) 활성 근무 세션 (당일 또는 전일 야간 세션 최신순)
+    // 2순위: 당일 완료된 최신 근태 기록
+    const currentEmp = mappedEmployees.find((e: any) => 
+      e.username === loggedUsername || e.id === loggedUsername || e.name === loggedName
+    );
+    const myOpenSession = allAttendance
+      .filter((a: any) => currentEmp && String(a.operator_id) === String(currentEmp.id) && a.clock_in && !a.clock_out)
+      .sort((a: any, b: any) => (b.work_date || '').localeCompare(a.work_date || '') || (b.clock_in || '').localeCompare(a.clock_in || ''))[0];
+
+    const myTodayCompleted = attendanceList
+      .filter((a: any) => currentEmp && String(a.operator_id) === String(currentEmp.id) && a.clock_in)
+      .sort((a: any, b: any) => (b.clock_out || '').localeCompare(a.clock_out || '') || (b.clock_in || '').localeCompare(a.clock_in || ''))[0];
+
+    const currentRecord = myOpenSession || myTodayCompleted || (currentEmp ? {
+      operator_id: currentEmp.id,
+      work_date: currentEmp.work_date,
+      clock_in: currentEmp.clock_in,
+      clock_out: currentEmp.clock_out,
+      status: currentEmp.status,
+      working_hours: currentEmp.working_hours,
+      memo: currentEmp.memo
+    } : null);
+
+    // 지각 / 조퇴 사유 스마트 추출
+    let parsedLateReason = '';
+    let parsedEarlyLeaveReason = '';
+    if (currentRecord?.memo) {
+      const memoText = String(currentRecord.memo);
+      const lateMatch = memoText.match(/\[지각 사유\]\s*([^\n]+)/);
+      if (lateMatch) {
+        parsedLateReason = lateMatch[1].trim();
+      } else if (!memoText.includes('정상 출근') && !memoText.includes('지각 출근 기록') && !memoText.includes('익일 퇴근') && currentRecord.status === 'LATE') {
+        parsedLateReason = memoText.trim();
+      }
+
+      const earlyMatch = memoText.match(/\[조퇴 사유\]\s*([^\n]+)/);
+      if (earlyMatch) {
+        parsedEarlyLeaveReason = earlyMatch[1].trim();
+      }
+    }
+
+    const enrichedRecord = currentRecord ? {
+      ...currentRecord,
+      late_reason: parsedLateReason || (currentRecord as any).late_reason || '',
+      early_leave_reason: parsedEarlyLeaveReason || (currentRecord as any).early_leave_reason || ''
+    } : null;
+
     return NextResponse.json({
       success: true,
+      record: enrichedRecord,
       employees: mappedEmployees,
       companyEvents,
       approvedLeaves,
@@ -380,8 +429,9 @@ export async function POST(req: Request) {
     }
 
     if (action === 'CLOCK_IN') {
-      if (records.length > 0 && records[0].clock_in) {
-        return NextResponse.json({ success: false, error: '이미 오늘의 출근 스탬프가 찍혀 있습니다.' }, { status: 400 });
+      const activeSession = records.find((r: any) => r.clock_in && !r.clock_out);
+      if (activeSession) {
+        return NextResponse.json({ success: false, error: '현재 이미 진행 중인 출근 세션이 있습니다. 퇴근 후 다시 출근해 주세요.' }, { status: 400 });
       }
 
       // 출근 시간 판별 기준 (문자열 비교 버그 방지: 초/분 단위 숫자로 정확히 변환 비교)

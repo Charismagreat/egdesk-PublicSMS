@@ -117,25 +117,34 @@ export const MobileAttendanceWidget: React.FC<MobileAttendanceWidgetProps> = ({
           )}
 
           {attendanceStatus === "done" && (
-            pendingLeave ? (
-              <div 
-                onClick={onOpenPendingLeaveModal}
-                className="bg-amber-50 text-amber-900 border border-amber-200/80 text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-3xs cursor-pointer hover:bg-amber-100 transition-all"
+            <div className="flex items-center gap-2">
+              {pendingLeave ? (
+                <div 
+                  onClick={onOpenPendingLeaveModal}
+                  className="bg-amber-50 text-amber-900 border border-amber-200/80 text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-3xs cursor-pointer hover:bg-amber-100 transition-all"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>{getPendingBadgeText()}</span>
+                </div>
+              ) : (
+                <div className="bg-emerald-50 text-emerald-900 border border-emerald-200/80 px-2.5 py-1.5 rounded-xl shadow-3xs flex flex-col items-end gap-0.5 text-right">
+                  <div className="flex items-center gap-1 text-[10px] font-black text-emerald-800">
+                    <CheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
+                    <span>근무 완료 (총 {totalWorkTimeStr})</span>
+                  </div>
+                  <div className="text-[9px] font-mono text-emerald-700/90 font-bold">
+                    {checkInTime} ~ {checkOutTime}
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={onClockIn}
+                title="오늘 추가 근무(재출근) 스탬프 찍기"
+                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-[11px] font-black rounded-xl shadow-xs transition-all cursor-pointer border-none whitespace-nowrap"
               >
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span>{getPendingBadgeText()}</span>
-              </div>
-            ) : (
-              <div className="bg-emerald-50 text-emerald-900 border border-emerald-200/80 px-3 py-1.5 rounded-2xl shadow-3xs flex flex-col items-end gap-0.5 text-right">
-                <div className="flex items-center gap-1 text-[11px] font-black text-emerald-800">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>근무 완료 (총 {totalWorkTimeStr})</span>
-                </div>
-                <div className="text-[10px] font-mono text-emerald-700/90 font-bold pl-4">
-                  {checkInTime} ~ {checkOutTime}
-                </div>
-              </div>
-            )
+                + 추가 출근
+              </button>
+            </div>
           )}
         </div>
       </div>
