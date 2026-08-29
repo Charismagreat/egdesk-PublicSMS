@@ -325,7 +325,7 @@ export async function POST(req: Request) {
     }
 
     const action = body.action || queryAction;
-    const memo = body.memo;
+    const memo = body.memo || body.reason || body.late_reason || body.early_leave_reason;
 
     const { isAuthorized, tenantId, name: operatorName, username } = await verifyUserRole();
     if (!isAuthorized) {
@@ -492,18 +492,48 @@ export async function POST(req: Request) {
       });
     }
 
-    if (action === 'REPORT_LATE_REASON') {
-      if (records.length === 0) {
-        return NextResponse.json({ success: false, error: '금일 출퇴근 기록이 아직 생성되지 않았습니다.' }, { status: 400 });
-      }
-      
-      const attRecord = records[0];
-      if (!memo || !memo.trim()) {
+    if (action === 'REPORT_LATE_REASON' || action === 'REPORT_EARLY_LEAVE_REASON') {
+      const reasonText = (memo || '').trim();
+      if (!reasonText) {
         return NextResponse.json({ success: false, error: '근태 사유를 입력해 주십시오.' }, { status: 400 });
       }
 
+      const isLateAction = action === 'REPORT_LATE_REASON';
+      const reasonLabel = isLateAction ? '[지각 사유]' : '[조퇴 사유]';
+
+      if (records.length === 0) {
+        const newRecord = {
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          operator_id: operatorId,
+          work_date: workDate,
+          clock_in: null,
+          clock_out: null,
+          status: isLateAction ? 'LATE' : 'NORMAL',
+          working_hours: 0,
+          memo: `${reasonLabel} ${reasonText}`,
+          tenant_id: tenantId,
+          created_at: now.toISOString(),
+          updated_at: now.toISOString()
+        };
+
+        await insertRows('crm_attendance', [newRecord]);
+
+        return NextResponse.json({
+          success: true,
+          message: `${isLateAction ? '지각' : '조퇴'} 사유가 성공적으로 상신되었습니다.`,
+          record: newRecord
+        });
+      }
+      
+      const attRecord = records[0];
+      const existingMemo = attRecord.memo || '';
+      const updatedMemo = existingMemo 
+        ? `${existingMemo}\n${reasonLabel} ${reasonText}` 
+        : `${reasonLabel} ${reasonText}`;
+
       const updates = {
-        memo: memo.trim(),
+        memo: updatedMemo,
+        status: isLateAction ? 'LATE' : attRecord.status,
         updated_at: now.toISOString()
       };
 
@@ -513,7 +543,7 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        message: '금일 근태 사유(지각/조퇴 등) 보고가 정상 상신되었습니다.',
+        message: `${isLateAction ? '지각' : '조퇴'} 사유가 성공적으로 상신되었습니다.`,
         record: { ...attRecord, ...updates }
       });
     }

@@ -174,7 +174,7 @@ export function useMobileAttendance(selectedWorkplace?: any) {
       const res = await apiFetch("/api/hr/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "REPORT_LATE_REASON", reason: lateReason }),
+        body: JSON.stringify({ action: "REPORT_LATE_REASON", reason: lateReason, memo: lateReason }),
       });
       const data = await res.json();
       if (data.success) {
@@ -201,7 +201,7 @@ export function useMobileAttendance(selectedWorkplace?: any) {
       const res = await apiFetch("/api/hr/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "REPORT_EARLY_LEAVE_REASON", reason: earlyLeaveReason }),
+        body: JSON.stringify({ action: "REPORT_EARLY_LEAVE_REASON", reason: earlyLeaveReason, memo: earlyLeaveReason }),
       });
       const data = await res.json();
       if (data.success) {
