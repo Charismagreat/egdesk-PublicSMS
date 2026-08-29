@@ -50,44 +50,73 @@ export async function POST(req: Request) {
       })
     });
 
-    if (!fullRes.ok) {
-      const errText = await fullRes.text();
-      return NextResponse.json(
-        { success: false, error: `EGDesk Sheets API 통신 오류 (${fullRes.status}): ${errText}` },
-        { status: fullRes.status }
-      );
-    }
+    let sheetsData: any[] = [];
+    let metadata: any = null;
 
-    const mcpData = await fullRes.json();
-    if (!mcpData.success && mcpData.error) {
-      return NextResponse.json(
-        { success: false, error: mcpData.error },
-        { status: 400 }
-      );
-    }
-
-    let contextResult: any = null;
-    if (mcpData.result?.content?.[0]?.text) {
-      try {
-        contextResult = JSON.parse(mcpData.result.content[0].text);
-      } catch (e) {
-        contextResult = mcpData.result.content[0].text;
+    if (fullRes.ok) {
+      const mcpData = await fullRes.json();
+      let contextResult: any = null;
+      if (mcpData.result?.content?.[0]?.text) {
+        try {
+          contextResult = JSON.parse(mcpData.result.content[0].text);
+        } catch (e) {
+          contextResult = mcpData.result.content[0].text;
+        }
+      } else if (mcpData.result) {
+        contextResult = mcpData.result;
       }
-    } else if (mcpData.result) {
-      contextResult = mcpData.result;
+
+      if (contextResult && !contextResult.error) {
+        sheetsData = contextResult.sheetsData || contextResult.sheets || [];
+        metadata = contextResult.metadata || contextResult;
+      }
     }
 
-    const sheetsData: any[] = contextResult?.sheetsData || contextResult?.sheets || [];
-    const metadata = contextResult?.metadata || contextResult;
-    const spreadsheetTitle = metadata?.title || '구글 스프레드시트';
-
+    // MCP 조회 결과가 없거나 OAuth 토큰이 없는 경우: 공개 시트(Public Gviz / CSV) Fallback 시도
     if (!sheetsData || sheetsData.length === 0) {
+      try {
+        let publicUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json`;
+        if (gid) publicUrl += `&gid=${gid}`;
+        else if (requestedSheetName) publicUrl += `&sheet=${encodeURIComponent(requestedSheetName)}`;
+
+        const pubRes = await fetch(publicUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        if (pubRes.ok) {
+          const text = await pubRes.text();
+          const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\);/);
+          if (match && match[1]) {
+            const parsedGviz = JSON.parse(match[1]);
+            if (parsedGviz?.table?.rows) {
+              const cols: string[] = (parsedGviz.table.cols || []).map((c: any) => c.label || c.id || '');
+              const rows: any[][] = (parsedGviz.table.rows || []).map((r: any) =>
+                (r.c || []).map((cell: any) => (cell && cell.v !== null && cell.v !== undefined ? String(cell.f ?? cell.v) : ''))
+              );
+              
+              const title = requestedSheetName || '기본 시트';
+              return NextResponse.json({
+                success: true,
+                spreadsheetId,
+                spreadsheetTitle: '구글 스프레드시트',
+                sheetName: title,
+                availableSheets: [title],
+                headers: cols.length > 0 ? cols : (rows[0] || []),
+                rows: cols.length > 0 ? rows : rows.slice(1),
+                data: cols.length > 0 ? [cols, ...rows] : rows,
+                rowCount: rows.length
+              });
+            }
+          }
+        }
+      } catch (pubErr) {
+        console.warn('Public sheet fallback error:', pubErr);
+      }
+
       return NextResponse.json(
-        { success: false, error: '구글 시트에서 시트(탭) 데이터를 찾을 수 없습니다.' },
+        { success: false, error: '구글 시트에서 시트(탭) 데이터를 찾을 수 없습니다. 시트 공유 설정을 확인해 주세요.' },
         { status: 400 }
       );
     }
 
+    const spreadsheetTitle = metadata?.title || '구글 스프레드시트';
     const availableSheets: string[] = sheetsData.map((s: any) => s.sheetTitle || s.title || s.sheetName);
 
     // 대상 시트 선택 로직: URL에 명시된 gid가 있으면 최우선 매칭 (정확한 탭 로드 보장)

@@ -351,6 +351,7 @@ export default function HometaxGoogleSheetsModal({
         const rawBuyerNum = colBuyerNum !== -1 ? String(rowArr[colBuyerNum] || '').trim() : '';
         const buyer_corp_name = colBuyerName !== -1 ? String(rowArr[colBuyerName] || '').trim() : '';
         const buyer_ceo_name = colBuyerCeo !== -1 ? String(rowArr[colBuyerCeo] || '').trim() : '';
+        const buyer_address = colBuyerAddress !== -1 ? String(rowArr[colBuyerAddress] || '').trim() : '';
         const buyer_email1 = colBuyerEmail1 !== -1 ? String(rowArr[colBuyerEmail1] || '').trim() : '';
         const buyer_email2 = colBuyerEmail2 !== -1 ? String(rowArr[colBuyerEmail2] || '').trim() : '';
         const buyer_email = buyer_email1 || buyer_email2 || (colBuyerEmail !== -1 ? String(rowArr[colBuyerEmail] || '').trim() : '');
