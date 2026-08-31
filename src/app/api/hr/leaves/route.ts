@@ -249,17 +249,14 @@ export async function POST(req: Request) {
           doc_id: newLeaveId,
           doc_title: `[근태 상신] ${applicantName} ${leaveTypeName} (${days_spent}일)`,
           status: 'PENDING_APPROVAL',
-          reason: governanceReasons.join(' / '),
+          reason: aiRiskNote,
           operator: applicantName,
           due_date: start_date,
           tenant_id: tenantId,
           uuid: govLogId,
-          updated_at: now.toISOString(),
-          updated_by: applicantName,
           created_at: now.toISOString().replace('T', ' ').substring(0, 19),
-          matched_filename: attachmentNames[0] || '근태_사내규정_연동',
-          file_url: uploadedFileUrls[0] || '',
-          note: aiRiskNote
+          updated_at: now.toISOString().replace('T', ' ').substring(0, 19),
+          updated_by: applicantName
         }]).catch(e => console.error('[Leave Governance] Failed to insert governance log:', e));
       }
 

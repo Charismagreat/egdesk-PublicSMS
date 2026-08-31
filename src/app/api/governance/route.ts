@@ -390,7 +390,12 @@ export async function GET(request: Request) {
           };
 
           const hasCancelReq = Boolean(matchedCancelLog);
-          const eventType = hasCancelReq ? 'TASK_CANCEL_REQUEST' : 'RAG_HOLD';
+          const isLeaveReq = log.doc_type === 'LEAVE_APPROVAL_REQUEST';
+          const eventType = hasCancelReq 
+            ? 'TASK_CANCEL_REQUEST' 
+            : isLeaveReq 
+              ? 'LEAVE_APPROVAL_REQUEST' 
+              : 'RAG_HOLD';
           
           let rawDocTitle = (log.doc_title || '보류 건').replace(/^AI 결재 보류:\s*/, '').trim();
           if (hasCancelReq) {
@@ -399,9 +404,11 @@ export async function GET(request: Request) {
 
           const subtitleText = hasCancelReq
             ? `🚨 [취소 요청 접수] ${realCancelOperator} 님의 업무 취소/기각 관제 검토 건`
-            : (isMobileReq
-                ? `[현장 상신] AI 분석 기반 신규 등록 요청 검토 건`
-                : `${log.doc_type === 'estimate' ? '견적서' : log.doc_type === 'purchase_order' ? '발주서' : '수주서'} 삭제 시도 보류 건`);
+            : (isLeaveReq
+                ? `[근태/휴가 관제] 사내 근태 거버넌스 규정 제3조 기반 AI 관제 상신 건`
+                : (isMobileReq
+                    ? `[현장 상신] AI 분석 기반 신규 등록 요청 검토 건`
+                    : `${log.doc_type === 'estimate' ? '견적서' : log.doc_type === 'purchase_order' ? '발주서' : '수주서'} 삭제 시도 보류 건`));
 
           events.push({
             id: `rag_hold_${log.id}`,
@@ -537,21 +544,28 @@ export async function GET(request: Request) {
         console.error('Failed to load inventory for events:', e);
       }
 
-      // 1.4. crm_annual_leaves (휴가 신청 결재 대기 건)
+      // 1.4. crm_annual_leaves (휴가 신청 결재 대기 건 - 사규 제3조에 의거 관제 원장과 중복 방지)
       try {
-        const leavesRes = await queryTable('crm_annual_leaves', { filters: { ...tenantFilterObj, status: 'PENDING' } });
+        const leavesRes = await queryTable('crm_annual_leaves', { filters: { ...tenantFilterObj, status: 'PENDING' } }).catch(() => ({ rows: [] }));
         const pendingLeaves = leavesRes.rows || [];
-        
+        const existingGovDocIds = new Set(logs.map((l: any) => String(l.doc_id || l.id)));
+
         // 이름 매핑을 위한 직원 마스터 조회
-        const operatorsRes = await queryTable('crm_operators', { filters: tenantFilterObj });
+        const operatorsRes = await queryTable('crm_operators', { filters: tenantFilterObj }).catch(() => ({ rows: [] }));
         const ops = operatorsRes.rows || [];
 
         pendingLeaves.forEach((leave: any) => {
           if (leave.deleted_at) return;
+          // 이미 crm_governance_logs에 AI 사규 분석 리포트와 함께 등록된 경우 중복 생성 방지
+          if (existingGovDocIds.has(String(leave.id))) return;
+          
+          // 사규 제2조: 1일 이하의 단순 연차는 관제 피드에 올라오지 않고 HR 인사 결재함에서만 처리
+          if (Number(leave.days_spent || 1) < 2) return;
+
           const emp = ops.find((o: any) => String(o.id) === String(leave.operator_id));
           const empName = emp ? emp.name : '알수없음';
           const leaveTypeStr = 
-            leave.leave_type === 'ANNUAL' ? '연차' :
+            leave.leave_type === 'ANNUAL' ? '전일 연차' :
             leave.leave_type === 'HALF_AM' ? '오전 반차' :
             leave.leave_type === 'HALF_PM' ? '오후 반차' :
             leave.leave_type === 'HALF' ? '반차' :
@@ -567,15 +581,17 @@ export async function GET(request: Request) {
           events.push({
             id: `leave_${leave.id}`,
             type: 'LEAVE_APPROVAL_REQUEST',
-            title: `📅 휴가/연차 결재 승인 요청 (${empName})`,
-            subtitle: `종류: ${leaveTypeStr} (${leave.days_spent}일) / 기간: ${periodStr}`,
+            title: `[근태 상신] ${empName} ${leaveTypeStr} (${leave.days_spent}일)`,
+            subtitle: `[근태/휴가 관제] 사내 근태 거버넌스 규정 제3조 기반 AI 관제 상신 건 (기간: ${periodStr})`,
             status: 'WAITING',
             created_at: leave.created_at || nowStr,
             due_date: leave.start_date || leave.due_date || null,
             data: {
               ...leave,
               employee_name: empName,
-              leave_type_str: leaveTypeStr
+              leave_type_str: leaveTypeStr,
+              operator: empName,
+              reason: leave.reason || '사규 제3조 1호(2일 이상 장기 휴가 신청)'
             }
           });
         });
