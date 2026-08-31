@@ -2,7 +2,7 @@
 
 import { apiFetch } from '@/lib/api';
 import React, { useState } from "react";
-import { Plus, Eye, CheckCircle2, ChevronRight, Trash2, Clock, Printer, Upload, Sparkles, ArrowRightLeft, FileText, Settings2 } from "lucide-react";
+import { Plus, Eye, CheckCircle2, ChevronRight, Trash2, Clock, Printer, Upload, Sparkles, ArrowRightLeft, FileText, Settings2, Truck } from "lucide-react";
 import Link from "next/link";
 import { Estimate, SalesOrder, Partner } from "../types";
 import { parseEstimateMetadata, parsePurchaseOrderExcel, ExcelParsedPurchaseOrder, getExcelColumnsAndRawData, parseExcelWithMapping } from "../utils";
@@ -62,6 +62,33 @@ export default function OutboundHub({
   const [outboundSortKey, setOutboundSortKey] = usePersistedState<string>("egdesk_outbound_sortKey", "created_at");
   const [outboundSortDir, setOutboundSortDir] = usePersistedState<"asc" | "desc">("egdesk_outbound_sortDir", "desc");
   const [selectedOutboundIds, setSelectedOutboundIds] = useState<Set<string>>(new Set());
+
+  // 🚚 거래명세서 발송 완료 건에 대한 납품 완료 확정 처리
+  const handleMarkDelivered = async (so: SalesOrder) => {
+    if (!window.confirm(`[${so.customer_name}] 발주번호: ${so.client_order_no || so.id}\n총 금액: ${so.total_amount.toLocaleString()}원\n\n해당 건을 '납품 완료'로 등록하시겠습니까?\n납품 완료 등록 후에는 [납품 완료 대장]에서 실시간으로 집계 및 관리됩니다.`)) {
+      return;
+    }
+
+    try {
+      const res = await apiFetch("/api/estimates/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mark_delivered",
+          orderId: so.id
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("성공적으로 납품 완료 처리되었습니다.");
+        window.location.reload();
+      } else {
+        alert(data.error || "납품 완료 처리에 실패했습니다.");
+      }
+    } catch (err: any) {
+      alert("납품 완료 처리 중 오류가 발생했습니다: " + err.message);
+    }
+  };
 
   // 엑셀 업로드 직접 처리 (백그라운드 다이렉트 자동 수주 등록)
   const handleExcelUploadDirect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -432,7 +459,8 @@ export default function OutboundHub({
             ) : (
               <>
                 <option value="REGISTERED">수주등록</option>
-                <option value="CONFIRMED">납품완료</option>
+                <option value="STATEMENT_SENT">명세서발송완료</option>
+                <option value="DELIVERED">납품완료</option>
               </>
             )}
           </select>
@@ -523,6 +551,14 @@ export default function OutboundHub({
               >
                 <FileText className="w-4 h-4 text-emerald-400" />
                 보낸 거래명세서 대장
+              </button>
+              <button
+                onClick={() => window.open("/estimates/web-view?type=outbound_delivered", "_blank")}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                title="물품 출고 및 실물 납품이 완료된 전용 대장 웹뷰를 엽니다."
+              >
+                <Truck className="w-4 h-4 text-amber-400" />
+                납품 완료 대장
               </button>
               <Link
                 href="/estimates/statement-write"
@@ -1042,14 +1078,18 @@ export default function OutboundHub({
                     <td className="py-3.5 px-2">
                       <span
                         className={`px-2 py-0.5 rounded-full text-[9px] font-black border uppercase ${
-                          so.status === "STATEMENT_SENT" || so.status === "DELIVERED"
+                          so.status === "DELIVERED"
+                            ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                            : so.status === "STATEMENT_SENT"
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                             : so.status === "REGISTERED"
                             ? "bg-blue-50 text-blue-700 border-blue-100"
                             : "bg-slate-100 text-slate-700 border-slate-200"
                         }`}
                       >
-                        {so.status === "STATEMENT_SENT" || so.status === "DELIVERED"
+                        {so.status === "DELIVERED"
+                          ? "🚚 납품완료"
+                          : so.status === "STATEMENT_SENT"
                           ? "명세서발송완료"
                           : so.status === "REGISTERED"
                           ? "수주등록"
@@ -1063,21 +1103,38 @@ export default function OutboundHub({
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => onOpenDetailModal(so.estimate_id)}
-                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-black flex items-center gap-1"
+                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-black flex items-center gap-1 cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" /> 견적상세
                         </button>
+                        
+                        {/* 🚚 명세서 발송 완료 건에 한해 납품완료 등록 버튼 노출 (2단계 안전 가드) */}
+                        {so.status === "STATEMENT_SENT" && (
+                          <button
+                            onClick={() => handleMarkDelivered(so)}
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+                            title="물품 출고 및 배송 완료 후 납품 완료 상태로 확정합니다."
+                          >
+                            <Truck className="w-3.5 h-3.5" />
+                            납품완료 등록
+                          </button>
+                        )}
+
                         <Link
                           href={`/estimates/statement-write?soId=${so.id}`}
-                          className={`px-3 py-1.5 text-[10px] font-bold rounded-lg flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer ${
-                            so.status === "STATEMENT_SENT" || so.status === "DELIVERED"
+                          className={`px-3 py-1.5 text-[10px] font-bold rounded-lg flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer whitespace-nowrap ${
+                            so.status === "DELIVERED"
+                              ? "bg-slate-700 hover:bg-slate-800 text-white"
+                              : so.status === "STATEMENT_SENT"
                               ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                               : "bg-indigo-600 hover:bg-indigo-700 text-white"
                           }`}
                           title="해당 수주 건을 바탕으로 거래명세서를 작성하고 발송합니다."
                         >
                           <FileText className="w-3.5 h-3.5" />
-                          {so.status === "STATEMENT_SENT" || so.status === "DELIVERED"
+                          {so.status === "DELIVERED"
+                            ? "거래명세서 재확인"
+                            : so.status === "STATEMENT_SENT"
                             ? "거래명세서 재발송"
                             : "거래명세서 작성 및 발송"}
                         </Link>

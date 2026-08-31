@@ -512,6 +512,30 @@ export async function POST(req: Request) {
     }
 
     // ────────────────────────────────────────────────────────
+    // 4.7. 수주 ➡️ 납품 완료 확정 등록 (DELIVERED)
+    // ────────────────────────────────────────────────────────
+    if (action === 'mark_delivered') {
+      if (!orderId) {
+        return NextResponse.json({ success: false, error: '수주 번호가 누락되었습니다.' }, { status: 400 });
+      }
+
+      const tenantId = await resolveTenantId();
+      await updateRows('crm_sales_orders', {
+        status: 'DELIVERED',
+        delivered_at: nowStr,
+        updated_at: nowStr,
+        updated_by: '납품완료 등록'
+      }, {
+        filters: { id: orderId }
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: '해당 수주 건이 납품 완료 상태로 성공적으로 등록되었습니다.'
+      });
+    }
+
+    // ────────────────────────────────────────────────────────
     // 5. 수주 등록 건 소프트 삭제
     // ────────────────────────────────────────────────────────
     if (action === 'delete_sales_order') {

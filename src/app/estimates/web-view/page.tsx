@@ -89,6 +89,17 @@ const typeConfig = {
       "원본 파일", "품목코드", "유효품목코드", "품목명", "규격", "수량", "단가", "금액", "품목납기일", "상세비고"
     ]
   },
+  outbound_delivered: {
+    title: "납품 완료 대장 상세 내역",
+    headers: [
+      "납품완료일시", "고객발주번호", "바이어명", "바이어담당자", "담당자", "총 납품액", "상태", "수주일시", "마스터납기일",
+      "원본 파일", "품목코드", "유효품목코드", "품목명", "규격", "수량", "단가", "금액", "품목납기일", "상세비고"
+    ],
+    defaultVisible: [
+      "납품완료일시", "고객발주번호", "바이어명", "바이어담당자", "담당자", "총 납품액", "상태", "수주일시",
+      "품목명", "규격", "수량", "단가", "금액", "상세비고"
+    ]
+  },
   inventory_inout: {
     title: "재고 입출고 및 변동 대장 내역",
     headers: [
@@ -104,8 +115,8 @@ function WebViewContent() {
   const searchParams = useSearchParams();
   const typeParam = searchParams.get("type") || "inbound_est";
   const isStatementParam = searchParams.get("is_statement") === "true";
-  const type: "inbound_est" | "inbound_po" | "outbound_est" | "outbound_so" | "inventory_inout" = 
-    ["inbound_est", "inbound_po", "outbound_est", "outbound_so", "inventory_inout"].includes(typeParam) 
+  const type: "inbound_est" | "inbound_po" | "outbound_est" | "outbound_so" | "outbound_delivered" | "inventory_inout" = 
+    ["inbound_est", "inbound_po", "outbound_est", "outbound_so", "outbound_delivered", "inventory_inout"].includes(typeParam) 
       ? (typeParam as any) 
       : "inbound_est";
 
@@ -414,22 +425,33 @@ function WebViewContent() {
             });
           });
         }
-      } else if (type === "outbound_so") {
+      } else if (type === "outbound_so" || type === "outbound_delivered") {
         const res = await apiFetch(`/api/estimates/process?action=so_list&_t=${Date.now()}`);
         const json = await res.json();
         if (json.success && json.salesOrders) {
-          const salesOrders = json.salesOrders;
+          let salesOrders = json.salesOrders;
+          if (type === "outbound_delivered") {
+            salesOrders = salesOrders.filter((s: any) => s.status === "DELIVERED");
+          }
           salesOrders.forEach((s: any) => {
             const soItems = s.items && s.items.length > 0 ? s.items : [{}];
             soItems.forEach((item: any) => {
+              const statusBadgeText = s.status === "DELIVERED"
+                ? "납품완료"
+                : s.status === "STATEMENT_SENT"
+                ? "명세서발송완료"
+                : s.status === "REGISTERED"
+                ? "수주등록"
+                : "확인완료";
+
               rows.push([
-                s.created_at,          // 등록일시
+                type === "outbound_delivered" ? (s.delivered_at || s.updated_at || s.created_at) : s.created_at, // 등록일시 / 납품완료일시
                 s.client_order_no || "-", // 고객발주번호
                 s.customer_name,       // 바이어명
                 s.customer_manager || "-", // 바이어담당자
                 s.assigned_to || "-",  // 담당자
-                s.total_amount,        // 총 수주액
-                (s.status === "STATEMENT_SENT" || s.status === "DELIVERED") ? "명세서발송완료" : (s.status === "REGISTERED" ? "수주등록" : "확인완료"), // 상태
+                s.total_amount,        // 총 수주액 / 총 납품액
+                statusBadgeText,       // 상태
                 s.order_date || s.created_at, // 수주일시
                 s.delivery_date || "-", // 마스터납기일
                 s.file_url || "-",     // 원본 파일
@@ -1222,13 +1244,15 @@ function WebViewContent() {
                               </span>
                             ) : headerName === "상태" ? (
                               <span className={`px-2 py-0.5 rounded-md text-[10px] font-black inline-flex items-center gap-0.5 shadow-3xs whitespace-nowrap ${
-                                strVal === "수주등록" || strVal === "발주등록"
+                                strVal === "납품완료"
+                                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                  : strVal === "수주등록" || strVal === "발주등록"
                                   ? "bg-blue-50 text-blue-700 border border-blue-200"
                                   : strVal === "확인완료" || strVal === "입고완료" || strVal === "명세서발송완료"
                                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                   : "bg-slate-100 text-slate-700 border border-slate-200"
                               }`}>
-                                {strVal}
+                                {strVal === "납품완료" ? `🚚 ${strVal}` : strVal}
                               </span>
                             ) : headerName === "상세비고" ? (
                               <div className="flex flex-col gap-1 max-w-[220px]">
