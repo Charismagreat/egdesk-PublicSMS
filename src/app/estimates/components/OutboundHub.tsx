@@ -1025,12 +1025,18 @@ export default function OutboundHub({
                     <td className="py-3.5 px-2">
                       <span
                         className={`px-2 py-0.5 rounded-full text-[9px] font-black border uppercase ${
-                          so.status === "REGISTERED"
-                            ? "bg-amber-50 text-amber-600 border-amber-100 animate-pulse"
-                            : "bg-emerald-50 text-emerald-600 border-emerald-100"
+                          so.status === "STATEMENT_SENT" || so.status === "DELIVERED"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : so.status === "REGISTERED"
+                            ? "bg-blue-50 text-blue-700 border-blue-100"
+                            : "bg-slate-100 text-slate-700 border-slate-200"
                         }`}
                       >
-                        {so.status === "REGISTERED" ? "수주등록" : "확인완료"}
+                        {so.status === "STATEMENT_SENT" || so.status === "DELIVERED"
+                          ? "명세서발송완료"
+                          : so.status === "REGISTERED"
+                          ? "수주등록"
+                          : "확인완료"}
                       </span>
                     </td>
                     <td className="py-3.5 px-2 text-slate-500 font-medium">
@@ -1046,10 +1052,17 @@ export default function OutboundHub({
                         </button>
                         <Link
                           href={`/estimates/statement-write?soId=${so.id}`}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer"
+                          className={`px-3 py-1.5 text-[10px] font-bold rounded-lg flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer ${
+                            so.status === "STATEMENT_SENT" || so.status === "DELIVERED"
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                              : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                          }`}
                           title="해당 수주 건을 바탕으로 거래명세서를 작성하고 발송합니다."
                         >
-                          <FileText className="w-3.5 h-3.5" /> 거래명세서 작성 및 발송
+                          <FileText className="w-3.5 h-3.5" />
+                          {so.status === "STATEMENT_SENT" || so.status === "DELIVERED"
+                            ? "거래명세서 재발송"
+                            : "거래명세서 작성 및 발송"}
                         </Link>
                         {so.is_pending_delete ? (
                           <span className="px-2.5 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-[10px] font-black border border-amber-100 inline-flex items-center gap-1">

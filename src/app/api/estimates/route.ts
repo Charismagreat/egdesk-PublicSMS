@@ -468,7 +468,8 @@ export async function POST(req: Request) {
       // 견적서 다이렉트 발송 채널 확장
       send_method = '',           // EMAIL, SMS, FAX
       send_target = '',           // 수신 주소/번호
-      raw_ocr_data = null
+      raw_ocr_data = null,
+      linked_so_ids = []          // 거래명세서 발송 연계 수주 번호 목록
     } = body;
 
     if (!partner_name) {
@@ -623,6 +624,23 @@ export async function POST(req: Request) {
     }));
 
     await insertRows('crm_estimate_items', detailRows);
+
+    // 📦 5. 거래명세서 발송과 연계된 수주 건들의 상태를 'STATEMENT_SENT' (명세서 발송완료)로 자동 갱신
+    if (linked_so_ids && Array.isArray(linked_so_ids) && linked_so_ids.length > 0) {
+      for (const soId of linked_so_ids) {
+        try {
+          await updateRows('crm_sales_orders', {
+            status: 'STATEMENT_SENT',
+            updated_at: nowStr,
+            updated_by: '거래명세서 발송 연동'
+          }, {
+            filters: { id: String(soId) }
+          });
+        } catch (soErr: any) {
+          console.warn(`수주(${soId}) 상태 업데이트 실패(무시됨):`, soErr.message);
+        }
+      }
+    }
 
     // 🤖 사용자가 수정한 내용이 있을 경우 Few-shot 자율 학습 데이터로 자동 축적
     if (raw_ocr_data) {

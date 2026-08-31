@@ -429,7 +429,7 @@ function WebViewContent() {
                 s.customer_manager || "-", // 바이어담당자
                 s.assigned_to || "-",  // 담당자
                 s.total_amount,        // 총 수주액
-                s.status === "REGISTERED" ? "수주등록" : "확인완료", // 상태
+                (s.status === "STATEMENT_SENT" || s.status === "DELIVERED") ? "명세서발송완료" : (s.status === "REGISTERED" ? "수주등록" : "확인완료"), // 상태
                 s.order_date || s.created_at, // 수주일시
                 s.delivery_date || "-", // 마스터납기일
                 s.file_url || "-",     // 원본 파일
@@ -1224,7 +1224,7 @@ function WebViewContent() {
                               <span className={`px-2 py-0.5 rounded-md text-[10px] font-black inline-flex items-center gap-0.5 shadow-3xs whitespace-nowrap ${
                                 strVal === "수주등록" || strVal === "발주등록"
                                   ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                  : strVal === "확인완료" || strVal === "입고완료"
+                                  : strVal === "확인완료" || strVal === "입고완료" || strVal === "명세서발송완료"
                                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                   : "bg-slate-100 text-slate-700 border border-slate-200"
                               }`}>

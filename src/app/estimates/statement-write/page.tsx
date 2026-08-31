@@ -280,6 +280,7 @@ function DeliveryStatementWriteContent() {
   const [sendFaxNumber, setSendFaxNumber] = useState("");
   const [sendDirectMemo, setSendDirectMemo] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [linkedSoIds, setLinkedSoIds] = useState<string[]>([]);
 
   // 💡 자사 직인 도장 이미지 상태 (로컬스토리지가 아닌 메모리 상태로 관리하여 용량 초과 방어)
   const [sealImage, setSealImage] = useState<string | null>(null);
@@ -512,6 +513,9 @@ function DeliveryStatementWriteContent() {
   const handleSelectOrders = (selectedOrders: any[]) => {
     if (selectedOrders.length === 0) return;
     
+    // 연계 수주 번호 목록 저장
+    setLinkedSoIds(selectedOrders.map(o => String(o.id)).filter(Boolean));
+
     // 첫 수주 건 기준으로 바이어 정보 바인딩
     const first = selectedOrders[0];
     setBuyer(prev => ({
@@ -936,6 +940,7 @@ function DeliveryStatementWriteContent() {
         partner_phone: buyer.phone || sendSmsPhone,
         partner_manager: buyer.managerName || "-",
         items: payloadItems,
+        linked_so_ids: linkedSoIds,
         tags: JSON.stringify({ 
           is_statement: true,
           is_manufacture: false,
