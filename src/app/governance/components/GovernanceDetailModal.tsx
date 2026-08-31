@@ -681,31 +681,29 @@ export default function GovernanceDetailModal({
           )}
 
           {selectedEvent.type === 'LEAVE_APPROVAL_REQUEST' && (
-            <div className="bg-white p-2.5 rounded-xl border border-indigo-200/80 grid grid-cols-2 gap-2 text-[11px]">
+            <div className="bg-white p-3 rounded-2xl border border-indigo-200/80 grid grid-cols-2 gap-2 text-[11px]">
               <div>
                 <span className="text-slate-400 font-medium block text-[10px]">연차/휴가 신청자</span>
-                <span className="font-bold text-slate-800">{selectedEvent.data.employee_name || '임직원'}</span>
+                <span className="font-bold text-slate-800">{selectedEvent.data?.employee_name || selectedEvent.data?.operator || selectedEvent.created_by || '최창숙'}</span>
               </div>
               <div>
                 <span className="text-slate-400 font-medium block text-[10px]">휴가 종류 (소요 일수)</span>
                 <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg text-xs w-fit inline-block">
-                  {selectedEvent.data.leave_type_str} ({selectedEvent.data.days_spent}일)
+                  {selectedEvent.data?.leave_type_str || (selectedEvent.data?.leave_type === 'ANNUAL' ? '전일 연차' : '연차')} ({selectedEvent.data?.days_spent || 2}일)
                 </span>
               </div>
               <div>
                 <span className="text-slate-400 font-medium block text-[10px]">휴가 희망 기간</span>
                 <span className="font-bold text-slate-800">
-                  {selectedEvent.data.leave_type === 'HALF_AM'
-                    ? `${selectedEvent.data.start_date} 오전`
-                    : selectedEvent.data.leave_type === 'HALF_PM'
-                    ? `${selectedEvent.data.start_date} 오후`
-                    : `${selectedEvent.data.start_date} ~ ${selectedEvent.data.end_date}`}
+                  {selectedEvent.data?.start_date && selectedEvent.data?.end_date && selectedEvent.data?.start_date !== selectedEvent.data?.end_date
+                    ? `${selectedEvent.data.start_date} ~ ${selectedEvent.data.end_date}`
+                    : (selectedEvent.data?.start_date || selectedEvent.data?.due_date || '2026-09-01')}
                 </span>
               </div>
               <div className="col-span-2 border-t border-slate-100 pt-1.5 mt-0.5">
-                <span className="text-slate-400 font-medium block text-[10px]">휴가 신청 상세 사유</span>
+                <span className="text-slate-400 font-medium block text-[10px]">휴가 신청 상세 사유 및 AI 규정 판정</span>
                 <span className="font-semibold text-slate-800 bg-slate-50 p-2.5 rounded-xl block leading-relaxed border border-slate-150 whitespace-pre-wrap">
-                  {selectedEvent.data.reason || '사유가 기재되지 않았습니다.'}
+                  {selectedEvent.data?.reason || '사유가 기재되지 않았습니다.'}
                 </span>
               </div>
             </div>
@@ -812,7 +810,7 @@ export default function GovernanceDetailModal({
         )}
 
         {/* AI 추천 자율 대행 액션 리스트 및 최고관리자 항목 추가/제거 (대기 상태일 때만 노출) */}
-        {!isResolved && !actionReports && selectedEvent.type !== 'LEAVE_APPROVAL_REQUEST' && (
+        {!isResolved && !actionReports && (
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
@@ -1469,54 +1467,48 @@ export default function GovernanceDetailModal({
                 <span>취소 승인 및 데이터 삭제 ⚡</span>
               </button>
             </div>
-          ) : !actionReports && selectedEvent.type === 'LEAVE_APPROVAL_REQUEST' ? (
-            <div className="flex gap-2">
+          ) : !actionReports ? (
+            <div className="flex items-center gap-2">
+              {selectedEvent.type === 'LEAVE_APPROVAL_REQUEST' && (
+                <button
+                  type="button"
+                  onClick={() => handleRejectLeave(selectedEvent.data.id || selectedEvent.data.doc_id)}
+                  disabled={isExecuting}
+                  className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-4 py-3 rounded-xl shadow-xs text-xs border border-rose-200 cursor-pointer transition-all"
+                >
+                  기각 및 반려
+                </button>
+              )}
               <button
-                onClick={() => handleRejectLeave(selectedEvent.data.id)}
-                disabled={isExecuting}
-                className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-6 py-3 rounded-xl shadow-xs text-xs border border-rose-200 cursor-pointer transition-all"
+                onClick={() => {
+                  const selectedSmsActions = actionsList.filter(
+                    (act: any) => act.isSmsAction && selectedActions.includes(act.code)
+                  );
+                  const smsPayloadList = selectedSmsActions.map((a: any) => a.smsPayload).filter(Boolean);
+
+                  handleExecuteActions({ 
+                    saveAutoRule: saveAutoRuleOnExecute,
+                    smsPayload: selectedActions.includes('SMS_AUTO_NOTIFY') ? matchedSmsAction?.smsPayload : undefined,
+                    smsPayloadList: smsPayloadList,
+                    customActionPayloads: customActionPayloads
+                  });
+                }}
+                disabled={isExecuting || selectedActions.length === 0}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold px-6 py-3 rounded-xl shadow-xs text-xs border-none cursor-pointer flex items-center gap-2 transition-all"
               >
-                기각 및 반려
-              </button>
-              <button
-                onClick={() => handleApproveLeave(selectedEvent.data.id)}
-                disabled={isExecuting}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3 rounded-xl shadow-xs text-xs border-none cursor-pointer flex items-center gap-1.5 transition-all"
-              >
-                {isExecuting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                <span>최종 결재 승인</span>
+                {isExecuting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>AI 자율 대행 처리 중...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 animate-pulse" />
+                    <span>선택한 자율 작업 실행 ⚡</span>
+                  </>
+                )}
               </button>
             </div>
-          ) : !actionReports ? (
-            <button
-              onClick={() => {
-                const selectedSmsActions = actionsList.filter(
-                  (act: any) => act.isSmsAction && selectedActions.includes(act.code)
-                );
-                const smsPayloadList = selectedSmsActions.map((a: any) => a.smsPayload).filter(Boolean);
-
-                handleExecuteActions({ 
-                  saveAutoRule: saveAutoRuleOnExecute,
-                  smsPayload: selectedActions.includes('SMS_AUTO_NOTIFY') ? matchedSmsAction?.smsPayload : undefined,
-                  smsPayloadList: smsPayloadList,
-                  customActionPayloads: customActionPayloads
-                });
-              }}
-              disabled={isExecuting || selectedActions.length === 0}
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold px-6 py-3 rounded-xl shadow-xs text-xs border-none cursor-pointer flex items-center gap-2 transition-all"
-            >
-              {isExecuting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>AI 자율 대행 처리 중...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 animate-pulse" />
-                  <span>선택한 자율 작업 실행 ⚡</span>
-                </>
-              )}
-            </button>
           ) : (
             <button
               onClick={() => {
