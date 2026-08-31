@@ -165,7 +165,7 @@ export async function GET(req: Request) {
               const isCustMatch = cust && t.title.includes(cust);
               const isDateMatch = dDate && t.title.includes(dDate);
               const isNoMatch = so.client_order_no && t.description?.includes(so.client_order_no);
-              return (isCustMatch && isDateMatch) || isNoMatch || isCustMatch;
+              return (isCustMatch && isDateMatch) || isNoMatch;
             });
             if (matchedSo && matchedSo.assigned_to) {
               resolvedAssignee = matchedSo.assigned_to;
