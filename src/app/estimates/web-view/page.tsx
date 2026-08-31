@@ -436,7 +436,7 @@ function WebViewContent() {
                 item.item_code || "-", // 품목코드
                 item.valid_item_code || "-", // 유효품목코드
                 item.product_name || "-", // 품목명
-                formatSpec(item.spec),      // 규격
+                (item.spec && item.spec !== item.item_code) ? formatSpec(item.spec) : "-", // 규격
                 item.quantity !== undefined ? item.quantity : "", // 수량
                 item.unit_price !== undefined ? item.unit_price : "", // 단가
                 item.amount !== undefined ? item.amount : "", // 금액
@@ -1041,13 +1041,28 @@ function WebViewContent() {
                     const origIdx = data.headers.indexOf(header);
                     if (origIdx === -1) return null;
                     const isHeaderNumeric = ["수량", "단가", "금액", "총 수주액", "총 발주액", "총 견적액"].includes(header.replace(/\s+/g, ""));
+                    
+                    let widthClass = "min-w-[100px]";
+                    if (header === "품목명") widthClass = "min-w-[340px] max-w-[500px]";
+                    else if (header === "규격") widthClass = "min-w-[150px]";
+                    else if (["고객발주번호", "발주등록번호/발주번호", "견적번호", "명세서번호"].includes(header)) widthClass = "min-w-[130px]";
+                    else if (["품목코드", "유효품목코드", "바코드"].includes(header)) widthClass = "min-w-[120px]";
+                    else if (header.endsWith("일시") || header.endsWith("일자") || header.endsWith("일")) widthClass = "min-w-[110px]";
+                    else if (["바이어명", "공급처", "공급처명", "수신바이어"].includes(header)) widthClass = "min-w-[130px]";
+                    else if (["바이어담당자", "담당자", "담당자명"].includes(header)) widthClass = "min-w-[100px]";
+                    else if (["총 수주액", "총 발주액", "총 견적액", "단가", "금액"].includes(header)) widthClass = "min-w-[105px]";
+                    else if (header === "수량") widthClass = "min-w-[65px]";
+                    else if (["상태", "변동종류"].includes(header)) widthClass = "min-w-[85px]";
+                    else if (["원본 파일", "첨부파일", "증빙조회"].includes(header)) widthClass = "min-w-[95px]";
+                    else if (header === "상세비고") widthClass = "min-w-[160px]";
+
                     return (
                       <th
                         key={header}
                         onClick={() => handleSort(origIdx)}
                         className={`py-3.5 px-3.5 cursor-pointer ${
                           isDarkMode ? "hover:text-white" : "hover:text-slate-900"
-                        } select-none transition-colors group whitespace-nowrap ${
+                        } select-none transition-colors group whitespace-nowrap ${widthClass} ${
                           isHeaderNumeric ? "text-right" : ""
                         }`}
                       >
@@ -1123,16 +1138,21 @@ function WebViewContent() {
                         const isCodeCol = ["고객발주번호", "품목코드", "유효품목코드", "견적번호", "명세서번호", "발주등록번호/발주번호", "바코드"].includes(headerName);
                         const isPersonCol = ["바이어담당자", "담당자", "담당자명", "공급처", "바이어명", "수신바이어"].includes(headerName);
 
+                        let tdClass = "whitespace-normal break-words max-w-[240px]";
+                        if (isNumericCol) {
+                          tdClass = "whitespace-nowrap font-mono text-right";
+                        } else if (headerName === "품목명") {
+                          tdClass = "min-w-[340px] max-w-[500px] whitespace-normal break-words leading-relaxed font-bold text-slate-850 dark:text-slate-200";
+                        } else if (headerName === "규격") {
+                          tdClass = "min-w-[150px] whitespace-nowrap font-mono";
+                        } else if (isDateCol || isStatusCol || isCodeCol || isPersonCol || isAttachedFile) {
+                          tdClass = "whitespace-nowrap";
+                        }
+
                         return (
                           <td key={headerName} className={`py-3 px-3.5 ${
                             isDarkMode ? "text-slate-355" : "text-slate-700"
-                          } font-medium ${
-                            isNumericCol 
-                              ? "whitespace-nowrap font-mono text-right" 
-                              : (isDateCol || isStatusCol || isCodeCol || isPersonCol || isAttachedFile)
-                              ? "whitespace-nowrap"
-                              : "whitespace-normal break-all max-w-[240px]"
-                          }`}>
+                          } font-medium ${tdClass}`}>
                             {headerName === "증빙조회" ? (
                               (() => {
                                 const proofPath = strVal;
