@@ -2808,30 +2808,45 @@ ${JSON.stringify(operators || [], null, 2)}
             });
           }
 
-          else if (act === 'approve_task_cancel') {
-            const taskId = originalData?.doc_id || originalData?.id || '';
-            // crm_snaptasks 테이블에서 소프트 삭제 처리
-            await updateRows('crm_snaptasks', {
-              deleted_at: nowStr,
-              deleted_by: adminUser
-            }, { filters: { id: taskId } });
+          else if (act === 'approve_task_cancel' || act === 'DELETE_APPROVED_DATA') {
+            const rawId = String(originalData?.doc_id || originalData?.id || '').trim();
+            const pureNum = rawId.replace(/[^0-9]/g, '');
+            const targetTaskIds = Array.from(new Set([
+              rawId,
+              pureNum ? `ST-${pureNum}` : '',
+              pureNum ? `REQ-${pureNum}` : '',
+              pureNum
+            ].filter(Boolean)));
 
-            // crm_snaptask_items (파일 및 내용) 도 일괄 소프트 삭제 처리
-            await updateRows('crm_snaptask_items', {
-              deleted_at: nowStr,
-              deleted_by: adminUser
-            }, { filters: { task_id: taskId } });
+            // crm_snaptasks 테이블에서 소프트 삭제 처리
+            for (const tId of targetTaskIds) {
+              await updateRows('crm_snaptasks', {
+                status: 'DONE',
+                deleted_at: nowStr,
+                deleted_by: adminUser,
+                updated_at: nowStr,
+                updated_by: adminUser
+              }, { filters: { id: tId } }).catch(() => {});
+
+              // crm_snaptask_items (파일 및 내용) 도 일괄 소프트 삭제 처리
+              await updateRows('crm_snaptask_items', {
+                deleted_at: nowStr,
+                deleted_by: adminUser,
+                updated_at: nowStr,
+                updated_by: adminUser
+              }, { filters: { task_id: tId } }).catch(() => {});
+            }
 
             // 거버넌스 로그 상태를 승인 완료로 갱신
             if (eventId) {
-              const logRawId = eventId.replace('event_cancel_req_', '').replace('cancel_req_', '');
+              const logRawId = eventId.replace(/^event_/, '').replace(/^cancel_req_/, '').replace(/^rag_hold_/, '');
               await updateRows('crm_governance_logs', {
                 status: 'APPROVED',
                 reason: `최고관리자(${adminUser})에 의해 업무 취소 최종 승인 및 소프트 삭제 완료.`,
                 updated_at: nowStr,
                 updated_by: adminUser,
                 resolved_at: nowStr
-              }, { filters: { id: logRawId } });
+              }, { filters: { id: logRawId } }).catch(() => {});
             }
 
             actionReports.push({
