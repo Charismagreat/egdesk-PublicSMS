@@ -146,6 +146,13 @@ export default function MobileTaskDetailModal({
   const isOverdue = overdueDays !== null && overdueDays > 0;
   const isToday = overdueDays === 0;
 
+  const isAdminAssigned = 
+    task.created_by?.includes('최고관리자') || 
+    task.category === 'ADMIN_DIRECTIVE' || 
+    task.title?.includes('[수주납기 관리]') ||
+    task.is_assigned === true;
+  const displayTitle = isAdminAssigned ? (task.title || '').replace(/^\[상신\]\s*/g, '') : (task.title || '');
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-5 space-y-4 animate-scale-in text-left">
