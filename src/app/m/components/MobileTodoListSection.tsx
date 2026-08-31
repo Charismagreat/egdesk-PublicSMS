@@ -81,6 +81,28 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
     return null;
   };
 
+  // 💡 경과 일수(Overdue Days) 계산 헬퍼 (예: 2026-08-28 납기인 건은 오늘 8/31 기준 +3일)
+  const getOverdueDays = (t: any): number | null => {
+    const rawDateStr = extractDueDate(t);
+    if (!rawDateStr) return null;
+
+    try {
+      const now = new Date();
+      const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+      const todayStr = kstNow.toISOString().substring(0, 10);
+
+      const todayMidnight = new Date(`${todayStr}T00:00:00Z`).getTime();
+      const targetMidnight = new Date(`${rawDateStr}T00:00:00Z`).getTime();
+
+      const diffMs = todayMidnight - targetMidnight;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      return diffDays;
+    } catch {
+      return null;
+    }
+  };
+
   const formatTaskDate = (dateStr?: string) => {
     if (!dateStr) return "";
     try {
@@ -409,13 +431,39 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
                       )}
 
                       <div className="flex items-center flex-wrap gap-1.5 mt-2 text-[10px] font-bold">
-                        {/* 1. 마감일 (할 일인 경우) */}
-                        {!isDone && t.due_date && (
-                          <span className="flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200/80 px-2 py-0.5 rounded-md font-extrabold shrink-0" title="마감 예정일">
-                            <Calendar className="w-3 h-3 text-purple-600 shrink-0" />
-                            <span>마감 {t.due_date.substring(0, 10)}</span>
-                          </span>
-                        )}
+                        {/* 1. 마감/납기일 및 경과 일수 뱃지 (할 일인 경우) */}
+                        {!isDone && (t.due_date || extractDueDate(t)) && (() => {
+                          const targetDate = (t.due_date || extractDueDate(t))?.substring(0, 10);
+                          const overdueDays = getOverdueDays(t);
+                          const isOverdue = overdueDays !== null && overdueDays > 0;
+                          const isToday = overdueDays === 0;
+
+                          return (
+                            <span
+                              className={`flex items-center gap-1 px-2 py-0.5 rounded-md font-extrabold shrink-0 border transition-all ${
+                                isOverdue
+                                  ? "bg-rose-50 text-rose-700 border-rose-300 shadow-3xs"
+                                  : isToday
+                                  ? "bg-amber-50 text-amber-800 border-amber-300 shadow-3xs"
+                                  : "bg-purple-50 text-purple-700 border-purple-200/80"
+                              }`}
+                              title={isOverdue ? `마감일로부터 ${overdueDays}일 경과됨` : isToday ? '오늘 마감' : '마감 예정일'}
+                            >
+                              <Calendar className={`w-3 h-3 shrink-0 ${isOverdue ? "text-rose-600 animate-pulse" : isToday ? "text-amber-600" : "text-purple-600"}`} />
+                              <span>{t.title?.includes('[수주납기 관리]') ? '납기' : '마감'} {targetDate}</span>
+                              {isOverdue && (
+                                <span className="bg-rose-600 text-white font-black px-1.5 py-0.2 rounded text-[9px] ml-0.5 flex items-center gap-0.5 shadow-2xs">
+                                  <span>+{overdueDays}일</span>
+                                </span>
+                              )}
+                              {isToday && (
+                                <span className="bg-amber-600 text-white font-black px-1.5 py-0.2 rounded text-[9px] ml-0.5 shadow-2xs">
+                                  오늘
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })()}
 
                         {/* 2. 등록일시 */}
                         {t.created_at && (

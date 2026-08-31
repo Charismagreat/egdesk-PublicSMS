@@ -118,12 +118,33 @@ export default function MobileTaskDetailModal({
     );
   };
 
-  const isAdminAssigned = 
-    task.created_by?.includes('최고관리자') || 
-    task.category === 'ADMIN_DIRECTIVE' || 
-    task.title?.includes('[수주납기 관리]') ||
-    task.is_assigned === true;
-  const displayTitle = isAdminAssigned ? task.title.replace(/^\[상신\]\s*/g, '') : task.title;
+  // 💡 경과 일수 계산
+  const getOverdueDays = () => {
+    let rawDateStr = task.due_date;
+    if (!rawDateStr && task.title) {
+      const match = String(task.title).replace(/[\.\/]/g, '-').match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+      if (match) rawDateStr = match[1];
+    }
+    if (!rawDateStr) return null;
+
+    try {
+      const now = new Date();
+      const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+      const todayStr = kstNow.toISOString().substring(0, 10);
+
+      const todayMidnight = new Date(`${todayStr}T00:00:00Z`).getTime();
+      const targetMidnight = new Date(`${rawDateStr}T00:00:00Z`).getTime();
+
+      const diffMs = todayMidnight - targetMidnight;
+      return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    } catch {
+      return null;
+    }
+  };
+
+  const overdueDays = !isDone ? getOverdueDays() : null;
+  const isOverdue = overdueDays !== null && overdueDays > 0;
+  const isToday = overdueDays === 0;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 p-4 animate-fade-in">
@@ -134,9 +155,25 @@ export default function MobileTaskDetailModal({
           <div className="space-y-1 pr-2">
             <div className="flex items-center gap-2 flex-wrap">
               {getStatusBadge()}
-              {task.due_date && (
-                <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                  📅 {task.due_date}
+              {(task.due_date || isOverdue) && (
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 border ${
+                  isOverdue
+                    ? "bg-rose-50 text-rose-700 border-rose-300 shadow-3xs"
+                    : isToday
+                    ? "bg-amber-50 text-amber-800 border-amber-300 shadow-3xs"
+                    : "bg-slate-100 text-slate-700 border-slate-200"
+                }`}>
+                  <span>📅 {task.due_date || '납기일'}</span>
+                  {isOverdue && (
+                    <span className="bg-rose-600 text-white font-black px-1.5 py-0.2 rounded text-[9px] shadow-3xs">
+                      +{overdueDays}일 지연
+                    </span>
+                  )}
+                  {isToday && (
+                    <span className="bg-amber-600 text-white font-black px-1.5 py-0.2 rounded text-[9px] shadow-3xs">
+                      오늘 마감
+                    </span>
+                  )}
                 </span>
               )}
             </div>
