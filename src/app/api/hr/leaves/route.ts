@@ -98,8 +98,8 @@ export async function POST(req: Request) {
     let operatorId = (sessionUser.id as string) || '';
     const tenantId = (sessionUser.tenant_id as string) || 'default';
 
-    // 💡 [수정] 신규 연차 신청(APPLY)을 제외한 결재 심사(APPROVE/REJECT) 조작은 관리자 권한 필수 검증
-    if (action !== 'APPLY') {
+    // 💡 [수정] 신규 연차 신청(APPLY) 및 본인 취소(CANCEL)를 제외한 결재 심사(APPROVE/REJECT) 조작은 관리자 권한 필수 검증
+    if (action !== 'APPLY' && action !== 'CANCEL') {
       const { isAuthorized } = await verifyUserRole();
       if (!isAuthorized) {
         return NextResponse.json({ success: false, error: '🔒 권한이 없습니다. 결재 권한을 확인해 주세요.' }, { status: 403 });
@@ -324,6 +324,41 @@ export async function POST(req: Request) {
         return NextResponse.json({
           success: true,
           message: '연차 휴가 신청이 공식 반려 처리되었습니다 🔴'
+        });
+      }
+
+      // ==========================================
+      // 📂 액션 4: 신청자 본인의 연차 신청 취소 (CANCEL)
+      // ==========================================
+      if (action === 'CANCEL') {
+        const leaveIdToCancel = payload.leave_id || payload.id;
+        if (!leaveIdToCancel) {
+          return NextResponse.json({ success: false, error: '취소할 연차 신청 식별자(leave_id)가 필요합니다.' }, { status: 400 });
+        }
+
+        const leaveQuery = await queryTable('crm_annual_leaves', { filters: { id: leaveIdToCancel, tenant_id: tenantId } });
+        if (!leaveQuery.rows || leaveQuery.rows.length === 0) {
+          return NextResponse.json({ success: false, error: '존재하지 않는 연차 신청 건입니다.' }, { status: 404 });
+        }
+        const targetLeave = leaveQuery.rows[0];
+
+        if (targetLeave.status === 'APPROVED') {
+          return NextResponse.json({ success: false, error: '이미 승인 완료된 휴가는 취소할 수 없습니다. 관리자에게 문의해 주세요.' }, { status: 400 });
+        }
+
+        const cancelUser = (sessionUser.name as string) || (sessionUser.username as string) || 'USER';
+        await updateRows('crm_annual_leaves', {
+          status: 'CANCELLED',
+          reject_reason: '신청자 본인 취소',
+          deleted_at: now.toISOString(),
+          deleted_by: cancelUser,
+          updated_at: now.toISOString(),
+          updated_by: cancelUser
+        }, { filters: { id: leaveIdToCancel, tenant_id: tenantId } });
+
+        return NextResponse.json({
+          success: true,
+          message: '연차 신청이 성공적으로 취소되었습니다.'
         });
       }
     }

@@ -149,6 +149,35 @@ export function useMobileLeave() {
     }
   };
 
+  // 연차 신청 취소
+  const handleCancelLeave = async (leaveId: string) => {
+    if (!leaveId) return;
+    if (!confirm("정말 결재 대기 중인 연차 신청을 취소하시겠습니까?")) return;
+
+    try {
+      const res = await apiFetch("/api/hr/leaves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "CANCEL",
+          leave_id: leaveId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("✅ 연차 신청이 취소되었습니다.");
+        setIsPendingLeaveModalOpen(false);
+        setPendingLeave(null);
+        fetchPendingLeave();
+        fetchLeaveBalance();
+      } else {
+        alert("취소 실패: " + (data.error || "오류가 발생했습니다."));
+      }
+    } catch (err: any) {
+      alert("취소 처리 중 오류가 발생했습니다: " + err.message);
+    }
+  };
+
   return {
     isLeaveModalOpen,
     setIsLeaveModalOpen,
@@ -165,6 +194,7 @@ export function useMobileLeave() {
     isLeaveSubmitting,
     leaveErrorMsg,
     handleLeaveSubmit,
+    handleCancelLeave,
     pendingLeave,
     isPendingLeaveModalOpen,
     setIsPendingLeaveModalOpen,

@@ -458,6 +458,7 @@ export default function MobileHubPage() {
         isPendingLeaveModalOpen={leave.isPendingLeaveModalOpen}
         setIsPendingLeaveModalOpen={leave.setIsPendingLeaveModalOpen}
         pendingLeave={leave.pendingLeave}
+        onCancelLeave={leave.handleCancelLeave}
       />
 
       {/* 6. AI 관제 상신 & 태스크 발급 모달 */}
