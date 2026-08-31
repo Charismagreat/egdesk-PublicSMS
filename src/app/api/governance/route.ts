@@ -287,27 +287,42 @@ export async function GET(request: Request) {
 
           // 원본 상신건과 1:1 매칭되는 취소 요청 탐색
           const logPureTitle = getPureTitle(log.doc_title);
+          const logIdNum = String(log.id || '').replace(/[^0-9]/g, '');
+          const logDocIdNum = String(log.doc_id || '').replace(/[^0-9]/g, '');
+
           const matchedCancelLog = cancelLogs.find((cl: any) => {
             if (matchedCancelLogIds.has(String(cl.id))) return false;
             
             const clPureTitle = getPureTitle(cl.doc_title);
             const clNoteId = (cl.note || '').replace(/[^0-9]/g, '');
-            const logIdNum = String(log.id || '').replace(/[^0-9]/g, '');
-            const logDocIdNum = String(log.doc_id || '').replace(/[^0-9]/g, '');
+            const clDocIdNum = String(cl.doc_id || '').replace(/[^0-9]/g, '');
+            const clIdNum = String(cl.id || '').replace(/[^0-9]/g, '');
 
-            if (logPureTitle && clPureTitle && (logPureTitle === clPureTitle || clPureTitle.includes(logPureTitle) || logPureTitle.includes(clPureTitle))) {
+            // 1) 순수 숫자 타임스탬프 ID 1:1 일치 (ST-1788... vs REQ-1788... vs mobile_req_1788...)
+            if (clDocIdNum && (clDocIdNum === logIdNum || clDocIdNum === logDocIdNum)) {
               return true;
             }
             if (clNoteId && (clNoteId === logIdNum || clNoteId === logDocIdNum)) {
               return true;
             }
+            // 2) 완전 일치 외래키 조인
             if (cl.doc_id && (String(cl.doc_id) === String(log.id) || String(cl.doc_id) === String(log.doc_id))) {
+              return true;
+            }
+            // 3) 순수 제목 일치
+            if (logPureTitle && clPureTitle && (logPureTitle === clPureTitle || clPureTitle.includes(logPureTitle) || logPureTitle.includes(clPureTitle))) {
               return true;
             }
             return false;
           });
 
           if (matchedCancelLog) {
+            cancelLogs.forEach((cItem: any) => {
+              const cItemDocId = String(cItem.doc_id || '').replace(/[^0-9]/g, '');
+              if (cItemDocId && (cItemDocId === logIdNum || cItemDocId === logDocIdNum)) {
+                matchedCancelLogIds.add(String(cItem.id));
+              }
+            });
             matchedCancelLogIds.add(String(matchedCancelLog.id));
           }
 
@@ -1658,7 +1673,7 @@ export async function POST(request: Request) {
 
       const reqId = `cancel_req_${Date.now()}`;
       const cancelOperator = body.operator || task.operator || task.created_by || (currentUser && currentUser !== 'SUPER_ADMIN_DEV' && currentUser !== 'system' ? currentUser : '상신자');
-      const tenantId = await resolveTenantId();
+      const tenantId = task.tenant_id || (await resolveTenantId()) || 'tenant-wontrading';
       
       // 1. 거버넌스 승인 요청 로그 인서트
       await insertRows('crm_governance_logs', [{
