@@ -44,11 +44,11 @@ export async function GET(req: Request) {
     const tenantId = await resolveTenantId();
 
     if (action === 'po_list') {
-      const res = await queryTable('crm_purchase_orders', { filters: { tenant_id: tenantId } });
+      const res = await queryTable('crm_purchase_orders', { filters: { tenant_id: tenantId }, limit: 10000 });
       const rows = (res.rows || []).filter((a: any) => !a.deleted_at);
       
       // 견적 상세 아이템 데이터 로드
-      const itemsRes = await queryTable('crm_estimate_items', { filters: { tenant_id: tenantId } });
+      const itemsRes = await queryTable('crm_estimate_items', { filters: { tenant_id: tenantId }, limit: 10000 });
       const rawItems = itemsRes.rows || [];
       const itemsMap: Record<string, any[]> = {};
       for (const item of rawItems) {
@@ -58,7 +58,7 @@ export async function GET(req: Request) {
       }
 
       // 견적 마스터 데이터 로드 (비고란 검색용)
-      const estRes = await queryTable('crm_estimates', { filters: { tenant_id: tenantId } });
+      const estRes = await queryTable('crm_estimates', { filters: { tenant_id: tenantId }, limit: 10000 });
       const rawEsts = estRes.rows || [];
       const estMap: Record<string, any> = {};
       for (const est of rawEsts) {
@@ -115,11 +115,11 @@ export async function GET(req: Request) {
     }
 
     if (action === 'so_list') {
-      const res = await queryTable('crm_sales_orders', { filters: tenantId ? { tenant_id: tenantId } : {} });
+      const res = await queryTable('crm_sales_orders', { filters: tenantId ? { tenant_id: tenantId } : {}, limit: 10000 });
       const rows = (res.rows || []).filter((a: any) => !a.deleted_at);
       
       // 견적 상세 아이템 데이터 로드
-      const itemsRes = await queryTable('crm_estimate_items', { filters: { tenant_id: tenantId } });
+      const itemsRes = await queryTable('crm_estimate_items', { filters: { tenant_id: tenantId }, limit: 10000 });
       const rawItems = itemsRes.rows || [];
       const itemsMap: Record<string, any[]> = {};
       for (const item of rawItems) {
@@ -129,7 +129,7 @@ export async function GET(req: Request) {
       }
 
       // 견적 마스터 데이터 로드 (비고란 검색용)
-      const estRes = await queryTable('crm_estimates', { filters: { tenant_id: tenantId } });
+      const estRes = await queryTable('crm_estimates', { filters: { tenant_id: tenantId }, limit: 10000 });
       const rawEsts = estRes.rows || [];
       const estMap: Record<string, any> = {};
       for (const est of rawEsts) {

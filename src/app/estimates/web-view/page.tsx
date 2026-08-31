@@ -81,11 +81,11 @@ const typeConfig = {
   outbound_so: {
     title: "받은 발주서 상세 내역",
     headers: [
-      "등록일시", "고객발주번호", "바이어명", "바이어담당자", "총 수주액", "상태", "수주일시", "마스터납기일",
+      "등록일시", "고객발주번호", "바이어명", "바이어담당자", "담당자", "총 수주액", "상태", "수주일시", "마스터납기일",
       "원본 파일", "품목코드", "유효품목코드", "품목명", "규격", "수량", "단가", "금액", "품목납기일", "상세비고"
     ],
     defaultVisible: [
-      "등록일시", "고객발주번호", "바이어명", "바이어담당자", "총 수주액", "상태", "수주일시", "마스터납기일",
+      "등록일시", "고객발주번호", "바이어명", "바이어담당자", "담당자", "총 수주액", "상태", "수주일시", "마스터납기일",
       "원본 파일", "품목코드", "유효품목코드", "품목명", "규격", "수량", "단가", "금액", "품목납기일", "상세비고"
     ]
   },
@@ -427,6 +427,7 @@ function WebViewContent() {
                 s.client_order_no || "-", // 고객발주번호
                 s.customer_name,       // 바이어명
                 s.customer_manager || "-", // 바이어담당자
+                s.assigned_to || "-",  // 담당자
                 s.total_amount,        // 총 수주액
                 s.status === "REGISTERED" ? "수주등록" : "확인완료", // 상태
                 s.order_date || s.created_at, // 수주일시
@@ -1117,12 +1118,19 @@ function WebViewContent() {
                         }
 
                         const isNumericCol = ["수량", "단가", "금액", "총 수주액", "총 발주액", "총 견적액"].includes(headerName.replace(/\s+/g, ""));
+                        const isDateCol = ["등록일시", "수주일시", "마스터납기일", "품목납기일", "발주일시", "작성일", "입고일자", "입고완료일시"].includes(headerName);
+                        const isStatusCol = ["상태", "변동종류"].includes(headerName);
+                        const isCodeCol = ["고객발주번호", "품목코드", "유효품목코드", "견적번호", "명세서번호", "발주등록번호/발주번호", "바코드"].includes(headerName);
+                        const isPersonCol = ["바이어담당자", "담당자", "담당자명", "공급처", "바이어명", "수신바이어"].includes(headerName);
+
                         return (
                           <td key={headerName} className={`py-3 px-3.5 ${
                             isDarkMode ? "text-slate-355" : "text-slate-700"
                           } font-medium ${
                             isNumericCol 
                               ? "whitespace-nowrap font-mono text-right" 
+                              : (isDateCol || isStatusCol || isCodeCol || isPersonCol || isAttachedFile)
+                              ? "whitespace-nowrap"
                               : "whitespace-normal break-all max-w-[240px]"
                           }`}>
                             {headerName === "증빙조회" ? (
@@ -1140,21 +1148,21 @@ function WebViewContent() {
                                 return isDocOrImg ? (
                                   <button
                                     onClick={() => openFileInNewTab(proofPath)}
-                                    className="px-2.5 py-1 bg-indigo-500/10 text-indigo-650 hover:bg-indigo-500/20 rounded-lg text-[10px] font-black border border-indigo-500/20 transition-all inline-flex items-center gap-1 cursor-pointer"
+                                    className="px-2.5 py-1 bg-indigo-500/10 text-indigo-650 hover:bg-indigo-500/20 rounded-lg text-[10px] font-black border border-indigo-500/20 transition-all inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
                                     title="새 탭에서 원본 증빙 파일 보기"
                                   >
                                     📄 증빙 조회
                                   </button>
                                 ) : (proofPath.endsWith('.xlsx') || proofPath.endsWith('.xls') || proofPath.includes('excel')) ? (
                                   <span 
-                                    className="inline-flex items-center px-2 py-0.5 bg-emerald-500/10 text-emerald-650 rounded-lg text-[9px] font-extrabold border border-emerald-500/20"
+                                    className="inline-flex items-center px-2 py-0.5 bg-emerald-500/10 text-emerald-650 rounded-lg text-[9px] font-extrabold border border-emerald-500/20 whitespace-nowrap"
                                     title={`엑셀 파일 업로드 건: ${proofPath}`}
                                   >
                                     EXCEL
                                   </span>
                                 ) : (
                                   <span 
-                                    className="inline-flex items-center px-2 py-0.5 bg-slate-500/10 text-slate-500 rounded-lg text-[9px] font-extrabold border border-slate-500/15"
+                                    className="inline-flex items-center px-2 py-0.5 bg-slate-500/10 text-slate-500 rounded-lg text-[9px] font-extrabold border border-slate-500/15 whitespace-nowrap"
                                     title={`수동/일반 기록: ${proofPath}`}
                                   >
                                     일반
@@ -1171,7 +1179,7 @@ function WebViewContent() {
                                 return isExcel ? (
                                   <button
                                     onClick={() => openFileInNewTab(strVal)}
-                                    className="px-2.5 py-1 bg-emerald-500/10 text-emerald-650 hover:bg-emerald-500/20 rounded-lg text-[10px] font-black border border-emerald-500/20 transition-all inline-flex items-center gap-1 cursor-pointer"
+                                    className="px-2.5 py-1 bg-emerald-500/10 text-emerald-650 hover:bg-emerald-500/20 rounded-lg text-[10px] font-black border border-emerald-500/20 transition-all inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
                                     title="새 탭에서 엑셀 파일 열기"
                                   >
                                     🟢 EXCEL
@@ -1179,7 +1187,7 @@ function WebViewContent() {
                                 ) : (
                                   <button
                                     onClick={() => openFileInNewTab(strVal)}
-                                    className="px-2.5 py-1 bg-indigo-500/10 text-indigo-650 hover:bg-indigo-500/20 rounded-lg text-[10px] font-black border border-indigo-500/20 transition-all inline-flex items-center gap-1 cursor-pointer"
+                                    className="px-2.5 py-1 bg-indigo-500/10 text-indigo-650 hover:bg-indigo-500/20 rounded-lg text-[10px] font-black border border-indigo-500/20 transition-all inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
                                     title="새 탭에서 원본 파일 열기"
                                   >
                                     🔗 원본보기
@@ -1188,6 +1196,20 @@ function WebViewContent() {
                               })()
                             ) : strVal === "-" ? (
                               <span className={isDarkMode ? "text-slate-700" : "text-slate-400"}>-</span>
+                            ) : headerName === "담당자" ? (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/80 inline-flex items-center gap-0.5 shadow-3xs whitespace-nowrap">
+                                <span>👤 {strVal}</span>
+                              </span>
+                            ) : headerName === "상태" ? (
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black inline-flex items-center gap-0.5 shadow-3xs whitespace-nowrap ${
+                                strVal === "수주등록" || strVal === "발주등록"
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                  : strVal === "확인완료" || strVal === "입고완료"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : "bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}>
+                                {strVal}
+                              </span>
                             ) : headerName === "상세비고" ? (
                               <div className="flex flex-col gap-1 max-w-[220px]">
                                 <div className="truncate text-left text-[10px] text-slate-400 font-semibold" title={strVal}>
@@ -1207,16 +1229,16 @@ function WebViewContent() {
                                 const parts = strVal.split(" ");
                                 if (parts.length >= 2) {
                                   return (
-                                    <div className="flex flex-col text-left">
-                                      <span>{parts[0]}</span>
-                                      <span className="text-[10px] text-slate-400 mt-0.5">{parts.slice(1).join(" ")}</span>
+                                    <div className="flex flex-col text-left whitespace-nowrap">
+                                      <span className="font-bold">{parts[0]}</span>
+                                      <span className="text-[10px] text-slate-400 mt-0.5 font-mono">{parts.slice(1).join(" ")}</span>
                                     </div>
                                   );
                                 }
-                                return strVal;
+                                return <span className="whitespace-nowrap">{strVal}</span>;
                               })()
                             ) : (
-                              strVal
+                              <span className={isDateCol || isCodeCol || isPersonCol ? "whitespace-nowrap" : ""}>{strVal}</span>
                             )}
                           </td>
                         );
