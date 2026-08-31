@@ -634,15 +634,23 @@ export default function GovernanceDashboard() {
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
+  // 승인 대기 건(연차 신청, 취소 요청 등)은 휴가 시작일(due_date)이 있더라도 즉시 관제 대상(WAITING)으로 분류
+  const isScheduledEvent = (e: any) => {
+    if (e.type === 'LEAVE_APPROVAL_REQUEST' || e.type === 'TASK_CANCEL_REQUEST' || e.type === 'RAG_HOLD') {
+      return false;
+    }
+    return Boolean(e.due_date);
+  };
+
   const filteredFeed = combinedFeed.filter(item => {
     if (subTab === 'WAITING') {
       if (item.feedType !== 'EVENT') return false;
       if (item.data.status !== 'WAITING') return false;
-      if (item.data.due_date) return false;
+      if (isScheduledEvent(item.data)) return false;
     } else if (subTab === 'SCHEDULED') {
       if (item.feedType !== 'EVENT') return false;
       if (item.data.status !== 'WAITING') return false;
-      if (!item.data.due_date) return false;
+      if (!isScheduledEvent(item.data)) return false;
     } else if (subTab === 'RESOLVED') {
       if (item.feedType !== 'EVENT') return false;
       if (item.data.status !== 'RESOLVED') return false;
@@ -683,8 +691,8 @@ export default function GovernanceDashboard() {
   });
 
   const allFeedCount = combinedFeed.length;
-  const waitingCount = events.filter(e => e.status === 'WAITING' && !e.due_date).length;
-  const scheduledCount = events.filter(e => e.status === 'WAITING' && Boolean(e.due_date)).length;
+  const waitingCount = events.filter(e => e.status === 'WAITING' && !isScheduledEvent(e)).length;
+  const scheduledCount = events.filter(e => e.status === 'WAITING' && isScheduledEvent(e)).length;
   const resolvedCount = events.filter(e => e.status === 'RESOLVED').length;
   const auditLogsCount = auditLogs.length;
 
