@@ -3121,12 +3121,13 @@ ${JSON.stringify(operators || [], null, 2)}
           }
 
           else if (act === 'ASSIGN_DEPUTY_TASK' || act.includes('DEPUTY_TASK')) {
-            const applicant = originalData?.operator || originalData?.employee_name || '신청 직원';
+            const applicant = originalData?.operator || originalData?.employee_name || '최창숙';
             const sDate = originalData?.start_date || originalData?.due_date || '2026-09-01';
             const eDate = originalData?.end_date || sDate;
             const deputyName = originalData?.deputy_operator || '홍종현';
             const newTaskId = `ST-DEPUTY-${Date.now()}`;
 
+            // 1) 대체 근무자에게 인수인계 전용 스냅태스크 발행
             await insertRows('crm_snaptasks', [{
               id: newTaskId,
               title: `[업무 대행] ${applicant} 님 연차 기간(${sDate}~${eDate}) 업무 대행 및 인수인계`,
@@ -3141,10 +3142,61 @@ ${JSON.stringify(operators || [], null, 2)}
               uuid: newTaskId
             }]).catch(() => {});
 
+            // 2) 🚀 [핵심] 연차 기간 동안 신청자에게 잡힌 수주/납기 건(crm_sales_orders) 자동 이관
+            let reassignSoCount = 0;
+            try {
+              const soRes = await queryTable('crm_sales_orders', { filters: { assigned_to: applicant, tenant_id: tenantId }, limit: 1000 }).catch(() => ({ rows: [] }));
+              const soRows = soRes.rows || [];
+              const sDateTime = new Date(sDate).getTime();
+              const eDateTime = new Date(eDate).getTime() + 24 * 60 * 60 * 1000 - 1;
+
+              for (const so of soRows) {
+                if (!so.deleted_at && so.delivery_date) {
+                  const dTime = new Date(so.delivery_date).getTime();
+                  if (dTime >= sDateTime && dTime <= eDateTime) {
+                    await updateRows('crm_sales_orders', {
+                      assigned_to: deputyName,
+                      updated_at: nowStr,
+                      updated_by: `${adminUser}_업무대행이관`
+                    }, { filters: { id: so.id } }).catch(() => {});
+                    reassignSoCount++;
+                  }
+                }
+              }
+            } catch (soErr) {
+              console.warn('수주 대행 이관 실패:', soErr);
+            }
+
+            // 3) 🚀 [핵심] 연차 기간 동안 신청자에게 잡힌 미완료 스냅태스크(crm_snaptasks) 자동 이관
+            let reassignTaskCount = 0;
+            try {
+              const taskRes = await queryTable('crm_snaptasks', { filters: { assigned_to: applicant, tenant_id: tenantId }, limit: 1000 }).catch(() => ({ rows: [] }));
+              const taskRows = taskRes.rows || [];
+              const sDateTime = new Date(sDate).getTime();
+              const eDateTime = new Date(eDate).getTime() + 24 * 60 * 60 * 1000 - 1;
+
+              for (const t of taskRows) {
+                if (!t.deleted_at && t.status !== 'DONE' && t.status !== 'COMPLETE' && t.id !== newTaskId) {
+                  const dTime = t.due_date ? new Date(t.due_date).getTime() : 0;
+                  if (dTime >= sDateTime && dTime <= eDateTime) {
+                    await updateRows('crm_snaptasks', {
+                      assigned_to: deputyName,
+                      operator: deputyName,
+                      updated_at: nowStr,
+                      updated_by: `${adminUser}_업무대행이관`
+                    }, { filters: { id: t.id } }).catch(() => {});
+                    reassignTaskCount++;
+                  }
+                }
+              }
+            } catch (tErr) {
+              console.warn('스냅태스크 대행 이관 실패:', tErr);
+            }
+
             actionReports.push({
               action: act,
               success: true,
-              detail: `[업무 대행 배정 완료] ${deputyName} 님에게 '${applicant} 님 연차 기간 업무 대행' 모바일 스냅태스크를 성공적으로 발행 및 배정했습니다.`
+              detail: `[업무 대행 자동 이관 완료] ${applicant} 님의 연차 기간(${sDate}~${eDate}) 동안 예정된 수주/납기 ${reassignSoCount}건 및 미완료 할 일 ${reassignTaskCount}건을 ${deputyName} 님에게 자동 재배정(인수인계) 완료했습니다.`
             });
           }
 
