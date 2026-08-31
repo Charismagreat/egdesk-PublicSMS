@@ -401,15 +401,55 @@ export async function GET(request: Request) {
           });
         });
 
-        // 원본 로그와 매칭되지 않은 독립 취소 요청건만 별도 생성 (중복 2건 방지)
+        // 원본 로그와 매칭되지 않은 독립 취소 요청건만 별도 생성 (동일 doc_id 중복 방지)
+        const processedCancelDocIds = new Set<string>();
         cancelLogs.forEach((cl: any) => {
           if (matchedCancelLogIds.has(String(cl.id))) return;
+          const targetDocId = String(cl.doc_id || cl.id || '').trim();
+          if (targetDocId && processedCancelDocIds.has(targetDocId)) return;
+          if (targetDocId) processedCancelDocIds.add(targetDocId);
+
           const isLogResolved = cl.status === 'APPROVED' || cl.status === 'RESOLVED' || cl.status === 'DONE' || cl.status === 'COMPLETED';
           
           let rawClTitle = (cl.doc_title || '업무 취소 승인 요청').replace(/^AI 결재 보류:\s*/, '').trim();
           const clOp = (cl.operator && cl.operator !== '김직원' && cl.operator !== 'SUPER_ADMIN_DEV' && cl.operator !== 'system')
             ? cl.operator
             : (cl.created_by || '이주용');
+
+          // 💡 crm_snaptask_items 대장에서 취소 대상 태스크에 매칭되는 실물 첨부파일 결합
+          const attachments: Array<{ name: string; url: string; fileType: string }> = [];
+          let fileUrl = cl.file_url || cl.file_path || cl.attachment_url || '';
+          let matchedFilename = cl.matched_filename || cl.file_name || '';
+          let combinedAiAnalysisText = '';
+
+          const relatedItems = itemsRows.filter((item: any) => {
+            if (!item.file_url || item.file_url.trim() === '') return false;
+            const itemTaskId = String(item.task_id || '').trim();
+            const logId = String(cl.id || '').trim();
+            const logDocId = String(cl.doc_id || '').trim();
+
+            if (itemTaskId && (itemTaskId === logId || itemTaskId === logDocId)) return true;
+            const pureItemKey = itemTaskId.replace(/^(ST-|REQ-|mobile_req_|cancel_req_)/, '');
+            const pureLogKey = logId.replace(/^(ST-|REQ-|mobile_req_|cancel_req_)/, '');
+            const pureDocKey = logDocId.replace(/^(ST-|REQ-|mobile_req_|cancel_req_)/, '');
+            return Boolean(pureItemKey && (pureItemKey === pureLogKey || pureItemKey === pureDocKey));
+          });
+
+          relatedItems.forEach((item: any) => {
+            const fileName = item.content_text ? item.content_text.replace('[상신 첨부] ', '').trim() : `첨부서류_${item.id}`;
+            const downloadUrl = `/api/shared/files?tableName=crm_snaptask_items&rowId=${item.id}&columnName=file_url`;
+            if (item.content_text) combinedAiAnalysisText += ` ${item.content_text}`;
+            if (item.ai_analysis) combinedAiAnalysisText += ` ${typeof item.ai_analysis === 'string' ? item.ai_analysis : JSON.stringify(item.ai_analysis)}`;
+            attachments.push({
+              name: fileName,
+              url: downloadUrl,
+              fileType: item.file_type || 'DOCUMENT'
+            });
+            if (!fileUrl) {
+              fileUrl = downloadUrl;
+              matchedFilename = fileName;
+            }
+          });
 
           events.push({
             id: `cancel_req_${cl.id}`,
@@ -420,7 +460,16 @@ export async function GET(request: Request) {
             created_at: cl.created_at || nowStr,
             due_date: cl.due_date || null,
             resolved_at: cl.updated_at || cl.resolved_at || cl.created_at || nowStr,
-            data: { ...cl, operator: clOp, cancel_request_operator: clOp }
+            data: { 
+              ...cl, 
+              operator: clOp, 
+              cancel_request_operator: clOp,
+              has_cancel_request: true,
+              attachments,
+              file_url: fileUrl,
+              matched_filename: matchedFilename,
+              combined_ai_analysis_text: combinedAiAnalysisText
+            }
           });
         });
       } catch (e) {

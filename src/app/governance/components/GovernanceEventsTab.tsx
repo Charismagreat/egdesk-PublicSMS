@@ -222,6 +222,12 @@ export default function GovernanceEventsTab({
           {filteredFeed.map((item) => {
             if (item.feedType === 'EVENT') {
               const evt = item.data;
+              const isCancelEvent = 
+                evt.type === 'TASK_CANCEL_REQUEST' || 
+                evt.data?.has_cancel_request === true ||
+                evt.data?.doc_type === 'TASK_CANCEL_REQUEST' ||
+                (evt.subtitle && evt.subtitle.includes('취소 요청'));
+
               return (
                 <div
                   key={item.id}
@@ -229,7 +235,7 @@ export default function GovernanceEventsTab({
                   className={`bg-white border transition-all rounded-3xl p-4 md:p-5 shadow-2xs hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 text-left group cursor-pointer active:scale-[0.995] ${
                     evt.status === 'RESOLVED' 
                       ? 'border-slate-200/60 bg-slate-50/40 opacity-75' 
-                      : evt.type === 'TASK_CANCEL_REQUEST'
+                      : isCancelEvent
                         ? 'border-rose-300/80 bg-rose-50/20 hover:border-rose-400'
                         : 'border-slate-200/90 hover:border-slate-300'
                   }`}
@@ -239,16 +245,17 @@ export default function GovernanceEventsTab({
                     <div className={`p-2.5 rounded-2xl shrink-0 ${
                       evt.type === 'STORE_ORDER' 
                         ? 'bg-blue-50 text-blue-600' 
-                        : evt.type === 'RAG_HOLD' 
-                          ? 'bg-rose-50 text-rose-600' 
-                          : evt.type === 'TASK_CANCEL_REQUEST'
-                            ? 'bg-rose-100 text-rose-700'
+                        : isCancelEvent
+                          ? 'bg-rose-100 text-rose-700'
+                          : evt.type === 'RAG_HOLD' 
+                            ? 'bg-rose-50 text-rose-600' 
                             : 'bg-amber-50 text-amber-600'
                     }`}>
                       {evt.type === 'STORE_ORDER' && <ShoppingBag className="w-5.5 h-5.5" />}
-                      {evt.type === 'RAG_HOLD' && <ShieldAlert className="w-5.5 h-5.5" />}
-                      {evt.type === 'TASK_CANCEL_REQUEST' && <Trash2 className="w-5.5 h-5.5" />}
-                      {evt.type === 'LOW_STOCK' && <AlertTriangle className="w-5.5 h-5.5" />}
+                      {isCancelEvent && <Trash2 className="w-5.5 h-5.5" />}
+                      {!isCancelEvent && evt.type === 'RAG_HOLD' && <ShieldAlert className="w-5.5 h-5.5" />}
+                      {!isCancelEvent && evt.type === 'LOW_STOCK' && <AlertTriangle className="w-5.5 h-5.5" />}
+                      {!isCancelEvent && evt.type === 'LEAVE_APPROVAL_REQUEST' && <Calendar className="w-5.5 h-5.5" />}
                     </div>
                     <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3.5 min-w-0 text-left">
                       <div className="flex items-center flex-wrap gap-2 shrink-0">
@@ -263,18 +270,22 @@ export default function GovernanceEventsTab({
                             )}
                           </span>
                         )}
-                        {evt.type !== 'RAG_HOLD' && !evt.data?.doc_type?.includes('folder_file_task') && (
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
-                            evt.type === 'STORE_ORDER' 
-                              ? 'bg-blue-50 text-blue-700' 
-                              : evt.type === 'TASK_CANCEL_REQUEST'
-                                ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                        {isCancelEvent ? (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                            🚨 취소 요청됨
+                          </span>
+                        ) : (
+                          evt.type !== 'RAG_HOLD' && !evt.data?.doc_type?.includes('folder_file_task') && (
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                              evt.type === 'STORE_ORDER' 
+                                ? 'bg-blue-50 text-blue-700' 
                                 : evt.type === 'LEAVE_APPROVAL_REQUEST'
                                   ? 'bg-purple-50 text-purple-700'
                                   : 'bg-amber-50 text-amber-700'
-                          }`}>
-                            {evt.type === 'STORE_ORDER' ? '스토어 주문' : evt.type === 'TASK_CANCEL_REQUEST' ? '🚨 취소 요청됨' : evt.type === 'LEAVE_APPROVAL_REQUEST' ? '휴가/연차 결재' : '재고 부족 경보'}
-                          </span>
+                            }`}>
+                              {evt.type === 'STORE_ORDER' ? '스토어 주문' : evt.type === 'LEAVE_APPROVAL_REQUEST' ? '휴가/연차 결재' : '재고 부족 경보'}
+                            </span>
+                          )
                         )}
                       </div>
                       <span className="hidden md:inline text-slate-300 font-light">|</span>
