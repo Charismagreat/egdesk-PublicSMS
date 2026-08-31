@@ -357,7 +357,7 @@ export default function MobileHubPage() {
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           filteredTasks={filteredTasks}
-          allTasks={tasks}
+          allTasks={myTasks}
           activeTaskCount={activeTasks.length}
           completedTaskCount={completedTasks.length}
           taskFolderCount={folders.taskFolders.length}
