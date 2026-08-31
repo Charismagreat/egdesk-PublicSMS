@@ -9,6 +9,19 @@ import { checkRagApproval } from '../../../lib/rag-approval';
 import { getTenantSetting } from '@/lib/tenant';
 import { recordOcrCorrection } from '@/lib/ocr-fewshot-service';
 
+// 현재 세션의 테넌트 ID 추출 헬퍼
+async function resolveTenantId(): Promise<string> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('auth_token')?.value;
+  if (!token) return 'tenant-wontrading';
+  try {
+    const payload = decodeJwt(token);
+    return (payload.tenant_id as string) || 'tenant-wontrading';
+  } catch {
+    return 'tenant-wontrading';
+  }
+}
+
 // 최고 관리자(SUPER_ADMIN) 권한 검증 헬퍼
 async function verifySuperAdmin() {
   const cookieStore = await cookies();
@@ -253,6 +266,18 @@ export async function GET(req: Request) {
         console.error('Failed to load pending governance logs:', govErr);
       }
 
+      // 🛡️ 테넌트 ID 누락 레코드 자동 백필 복구 (Self-healing Guard)
+      try {
+        await updateRows('crm_estimates', { tenant_id: tenantId }, { filters: { tenant_id: null } });
+        await updateRows('crm_estimates', { tenant_id: tenantId }, { filters: { tenant_id: '' } });
+        await updateRows('crm_estimates', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
+        await updateRows('crm_estimate_items', { tenant_id: tenantId }, { filters: { tenant_id: null } });
+        await updateRows('crm_estimate_items', { tenant_id: tenantId }, { filters: { tenant_id: '' } });
+        await updateRows('crm_estimate_items', { tenant_id: tenantId }, { filters: { tenant_id: 'default' } });
+      } catch (backfillErr: any) {
+        console.warn('Tenant backfill warning:', backfillErr?.message);
+      }
+
       // 1. 견적서 마스터 목록 조회 (deleted_at IS NULL은 queryTable 내부에서 자체 처리됨)
       const estRes = await queryTable('crm_estimates', {
         filters: { tenant_id: tenantId },
@@ -441,6 +466,7 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
   try {
+    const tenantId = await resolveTenantId();
     const body = await req.json();
     const { 
       type = 'INBOUND',           // INBOUND(받은 것/모바일요청), OUTBOUND(보낼 것)
@@ -601,6 +627,7 @@ export async function POST(req: Request) {
       ai_parsed,
       tags: finalTags,
       uuid,
+      tenant_id: tenantId || 'default',
       created_at: nowStr
     }]);
 
@@ -620,7 +647,8 @@ export async function POST(req: Request) {
       unit_price: row.unit_price,
       amount: row.amount,
       delivery_date: row.delivery_date,
-      spec: row.spec
+      spec: row.spec,
+      tenant_id: tenantId || 'default'
     }));
 
     await insertRows('crm_estimate_items', detailRows);
