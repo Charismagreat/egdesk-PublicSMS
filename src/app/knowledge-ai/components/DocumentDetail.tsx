@@ -1,5 +1,5 @@
-import React from "react";
-import { Cpu, GitBranch, CheckCircle2, X, HelpCircle } from "lucide-react";
+import React, { useState } from "react";
+import { Cpu, GitBranch, CheckCircle2, X, HelpCircle, FileEdit, Sparkles, Shield, Save, Layers, Eye, Code, Maximize2 } from "lucide-react";
 import { KnowledgeDocument } from "../types";
 import { CadViewer } from "./CadViewer";
 import { AudioPlayer } from "./AudioPlayer";
@@ -265,108 +265,33 @@ export function DocumentDetail({
         )}
       </div>
 
-      {/* 문서 상세 마크다운 텍스트 본문 또는 편집 에디터 */}
-      <div className="flex-1 flex flex-col min-h-[240px] max-h-[360px] bg-slate-50 border border-slate-200 rounded-xl p-4 overflow-y-auto scrollbar-thin relative text-slate-700">
-        {isEditing ? (
-          <div className="flex-1 flex flex-col gap-2.5 h-full min-h-[200px]">
-            <textarea
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              className="flex-1 w-full bg-white border border-slate-200 rounded-lg p-3 text-xs focus:outline-none focus:border-blue-500 font-mono resize-none leading-relaxed text-slate-800"
-              placeholder="수정할 마크다운 지식 내용을 입력해 주세요."
-            />
-            <div className="flex justify-end gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsEditing(false)}
-                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-750 text-[10px] font-black rounded-lg border-none cursor-pointer transition-colors"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => handleUpdateDocument(selectedDoc.document_id, editContent, editMetadata, editSecurityLevel)}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black rounded-lg border-none cursor-pointer transition-colors"
-              >
-                저장 및 RAG 배포
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="whitespace-pre-wrap text-xs font-mono leading-relaxed">{selectedDoc.content}</div>
-          </>
-        )}
+      {/* 문서 상세 마크다운 텍스트 본문 (읽기 전용 뷰어) */}
+      <div className="flex-1 flex flex-col min-h-[240px] max-h-[420px] bg-slate-50 border border-slate-200 rounded-xl p-4 overflow-y-auto scrollbar-thin relative text-slate-700">
+        <div className="whitespace-pre-wrap text-xs font-mono leading-relaxed">{selectedDoc.content}</div>
 
-        {/* JSON 메타데이터 렌더링 및 편집 */}
+        {/* JSON 메타데이터 렌더링 */}
         {selectedDoc.metadata && (
           <div className="border-t border-slate-200 pt-3 mt-4 space-y-2">
             <span className="text-blue-600 font-bold flex items-center gap-1 font-sans">
               <Cpu className="w-3.5 h-3.5 text-blue-500" />
-              {isEditing ? "🔧 AI 추출 정형 메타데이터 편집" : "⚙️ AI 추출 정형 메타데이터"}
+              ⚙️ AI 추출 정형 메타데이터
             </span>
             <div className="bg-white p-3 rounded-lg border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-              {isEditing ? (
-                Object.entries(editMetadata).map(([k, v]: any) => {
-                  if (typeof v === "object") return null;
+              {Object.entries(selectedDoc.metadata).map(([k, v]: any) => {
+                if (typeof v === "object") return null;
 
-                  // 메타데이터 키 한글 매핑
-                  let labelName = k;
-                  if (k === "doc_type") labelName = "자산종류";
-                  else if (k === "file_name") labelName = "파일명";
-                  else if (k === "file_size") labelName = "파일크기";
+                let labelName = k;
+                if (k === "doc_type") labelName = "자산종류";
+                else if (k === "file_name") labelName = "파일명";
+                else if (k === "file_size") labelName = "파일크기";
 
-                  return (
-                    <div key={k} className="flex items-center justify-between border-b border-slate-100 pb-1.5 gap-2">
-                      <span className="text-slate-400 font-semibold shrink-0">{labelName}:</span>
-                      {k === "doc_type" ? (
-                        <select
-                          value={String(v)}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setEditMetadata((prev) => ({ ...prev, [k]: val }));
-                          }}
-                          className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-sans w-full font-bold text-right cursor-pointer"
-                        >
-                          {assetTypes.map((type) => (
-                            <option key={type.id} value={type.type_name}>
-                              {type.type_name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : k === "file_size" ? (
-                        <span className="text-slate-700 font-bold py-0.5">{String(v)}</span>
-                      ) : (
-                        <input
-                          type="text"
-                          value={String(v)}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setEditMetadata((prev) => ({ ...prev, [k]: val }));
-                          }}
-                          className="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-mono w-full font-bold text-right"
-                        />
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                Object.entries(selectedDoc.metadata).map(([k, v]: any) => {
-                  if (typeof v === "object") return null;
-
-                  let labelName = k;
-                  if (k === "doc_type") labelName = "자산종류";
-                  else if (k === "file_name") labelName = "파일명";
-                  else if (k === "file_size") labelName = "파일크기";
-
-                  return (
-                    <div key={k} className="flex justify-between border-b border-slate-100 pb-1">
-                      <span className="text-slate-400 font-semibold">{labelName}:</span>
-                      <span className="text-slate-700 font-bold">{String(v)}</span>
-                    </div>
-                  );
-                })
-              )}
+                return (
+                  <div key={k} className="flex justify-between border-b border-slate-100 pb-1">
+                    <span className="text-slate-400 font-semibold">{labelName}:</span>
+                    <span className="text-slate-700 font-bold">{String(v)}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -450,6 +375,216 @@ export function DocumentDetail({
           </div>
         )}
       </div>
+
+      {/* 🚀 [대형 팝업 모달] 사내 지식 마크다운 정밀 수정 및 RAG 배포 모달 */}
+      {isEditing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-6xl h-[92vh] max-h-[900px] bg-white rounded-3xl shadow-2xl border border-slate-200/90 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* 모달 상단 헤더 */}
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/90 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md">
+                  <FileEdit className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-800 tracking-tight">
+                      사내 지식 마크다운 정밀 수정 & RAG 즉시 반영
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-black border border-blue-200">
+                      ID: {selectedDoc.document_id}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    문서명: <span className="font-bold text-slate-800">{selectedDoc.title}</span> · 기안자: {selectedDoc.creator_id} ({selectedDoc.dept_code})
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="p-2 hover:bg-slate-200/80 rounded-xl text-slate-400 hover:text-slate-700 transition-colors border-none bg-transparent cursor-pointer"
+                  title="닫기 (ESC)"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* 모달 바디: 좌우 2열 분할 와이드 작업 공간 */}
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100/60 divide-y md:divide-y-0 md:divide-x divide-slate-200">
+              {/* 좌측 메인: 대형 마크다운 에디터 (62% 너비) */}
+              <div className="flex-1 md:w-[62%] flex flex-col bg-white p-5 overflow-hidden">
+                <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-slate-800 flex items-center gap-1.5 text-sm">
+                      <Code className="w-4 h-4 text-blue-600" />
+                      마크다운(Markdown) 원문 에디터
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      ({editContent.length.toLocaleString()} 글자 · {editContent.split('\n').length}줄)
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-medium">
+                    💡 단락, 머리글(#), 표(|), 리스트(-), 강조(**) 문법 지원
+                  </div>
+                </div>
+
+                <div className="flex-1 relative rounded-2xl border border-slate-200/90 overflow-hidden shadow-inner focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all bg-slate-900">
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full h-full p-4.5 bg-slate-900 text-slate-100 text-sm font-mono leading-relaxed resize-none focus:outline-none scrollbar-thin selection:bg-blue-600 selection:text-white"
+                    placeholder="# 사내 지식 마크다운 내용을 상세히 입력하세요..."
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+
+              {/* 우측 서브: 보안등급 설정 & 정형 메타데이터 & 실시간 미리보기 (38% 너비) */}
+              <div className="md:w-[38%] flex flex-col bg-slate-50/80 p-5 overflow-y-auto scrollbar-thin space-y-4">
+                {/* 1. 보안 등급 및 사내 배포 통제 */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <Shield className="w-4 h-4 text-indigo-600" />
+                      보안 등급 및 사내 열람 권한
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                      editSecurityLevel === 'A' ? 'bg-rose-50 text-rose-600 border-rose-200' :
+                      editSecurityLevel === 'B' ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                      'bg-emerald-50 text-emerald-600 border-emerald-200'
+                    }`}>
+                      현재: {editSecurityLevel}등급 ({editSecurityLevel === 'A' ? '극비 격리' : editSecurityLevel === 'B' ? '부서 한정' : '사내 전체 공개'})
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    {(['A', 'B', 'C'] as const).map((lvl) => (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() => setEditSecurityLevel(lvl)}
+                        className={`p-2.5 rounded-xl border text-center font-bold transition-all cursor-pointer ${
+                          editSecurityLevel === lvl
+                            ? lvl === 'A'
+                              ? 'bg-rose-50 border-rose-400 text-rose-700 ring-2 ring-rose-200 shadow-sm'
+                              : lvl === 'B'
+                              ? 'bg-amber-50 border-amber-400 text-amber-700 ring-2 ring-amber-200 shadow-sm'
+                              : 'bg-emerald-50 border-emerald-400 text-emerald-700 ring-2 ring-emerald-200 shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="text-sm font-black">{lvl}등급</div>
+                        <div className="text-[10px] font-normal opacity-80 mt-0.5">
+                          {lvl === 'A' ? '극비 격리' : lvl === 'B' ? '부서 한정' : '사내 전체 공개'}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. AI 정형 메타데이터 편집 */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <Cpu className="w-4 h-4 text-blue-600" />
+                      AI 추출 정형 메타데이터 설정
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">JSON 속성 맵핑</span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    {Object.entries(editMetadata).map(([k, v]: any) => {
+                      if (typeof v === "object") return null;
+
+                      let labelName = k;
+                      if (k === "doc_type") labelName = "자산종류";
+                      else if (k === "file_name") labelName = "파일명";
+                      else if (k === "file_size") labelName = "파일크기";
+                      else if (k === "company") labelName = "고객사/회사명";
+                      else if (k === "category") labelName = "카테고리";
+
+                      return (
+                        <div key={k} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-slate-50 border border-slate-150">
+                          <span className="text-[11px] text-slate-500 font-bold shrink-0 min-w-[70px]">{labelName}</span>
+                          {k === "doc_type" ? (
+                            <select
+                              value={String(v)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditMetadata((prev) => ({ ...prev, [k]: val }));
+                              }}
+                              className="bg-white border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-800 font-bold focus:outline-none focus:border-blue-500 w-full"
+                            >
+                              {assetTypes.map((type) => (
+                                <option key={type.id} value={type.type_name}>
+                                  {type.type_name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : k === "file_size" ? (
+                            <span className="text-slate-700 font-mono font-bold text-[11px] px-2">{String(v)}</span>
+                          ) : (
+                            <input
+                              type="text"
+                              value={String(v)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditMetadata((prev) => ({ ...prev, [k]: val }));
+                              }}
+                              className="bg-white border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-800 font-medium focus:outline-none focus:border-blue-500 w-full"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. 마크다운 실시간 미리보기 */}
+                <div className="flex-1 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col min-h-[200px]">
+                  <span className="text-xs font-black text-slate-800 flex items-center gap-1.5 mb-2">
+                    <Eye className="w-4 h-4 text-emerald-600" />
+                    실시간 본문 렌더링 미리보기
+                  </span>
+                  <div className="flex-1 bg-slate-50 rounded-xl p-3.5 border border-slate-150 overflow-y-auto scrollbar-thin text-xs text-slate-700 font-mono whitespace-pre-wrap leading-relaxed">
+                    {editContent || <span className="text-slate-400 italic">내용을 입력하시면 실시간 미리보기가 렌더링됩니다.</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 모달 하단 푸터 액션 바 */}
+            <div className="px-6 py-4 border-t border-slate-200 bg-white flex items-center justify-between shrink-0 shadow-lg">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Sparkles className="w-4 h-4 text-blue-600 animate-pulse" />
+                <span>저장 완료 시 <strong>전사 지식 RAG 및 AI 컨트롤타워 관제 규정</strong>에 즉시 자동 색인됩니다.</span>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-all cursor-pointer"
+                >
+                  취소 및 닫기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateDocument(selectedDoc.document_id, editContent, editMetadata, editSecurityLevel)}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white text-xs font-black rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer border-none"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>수정 내용 저장 및 RAG 배포 🚀</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
