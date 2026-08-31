@@ -135,6 +135,14 @@ export async function GET(req: Request) {
         console.error('파트너 목록 조회 실패:', pe);
       }
 
+      let salesOrdersRows: any[] = [];
+      try {
+        const soRes = await queryTable('crm_sales_orders', { limit: 10000 });
+        salesOrdersRows = (soRes.rows || []).filter((r: any) => !r.deleted_at);
+      } catch (se) {
+        console.error('수주 목록 조회 실패:', se);
+      }
+
       let itemsRows: any[] = [];
       try {
         const itemsRes = await queryTable('crm_snaptask_items', { limit: 10000, orderBy: 'id', orderDirection: 'DESC' });
@@ -147,6 +155,22 @@ export async function GET(req: Request) {
       tasks = snaptasksRows
         .map((t: any) => {
           const matchedPartner = partnersRows.find(p => String(p.id) === String(t.partner_id));
+
+          // 💡 [수주납기 관리] 태스크인 경우, 수주 대장(crm_sales_orders)의 최신 담당자 실시간 조인
+          let resolvedAssignee = t.assigned_to || t.assignee_name || t.created_by || null;
+          if (t.title && t.title.includes('[수주납기 관리]')) {
+            const matchedSo = salesOrdersRows.find((so: any) => {
+              const cust = (so.customer_name || so.partner_name || '').trim();
+              const dDate = (so.delivery_date || '').trim();
+              const isCustMatch = cust && t.title.includes(cust);
+              const isDateMatch = dDate && t.title.includes(dDate);
+              const isNoMatch = so.client_order_no && t.description?.includes(so.client_order_no);
+              return (isCustMatch && isDateMatch) || isNoMatch || isCustMatch;
+            });
+            if (matchedSo && matchedSo.assigned_to) {
+              resolvedAssignee = matchedSo.assigned_to;
+            }
+          }
           
           // 해당 스냅태스크의 실물 첨부 파일들 추출
           const taskItems = itemsRows.filter(it => 
@@ -185,8 +209,8 @@ export async function GET(req: Request) {
           return {
             ...t,
             title: displayTitle,
-            assigned_to: t.assigned_to || t.assignee_name || t.created_by || null,
-            assignee_name: t.assigned_to || t.assignee_name || t.created_by || null,
+            assigned_to: resolvedAssignee,
+            assignee_name: resolvedAssignee,
             partner_company_name: matchedPartner ? matchedPartner.company_name : null,
             attachments: attachments
           };
