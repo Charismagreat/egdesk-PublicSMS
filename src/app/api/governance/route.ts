@@ -2897,6 +2897,105 @@ ${JSON.stringify(operators || [], null, 2)}
             });
           }
 
+          else if (act === 'approve_leave' || act === 'APPROVE_LEAVE') {
+            const leaveId = originalData?.doc_id || originalData?.id || '';
+            const leaveTenant = originalData?.tenant_id || tenantId;
+
+            const leaveRes = await queryTable('crm_annual_leaves', { filters: { id: leaveId, tenant_id: leaveTenant } }).catch(() => ({ rows: [] }));
+            const leaveDoc = leaveRes.rows && leaveRes.rows.length > 0 ? leaveRes.rows[0] : null;
+
+            if (leaveDoc) {
+              // 1) 잔여 연차 차감
+              const empBalanceRes = await queryTable('crm_operator_leave_balances', { filters: { operator_id: leaveDoc.operator_id, tenant_id: leaveTenant } }).catch(() => ({ rows: [] }));
+              const empBal = empBalanceRes.rows && empBalanceRes.rows.length > 0 ? empBalanceRes.rows[0] : null;
+              if (empBal) {
+                const updatedUsed = empBal.used + (Number(leaveDoc.days_spent) || 1);
+                const updatedRemaining = Math.max(0, empBal.total_allowed - updatedUsed);
+                await updateRows('crm_operator_leave_balances', {
+                  used: updatedUsed,
+                  remaining: updatedRemaining,
+                  updated_at: nowStr
+                }, { filters: { operator_id: leaveDoc.operator_id, tenant_id: leaveTenant } }).catch(() => {});
+              }
+
+              // 2) 근태 대장 캘린더 자동 등록
+              const sDate = new Date(leaveDoc.start_date);
+              const eDate = new Date(leaveDoc.end_date || leaveDoc.start_date);
+              const attendanceRows: any[] = [];
+              for (let d = new Date(sDate); d <= eDate; d.setDate(d.getDate() + 1)) {
+                const dateStr = d.toISOString().substring(0, 10);
+                const leaveTypeName = leaveDoc.leave_type === 'ANNUAL' ? '연차' : leaveDoc.leave_type === 'HALF_AM' ? '오전반차' : '오후반차';
+                attendanceRows.push({
+                  id: `att-leave-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  operator_id: leaveDoc.operator_id,
+                  work_date: dateStr,
+                  status: 'LEAVE',
+                  leave_type: leaveTypeName,
+                  note: `[관제 승인] ${leaveDoc.reason || '사규 연동 휴가'}`,
+                  tenant_id: leaveTenant,
+                  created_at: nowStr
+                });
+              }
+              if (attendanceRows.length > 0) {
+                await insertRows('crm_attendance', attendanceRows).catch(() => {});
+              }
+
+              // 3) 연차 신청서 상태 승인 완료로 업데이트
+              await updateRows('crm_annual_leaves', {
+                status: 'APPROVED',
+                approver_id: adminUser,
+                updated_at: nowStr
+              }, { filters: { id: leaveId, tenant_id: leaveTenant } }).catch(() => {});
+            }
+
+            // 4) 거버넌스 로그 완료 갱신
+            if (eventId) {
+              const logRawId = eventId.replace(/^event_/, '').replace(/^leave_gov_/, '').replace(/^rag_hold_/, '');
+              await updateRows('crm_governance_logs', {
+                status: 'APPROVED',
+                reason: `최고관리자(${adminUser})에 의해 사내 근태 거버넌스 규정에 의거 연차 신청 최종 승인 및 캘린더 등록 완료.`,
+                updated_at: nowStr,
+                updated_by: adminUser,
+                resolved_at: nowStr
+              }, { filters: { id: logRawId } }).catch(() => {});
+            }
+
+            actionReports.push({
+              action: act,
+              success: true,
+              detail: `[근태 승인 완료] 연차 신청(ID: ${leaveId})을 승인하고 전사 근태 캘린더 및 잔여 연차를 자동 동기화했습니다.`
+            });
+          }
+
+          else if (act === 'reject_leave' || act === 'REJECT_LEAVE') {
+            const leaveId = originalData?.doc_id || originalData?.id || '';
+            const leaveTenant = originalData?.tenant_id || tenantId;
+
+            await updateRows('crm_annual_leaves', {
+              status: 'REJECTED',
+              reject_reason: `최고관리자(${adminUser}) 관제 반려`,
+              approver_id: adminUser,
+              updated_at: nowStr
+            }, { filters: { id: leaveId, tenant_id: leaveTenant } }).catch(() => {});
+
+            if (eventId) {
+              const logRawId = eventId.replace(/^event_/, '').replace(/^leave_gov_/, '').replace(/^rag_hold_/, '');
+              await updateRows('crm_governance_logs', {
+                status: 'REJECTED',
+                reason: `최고관리자(${adminUser})에 의해 연차 신청 기각 및 반려됨.`,
+                updated_at: nowStr,
+                updated_by: adminUser,
+                resolved_at: nowStr
+              }, { filters: { id: logRawId } }).catch(() => {});
+            }
+
+            actionReports.push({
+              action: act,
+              success: true,
+              detail: `[근태 신청 반려] 연차 신청(ID: ${leaveId})을 기각 및 반려 처리했습니다.`
+            });
+          }
+
           // 💡 1. [이메일 발송 실행]
           else if (act.includes('SEND_EMAIL') || act.includes('EMAIL')) {
             const emailPayload = (body.customActionPayloads && body.customActionPayloads[act]) || originalData;

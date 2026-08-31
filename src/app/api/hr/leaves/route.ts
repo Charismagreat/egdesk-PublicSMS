@@ -194,10 +194,82 @@ export async function POST(req: Request) {
 
       await insertRows('crm_annual_leaves', [newLeave]);
 
+      // =========================================================================
+      // 🤖 [AI 사내 규정 자율 관제 엔진]: 근태 거버넌스 규정 제3조 대조 및 관제 피드 상신
+      // =========================================================================
+      const applicantName = (sessionUser.name as string) || (sessionUser.username as string) || '임직원';
+      const governanceReasons: string[] = [];
+      const conflictingTasks: string[] = [];
+
+      // 1) 규정 1호: 2일 이상 연속 장기 연차
+      if (Number(days_spent) >= 2) {
+        governanceReasons.push(`사규 제3조 1호(2일 이상 장기 휴가 ${days_spent}일 신청)`);
+      }
+
+      // 2) 규정 2호: 주요 업무 및 납기일 충돌 점검
+      try {
+        const myTasksRes = await queryTable('crm_snaptasks', { filters: { tenant_id: tenantId } }).catch(() => ({ rows: [] }));
+        const activeTasks = (myTasksRes.rows || []).filter((t: any) => {
+          const isMine = t.operator === applicantName || t.assigned_to === applicantName || t.created_by === applicantName;
+          const isUnfinished = t.status !== 'DONE' && t.status !== 'COMPLETE' && !t.deleted_at;
+          if (!isMine || !isUnfinished || !t.due_date) return false;
+          const due = String(t.due_date).substring(0, 10);
+          return due >= start_date && due <= end_date;
+        });
+
+        if (activeTasks.length > 0) {
+          activeTasks.forEach((t: any) => {
+            conflictingTasks.push(`태스크 [${t.title}] (마감: ${t.due_date})`);
+          });
+          governanceReasons.push(`사규 제3조 2호(휴가 기간 내 담당 업무 마감일 충돌: ${activeTasks.length}건)`);
+        }
+      } catch (checkErr) {
+        console.error('[Leave Governance] Task conflict check error:', checkErr);
+      }
+
+      // 3) 관제 대상 상신 트리거 조건 충족 시 컨트롤타워 관제 원장(crm_governance_logs)에 자동 상신
+      let isGovEscalated = false;
+      if (governanceReasons.length > 0) {
+        isGovEscalated = true;
+        const govLogId = `leave_gov_${Date.now()}`;
+        const leaveTypeName = leave_type === 'ANNUAL' ? '전일 연차' : leave_type === 'HALF_AM' ? '오전 반차' : '오후 반차';
+        
+        let aiRiskNote = `📚 [근거 규정]: 사내 근태 관리 및 AI 컨트롤타워 관제 연동 규정 제3조\n`;
+        aiRiskNote += `📌 [관제 상신 사유]: ${governanceReasons.join(' / ')}\n`;
+        aiRiskNote += `🗓️ [신청 일정]: ${start_date} ~ ${end_date} (총 ${days_spent}일, 사유: ${reason || '미기재'})\n`;
+        if (conflictingTasks.length > 0) {
+          aiRiskNote += `⚠️ [업무 충돌 주의]:\n - ${conflictingTasks.join('\n - ')}\n💡 [AI 추천 조치]: 대체 근무자 지정 여부 확인 후 승인 또는 일정 조율`;
+        } else {
+          aiRiskNote += `💡 [AI 추천 조치]: 2일 이상 휴가 신청 건으로 부서 내 업무 일정 확인 후 승인`;
+        }
+
+        await insertRows('crm_governance_logs', [{
+          id: govLogId,
+          doc_type: 'LEAVE_APPROVAL_REQUEST',
+          doc_id: newLeaveId,
+          doc_title: `[근태 상신] ${applicantName} ${leaveTypeName} (${days_spent}일)`,
+          status: 'PENDING_APPROVAL',
+          reason: governanceReasons.join(' / '),
+          operator: applicantName,
+          due_date: start_date,
+          tenant_id: tenantId,
+          uuid: govLogId,
+          updated_at: now.toISOString(),
+          updated_by: applicantName,
+          created_at: now.toISOString().replace('T', ' ').substring(0, 19),
+          matched_filename: attachmentNames[0] || '근태_사내규정_연동',
+          file_url: uploadedFileUrls[0] || '',
+          note: aiRiskNote
+        }]).catch(e => console.error('[Leave Governance] Failed to insert governance log:', e));
+      }
+
       return NextResponse.json({
         success: true,
-        message: '연차 휴가 신청서가 성공적으로 접수되었습니다. 결재 대기 중입니다 📝',
-        leave: newLeave
+        message: isGovEscalated
+          ? '사내 근태 거버넌스 규정(2일 이상/업무 충돌)에 따라 AI 컨트롤타워 관제 피드로 자동 상신되었습니다. 최고관리자 검토 후 최종 반영됩니다 🛡️'
+          : '연차 휴가 신청서가 성공적으로 접수되었습니다. 일반 결재 대기 중입니다 📝',
+        leave: newLeave,
+        is_governance_escalated: isGovEscalated
       });
     }
 
