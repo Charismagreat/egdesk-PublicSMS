@@ -185,6 +185,8 @@ export async function GET(req: Request) {
           return {
             ...t,
             title: displayTitle,
+            assigned_to: t.assigned_to || t.assignee_name || t.created_by || null,
+            assignee_name: t.assigned_to || t.assignee_name || t.created_by || null,
             partner_company_name: matchedPartner ? matchedPartner.company_name : null,
             attachments: attachments
           };

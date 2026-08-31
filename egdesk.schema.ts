@@ -376,7 +376,12 @@ export const COLUMN_DEFINITIONS = {
   crm_snaptasks: [
     { name: 'id', type: 'TEXT', notNull: true },
     { name: 'title', type: 'TEXT', notNull: true },
+    { name: 'description', type: 'TEXT' },
     { name: 'status', type: 'TEXT', defaultValue: 'ACTIVE' },
+    { name: 'assigned_to', type: 'TEXT' },
+    { name: 'assignee_name', type: 'TEXT' },
+    { name: 'due_date', type: 'TEXT' },
+    { name: 'created_by', type: 'TEXT' },
     { name: 'partner_id', type: 'TEXT' },
     { name: 'created_at', type: 'TEXT', notNull: true },
     { name: 'updated_at', type: 'TEXT', notNull: true },

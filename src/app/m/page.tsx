@@ -244,9 +244,39 @@ export default function MobileHubPage() {
     }
   };
 
-  // 15. 필터링된 할 일 및 완료 목록
-  const activeTasks = tasks.filter((t) => t.status === "ACTIVE" || t.status === "IN_PROGRESS" || t.status === "PENDING_APPROVAL");
-  const completedTasks = tasks.filter((t) => t.status === "DONE" || t.status === "RESOLVED" || t.status === "CANCELLED");
+  // 15. 필터링된 할 일 및 완료 목록 (본인 담당 업무 및 상신 건 1:1 엄격 매칭)
+  const myName = (session as any)?.name;
+  const myUsername = (session as any)?.username;
+  const isSuperAdmin = (session as any)?.role === 'SUPER_ADMIN';
+
+  const myTasks = tasks.filter((t) => {
+    // 최고관리자 테스트 지원: 이름/아이디가 미정이면 전체 노출
+    if (isSuperAdmin && !myName && !myUsername) return true;
+    if (!myName && !myUsername) return true;
+
+    const taskAssignee = t.assigned_to || t.assignee_name || '';
+    const taskCreator = t.created_by || t.operator || '';
+
+    // 1) 본인에게 배정된 업무 (예: 이주용, 최창숙)
+    const isAssignedToMe = Boolean(
+      (myName && taskAssignee.includes(myName)) ||
+      (myUsername && taskAssignee.includes(myUsername))
+    );
+
+    // 2) 본인이 직접 등록/상신한 업무
+    const isCreatedByMe = Boolean(
+      (myName && (taskCreator === myName || taskCreator.includes(myName))) ||
+      (myUsername && (taskCreator === myUsername || taskCreator.includes(myUsername)))
+    );
+
+    // 3) 담당자가 아직 없는 공용 미배정 업무
+    const isUnassigned = !taskAssignee && !taskCreator;
+
+    return isAssignedToMe || isCreatedByMe || isUnassigned;
+  });
+
+  const activeTasks = myTasks.filter((t) => t.status === "ACTIVE" || t.status === "IN_PROGRESS" || t.status === "PENDING_APPROVAL");
+  const completedTasks = myTasks.filter((t) => t.status === "DONE" || t.status === "RESOLVED" || t.status === "CANCELLED");
 
   const filteredTasks = (todoTab === "active" ? activeTasks : completedTasks).filter((t) => {
     const matchesSearch =
