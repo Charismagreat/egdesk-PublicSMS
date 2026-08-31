@@ -143,16 +143,25 @@ export default function MobileHubPage() {
 
   // 12. 상신 취소 요청 핸들러
   const handleCancelTaskRequest = async (task: any) => {
-    if (!confirm(`'${task.title}' 상신건을 정말 취소 요청하시겠습니까?`)) return;
+    const cancelReasonPrompt = prompt(`'${task.title}' 상신 취소 사유를 입력해 주세요. (미입력 시 기본 사유로 접수)`, "현장 업무 재검토 및 사유로 상신 취소를 요청합니다.");
+    if (cancelReasonPrompt === null) return; // 취소 버튼 누른 경우
+
+    const finalReason = cancelReasonPrompt.trim() || "현장 업무 재검토 및 사유로 상신 취소를 요청합니다.";
+
     try {
-      const res = await apiFetch("/api/governance?action=cancel_log", {
+      const myOperatorName = (session as any)?.name || (session as any)?.username || "현장 직원";
+      const res = await apiFetch("/api/governance?action=create_cancel_request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId: task.id }),
+        body: JSON.stringify({ 
+          taskId: task.id,
+          reason: finalReason,
+          operator: myOperatorName
+        }),
       });
       const data = await res.json();
       if (data.success) {
-        alert("✅ 상신 취소 요청이 접수되었습니다.");
+        alert("✅ 상신 취소 요청이 접수되었습니다.\n최고관리자의 관제 승인 후 최종 처리됩니다.");
         fetchTasks();
         setSelectedTask(null);
       } else {

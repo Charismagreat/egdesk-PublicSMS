@@ -1268,8 +1268,15 @@ export async function POST(request: Request) {
 
     const adminUser = await verifySuperAdmin();
     
-    // 모바일에서의 현장 요청 생성, 일보 제출 및 일반 업무/취소 상신(create_log)인 경우, 최고관리자가 아니더라도 세션이 있으면 허용
-    if (action !== 'create_mobile_request' && action !== 'submit_report' && action !== 'create_log') {
+    // 모바일에서의 현장 요청 생성, 일보 제출 및 일반 업무/취소 상신(create_cancel_request, cancel_log, create_log)인 경우, 최고관리자가 아니더라도 세션이 있으면 허용
+    const isEmployeeAllowedAction = 
+      action === 'create_mobile_request' || 
+      action === 'submit_report' || 
+      action === 'create_log' || 
+      action === 'create_cancel_request' || 
+      action === 'cancel_log';
+
+    if (!isEmployeeAllowedAction) {
       if (!adminUser) {
         return NextResponse.json(
           { success: false, error: '🔒 권한이 없습니다. 최고관리자만 조작할 수 있습니다.' },
@@ -1279,7 +1286,7 @@ export async function POST(request: Request) {
     }
 
     let currentUser = adminUser || 'guest';
-    if (!adminUser && (action === 'create_mobile_request' || action === 'submit_report' || action === 'create_log')) {
+    if (!adminUser && isEmployeeAllowedAction) {
       try {
         const cookieStore = await cookies();
         const token = cookieStore.get('auth_token')?.value;
@@ -1583,13 +1590,15 @@ export async function POST(request: Request) {
       });
     }
 
-    // [신규] 임직원 모바일 현장 작업 취소 요청 상신
-    if (action === 'create_cancel_request') {
+    // [신규] 임직원 모바일 현장 작업 취소 요청 상신 (cancel_log / create_cancel_request)
+    if (action === 'create_cancel_request' || action === 'cancel_log') {
       const { taskId, reason } = body;
       
-      if (!taskId || !reason || !reason.trim()) {
-        return NextResponse.json({ success: false, error: '취소할 대상 태스크 ID와 사유가 필요합니다.' }, { status: 400 });
+      if (!taskId) {
+        return NextResponse.json({ success: false, error: '취소할 대상 태스크 ID(taskId)가 필요합니다.' }, { status: 400 });
       }
+
+      const effectiveReason = (reason && String(reason).trim()) || '현장 업무 사유로 상신 취소를 요청합니다.';
 
       // 태스크 존재 여부 확인
       const taskRes = await queryTable('crm_snaptasks', { filters: { id: taskId } });
@@ -1609,7 +1618,7 @@ export async function POST(request: Request) {
         doc_id: taskId,
         doc_title: task.title,
         status: 'PENDING_APPROVAL',
-        reason: reason.trim(),
+        reason: effectiveReason,
         operator: cancelOperator,
         created_at: nowStr,
         tenant_id: tenantId,
@@ -1630,7 +1639,7 @@ export async function POST(request: Request) {
       await insertRows('crm_snaptask_items', [{
         id: Date.now(),
         task_id: taskId,
-        content_text: `[취소 요청 사유]\n${reason.trim()}`,
+        content_text: `[취소 요청 사유]\n${effectiveReason}`,
         file_url: null,
         file_type: 'TEXT',
         ai_analysis: JSON.stringify({ message: "Mobile task cancel requested" }),
