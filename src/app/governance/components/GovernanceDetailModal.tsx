@@ -56,6 +56,7 @@ export default function GovernanceDetailModal({
   const [saveAutoRuleOnExecute, setSaveAutoRuleOnExecute] = useState(false);
   const [matchedSmsAction, setMatchedSmsAction] = useState<any | null>(null);
   const [dynamicRecommendations, setDynamicRecommendations] = useState<any[] | null>(null);
+  const [smsDeviceStatus, setSmsDeviceStatus] = useState<{ isReady: boolean; reason?: string; label?: string } | null>(null);
 
   // 🤖 자연어 지시 기반 AI 자율 조치 생성 상태
   const [naturalPrompt, setNaturalPrompt] = useState("");
@@ -77,6 +78,7 @@ export default function GovernanceDetailModal({
     setCustomActions([]);
     setCustomActionPayloads({});
     setDynamicRecommendations(null);
+    setSmsDeviceStatus(null);
     setIsAddingAction(false);
     setIsAddingAdhocSms(false);
     setAdhocSelectedOpIds([]);
@@ -88,11 +90,16 @@ export default function GovernanceDetailModal({
     let isMounted = true;
     (async () => {
       try {
-        const [autoRes, tmplRes, opRes] = await Promise.all([
+        const [autoRes, tmplRes, opRes, smsDevRes] = await Promise.all([
           apiFetch('/api/automation').then(r => r.json()).catch(() => ({ rules: {} })),
           apiFetch('/api/message-templates').then(r => r.json()).catch(() => ({ templates: [] })),
-          apiFetch('/api/operators').then(r => r.json()).catch(() => ({ operators: [] }))
+          apiFetch('/api/operators').then(r => r.json()).catch(() => ({ operators: [] })),
+          apiFetch('/api/governance?action=check_sms_device_status').then(r => r.json()).catch(() => ({ isReady: false, reason: '기기 상태 확인 실패' }))
         ]);
+
+        if (isMounted && smsDevRes) {
+          setSmsDeviceStatus(smsDevRes);
+        }
 
         let rules = autoRes?.rules || {};
         const templates = tmplRes?.templates || tmplRes?.items || [];
@@ -198,11 +205,14 @@ export default function GovernanceDetailModal({
         }
 
         if (isMounted) {
+          const isSmsReady = Boolean(smsDevRes?.isReady);
           const newSmsAction = {
             code: "SMS_AUTO_NOTIFY",
             label: `[📱 AI 자동 문자 발송] ${targetRuleTitle}`,
             description: `템플릿: '${templateTitle}' · 수신: ${targetRecipients.map(r => r.name).join(', ')} (총 ${targetRecipients.length}명)`,
             isSmsAction: true,
+            isSmsDisabled: !isSmsReady,
+            disabledReason: smsDevRes?.reason || '스마트폰 문자 발송 기기가 연결되어 있지 않습니다.',
             templateTitle,
             finalMessage,
             targetRecipients,
@@ -214,11 +224,21 @@ export default function GovernanceDetailModal({
             }
           };
           setMatchedSmsAction(newSmsAction);
+
+          const isLeaveReq = selectedEvent.type === 'LEAVE_APPROVAL_REQUEST' || selectedEvent.data?.doc_type === 'LEAVE_APPROVAL_REQUEST' || title.includes('연차') || title.includes('근태');
+          const isSalesOrderReq = !isExplicitDelete && !isLeaveReq && (title.includes('수주') || title.includes('발주') || title.includes('견적') || selectedEvent.data?.file_type === 'DOCUMENT' || selectedEvent.data?.file_type === 'EXCEL');
+
           setSelectedActions(prev => {
             const withoutNotify = prev.filter(c => c !== "NOTIFY_USER");
             const newSet = new Set(withoutNotify);
-            newSet.add("SMS_AUTO_NOTIFY");
-            if (!isExplicitDelete) {
+            if (isSmsReady) {
+              newSet.add("SMS_AUTO_NOTIFY");
+            }
+            if (isLeaveReq) {
+              newSet.add("APPROVE_LEAVE");
+              newSet.add("ASSIGN_DEPUTY_TASK");
+              newSet.add("LOG_AUDIT");
+            } else if (isSalesOrderReq) {
               newSet.add("auto_register_sales_order");
             }
             return Array.from(newSet);
@@ -521,21 +541,23 @@ export default function GovernanceDetailModal({
             </span>
           </div>
 
-          {/* 슬림 컴팩트 4컬럼 메타 그리드 */}
-          <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+          {/* 슬림 컴팩트 메타 그리드 (텍스트 겹침 방지) */}
+          <div className="bg-white p-3 rounded-xl border border-slate-200/60 grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px]">
             <div>
               <span className="text-slate-400 font-medium block text-[10px]">발생 유형</span>
-              <span className="font-bold text-slate-800 shrink-0">{selectedEvent.type}</span>
+              <span className="font-bold text-slate-800 break-all block">
+                {selectedEvent.type === 'LEAVE_APPROVAL_REQUEST' ? '근태/휴가 결재' : selectedEvent.type === 'TASK_CANCEL_REQUEST' ? '업무 취소 요청' : selectedEvent.type === 'STORE_ORDER' ? '스토어 주문' : selectedEvent.type}
+              </span>
             </div>
             <div>
               <span className="text-slate-400 font-medium block text-[10px]">요청 종류</span>
-              <span className="font-extrabold text-indigo-600 truncate block">
-                {selectedEvent.data?.doc_type === 'mobile_request' || selectedEvent.data?.doc_type === 'mobile_req' ? '모바일 현장 상신' : (selectedEvent.data?.doc_type || '관제 요청')}
+              <span className="font-extrabold text-indigo-600 break-all block">
+                {selectedEvent.data?.doc_type === 'mobile_request' || selectedEvent.data?.doc_type === 'mobile_req' ? '모바일 현장 상신' : selectedEvent.data?.doc_type === 'LEAVE_APPROVAL_REQUEST' ? '연차 결재 심사' : (selectedEvent.data?.doc_type || '관제 요청')}
               </span>
             </div>
-            <div className="col-span-2 sm:col-span-2">
+            <div>
               <span className="text-slate-400 font-medium block text-[10px]">요청 식별 번호</span>
-              <span className="font-mono font-bold text-slate-700 truncate block">{selectedEvent.data?.doc_id || selectedEvent.id}</span>
+              <span className="font-mono font-bold text-slate-700 break-all block">{selectedEvent.data?.doc_id || selectedEvent.id}</span>
             </div>
           </div>
 
@@ -1301,12 +1323,20 @@ export default function GovernanceDetailModal({
                               <span className={`text-xs font-black ${isSelected ? "text-indigo-950" : "text-slate-700"}`}>
                                 {act.label}
                               </span>
-                              <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black border border-indigo-200">
-                                0원 무료 P2P SMS
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-black border border-purple-200">
-                                ⚡ 문자 관제 규칙 연동
-                              </span>
+                              {act.isSmsDisabled || (smsDeviceStatus && !smsDeviceStatus.isReady) ? (
+                                <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-black border border-rose-200 flex items-center gap-1">
+                                  <span>⚠️ 문자 발송 불가 (기기 연결 필요)</span>
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black border border-indigo-200">
+                                    0원 무료 P2P SMS
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-black border border-purple-200">
+                                    ⚡ {smsDeviceStatus?.label || '기기 연결 정상'}
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </div>
 
@@ -1319,6 +1349,17 @@ export default function GovernanceDetailModal({
                             <X className="w-4 h-4" />
                           </button>
                         </div>
+
+                        {/* 기기 미연결 시 주의 안내 박스 */}
+                        {(act.isSmsDisabled || (smsDeviceStatus && !smsDeviceStatus.isReady)) && (
+                          <div className="ml-7 bg-rose-50/80 border border-rose-200 rounded-xl p-2.5 text-[11px] text-rose-800 font-semibold space-y-0.5">
+                            <span className="font-black text-rose-900 block">📱 스마트폰 발송 기기 미연결 안내</span>
+                            <p className="leading-relaxed">
+                              {smsDeviceStatus?.reason || '스마트폰 화면 꺼짐 또는 QR 페어링 연결이 오프라인 상태입니다.'} 
+                              <span className="text-rose-950 font-bold block mt-0.5">💡 [발송 기기 멀티 허브] 메뉴에서 스마트폰 연결 상태를 먼저 확인해 주세요.</span>
+                            </p>
+                          </div>
+                        )}
 
                         {/* 수신자 명단 태그 */}
                         <div className="flex items-center gap-1.5 flex-wrap pl-7">

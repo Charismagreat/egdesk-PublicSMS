@@ -13,7 +13,9 @@ import {
   downloadFile,
   callAiCaller,
   createKnowledgeDocument,
-  listBusinessIdentitySnapshots
+  listBusinessIdentitySnapshots,
+  listPhoneDevices,
+  checkPhoneDevice
 } from '../../../../egdesk-helpers';
 
 /**
@@ -239,6 +241,43 @@ export async function GET(request: Request) {
 
     const tenantId = await resolveTenantId();
     const tenantFilterObj = (tenantId && tenantId !== 'all') ? { tenant_id: tenantId } : {};
+
+    // 0. 스마트폰 문자 발송 기기 연결 상태 실시간 점검
+    if (action === 'check_sms_device_status') {
+      try {
+        const devicesRes = await listPhoneDevices().catch(() => []);
+        const devices = Array.isArray(devicesRes) ? devicesRes : devicesRes?.devices || [];
+        const pairedDevice = Array.isArray(devices) 
+          ? devices.find((d: any) => d.status === 'paired' || d.linked_phone)
+          : null;
+
+        if (!pairedDevice) {
+          return NextResponse.json({
+            success: true,
+            isReady: false,
+            reason: '등록되거나 페어링된 스마트폰 문자 발송 기기가 없습니다.'
+          });
+        }
+
+        const checkRes = await checkPhoneDevice(pairedDevice.id).catch((err: any) => ({ success: false, error: err.message }));
+        const isPaired = Boolean(checkRes?.paired || checkRes?.success || pairedDevice.status === 'paired');
+
+        return NextResponse.json({
+          success: true,
+          isReady: isPaired,
+          deviceId: pairedDevice.id,
+          label: pairedDevice.label || '회사폰',
+          phone: pairedDevice.linked_phone || '',
+          reason: isPaired ? '기기 연결 정상' : '스마트폰 연결이 오프라인 상태입니다.'
+        });
+      } catch (err: any) {
+        return NextResponse.json({
+          success: true,
+          isReady: false,
+          reason: `기기 연결 확인 실패: ${err.message}`
+        });
+      }
+    }
 
     // 1. 통합 관제 게시판 이벤트 피드 조립
     if (action === 'events') {
