@@ -22,7 +22,6 @@ const TABS: { id: EstimateTabType; label: string; icon: React.ComponentType<{ cl
   { id: "inbound_statement", label: "거래 명세서 등록", icon: Receipt },
   { id: "outbound_est", label: "견적서 작성 및 발송", icon: Send },
   { id: "outbound_so", label: "수주 등록", icon: PackageCheck },
-  { id: "outbound_statement", label: "거래 명세서 작성 및 발송", icon: FileCheck2 },
 ];
 
 export default function EstimatesHeader({

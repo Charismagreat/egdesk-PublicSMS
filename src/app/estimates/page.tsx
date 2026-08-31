@@ -60,6 +60,13 @@ export default function EstimatesDashboard() {
   }, [isSoExcelModalOpen, uploadedSoExcelFile]);
   const [isInboundStatementOcrOpen, setIsInboundStatementOcrOpen] = useState(false);
 
+  // 🔄 구버전 '거래 명세서 작성 및 발송' 탭 세션이 남아있는 경우 '수주 등록' 탭으로 자동 마이그레이션
+  useEffect(() => {
+    if (activeTab === ("outbound_statement" as any)) {
+      setActiveTab("outbound_so");
+    }
+  }, [activeTab, setActiveTab]);
+
   // 📂 태그 프리셋 로드
   useEffect(() => {
     apiFetch("/api/expenses/tags")

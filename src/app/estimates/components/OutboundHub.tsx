@@ -511,10 +511,27 @@ export default function OutboundHub({
               <button
                 onClick={() => window.open("/estimates/web-view?type=outbound_so", "_blank")}
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                title="수주 등록된 전체 발주 내역 웹뷰 대장을 엽니다."
               >
                 <Printer className="w-4 h-4 text-indigo-400" />
                 받은 발주 대장
               </button>
+              <button
+                onClick={() => window.open("/estimates/web-view?type=outbound_est&is_statement=true", "_blank")}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                title="발송 완료된 보낸 거래명세서 대장 웹뷰를 엽니다."
+              >
+                <FileText className="w-4 h-4 text-emerald-400" />
+                보낸 거래명세서 대장
+              </button>
+              <Link
+                href="/estimates/statement-write"
+                className="px-3.5 py-2 bg-white hover:bg-slate-50 text-indigo-600 border border-indigo-200 hover:border-indigo-300 text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 transition-all"
+                title="수주 연계 없이 직접 일반 거래명세서를 작성하고 발송합니다."
+              >
+                <Plus className="w-4 h-4 text-indigo-600" />
+                거래명세서 직접 작성
+              </Link>
               <input
                 type="file"
                 ref={excelInputRef}
