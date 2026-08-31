@@ -2,11 +2,12 @@
 
 import { apiFetch } from '@/lib/api';
 import React, { useState } from "react";
-import { Plus, Eye, CheckCircle2, ChevronRight, Trash2, Clock, Printer, Upload, Sparkles, ArrowRightLeft, FileText } from "lucide-react";
+import { Plus, Eye, CheckCircle2, ChevronRight, Trash2, Clock, Printer, Upload, Sparkles, ArrowRightLeft, FileText, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { Estimate, SalesOrder, Partner } from "../types";
 import { parseEstimateMetadata, parsePurchaseOrderExcel, ExcelParsedPurchaseOrder, getExcelColumnsAndRawData, parseExcelWithMapping } from "../utils";
 import SalesOrderExcelModal from "./SalesOrderExcelModal";
+import ExcelMappingManagerModal from "./ExcelMappingManagerModal";
 import { usePersistedState } from "../../../hooks/usePersistedState";
 
 interface OutboundHubProps {
@@ -51,6 +52,7 @@ export default function OutboundHub({
   // 탭 매핑
   const outboundSubTab = currentTab === "outbound_est" ? "estimates" : currentTab === "outbound_so" ? "sos" : "statements";
   const [isSoExcelOpen, setIsSoExcelOpen] = useState(false);
+  const [isExcelMappingManagerOpen, setIsExcelMappingManagerOpen] = useState(false);
   const [preParsedExcelData, setPreParsedExcelData] = useState<ExcelParsedPurchaseOrder | null>(null);
   const [uploadedExcelFile, setUploadedExcelFile] = useState<File | null>(null);
   const [isExcelUploading, setIsExcelUploading] = useState(false);
@@ -527,6 +529,14 @@ export default function OutboundHub({
               >
                 <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
                 {isExcelUploading ? "엑셀 분석 중..." : "AI 엑셀 서식 매핑 & 수주 등록"}
+              </button>
+              <button
+                onClick={() => setIsExcelMappingManagerOpen(true)}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 transition-all border border-slate-700"
+                title="거래처별 엑셀 열 매핑 규칙 조회, 수정 및 초기화"
+              >
+                <Settings2 className="w-4 h-4 text-emerald-400" />
+                서식 매핑 관리
               </button>
               <button
                 onClick={onOpenOcrModal}
@@ -1116,6 +1126,15 @@ export default function OutboundHub({
         }}
         preParsedData={preParsedExcelData}
         uploadedFile={uploadedExcelFile}
+      />
+
+      {/* ⚙️ [거래처별 AI 엑셀 서식 매핑 관리자 모달] */}
+      <ExcelMappingManagerModal
+        isOpen={isExcelMappingManagerOpen}
+        onClose={() => setIsExcelMappingManagerOpen(false)}
+        onRefresh={() => {
+          // 필요시 목록 리프레시
+        }}
       />
     </div>
   );
