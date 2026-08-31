@@ -1161,9 +1161,9 @@ export default function OutboundHub({
         </div>
       )}
 
-      {/* 일괄 작업 플로팅 바 */}
+      {/* 일괄 작업 상단 스티키 플로팅 바 */}
       {selectedOutboundIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md text-white px-6 py-4 rounded-2xl flex items-center gap-6 shadow-2xl border border-slate-800 z-40 animate-scale-up">
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md text-white px-6 py-3.5 rounded-2xl flex items-center gap-6 shadow-2xl border border-indigo-500/40 ring-4 ring-indigo-500/10 z-50 animate-scale-up">
           <span className="text-xs font-bold text-indigo-350">
             📦 {selectedOutboundIds.size}건의 항목 선택됨
           </span>
