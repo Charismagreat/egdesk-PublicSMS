@@ -85,7 +85,9 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
   try {
-    const { action, ...payload } = await req.json();
+    const body = await req.json();
+    const action = body.action || ((body.start_date || body.leave_type) ? 'APPLY' : '');
+    const payload = body;
 
     const cookieStore = await cookies();
     const token = cookieStore.get('auth_token')?.value;
@@ -93,7 +95,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: '인증 세션이 만료되었습니다. 다시 로그인해주세요.' }, { status: 401 });
     }
     const sessionUser = decodeJwt(token);
-    const operatorId = sessionUser.id as string;
+    let operatorId = (sessionUser.id as string) || '';
     const tenantId = (sessionUser.tenant_id as string) || 'default';
 
     // 💡 [수정] 신규 연차 신청(APPLY)을 제외한 결재 심사(APPROVE/REJECT) 조작은 관리자 권한 필수 검증
@@ -110,18 +112,45 @@ export async function POST(req: Request) {
     // 📂 액션 1: 신규 연차 신청 (APPLY)
     // ==========================================
     if (action === 'APPLY') {
-      const { leave_type, start_date, end_date, days_spent, reason, attachments } = payload;
+      let { leave_type, start_date, end_date, days_spent, reason, attachments } = payload;
 
-      if (!leave_type || !start_date || !end_date || !days_spent) {
-        return NextResponse.json({ success: false, error: '연차 신청서 필수 입력 항목이 누락되었습니다.' }, { status: 400 });
+      if (!leave_type) leave_type = 'ANNUAL';
+      if (!start_date) {
+        return NextResponse.json({ success: false, error: '연차 시작일이 누락되었습니다.' }, { status: 400 });
+      }
+      if (!end_date) end_date = start_date;
+
+      // 일수 자동 계산 폴백
+      if (!days_spent) {
+        if (leave_type === 'HALF_AM' || leave_type === 'HALF_PM') {
+          days_spent = 0.5;
+        } else {
+          const sDate = new Date(start_date);
+          const eDate = new Date(end_date);
+          const diffDays = Math.ceil(Math.abs(eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          days_spent = Math.max(1, diffDays);
+        }
+      }
+
+      // operatorId 보정 (토큰에 id가 없는 경우 이름으로 조회)
+      if (!operatorId) {
+        const opName = (sessionUser.name as string) || (sessionUser.username as string) || '';
+        if (opName) {
+          const opRes = await queryTable('crm_operators', { filters: { name: opName, tenant_id: tenantId } }).catch(() => ({ rows: [] }));
+          if (opRes.rows && opRes.rows.length > 0) {
+            operatorId = String(opRes.rows[0].id);
+          }
+        }
       }
 
       // 신청자의 잔여 연차 잔액 조회 (테넌트 격리)
-      const balanceRes = await queryTable('crm_operator_leave_balances', { filters: { operator_id: operatorId, tenant_id: tenantId } });
-      const balance = balanceRes.rows && balanceRes.rows.length > 0 ? balanceRes.rows[0] : null;
+      if (operatorId) {
+        const balanceRes = await queryTable('crm_operator_leave_balances', { filters: { operator_id: operatorId, tenant_id: tenantId } }).catch(() => ({ rows: [] }));
+        const balance = balanceRes.rows && balanceRes.rows.length > 0 ? balanceRes.rows[0] : null;
 
-      if (balance && balance.remaining < parseFloat(days_spent)) {
-        return NextResponse.json({ success: false, error: `잔여 연차가 부족합니다. (신청: ${days_spent}일, 잔여: ${balance.remaining}일)` }, { status: 400 });
+        if (balance && balance.remaining < parseFloat(String(days_spent))) {
+          return NextResponse.json({ success: false, error: `잔여 연차가 부족합니다. (신청: ${days_spent}일, 잔여: ${balance.remaining}일)` }, { status: 400 });
+        }
       }
 
       const newLeaveId = `leave-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;

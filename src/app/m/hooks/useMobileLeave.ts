@@ -104,10 +104,23 @@ export function useMobileLeave() {
         }
       }
 
+      let daysSpent = 1;
+      if (leaveType === "HALF_AM" || leaveType === "HALF_PM") {
+        daysSpent = 0.5;
+      } else {
+        const start = new Date(leaveStartDate);
+        const end = new Date(leaveEndDate || leaveStartDate);
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        daysSpent = Math.max(1, diffDays);
+      }
+
       const payload = {
+        action: "APPLY",
         leave_type: leaveType,
         start_date: leaveStartDate,
         end_date: leaveType === "ANNUAL" ? leaveEndDate : leaveStartDate,
+        days_spent: daysSpent,
         reason: leaveReason,
         attachments: uploadedAttachments,
       };
