@@ -97,7 +97,13 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
 
   const getSubTabCount = (periodId: any, tabType: "active" | "completed") => {
     if (!allTasks || allTasks.length === 0) return 0;
-    const targetTasks = allTasks.filter((t) => (tabType === "active" ? t.status !== "DONE" : t.status === "DONE"));
+    const targetTasks = allTasks.filter((t) => {
+      if (tabType === "active") {
+        return t.status === "ACTIVE" || t.status === "IN_PROGRESS" || t.status === "PENDING_APPROVAL";
+      } else {
+        return t.status === "DONE" || t.status === "COMPLETE" || t.status === "RESOLVED" || t.status === "CANCELLED";
+      }
+    });
     if (periodId === "ALL") return targetTasks.length;
 
     return targetTasks.filter((t) => isTaskInPeriod(t, periodId, tabType)).length;

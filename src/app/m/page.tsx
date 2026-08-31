@@ -276,7 +276,7 @@ export default function MobileHubPage() {
   });
 
   const activeTasks = myTasks.filter((t) => t.status === "ACTIVE" || t.status === "IN_PROGRESS" || t.status === "PENDING_APPROVAL");
-  const completedTasks = myTasks.filter((t) => t.status === "DONE" || t.status === "RESOLVED" || t.status === "CANCELLED");
+  const completedTasks = myTasks.filter((t) => t.status === "DONE" || t.status === "COMPLETE" || t.status === "RESOLVED" || t.status === "CANCELLED");
 
   const filteredTasks = (todoTab === "active" ? activeTasks : completedTasks).filter((t) => {
     const matchesSearch =
