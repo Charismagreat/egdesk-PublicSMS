@@ -57,7 +57,8 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
       // 💡 최고관리자가 배정한 업무는 직원이 직접 체크하여 완료(DONE) 토글 가능
       onToggleTaskStatus(t.id, t.status);
     } else {
-      if (t.status !== "DONE") {
+      const isTaskDone = t.status === "DONE" || t.status === "COMPLETE" || t.status === "RESOLVED";
+      if (!isTaskDone) {
         alert("📌 임직원 현장 상신 건은 최고관리자의 컨트롤타워 관제 및 결재 실행 완료 후 '한 일'로 자동 이동됩니다.");
       } else {
         onToggleTaskStatus(t.id, t.status);
@@ -246,7 +247,7 @@ export const MobileTodoListSection: React.FC<MobileTodoListSectionProps> = ({
               </div>
             ) : (
               filteredTasks.map((t) => {
-                const isDone = t.status === "DONE";
+                const isDone = t.status === 'DONE' || t.status === 'COMPLETE' || t.status === 'RESOLVED';
                 const isCancelledTask = Boolean(
                   t.is_cancelled ||
                   t.cancel_status === 'APPROVED' ||
