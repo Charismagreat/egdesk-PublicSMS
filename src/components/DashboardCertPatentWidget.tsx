@@ -344,6 +344,17 @@ export default function DashboardCertPatentWidget() {
             <span className="text-[11px] font-extrabold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">
               실시간 DB 감시 연동
             </span>
+            <div className="flex items-center gap-1.5 ml-2 text-[10px] font-bold">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-md">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> 납기예정
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 명세발송
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span> 🚚 납품완료
+              </span>
+            </div>
           </div>
           <p className="text-xs text-slate-500 mt-1">
             수주 대장 납기일, 특허 연차료, 인증서 갱신, AI 자동 태스크 일정을 실시간 종합 관제합니다.
@@ -534,6 +545,10 @@ export default function DashboardCertPatentWidget() {
                       className={`px-1.5 py-1 rounded-md text-[10px] font-extrabold truncate flex items-center justify-between transition-all cursor-pointer hover:opacity-90 ${
                         isUnassigned
                           ? "bg-amber-100 text-amber-900 border border-amber-300 ring-1 ring-amber-400/40"
+                          : ev.category === "SALES" && (ev.status === "DELIVERED" || ev.raw?.status === "DELIVERED")
+                          ? "bg-indigo-50 text-indigo-900 border border-indigo-200 opacity-85"
+                          : ev.category === "SALES" && (ev.status === "STATEMENT_SENT" || ev.raw?.status === "STATEMENT_SENT")
+                          ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
                           : ev.category === "SALES"
                           ? "bg-rose-100 text-rose-900 border border-rose-200"
                           : ev.type === "TASK" && ev.status === "AI_SUGGESTED"
@@ -583,51 +598,95 @@ export default function DashboardCertPatentWidget() {
             {selectedEvents.length === 0 ? (
               <span className="text-xs text-slate-400">선택한 날짜에 예정된 전사 기한 일정이 없습니다.</span>
             ) : (
-              selectedEvents.map((ev, i) => (
-                <div key={i} className="bg-white border border-slate-200 px-3.5 py-2 rounded-2xl text-xs flex flex-wrap items-center gap-2 shadow-xs hover:border-indigo-300 transition-all">
-                  <span className="font-extrabold text-slate-900">{ev.title}</span>
-                  
-                  {/* 담당자 뱃지 / 미배정 배정하기 버튼 */}
-                  {ev.assigned_to ? (
-                    <button
-                      onClick={() => handleOpenAssignModal(ev)}
-                      className="text-[11px] text-indigo-900 font-extrabold bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-3xs"
-                      title="클릭하여 담당자 변경"
-                    >
-                      <Users className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>배정 담당: <strong className="text-indigo-700 underline underline-offset-2">{ev.assigned_to}</strong></span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleOpenAssignModal(ev)}
-                      className="text-[11px] text-amber-900 font-extrabold bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2.5 py-1 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-3xs"
-                    >
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 animate-bounce" />
-                      <span>미배정 (클릭하여 배정)</span>
-                    </button>
-                  )}
+              selectedEvents.map((ev, i) => {
+                const isDelivered = ev.category === "SALES" && (ev.status === "DELIVERED" || ev.raw?.status === "DELIVERED");
+                const isStatementSent = ev.category === "SALES" && (ev.status === "STATEMENT_SENT" || ev.raw?.status === "STATEMENT_SENT");
 
-                  {/* 📦 수주 납기 건 바로가기 */}
-                  {ev.category === "SALES" && (
-                    <div className="flex items-center gap-1.5 ml-1">
-                      {ev.raw?.client_order_no && (
-                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                          발주번호: {ev.raw.client_order_no}
-                        </span>
-                      )}
-                      <Link
-                        href={ev.raw?.so_id ? `/estimates/statement-write?soId=${ev.raw.so_id}` : "/estimates"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                return (
+                  <div 
+                    key={i} 
+                    className={`px-3.5 py-2 rounded-2xl text-xs flex flex-wrap items-center gap-2 shadow-xs transition-all border ${
+                      isDelivered
+                        ? "bg-indigo-50/30 border-indigo-200 hover:border-indigo-300"
+                        : isStatementSent
+                        ? "bg-emerald-50/20 border-emerald-200 hover:border-emerald-300"
+                        : "bg-white border-slate-200 hover:border-indigo-300"
+                    }`}
+                  >
+                    {/* 상태 뱃지 */}
+                    {ev.category === "SALES" && (
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-black shrink-0 ${
+                        isDelivered
+                          ? "bg-indigo-100 text-indigo-800 border border-indigo-200"
+                          : isStatementSent
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                          : "bg-rose-100 text-rose-800 border border-rose-200"
+                      }`}>
+                        {isDelivered ? "🚚 납품완료" : isStatementSent ? "📄 명세발송" : "🔴 납기예정"}
+                      </span>
+                    )}
+
+                    <span className={`font-extrabold ${isDelivered ? "text-slate-700" : "text-slate-900"}`}>
+                      {ev.title}
+                    </span>
+                    
+                    {/* 담당자 뱃지 / 미배정 배정하기 버튼 */}
+                    {ev.assigned_to ? (
+                      <button
+                        onClick={() => handleOpenAssignModal(ev)}
+                        className="text-[11px] text-indigo-900 font-extrabold bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-3xs"
+                        title="클릭하여 담당자 변경"
                       >
-                        <span>거래명세서/수주조회</span>
-                        <ArrowUpRight className="w-2.5 h-2.5" />
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              ))
+                        <Users className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>배정 담당: <strong className="text-indigo-700 underline underline-offset-2">{ev.assigned_to}</strong></span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenAssignModal(ev)}
+                        className="text-[11px] text-amber-900 font-extrabold bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2.5 py-1 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-3xs"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 animate-bounce" />
+                        <span>미배정 (클릭하여 배정)</span>
+                      </button>
+                    )}
+
+                    {/* 📦 수주 납기 건 바로가기 */}
+                    {ev.category === "SALES" && (
+                      <div className="flex items-center gap-1.5 ml-1">
+                        {ev.raw?.client_order_no && (
+                          <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                            발주번호: {ev.raw.client_order_no}
+                          </span>
+                        )}
+                        {isDelivered ? (
+                          <Link
+                            href="/estimates/web-view?type=outbound_delivered"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                            title="납품 완료 대장 조회"
+                          >
+                            <span>🚚 납품대장조회</span>
+                            <ArrowUpRight className="w-2.5 h-2.5" />
+                          </Link>
+                        ) : (
+                          <Link
+                            href={ev.raw?.so_id ? `/estimates/statement-write?soId=${ev.raw.so_id}` : "/estimates"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`px-2 py-0.5 text-white rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer ${
+                              isStatementSent ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"
+                            }`}
+                          >
+                            <span>{isStatementSent ? "명세서 재확인" : "거래명세서/수주조회"}</span>
+                            <ArrowUpRight className="w-2.5 h-2.5" />
+                          </Link>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

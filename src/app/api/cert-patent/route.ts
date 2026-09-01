@@ -145,13 +145,18 @@ export async function GET(request: Request) {
           const partnerName = so.customer_name || so.partner_name || '거래처';
           const amountStr = so.total_amount ? ` (${Number(so.total_amount).toLocaleString()}원)` : '';
           const assignedTo = so.assigned_to || partnerManagerMap[partnerName.trim()] || null;
+          const statusPrefix = so.status === 'DELIVERED' 
+            ? '[🚚 납품완료]' 
+            : so.status === 'STATEMENT_SENT' 
+            ? '[📄 명세완료]' 
+            : '[수주납기]';
           salesDeliveries.push({
             id: 'so_' + so.id,
             so_id: so.id,
             estimate_id: so.estimate_id || '',
             client_order_no: so.client_order_no || '',
             customer_name: partnerName,
-            title: `[수주납기] ${partnerName}${amountStr}`,
+            title: `${statusPrefix} ${partnerName}${amountStr}`,
             due_date: deliveryDate,
             amount: so.total_amount || 0,
             status: so.status || 'REGISTERED',
