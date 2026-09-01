@@ -325,6 +325,9 @@ export default function OutboundHub({
     })
     .filter((so) => {
       if (outboundStatusFilter === "ALL") return true;
+      if (outboundStatusFilter === "PARTIAL") {
+        return (so as any).fulfillment_status === "PARTIAL";
+      }
       return so.status === outboundStatusFilter;
     })
     .sort((a, b) => {
@@ -459,6 +462,7 @@ export default function OutboundHub({
             ) : (
               <>
                 <option value="REGISTERED">수주등록</option>
+                <option value="PARTIAL">분할출고중</option>
                 <option value="STATEMENT_SENT">명세서발송완료</option>
                 <option value="DELIVERED">납품완료</option>
               </>
