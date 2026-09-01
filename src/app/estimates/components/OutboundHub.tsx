@@ -1134,7 +1134,9 @@ export default function OutboundHub({
                         <Link
                           href={`/estimates/statement-write?soId=${so.id}`}
                           className={`px-3 py-1.5 text-[10px] font-bold rounded-lg flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer whitespace-nowrap ${
-                            so.status === "DELIVERED"
+                            (so as any).fulfillment_status === "PARTIAL"
+                              ? "bg-amber-600 hover:bg-amber-700 text-white ring-1 ring-amber-400"
+                              : so.status === "DELIVERED"
                               ? "bg-slate-700 hover:bg-slate-800 text-white"
                               : so.status === "STATEMENT_SENT"
                               ? "bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -1143,7 +1145,9 @@ export default function OutboundHub({
                           title="해당 수주 건을 바탕으로 거래명세서를 작성하고 발송합니다."
                         >
                           <FileText className="w-3.5 h-3.5" />
-                          {so.status === "DELIVERED"
+                          {(so as any).fulfillment_status === "PARTIAL"
+                            ? `📄 잔여분(${(so as any).remaining_qty}개) 명세서 작성`
+                            : so.status === "DELIVERED"
                             ? "거래명세서 재확인"
                             : so.status === "STATEMENT_SENT"
                             ? "거래명세서 재발송"

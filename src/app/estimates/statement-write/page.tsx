@@ -282,10 +282,15 @@ function DeliveryStatementWriteContent() {
   const [isSending, setIsSending] = useState(false);
   const [linkedSoIds, setLinkedSoIds] = useState<string[]>([]);
   
-  // 🔍 1단계: 수주 원본 품목 보존 및 실시간 Diff & 동기화 상태
+  // 🔍 1단계 & 2단계: 수주 원본 품목 보존 및 실시간 Diff & 분할 출고 안내
   const [originalMaterials, setOriginalMaterials] = useState<MaterialItem[]>([]);
   const [syncToSo, setSyncToSo] = useState(false);
   const [priceChangeReason, setPriceChangeReason] = useState("");
+  const [partialDeliveryBanner, setPartialDeliveryBanner] = useState<{
+    orderedQty: number;
+    deliveredQty: number;
+    remainingQty: number;
+  } | null>(null);
 
   // 💡 자사 직인 도장 이미지 상태 (로컬스토리지가 아닌 메모리 상태로 관리하여 용량 초과 방어)
   const [sealImage, setSealImage] = useState<string | null>(null);
@@ -531,31 +536,50 @@ function DeliveryStatementWriteContent() {
       email: prev.email || ""
     }));
 
+    // 📦 2단계: 분할 출고 건인 경우 잔여 수량 및 안내 배너 상태 바인딩
+    const partialOrder = selectedOrders.find(o => o.fulfillment_status === 'PARTIAL' || (typeof o.remaining_qty === 'number' && o.remaining_qty > 0 && o.delivered_qty > 0));
+    if (partialOrder) {
+      setPartialDeliveryBanner({
+        orderedQty: partialOrder.ordered_qty || 0,
+        deliveredQty: partialOrder.delivered_qty || 0,
+        remainingQty: partialOrder.remaining_qty || 0
+      });
+      // 변동 사유 기본값에 [N차 분할 출고] 제안
+      const nextRound = (partialOrder.statement_count || 1) + 1;
+      setPriceChangeReason(`${nextRound}차 분할 납품`);
+    } else {
+      setPartialDeliveryBanner(null);
+    }
+
     // 품목 목록 구성 (각 수주건의 items 배열을 평탄화하여 복원, 없으면 o 자체 정보 폴백)
     const itemsList: any[] = [];
     selectedOrders.forEach(o => {
+      const hasPartial = o.fulfillment_status === 'PARTIAL' && typeof o.remaining_qty === 'number' && o.remaining_qty > 0;
+
       if (o.items && Array.isArray(o.items) && o.items.length > 0) {
-        o.items.forEach((it: any) => {
+        o.items.forEach((it: any, itIdx: number) => {
+          const qty = hasPartial && itIdx === 0 ? o.remaining_qty : (Number(it.quantity) || 0);
           itemsList.push({
             itemCode: it.item_code || "",
             productName: it.product_name || "",
             spec: it.spec ? formatSpec(it.spec) : "",
-            quantity: Number(it.quantity) || 0,
+            quantity: qty,
             unitPrice: Number(it.unit_price) || 0,
-            remark: o.id ? `수주:${o.id}` : ""
+            remark: o.id ? (hasPartial ? `수주:${o.id} [잔여분]` : `수주:${o.id}`) : ""
           });
         });
       } else {
-        const qty = Number(o.quantity) || 1;
         const total = Number(o.total_price) || 0;
-        const price = qty > 0 ? Math.round(total / qty) : total;
+        const origQty = Number(o.quantity) || 1;
+        const qty = hasPartial ? o.remaining_qty : origQty;
+        const price = origQty > 0 ? Math.round(total / origQty) : total;
         itemsList.push({
           itemCode: "",
           productName: o.product_name || "",
           spec: "",
           quantity: qty,
           unitPrice: price,
-          remark: o.id ? `수주:${o.id}` : ""
+          remark: o.id ? (hasPartial ? `수주:${o.id} [잔여분]` : `수주:${o.id}`) : ""
         });
       }
     });
@@ -1378,6 +1402,28 @@ function DeliveryStatementWriteContent() {
                 </div>
               </div>
             </div>
+
+            {/* 📦 2단계: 분할 출고 잔여 수량 안내 배너 */}
+            {partialDeliveryBanner && (
+              <div className="bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-300 rounded-3xl p-5 shadow-sm space-y-2 text-left">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 bg-amber-500 text-white rounded-xl shadow-xs">
+                      <Truck className="w-4 h-4" />
+                    </span>
+                    <h4 className="text-sm font-black text-amber-900">
+                      분할 출고(차수 발행) 자동 오토필 안내
+                    </h4>
+                  </div>
+                  <span className="text-[11px] font-black bg-amber-500 text-white px-2.5 py-0.5 rounded-full shadow-xs">
+                    잔여 {partialDeliveryBanner.remainingQty}개 자동 반영됨
+                  </span>
+                </div>
+                <p className="text-xs text-amber-850 font-medium leading-relaxed pl-8">
+                  수주 등록 총 수량 <b>{partialDeliveryBanner.orderedQty}개</b> 중 이전에 <b>{partialDeliveryBanner.deliveredQty}개</b>가 기출고되어, 품목 수량이 남은 잔여분 <b>{partialDeliveryBanner.remainingQty}개</b>로 자동 세팅되었습니다. 금회 출고할 수량에 맞춰 수정하신 후 발송하시면 누적 출고 수량이 자동 집계됩니다.
+                </p>
+              </div>
+            )}
 
             {/* 세션 1: 상품 명세 */}
             <div className="bg-white border border-slate-200/80 rounded-3xl p-6 space-y-4 shadow-sm">
