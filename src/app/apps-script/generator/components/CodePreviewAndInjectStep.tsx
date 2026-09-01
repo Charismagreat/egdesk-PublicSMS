@@ -240,10 +240,11 @@ export default function CodePreviewAndInjectStep({
           type="button"
           onClick={onBackToPrompt}
           disabled={loading}
-          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition-all cursor-pointer border-none"
+          className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs rounded-xl transition-all cursor-pointer border border-indigo-200/80 flex items-center gap-1.5 shadow-3xs"
+          title="기존 코드를 유지하면서 새로운 기능을 추가/수정합니다"
         >
-          <ArrowLeft className="w-3.5 h-3.5 inline mr-1" />
-          <span>프롬프트 수정하기</span>
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>🪄 AI에게 추가/수정 요청하기 (증분 수정)</span>
         </button>
 
         {!injectionResult && (

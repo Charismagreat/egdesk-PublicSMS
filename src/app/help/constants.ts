@@ -19,6 +19,38 @@ export const CATEGORIES: CategoryConfig[] = [
 
 // FAQ 데이터베이스 (기존 Q&A 데이터 완전 보존 실장)
 export const FAQ_DATABASE: FAQItem[] = [
+  // 0. 구글 시트 & Apps Script 자동 주입 AI (SheetBot)
+  {
+    id: "sheets-1",
+    category: "sheets",
+    question: "Google Apps Script 자동 주입 AI (SheetBot)는 무엇이며 어떻게 작동하나요?",
+    answer: "내 구글 스프레드시트 공유 링크(URL)만 넣으면, 이지데스크가 원본 시트의 서식, 수식, 병합 셀, 배경색, 다중 탭을 100% 무손실 복제(Google Drive Clone)하여 안전한 제어용 사본을 생성합니다. 이후 사용자가 자연어로 요청한 비즈니스 로직(사이드바 파일 업로드, AI Vision OCR 분석, 메뉴 생성, 자동 계산 등)을 Gemini AI가 순수 V8 JavaScript 코드로 설계하여 구글 클라우드에 원클릭으로 100% 자동 주입 및 배포해 주는 혁신적인 시트 자동화 솔루션입니다."
+  },
+  {
+    id: "sheets-2",
+    category: "sheets",
+    question: "이미 주입된 자동화 코드에 새로운 기능을 추가하거나 수정(증분 리팩토링)할 수 있나요?",
+    answer: "네! 완벽한 [지능형 증분 수정 모드(Incremental Refactoring)]가 탑재되어 있습니다. 3단계 화면에서 [🪄 AI에게 추가/수정 요청하기 (증분 수정)] 버튼을 누르면, 이전에 작성된 Code.gs 소스코드 전체를 AI가 기억하고 계승합니다. 기존의 사이드바 UI나 완성된 함수를 훼손하지 않고, 사용자가 추가로 적은 요구사항(예: '특정 조건 시 행 색상 변경', '신규 메뉴 버튼 추가')만 기존 코드에 자연스럽게 병합(Merge)하여 구글 시트에 즉시 덮어쓰기 배포를 완료합니다."
+  },
+  {
+    id: "sheets-3",
+    category: "sheets",
+    question: "새로고침을 하거나 나중에 다시 접속했을 때 기존에 작업하던 시트를 이어서 수정할 수 있나요?",
+    answer: "네! 페이지 하단에 위치한 [이지데스크 AI 자동화 주입 완료 대장] 카드 목록에서 해당 시트의 [⚡ 이어서 수정하기] 버튼을 클릭하시면 됩니다. 클릭 즉시 해당 시트의 URL, 시트 제목, 프로젝트 ID, 이전 프롬프트 및 배포된 소스코드가 1초 만에 100% 복원되어 3단계(또는 2단계) 화면으로 바로 진입하여 작업을 계속하실 수 있습니다."
+  },
+  {
+    id: "sheets-4",
+    category: "sheets",
+    question: "Apps Script 내에서 Vision AI 및 OCR 기능을 호출할 때 DNS 오류가 발생하지 않나요?",
+    answer: "Google Apps Script는 구글 클라우드 서버에서 실행되므로 외부 사설 도메인을 호출하면 DNS 오류가 발생합니다. 이지데스크 SheetBot은 구글 클라우드 공식 백본망인 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent' 엔드포인트를 직접 호출하는 고성능 헬퍼를 Code.gs에 자동 탑재하여, DNS 오류 없이 100% 안정적이고 초고속으로 이미지/PDF 파일 OCR 분석을 수행합니다."
+  },
+  // 0-1. 시스템 설정 & 사이드바 메뉴 제어
+  {
+    id: "system-1",
+    category: "system",
+    question: "사이드바 메뉴의 노출 순서와 6대 비즈니스 도메인 그룹핑은 어떻게 구성되어 있나요?",
+    answer: "사이드바 메뉴는 실무 기업의 업무 흐름에 최적화된 6대 카테고리(1. 마케팅 & 홍보 채널, 2. 영업, 고객 & 계약, 3. 물류, 재고 & 통관, 4. 생산, 설비 & 안전 관리, 5. 재무, 회계 & 결제, 6. 인사, 노무 & 총무 지원)로 체계화되어 있습니다. 기본 노출 상태는 한국어 '가나다(ㄱㄴㄷ)순'으로 정렬되며, [시스템 설정 > 메뉴 관리]에서 [💼 업무 종류별], [ㄱㄴㄷ 가나다순], [⏰ 최근 사용순] 자동 정렬 버튼이나 드래그 앤 드롭으로 회사에 맞게 자유롭게 커스텀하실 수 있습니다."
+  },
   // 1. 문자발송 & 자동화
   {
     id: "sms-1",

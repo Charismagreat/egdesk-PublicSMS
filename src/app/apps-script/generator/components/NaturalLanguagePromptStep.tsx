@@ -11,6 +11,7 @@ interface NaturalLanguagePromptStepProps {
   loading: boolean;
   onBackToClone: () => void;
   clonedSheetInfo?: any;
+  existingScriptCode?: string;
 }
 
 export default function NaturalLanguagePromptStep({
@@ -20,6 +21,7 @@ export default function NaturalLanguagePromptStep({
   loading,
   onBackToClone,
   clonedSheetInfo,
+  existingScriptCode,
 }: NaturalLanguagePromptStepProps) {
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 
@@ -42,6 +44,8 @@ export default function NaturalLanguagePromptStep({
     }
   };
 
+  const isIncrementalMode = Boolean(existingScriptCode && existingScriptCode.trim().length > 30);
+
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-6 text-left">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
@@ -52,16 +56,39 @@ export default function NaturalLanguagePromptStep({
           <div>
             <h2 className="text-base font-black text-slate-800 tracking-tight flex items-center gap-2">
               <span>Step 2. 구글 시트에 주입할 자동화 로직을 자연어로 작성</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                다중 탭 심층 분석 AI
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                isIncrementalMode ? "bg-purple-100 text-purple-700" : "bg-indigo-100 text-indigo-700"
+              }`}>
+                {isIncrementalMode ? "기존 코드 기반 증분 수정 모드" : "다중 탭 심층 분석 AI"}
               </span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              AI가 시트의 모든 탭 구조와 컬럼을 미리 파악하고 있습니다. 원하는 자동화 기능(메뉴, 자동 계산, 탭 간 연동 등)을 편하게 적어주세요.
+              {isIncrementalMode
+                ? "현재 구글 시트의 기존 코드를 유지한 채, 추가하거나 변경하고 싶은 내용만 아래에 편하게 적어주세요."
+                : "AI가 시트의 모든 탭 구조와 컬럼을 미리 파악하고 있습니다. 원하는 자동화 기능(메뉴, 자동 계산, 탭 간 연동 등)을 편하게 적어주세요."}
             </p>
           </div>
         </div>
       </div>
+
+      {/* 증분 수정(Refactoring) 활성화 배너 */}
+      {isIncrementalMode && (
+        <div className="bg-gradient-to-r from-indigo-50/90 to-purple-50/90 border border-indigo-200/90 rounded-2xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-purple-600" />
+              <span>지능형 증분 수정 모드 활성화됨 (기존 코드 보존)</span>
+            </span>
+            <span className="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-200 shadow-3xs">
+              Code.gs 계승 모드
+            </span>
+          </div>
+          <p className="text-xs text-indigo-700 leading-relaxed">
+            💡 현재 구글 시트에 배포되어 있는 기존 코드(사이드바 UI, 파일 업로드 등)를 AI가 기억하고 있습니다.
+            기존 기능을 유지한 채 <strong>추가하거나 변경하고 싶은 내용만 아래에 편하게 적어주시면</strong> AI가 기존 코드에 자연스럽게 덧붙여(Merge) 완성해 드립니다.
+          </p>
+        </div>
+      )}
 
       {/* 감지된 시트 탭 목록 & 컬럼 명세 카드 */}
       {allTabs.length > 0 && (

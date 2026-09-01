@@ -97,10 +97,12 @@ export default function AppsScriptGeneratorPage() {
           action: "generate_script",
           prompt: prompt.trim(),
           sheetId: clonedSheetInfo?.clonedSheetId || clonedSheetInfo?.originalSheetId,
+          gasProjectId: clonedSheetInfo?.gasProjectId,
           sheetUrl: clonedSheetInfo?.clonedSheetUrl || sheetUrl,
           sheetTitle: clonedSheetInfo?.sheetTitle || "업무 대장",
           headers: clonedSheetInfo?.headers || [],
-          allTabs: clonedSheetInfo?.allTabs || []
+          allTabs: clonedSheetInfo?.allTabs || [],
+          currentScriptCode: scriptData?.scriptCode || ""
         })
       });
       const json = await res.json();
@@ -210,7 +212,50 @@ export default function AppsScriptGeneratorPage() {
     }
   };
 
-  // 7. 전체 사본 주입 내역 일괄 정리
+  // 7. 대장 항목 선택 시 해당 시트 상태 복원 & 3단계(또는 2단계) 즉시 진입
+  const handleSelectHistoryInjection = (inj: any) => {
+    let parsedFeatures: string[] = [];
+    let parsedTriggers: any[] = [];
+    try {
+      parsedFeatures = typeof inj.features === "string" ? JSON.parse(inj.features) : (inj.features || []);
+    } catch {}
+    try {
+      parsedTriggers = typeof inj.triggers === "string" ? JSON.parse(inj.triggers) : (inj.triggers || []);
+    } catch {}
+
+    const targetUrl = inj.sheet_url?.includes('/copy') ? inj.sheet_url.replace('/copy', '/edit') : (inj.sheet_url || "");
+
+    setClonedSheetInfo({
+      clonedSheetId: inj.sheet_id,
+      clonedSheetUrl: targetUrl,
+      sheetTitle: inj.sheet_title || "자동화 구글 시트",
+      gasProjectId: inj.gas_project_id,
+      headers: [],
+      allTabs: []
+    });
+    setSheetUrl(targetUrl);
+
+    if (inj.prompt) {
+      setPrompt(inj.prompt);
+    }
+
+    if (inj.script_code) {
+      setScriptData({
+        summary: inj.summary || inj.script_title || "자동화 스크립트",
+        features: parsedFeatures,
+        triggers: parsedTriggers,
+        scriptCode: inj.script_code,
+        manifest: inj.manifest || ""
+      });
+      // 3단계 (코드 검토 및 즉시 주입 화면)으로 이동!
+      setCurrentStep(3);
+    } else {
+      // 2단계 (자연어 프롬프트 수정 화면)으로 이동!
+      setCurrentStep(2);
+    }
+  };
+
+  // 8. 전체 사본 주입 내역 일괄 정리
   const handleClearAllInjections = async () => {
     if (!confirm("기존에 생성된 모든 사본 및 주입 내역을 대장에서 완전히 정리하시겠습니까?")) return;
     setInjections([]);
@@ -339,6 +384,7 @@ export default function AppsScriptGeneratorPage() {
             prompt={prompt}
             setPrompt={setPrompt}
             clonedSheetInfo={clonedSheetInfo}
+            existingScriptCode={scriptData?.scriptCode}
             onGenerateScript={handleGenerateScript}
             loading={loading}
             onBackToClone={() => setCurrentStep(1)}
@@ -362,6 +408,7 @@ export default function AppsScriptGeneratorPage() {
           injections={injections}
           loading={historyLoading}
           onRefresh={fetchInjections}
+          onSelectInjection={handleSelectHistoryInjection}
           onDeleteInjection={handleDeleteInjection}
           onClearAllInjections={handleClearAllInjections}
         />

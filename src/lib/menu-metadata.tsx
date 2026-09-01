@@ -49,82 +49,87 @@ export function YoutubeIcon({ className = "w-4 h-4" }: { className?: string }) {
       fill="currentColor" 
       className={className}
     >
-      <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.108C19.517 3.545 12 3.545 12 3.545s-7.516 0-9.387.51a3.003 3.003 0 0 0-2.11 2.108C0 8.033 0 12 0 12s0 3.967.502 5.837a3.003 3.003 0 0 0 2.11 2.108c1.871.51 9.387.51 9.387.51s7.517 0 9.387-.51a3.003 3.003 0 0 0 2.11-2.108C24 15.967 24 12 24 12s0-3.967-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-    </svg>
-  );
-}
-
-export interface MenuMetadata {
+      <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.108C19.517 3.545 12 3.545 12 3.545s-7.516 0-9.387.51a3.003 3.003 0 0 0-2.11 2.108C0 8.033 0 12 0 12s0 3.967.502 5.837a3.003 3.003 0 0 0 2.11 2.108c1.871.51 9.387.51 9.387.51s7.517 0 9.387-.51a3.003 3.003 0 0 0 2.11-2.108C24 15.967 24 12 24 12s0-3.967-.502-5.837zM9.545 1export interface MenuMetadata {
   href: string;
   label: string;
   icon: React.ComponentType<any>;
   color: string;
-  category: number;
+  category: number; // 1: 마케팅/채널, 2: 영업/고객, 3: 물류/재고, 4: 생산/현장/안전, 5: 재무/회계/결제, 6: 인사/노무/총무
 }
 
-// 💡 마스터 메뉴 명세 리스트 (SSOT)
-export const MENU_METADATA_LIST: MenuMetadata[] = [
-  // 1. 마케팅/채널/소통 (대고객 접점 및 채널)
+// 💡 6대 직관적 비즈니스 도메인별 마스터 메뉴 명세 리스트 (SSOT)
+export const RAW_MENU_METADATA_LIST: MenuMetadata[] = [
+  // 1. 마케팅 & 홍보 채널 (대고객 접점 및 SNS 채널)
   { href: "/sms", label: "문자 관제 AI", icon: MessageSquare, color: "text-purple-550", category: 1 },
   { href: "/instagram", label: "인스타그램 마케팅 AI", icon: InstagramIcon, color: "text-[#ff007f]", category: 1 },
   { href: "/naver-blog", label: "N-BLOG 포스팅 AI", icon: NaverIcon, color: "text-[#2db400]", category: 1 },
   { href: "/youtube-shorts", label: "YOUTUBE 쇼츠 AI", icon: YoutubeIcon, color: "text-[#FF0000]", category: 1 },
   { href: "/website", label: "홈페이지 빌더 AI", icon: Globe, color: "text-sky-555", category: 1 },
   
-  // 2. 고객/매출/결제 (비즈니스 거래 흐름)
+  // 2. 영업, 고객 & 계약 (비즈니스 거래 및 고객 관리)
   { href: "/customers", label: "고객 관리 AI", icon: Users, color: "text-green-600", category: 2 },
   { href: "/partners", label: "거래처 관리 AI", icon: Handshake, color: "text-emerald-600", category: 2 },
-  { href: "/transactions", label: "거래 관리 AI", icon: ShoppingCart, color: "text-orange-555", category: 2 },
-  { href: "/orders", label: "주문 관리 AI", icon: ClipboardList, color: "text-blue-550", category: 2 },
-  { href: "/payments", label: "결제 관리 AI", icon: CreditCard, color: "text-emerald-600", category: 2 },
   { href: "/estimates", label: "견적/발주/수주 AI", icon: ArrowRightLeft, color: "text-indigo-555", category: 2 },
+  { href: "/orders", label: "주문 관리 AI", icon: ClipboardList, color: "text-blue-550", category: 2 },
+  { href: "/transactions", label: "거래 관리 AI", icon: ShoppingCart, color: "text-orange-555", category: 2 },
   { href: "/coupons", label: "쿠폰 관리 AI", icon: Ticket, color: "text-rose-555", category: 2 },
-  { href: "/credit-risk", label: "채권 관리 AI", icon: CreditCard, color: "text-rose-555", category: 2 },
   { href: "/mail-management-ai", label: "메일 관리 AI", icon: Mail, color: "text-cyan-400", category: 2 },
   { href: "/form-management-new", label: "양식 관리 AI", icon: ClipboardList, color: "text-emerald-500", category: 2 },
-  { href: "/import-customs", label: "수입 통관 AI", icon: Truck, color: "text-indigo-600", category: 2 },
-  { href: "/scm-management", label: "공급망 관리 AI", icon: Truck, color: "text-indigo-500", category: 2 },
-  { href: "/products", label: "상품 관리 AI", icon: PackageSearch, color: "text-amber-600", category: 2 },
 
-  // 3. 생산/재고/안전 (공장/물류/제조 현장)
+  // 3. 물류, 재고 & 통관 (자재 유통 및 수출입)
   { href: "/inventory", label: "재고 관리 AI", icon: Package, color: "text-cyan-600", category: 3 },
-  { href: "/facility-management", label: "설비 관리 AI", icon: Wrench, color: "text-amber-550", category: 3 },
-  { href: "/production-plan", label: "생산 계획 AI", icon: CalendarDays, color: "text-indigo-550", category: 3 },
-  { href: "/energy-management", label: "에너지 관리 AI", icon: Zap, color: "text-amber-550", category: 3 },
-  { href: "/safety-management", label: "안전 관리 AI", icon: Shield, color: "text-red-655", category: 3 },
-  { href: "/safety-detection", label: "위험 감지 AI", icon: ShieldAlert, color: "text-red-655", category: 3 },
-  { href: "/quality-control", label: "품질 관리 AI", icon: CheckSquare, color: "text-indigo-600", category: 3 },
-  { href: "/grant-management", label: "지원금 신청 AI", icon: Award, color: "text-amber-555", category: 3 },
-  { href: "/knowledge-ai", label: "지식 관리 AI", icon: Compass, color: "text-indigo-550", category: 3 },
-  { href: "/google-drive", label: "구글 드라이브 관리 AI", icon: HardDrive, color: "text-indigo-600", category: 3 },
+  { href: "/products", label: "상품 관리 AI", icon: PackageSearch, color: "text-amber-600", category: 3 },
+  { href: "/import-customs", label: "수입 통관 AI", icon: Truck, color: "text-indigo-600", category: 3 },
+  { href: "/scm-management", label: "공급망 관리 AI", icon: Truck, color: "text-indigo-500", category: 3 },
   { href: "/ecount-erp-ai", label: "이카운트 ERP AI", icon: ArrowRightLeft, color: "text-sky-550", category: 3 },
 
-  // 4. 인사/노무/경영지원 (전사 백오피스)
-  { href: "/governance", label: "AI 컨트롤타워", icon: Bot, color: "text-purple-600", category: 4 },
-  { href: "/my-db", label: "MY DB 센터", icon: Database, color: "text-emerald-600", category: 4 },
-  { href: "/hr/attendance", label: "근태 관리 AI", icon: CalendarDays, color: "text-indigo-650", category: 4 },
-  { href: "/recruitment", label: "채용 매니저 AI", icon: Briefcase, color: "text-rose-550", category: 4 },
-  { href: "/expenses", label: "지출 관리 AI", icon: Coins, color: "text-rose-550", category: 4 },
-  { href: "/finance", label: "금융 정보 AI", icon: Landmark, color: "text-sky-555", category: 4 },
-  { href: "/finance-management", label: "금융 관리 AI", icon: Landmark, color: "text-sky-500", category: 4 },
-  { href: "/financials", label: "재무 정보 AI", icon: Landmark, color: "text-teal-600", category: 4 },
-  { href: "/finance-cashflow", label: "자금/원가 AI", icon: Coins, color: "text-amber-550", category: 4 },
-  { href: "/labor-management", label: "노무 관리 AI", icon: Scale, color: "text-red-655", category: 4 },
-  { href: "/password-ai", label: "비밀번호관리 AI", icon: Key, color: "text-purple-555", category: 4 },
-  { href: "/lawyer-ai", label: "법률 상담 AI", icon: Scale, color: "text-indigo-650", category: 4 },
-  { href: "/rnd-management", label: "연구소 관리 AI", icon: Award, color: "text-amber-550", category: 4 },
-  { href: "/meeting-minutes", label: "회의 기록 AI", icon: Mic, color: "text-purple-550", category: 4 },
+  // 4. 생산, 설비 & 안전 관리 (제조 현장 및 산업 안전)
+  { href: "/production-plan", label: "생산 계획 AI", icon: CalendarDays, color: "text-indigo-550", category: 4 },
+  { href: "/facility-management", label: "설비 관리 AI", icon: Wrench, color: "text-amber-550", category: 4 },
+  { href: "/quality-control", label: "품질 관리 AI", icon: CheckSquare, color: "text-indigo-600", category: 4 },
+  { href: "/safety-management", label: "안전 관리 AI", icon: Shield, color: "text-red-655", category: 4 },
+  { href: "/safety-detection", label: "위험 감지 AI", icon: ShieldAlert, color: "text-red-655", category: 4 },
+  { href: "/energy-management", label: "에너지 관리 AI", icon: Zap, color: "text-amber-550", category: 4 },
+
+  // 5. 재무, 회계 & 결제 (회사 자금 및 채권/지출)
+  { href: "/expenses", label: "지출 관리 AI", icon: Coins, color: "text-rose-550", category: 5 },
+  { href: "/payments", label: "결제 관리 AI", icon: CreditCard, color: "text-emerald-600", category: 5 },
+  { href: "/credit-risk", label: "채권 관리 AI", icon: CreditCard, color: "text-rose-555", category: 5 },
+  { href: "/finance-management", label: "금융 관리 AI", icon: Landmark, color: "text-sky-500", category: 5 },
+  { href: "/finance", label: "금융 정보 AI", icon: Landmark, color: "text-sky-555", category: 5 },
+  { href: "/financials", label: "재무 정보 AI", icon: Landmark, color: "text-teal-600", category: 5 },
+  { href: "/finance-cashflow", label: "자금/원가 AI", icon: Coins, color: "text-amber-550", category: 5 },
+
+  // 6. 인사, 노무 & 총무 지원 (임직원 지원 및 일반 백오피스)
+  { href: "/hr/attendance", label: "근태 관리 AI", icon: CalendarDays, color: "text-indigo-650", category: 6 },
+  { href: "/recruitment", label: "채용 매니저 AI", icon: Briefcase, color: "text-rose-550", category: 6 },
+  { href: "/labor-management", label: "노무 관리 AI", icon: Scale, color: "text-red-655", category: 6 },
+  { href: "/meeting-minutes", label: "회의 기록 AI", icon: Mic, color: "text-purple-550", category: 6 },
+  { href: "/lawyer-ai", label: "법률 상담 AI", icon: Scale, color: "text-indigo-650", category: 6 },
+  { href: "/rnd-management", label: "연구소 관리 AI", icon: Award, color: "text-amber-550", category: 6 },
+  { href: "/grant-management", label: "지원금 신청 AI", icon: Award, color: "text-amber-555", category: 6 },
+  { href: "/knowledge-ai", label: "지식 관리 AI", icon: Compass, color: "text-indigo-550", category: 6 },
+  { href: "/google-drive", label: "구글 드라이브 관리 AI", icon: HardDrive, color: "text-indigo-600", category: 6 },
+  { href: "/password-ai", label: "비밀번호관리 AI", icon: Key, color: "text-purple-555", category: 6 },
   
+  // 하단 고정 특수 메뉴 매핑용
+  { href: "/governance", label: "AI 컨트롤타워", icon: Bot, color: "text-purple-600", category: 6 },
+  { href: "/my-db", label: "MY DB 센터", icon: Database, color: "text-emerald-600", category: 6 },
 ];
 
-// 💡 [API용] DEFAULT_MENU_ITEMS
+// 💡 기본값(Default)을 "가나다(ㄱㄴㄷ)순"으로 자동 정렬하여 생성
+export const MENU_METADATA_LIST: MenuMetadata[] = [...RAW_MENU_METADATA_LIST].sort((a, b) => 
+  a.label.localeCompare(b.label, "ko")
+);
+
+// 💡 [API용] DEFAULT_MENU_ITEMS (기본 가나다순)
 export const DEFAULT_MENU_ITEMS = MENU_METADATA_LIST.map(item => ({
   href: item.href,
   label: item.label
 }));
 
 // 💡 [Sidebar용] MENU_STATIC_MAP
-export const MENU_STATIC_MAP: Record<string, { label: string; icon: React.ComponentType<any>; color: string }> = MENU_METADATA_LIST.reduce((acc, item) => {
+export const MENU_STATIC_MAP: Record<string, { label: string; icon: React.ComponentType<any>; color: string }> = RAW_MENU_METADATA_LIST.reduce((acc, item) => {
   acc[item.href] = {
     label: item.label,
     icon: item.icon,
@@ -136,8 +141,18 @@ export const MENU_STATIC_MAP: Record<string, { label: string; icon: React.Compon
 // 💡 [설정용] MENU_METADATA_MAP
 export const MENU_METADATA_MAP = MENU_STATIC_MAP;
 
-// 💡 [분류 정렬용] CATEGORY_MAP
-export const CATEGORY_MAP: Record<string, number> = MENU_METADATA_LIST.reduce((acc, item) => {
+// 💡 [분류 정렬용] CATEGORY_MAP (1~6단계 세분화 분류)
+export const CATEGORY_MAP: Record<string, number> = RAW_MENU_METADATA_LIST.reduce((acc, item) => {
   acc[item.href] = item.category;
   return acc;
 }, {} as Record<string, number>);
+
+// 💡 [카테고리 명칭 맵] CATEGORY_NAMES
+export const CATEGORY_NAMES: Record<number, string> = {
+  1: "마케팅 & 홍보 채널",
+  2: "영업, 고객 & 계약",
+  3: "물류, 재고 & 통관",
+  4: "생산, 설비 & 안전 관리",
+  5: "재무, 회계 & 결제",
+  6: "인사, 노무 & 총무 지원"
+};

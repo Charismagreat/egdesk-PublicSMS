@@ -7,6 +7,7 @@ interface InjectionHistoryCardProps {
   injections: any[];
   loading: boolean;
   onRefresh: () => void;
+  onSelectInjection?: (inj: any) => void;
   onDeleteInjection?: (id: string) => void;
   onClearAllInjections?: () => void;
 }
@@ -15,6 +16,7 @@ export default function InjectionHistoryCard({
   injections,
   loading,
   onRefresh,
+  onSelectInjection,
   onDeleteInjection,
   onClearAllInjections,
 }: InjectionHistoryCardProps) {
@@ -97,6 +99,16 @@ export default function InjectionHistoryCard({
                     <CheckCircle2 className="w-3 h-3" />
                     <span>배포됨</span>
                   </span>
+
+                  {onSelectInjection && (
+                    <button
+                      onClick={() => onSelectInjection(inj)}
+                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200/80 rounded-xl transition-all cursor-pointer shadow-3xs flex items-center gap-1 text-[11px]"
+                      title="이 시트의 자동화 코드 수정 및 3단계 진입"
+                    >
+                      <span>⚡ 이어서 수정하기</span>
+                    </button>
+                  )}
 
                   {inj.sheet_url && (
                     <a

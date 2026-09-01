@@ -309,7 +309,16 @@ export async function POST(req: Request) {
     // 2. 자연어 기반 Apps Script 코드 생성 (Generate Script)
     // ────────────────────────────────────────────────────────
     if (action === 'generate_script') {
-      const { prompt, sheetUrl, sheetTitle, headers, allTabs, sheetId } = body;
+      const {
+        prompt,
+        sheetUrl,
+        sheetTitle,
+        headers,
+        allTabs,
+        sheetId,
+        gasProjectId: incomingGasId,
+        currentScriptCode
+      } = body;
 
       if (!prompt || !prompt.trim()) {
         return NextResponse.json({
@@ -353,12 +362,46 @@ export async function POST(req: Request) {
         tabsContextDescription = `감지된 기본 헤더: ${Array.isArray(headers) && headers.length > 0 ? headers.join(', ') : '자유 형식'}`;
       }
 
+      // ────────────────────────────────────────────────────────
+      // 기존 배포된 스크립트 코드 조회 (증분 수정 모드)
+      // ────────────────────────────────────────────────────────
+      let existingCode = currentScriptCode || '';
+      if (!existingCode && (incomingGasId || sheetId)) {
+        try {
+          const targetProj = incomingGasId || `gas_proj_${sheetId}`;
+          const readRes = await callAppsScriptToolDirect('apps_script_read_file', {
+            projectId: targetProj,
+            fileName: 'Code.gs'
+          });
+          if (readRes) {
+            const rawContent = typeof readRes === 'string' ? readRes : (readRes?.result?.content?.[0]?.text || '');
+            if (rawContent && !rawContent.includes('Hello from EGDesk') && rawContent.length > 50) {
+              existingCode = rawContent;
+            }
+          }
+        } catch {}
+      }
+
+      let incrementalContext = '';
+      if (existingCode && existingCode.trim().length > 30) {
+        incrementalContext = `
+[⚡ 기존에 구글 시트에 배포되어 있던 Google Apps Script 소스코드]
+\`\`\`javascript
+${existingCode.trim()}
+\`\`\`
+
+[증분 수정 및 기능 확장 핵심 규칙]
+1. 위 [기존 코드]의 메뉴 구성, 함수, HTML UI 및 안정적인 비즈니스 로직을 최대한 존중하고 보존하십시오.
+2. 사용자의 새로운 [요구사항]을 기존 코드에 유기적으로 통합(Merge/Patch)하여 불필요한 중복 선언 없이 세련되게 완성된 전체 코드를 작성하십시오.
+`;
+      }
+
       const systemPrompt = `당신은 Google Apps Script(GAS) 및 Google Workspace 스프레드시트 자동화 최고 전문가입니다.
 사용자가 자연어로 요청한 비즈니스 로직을 완벽하고 신뢰성 높은 Google Apps Script (JavaScript V8 런타임) 코드로 작성해야 합니다.
 
-[작성 및 시트 탭 분석 핵심 지침]
-1. 구글 스프레드시트에 존재하는 **모든 탭(시트)의 이름과 각 탭의 컬럼 헤더, 실제 샘플 데이터 구조를 철저히 파악**하여 코드를 작성하십시오.
-2. 사용자의 요청이 특정 탭을 조작하는 것인지, 또는 여러 탭 간의 상호작용(예: 마스터 탭의 데이터를 상세 탭으로 자동 전기, VLOOKUP 연동, 타 탭 데이터 합산 등)인지 정확히 의도를 분석하십시오.
+[작성 및 증분 리팩토링 핵심 지침]
+1. **기존 코드가 제공된 경우**: 기존의 작동 가능한 함수와 설계를 계승하며 사용자의 추가/수정 요청을 자연스럽게 반영하여 완성된 단일 코드를 도출하십시오.
+2. 구글 스프레드시트에 존재하는 **모든 탭(시트)의 이름과 각 탭의 컬럼 헤더, 실제 샘플 데이터 구조를 철저히 파악**하여 코드를 작성하십시오.
 3. 시트를 가져올 때는 단순 \`getActiveSheet()\` 대신, 반드시 정확한 시트명을 지정하는 \`SpreadsheetApp.getActiveSpreadsheet().getSheetByName("탭이름")\`을 사용하여 탭 전환 시에도 오작동이 없도록 견고하게 작성하십시오.
 4. 사용자가 상단 메뉴바에서 직관적으로 실행할 수 있도록 \`onOpen()\` 트리거 함수와 \`SpreadsheetApp.getUi().createMenu('[⚡ 이지데스크 자동화]')...\` 커스텀 메뉴를 필수로 포함하십시오.
 5. 데이터 변경 감지가 필요한 경우 \`onEdit(e)\` 트리거에서 수정된 시트 이름(\`e.range.getSheet().getName()\`)과 열 번호를 엄격히 검증하여 다른 탭의 입력으로 인한 오작동을 원천 차단하십시오.
@@ -391,6 +434,8 @@ export async function POST(req: Request) {
 - Google Gemini API Key: ${geminiApiKey || '시트 속성(PropertiesService)에서 로드'}
 
 ${tabsContextDescription}
+
+${incrementalContext}
 
 [출력 JSON 규격]
 {

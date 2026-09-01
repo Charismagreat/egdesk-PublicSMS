@@ -10,7 +10,7 @@ import {
   ChevronUp, ChevronDown, Check, Save, ShieldAlert, GripVertical, Shield, CheckSquare, Wrench, Award, Scale, Key, Mic, Bot, ExternalLink
 } from "lucide-react";
 
-import { MENU_METADATA_MAP, CATEGORY_MAP } from '@/lib/menu-metadata';
+import { MENU_METADATA_MAP, CATEGORY_MAP, CATEGORY_NAMES } from '@/lib/menu-metadata';
 
 interface MenuSettingItem {
   id?: number;
@@ -48,13 +48,15 @@ export default function MenuSettingsCard() {
       .then(data => {
         if (data.success && data.menuSettings) {
           let items = data.menuSettings;
+          let targetSort: "abc" | "category" | "recent" = "abc"; // 기본값을 가나다순(abc)으로 지정
           if (typeof window !== "undefined") {
             const savedSort = localStorage.getItem("egdesk_menu_active_sort");
             if (savedSort === "abc" || savedSort === "category" || savedSort === "recent") {
-              setActiveSort(savedSort as "abc" | "category" | "recent");
-              items = applySortHelper(items, savedSort as "abc" | "category" | "recent");
+              targetSort = savedSort as "abc" | "category" | "recent";
             }
           }
+          setActiveSort(targetSort);
+          items = applySortHelper(items, targetSort);
           setMenuItems(items);
         }
       })
@@ -359,8 +361,13 @@ export default function MenuSettingsCard() {
                       className="flex flex-col min-w-0 hover:underline cursor-pointer group/link text-left"
                       title="새 탭에서 페이지 열기"
                     >
-                      <span className="text-xs font-bold text-slate-800 truncate group-hover/link:text-indigo-650 transition-colors flex items-center gap-1">
+                      <span className="text-xs font-bold text-slate-800 truncate group-hover/link:text-indigo-650 transition-colors flex items-center gap-1.5 flex-wrap">
                         {meta.label}
+                        {CATEGORY_NAMES[CATEGORY_MAP[item.menu_href]] && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100/80">
+                            {CATEGORY_NAMES[CATEGORY_MAP[item.menu_href]]}
+                          </span>
+                        )}
                         <ExternalLink className="w-3 h-3 text-slate-400 group-hover/link:text-indigo-500 opacity-0 group-hover/link:opacity-100 transition-all shrink-0" />
                       </span>
                       <span className="text-[10px] text-indigo-650/70 tracking-tight mt-0.5 truncate">{item.menu_href}</span>
