@@ -495,7 +495,9 @@ export async function POST(req: Request) {
       send_method = '',           // EMAIL, SMS, FAX
       send_target = '',           // 수신 주소/번호
       raw_ocr_data = null,
-      linked_so_ids = []          // 거래명세서 발송 연계 수주 번호 목록
+      linked_so_ids = [],         // 거래명세서 발송 연계 수주 번호 목록
+      sync_to_so = false,         // 수주 원장 동시 동기화 옵션
+      price_change_reason = ''    // 단가/수량 변동 사유
     } = body;
 
     if (!partner_name) {
@@ -657,11 +659,19 @@ export async function POST(req: Request) {
     if (linked_so_ids && Array.isArray(linked_so_ids) && linked_so_ids.length > 0) {
       for (const soId of linked_so_ids) {
         try {
-          await updateRows('crm_sales_orders', {
+          const soUpdatePayload: any = {
             status: 'STATEMENT_SENT',
             updated_at: nowStr,
             updated_by: '거래명세서 발송 연동'
-          }, {
+          };
+
+          // 🔍 1단계: 수주 원장 동기화 옵션이 켜진 경우 수주 원장의 금액도 동시 보정
+          if (sync_to_so) {
+            soUpdatePayload.total_amount = total_amount;
+            soUpdatePayload.updated_by = '거래명세서 수량단가 동기화';
+          }
+
+          await updateRows('crm_sales_orders', soUpdatePayload, {
             filters: { id: String(soId) }
           });
         } catch (soErr: any) {

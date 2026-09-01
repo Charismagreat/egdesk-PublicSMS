@@ -1076,25 +1076,36 @@ export default function OutboundHub({
                       {so.total_amount.toLocaleString()}원
                     </td>
                     <td className="py-3.5 px-2">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[9px] font-black border uppercase ${
-                          so.status === "DELIVERED"
-                            ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                      <div className="flex flex-col gap-1">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-black border uppercase inline-flex items-center gap-1 justify-center ${
+                            so.status === "DELIVERED"
+                              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                              : (so as any).fulfillment_status === "PARTIAL"
+                              ? "bg-amber-50 text-amber-800 border-amber-300"
+                              : so.status === "STATEMENT_SENT"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : so.status === "REGISTERED"
+                              ? "bg-blue-50 text-blue-700 border-blue-100"
+                              : "bg-slate-100 text-slate-700 border-slate-200"
+                          }`}
+                        >
+                          {so.status === "DELIVERED"
+                            ? "🚚 납품완료"
+                            : (so as any).fulfillment_status === "PARTIAL"
+                            ? `🟡 분할출고 (${(so as any).delivered_qty}/${(so as any).ordered_qty})`
                             : so.status === "STATEMENT_SENT"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            ? "🟢 명세서발송완료"
                             : so.status === "REGISTERED"
-                            ? "bg-blue-50 text-blue-700 border-blue-100"
-                            : "bg-slate-100 text-slate-700 border-slate-200"
-                        }`}
-                      >
-                        {so.status === "DELIVERED"
-                          ? "🚚 납품완료"
-                          : so.status === "STATEMENT_SENT"
-                          ? "명세서발송완료"
-                          : so.status === "REGISTERED"
-                          ? "수주등록"
-                          : "확인완료"}
-                      </span>
+                            ? "수주등록"
+                            : "확인완료"}
+                        </span>
+                        {(so as any).fulfillment_status === "PARTIAL" && (
+                          <span className="text-[9px] text-amber-700 font-bold">
+                            잔여: {(so as any).remaining_qty}개 미출고
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-2 text-slate-500 font-medium">
                       {so.delivery_date || "-"}

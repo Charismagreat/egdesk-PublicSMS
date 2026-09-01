@@ -132,8 +132,48 @@ export async function GET(req: Request) {
       const estRes = await queryTable('crm_estimates', { filters: { tenant_id: tenantId }, limit: 10000 });
       const rawEsts = estRes.rows || [];
       const estMap: Record<string, any> = {};
+      // 📦 2단계: 거래명세서 목록 및 수주별 출고 내역 인덱싱
+      const statementItemsBySoId: Record<string, any[]> = {};
+      const statementCountBySoId: Record<string, number> = {};
+
       for (const est of rawEsts) {
-        estMap[est.id] = est;
+        if (est.type !== 'OUTBOUND' || !est.tags) continue;
+        let isStmt = false;
+        let linkedIds: string[] = [];
+        try {
+          const p = JSON.parse(est.tags);
+          isStmt = p && p.is_statement === true;
+          if (Array.isArray(p.linked_so_ids)) {
+            linkedIds = p.linked_so_ids;
+          }
+        } catch {}
+
+        if (isStmt) {
+          const stmtItems = itemsMap[est.id] || [];
+          // 1) tags.linked_so_ids 기반 매핑
+          linkedIds.forEach((soId: string) => {
+            if (!statementItemsBySoId[soId]) statementItemsBySoId[soId] = [];
+            statementItemsBySoId[soId].push(...stmtItems);
+            statementCountBySoId[soId] = (statementCountBySoId[soId] || 0) + 1;
+          });
+
+          // 2) 품목 remark (예: "수주:SO-...") 기반 매핑 보정
+          stmtItems.forEach((it: any) => {
+            if (it.spec) {
+              try {
+                const specObj = JSON.parse(it.spec);
+                const remark = specObj.remark || '';
+                const match = remark.match(/수주:(SO-[0-9a-zA-Z-]+)/);
+                if (match && match[1] && !linkedIds.includes(match[1])) {
+                  const matchedSoId = match[1];
+                  if (!statementItemsBySoId[matchedSoId]) statementItemsBySoId[matchedSoId] = [];
+                  statementItemsBySoId[matchedSoId].push(it);
+                  statementCountBySoId[matchedSoId] = (statementCountBySoId[matchedSoId] || 0) + 1;
+                }
+              } catch {}
+            }
+          });
+        }
       }
 
       const enrichedRows = rows.map((so: any) => {
@@ -168,12 +208,31 @@ export async function GET(req: Request) {
           }
         }
 
+        // 📦 수주 총 수량 및 기출고 누적 수량 계산
+        const orderedQty = estItems.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0);
+        const deliveredStmtItems = statementItemsBySoId[so.id] || [];
+        const deliveredQty = deliveredStmtItems.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0);
+        const remainingQty = Math.max(0, orderedQty - deliveredQty);
+        const statementCount = statementCountBySoId[so.id] || 0;
+
+        let fulfillmentStatus = 'UNFULFILLED';
+        if (deliveredQty >= orderedQty && orderedQty > 0) {
+          fulfillmentStatus = 'FULFILLED';
+        } else if (deliveredQty > 0 && deliveredQty < orderedQty) {
+          fulfillmentStatus = 'PARTIAL';
+        }
+
         return {
           ...so,
           is_pending_delete: pendingDocIds.has(so.id),
           item_search_text: itemSearchText,
           document_memo_search: docMemo,
           items: estItems,
+          ordered_qty: orderedQty,
+          delivered_qty: deliveredQty,
+          remaining_qty: remainingQty,
+          statement_count: statementCount,
+          fulfillment_status: fulfillmentStatus,
           file_url: relatedEst ? relatedEst.file_url : null,
           business_license_url: relatedEst ? relatedEst.business_license_url : null
         };

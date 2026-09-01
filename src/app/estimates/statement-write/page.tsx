@@ -281,6 +281,11 @@ function DeliveryStatementWriteContent() {
   const [sendDirectMemo, setSendDirectMemo] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [linkedSoIds, setLinkedSoIds] = useState<string[]>([]);
+  
+  // 🔍 1단계: 수주 원본 품목 보존 및 실시간 Diff & 동기화 상태
+  const [originalMaterials, setOriginalMaterials] = useState<MaterialItem[]>([]);
+  const [syncToSo, setSyncToSo] = useState(false);
+  const [priceChangeReason, setPriceChangeReason] = useState("");
 
   // 💡 자사 직인 도장 이미지 상태 (로컬스토리지가 아닌 메모리 상태로 관리하여 용량 초과 방어)
   const [sealImage, setSealImage] = useState<string | null>(null);
@@ -555,7 +560,9 @@ function DeliveryStatementWriteContent() {
       }
     });
     
-    setMaterials(itemsList.length > 0 ? itemsList : [{ itemCode: "", productName: "", spec: "", quantity: 0, unitPrice: 0, remark: "" }]);
+    const finalMaterials = itemsList.length > 0 ? itemsList : [{ itemCode: "", productName: "", spec: "", quantity: 0, unitPrice: 0, remark: "" }];
+    setMaterials(finalMaterials);
+    setOriginalMaterials(JSON.parse(JSON.stringify(finalMaterials)));
   };
 
   // 🚀 URL 쿼리 파라미터(soId, soIds)로 유입된 수주 건 자동 로드 및 폼 오토필
@@ -624,6 +631,32 @@ function DeliveryStatementWriteContent() {
 
   // 최종 거래명세금액 (재료비 + 기타 부대 비용)
   const grandTotal = materialsTotal + extraCostsTotal;
+
+  // 🔍 1단계: 수주 원본 대비 수량/단가 변동 감지 헬퍼
+  const getMaterialDiff = (current: MaterialItem, idx: number) => {
+    if (!originalMaterials || !originalMaterials[idx]) return null;
+    const orig = originalMaterials[idx];
+    const origQty = Number(orig.quantity) || 0;
+    const currentQty = Number(current.quantity) || 0;
+    const origPrice = Number(orig.unitPrice) || 0;
+    const currentPrice = Number(current.unitPrice) || 0;
+
+    const qtyDiff = currentQty - origQty;
+    const priceDiff = currentPrice - origPrice;
+
+    if (qtyDiff === 0 && priceDiff === 0) return null;
+    return {
+      origQty,
+      currentQty,
+      qtyDiff,
+      origPrice,
+      currentPrice,
+      priceDiff
+    };
+  };
+
+  // 전체 품목 중 하나라도 수량이나 단가가 변경되었는지 여부
+  const hasAnyDiff = materials.some((m, idx) => getMaterialDiff(m, idx) !== null);
 
   const handleAddMaterial = () => {
     setMaterials([...materials, { itemCode: "", productName: "", spec: "", quantity: 0, unitPrice: 0, remark: "" }]);
@@ -933,6 +966,11 @@ function DeliveryStatementWriteContent() {
       }
 
       // 💡 실제 데이터베이스에 일반 거래명세서 적재 API 호출
+      const documentMemoText = [
+        memo,
+        priceChangeReason ? `[변동사유: ${priceChangeReason}]` : ""
+      ].filter(Boolean).join(" | ");
+
       const payload = {
         type: "OUTBOUND",
         direction_status: "SENT",
@@ -941,6 +979,8 @@ function DeliveryStatementWriteContent() {
         partner_manager: buyer.managerName || "-",
         items: payloadItems,
         linked_so_ids: linkedSoIds,
+        sync_to_so: syncToSo,
+        price_change_reason: priceChangeReason,
         tags: JSON.stringify({ 
           is_statement: true,
           is_manufacture: false,
@@ -952,7 +992,8 @@ function DeliveryStatementWriteContent() {
           businessProfit: 0,
           materialManageCost: 0,
           grandTotal: materialsTotal + extraCostsTotal,
-          document_memo: memo // 💡 대장의 상세비고 컬럼과 연계 표시
+          document_memo: documentMemoText || memo, // 💡 대장의 상세비고 컬럼과 연계 표시
+          price_change_reason: priceChangeReason || null
         }),
         send_method: selectedChannels.join(","),
         send_target: selectedChannels.map(ch => {
@@ -1368,27 +1409,45 @@ function DeliveryStatementWriteContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {materials.map((it, idx) => (
-                      <tr key={idx} className="group hover:bg-slate-50/50">
-                        <td className="py-2.5 pr-2 pl-1">
-                          <div className="flex gap-1.5 items-center">
-                            <input 
-                              type="text" 
-                              value={it.itemCode || ""}
-                              onChange={e => handleMaterialChange(idx, "itemCode", e.target.value)}
-                              onBlur={e => handleItemCodeLookup(idx, e.target.value, true)}
-                              placeholder="품목코드 (INV-)"
-                              className="w-24 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 outline-none focus:border-indigo-500 shrink-0 font-mono font-bold"
-                            />
-                            <input 
-                              type="text" 
-                              value={it.productName || ""}
-                              onChange={e => handleMaterialChange(idx, "productName", e.target.value)}
-                              placeholder="상품명 입력"
-                              className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 outline-none focus:border-indigo-500"
-                            />
-                          </div>
-                        </td>
+                    {materials.map((it, idx) => {
+                      const diff = getMaterialDiff(it, idx);
+                      return (
+                        <tr key={idx} className={`group hover:bg-slate-50/50 ${diff ? "bg-amber-50/30" : ""}`}>
+                          <td className="py-2.5 pr-2 pl-1">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex gap-1.5 items-center">
+                                <input 
+                                  type="text" 
+                                  value={it.itemCode || ""}
+                                  onChange={e => handleMaterialChange(idx, "itemCode", e.target.value)}
+                                  onBlur={e => handleItemCodeLookup(idx, e.target.value, true)}
+                                  placeholder="품목코드 (INV-)"
+                                  className="w-24 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 outline-none focus:border-indigo-500 shrink-0 font-mono font-bold"
+                                />
+                                <input 
+                                  type="text" 
+                                  value={it.productName || ""}
+                                  onChange={e => handleMaterialChange(idx, "productName", e.target.value)}
+                                  placeholder="상품명 입력"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 outline-none focus:border-indigo-500"
+                                />
+                              </div>
+                              {diff && (
+                                <div className="flex items-center gap-1.5 flex-wrap pl-1">
+                                  {diff.qtyDiff !== 0 && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-0.5">
+                                      수량 변동: {diff.origQty}개 ➔ {diff.currentQty}개 ({diff.qtyDiff > 0 ? `+${diff.qtyDiff}` : diff.qtyDiff}개)
+                                    </span>
+                                  )}
+                                  {diff.priceDiff !== 0 && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-800 border border-indigo-300 inline-flex items-center gap-0.5">
+                                      단가 변동: {diff.origPrice.toLocaleString()}원 ➔ {diff.currentPrice.toLocaleString()}원 ({diff.priceDiff > 0 ? `+${diff.priceDiff.toLocaleString()}` : diff.priceDiff.toLocaleString()}원)
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </td>
                         <td className="py-2.5 pr-2">
                           <input 
                             type="text" 
@@ -1434,9 +1493,10 @@ function DeliveryStatementWriteContent() {
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1843,6 +1903,68 @@ function DeliveryStatementWriteContent() {
                     placeholder="예: 지상현 대표 대면 전달, 퀵 발송, 종이 출력 등"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
                   />
+                </div>
+              )}
+
+              {/* 🔍 1단계: 수량/단가 변동 감지 시 수주 원장 동기화 옵션 및 변동 사유 */}
+              {hasAnyDiff && linkedSoIds.length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 space-y-2.5 text-left">
+                  <div className="flex items-center gap-1.5 text-amber-700 text-xs font-black">
+                    <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>수주 원본 대비 수량/단가 변동 감지됨</span>
+                  </div>
+                  
+                  <p className="text-[10.5px] text-amber-850 leading-relaxed font-medium">
+                    수주 등록 시점과 다른 수량/단가로 명세서가 작성되었습니다. 이 거래명세서는 수정한 수치로 정상 발행됩니다.
+                  </p>
+
+                  {/* 동기화 체크박스 */}
+                  <label className="flex items-start gap-2 p-2 bg-white/90 rounded-xl border border-amber-200 cursor-pointer hover:bg-white transition-all select-none">
+                    <input
+                      type="checkbox"
+                      checked={syncToSo}
+                      onChange={e => setSyncToSo(e.target.checked)}
+                      className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer mt-0.5"
+                    />
+                    <div className="flex flex-col text-left">
+                      <span className="text-[11px] font-bold text-slate-800">
+                        수주 원장(crm_sales_orders)의 수량·단가도 함께 동기화 갱신
+                      </span>
+                      <span className="text-[9.5px] text-slate-400">
+                        체크 해제 시 수주 원본은 그대로 보존되고, 명세서만 독립 발행됩니다.
+                      </span>
+                    </div>
+                  </label>
+
+                  {/* 변동 사유 칩 & 입력창 */}
+                  <div className="space-y-1 text-left">
+                    <label className="block text-[10px] font-bold text-slate-600">
+                      단가/수량 변동 사유 (선택/기록)
+                    </label>
+                    <div className="flex flex-wrap gap-1">
+                      {["1차 분할 납품", "바이어 단가 협의", "수량 단가 할인(DC)", "단순 오기입 정정"].map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setPriceChangeReason(tag)}
+                          className={`px-2 py-0.5 rounded-lg text-[9.5px] font-bold transition-all cursor-pointer border ${
+                            priceChangeReason === tag
+                              ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      value={priceChangeReason}
+                      onChange={e => setPriceChangeReason(e.target.value)}
+                      placeholder="직접 입력: 예) 긴급 부분 출고, 추가 네고 반영 등"
+                      className="w-full bg-white border border-amber-200 rounded-lg p-2 text-xs font-medium text-slate-800 outline-none focus:border-amber-500"
+                    />
+                  </div>
                 </div>
               )}
 
