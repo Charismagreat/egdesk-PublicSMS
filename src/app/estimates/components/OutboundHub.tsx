@@ -1146,7 +1146,7 @@ export default function OutboundHub({
                         >
                           <FileText className="w-3.5 h-3.5" />
                           {(so as any).fulfillment_status === "PARTIAL"
-                            ? `📄 잔여분(${(so as any).remaining_qty}개) 명세서 작성`
+                            ? "추가 명세서 작성"
                             : so.status === "DELIVERED"
                             ? "거래명세서 재확인"
                             : so.status === "STATEMENT_SENT"
