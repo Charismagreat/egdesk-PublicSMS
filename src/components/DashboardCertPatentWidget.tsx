@@ -317,13 +317,68 @@ export default function DashboardCertPatentWidget() {
     return eventList;
   };
 
-  // 전사 전체 미배정 총 건수 계산
-  const totalUnassignedCount = useMemo(() => {
+  const currentMonthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  // 1. 현재 보고 있는 월의 미배정 건수 계산
+  const currentMonthUnassignedCount = useMemo(() => {
     let count = 0;
-    tasks.forEach(t => { if (!t.assigned_to) count++; });
-    salesDeliveries.forEach(s => { if (!s.assigned_to) count++; });
+    tasks.forEach(t => {
+      if (!t.assigned_to && t.due_date && t.due_date.startsWith(currentMonthKey)) count++;
+    });
+    salesDeliveries.forEach(s => {
+      if (!s.assigned_to && s.due_date && s.due_date.startsWith(currentMonthKey)) count++;
+    });
     return count;
+  }, [tasks, salesDeliveries, currentMonthKey]);
+
+  // 2. 전사 전체 미배정 총 건수 및 월별 집계 계산
+  const { totalUnassignedCount, unassignedByMonth } = useMemo(() => {
+    let total = 0;
+    const monthMap: Record<string, number> = {};
+
+    const addUnassigned = (dueDate: string | null) => {
+      total++;
+      if (dueDate && dueDate.length >= 7) {
+        const ym = dueDate.substring(0, 7);
+        monthMap[ym] = (monthMap[ym] || 0) + 1;
+      }
+    };
+
+    tasks.forEach(t => { if (!t.assigned_to) addUnassigned(t.due_date); });
+    salesDeliveries.forEach(s => { if (!s.assigned_to) addUnassigned(s.due_date); });
+
+    return { totalUnassignedCount: total, unassignedByMonth: monthMap };
   }, [tasks, salesDeliveries]);
+
+  // 다른 월에 존재하는 미배정 정보 목록 (현재 월 제외)
+  const otherUnassignedMonths = useMemo(() => {
+    return Object.entries(unassignedByMonth)
+      .filter(([ym]) => ym !== currentMonthKey)
+      .map(([ym, cnt]) => ({ ym, cnt }));
+  }, [unassignedByMonth, currentMonthKey]);
+
+  // 특정 월로 즉시 달력 이동하는 핸들러
+  const handleJumpToMonth = (ym: string) => {
+    const [yStr, mStr] = ym.split('-');
+    const newY = parseInt(yStr, 10);
+    const newM = parseInt(mStr, 10) - 1;
+    if (!isNaN(newY) && !isNaN(newM)) {
+      const newDate = new Date(newY, newM, 1);
+      setCurrentDate(newDate);
+      setSelectedDateStr(`${ym}-01`);
+      setUnassignedOnly(true);
+    }
+  };
+
+  // 미배정 토글 클릭 시 스마트 동작
+  const handleToggleUnassignedOnly = () => {
+    const nextVal = !unassignedOnly;
+    setUnassignedOnly(nextVal);
+    // 만약 미배정 필터를 켰는데 현재 월에 0건이고 다른 월에 미배정 건이 있다면, 첫 번째 미배정 월로 스마트 자동 점프
+    if (nextVal && currentMonthUnassignedCount === 0 && otherUnassignedMonths.length > 0) {
+      handleJumpToMonth(otherUnassignedMonths[0].ym);
+    }
+  };
 
   // 선택된 일자의 이벤트 목록
   const selectedEvents = getEventsForDate(selectedDateStr);
@@ -366,7 +421,7 @@ export default function DashboardCertPatentWidget() {
           {/* ⚠️ 미배정 건만 보기 필터 토글 버튼 */}
           <button
             type="button"
-            onClick={() => setUnassignedOnly(prev => !prev)}
+            onClick={handleToggleUnassignedOnly}
             className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
               unassignedOnly
                 ? "bg-amber-500 text-white ring-2 ring-amber-400 animate-pulse"
@@ -378,9 +433,23 @@ export default function DashboardCertPatentWidget() {
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
               unassignedOnly ? "bg-white text-amber-600" : "bg-amber-200 text-amber-900"
             }`}>
-              {totalUnassignedCount}건
+              {currentMonthUnassignedCount > 0 ? `이달 ${currentMonthUnassignedCount}건` : `전사 ${totalUnassignedCount}건`}
             </span>
           </button>
+
+          {/* 🚨 다른 월에 미배정 건이 있을 때 원클릭 스마트 점프 칩 */}
+          {otherUnassignedMonths.map(({ ym, cnt }) => (
+            <button
+              key={ym}
+              type="button"
+              onClick={() => handleJumpToMonth(ym)}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-black bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1 cursor-pointer transition-all shadow-3xs"
+              title={`${ym}로 이동하여 미배정 ${cnt}건 배정`}
+            >
+              <AlertTriangle className="w-3 h-3 text-rose-500 animate-bounce" />
+              <span>{ym}에 미배정 {cnt}건 ➔ 바로 이동</span>
+            </button>
+          ))}
 
           <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200">
             <button
@@ -465,6 +534,33 @@ export default function DashboardCertPatentWidget() {
           <Truck className="w-3 h-3" /> 수주 · 발주 · 납기일
         </button>
       </div>
+
+      {/* ⚠️ 미배정 필터 활성화 상태에서 현재 월에 미배정이 없을 때 친절한 안내 배너 */}
+      {unassignedOnly && currentMonthUnassignedCount === 0 && (
+        <div className="mb-4 p-3.5 bg-amber-500/10 border border-amber-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              선택하신 <b>{year}년 {month + 1}월</b>에는 미배정 일정이 없습니다.
+              {otherUnassignedMonths.length > 0 ? " (다른 월에 대기 중인 미배정 건이 있습니다)" : " (전사 모든 일정이 배정 완료되었습니다)"}
+            </span>
+          </div>
+          {otherUnassignedMonths.length > 0 && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              {otherUnassignedMonths.map(({ ym, cnt }) => (
+                <button
+                  key={ym}
+                  onClick={() => handleJumpToMonth(ym)}
+                  className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-[11px] cursor-pointer shadow-xs transition-all flex items-center gap-1"
+                >
+                  <span>{ym} ({cnt}건)로 이동</span>
+                  <ArrowRightLeft className="w-3 h-3" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 🗓️ 7일 요일 헤더 (일 ~ 토) */}
       <div className="grid grid-cols-7 text-center font-bold text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-t-2xl py-2.5">
