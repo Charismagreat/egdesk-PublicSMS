@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Code, Play, Clock, RefreshCw, Layers, CheckCircle2, AlertCircle, FileCode, Wrench } from "lucide-react";
+import Link from "next/link";
+import { Code, Play, Clock, RefreshCw, Layers, CheckCircle2, AlertCircle, FileCode, Wrench, Sparkles, ArrowRight } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 export default function DriveAppsScriptManager() {
@@ -31,6 +32,30 @@ export default function DriveAppsScriptManager() {
 
   return (
     <div className="space-y-6">
+      {/* ⚡ AI 시트 자동화 주입기 프로모 배너 */}
+      <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 rounded-3xl p-6 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px]">NEW</span>
+            <h3 className="font-extrabold text-base text-white tracking-tight flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>Google Apps Script 자동 주입 AI (SheetBot)</span>
+            </h3>
+          </div>
+          <p className="text-xs text-indigo-100 leading-relaxed">
+            내 구글 시트 URL을 넣으면 이지데스크가 사본을 복제하고, 자연어 요구사항을 바탕으로 Apps Script를 직접 주입해 드립니다.
+          </p>
+        </div>
+
+        <Link
+          href="/apps-script/generator"
+          className="inline-flex items-center gap-2 px-5 py-3 bg-white hover:bg-slate-100 text-indigo-900 font-extrabold text-xs rounded-2xl transition-all shadow-sm shrink-0 text-decoration-none active:scale-95"
+        >
+          <span>🚀 AI 시트 자동 주입기 열기</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      </div>
+
       {/* 1. Apps Script 상태 헤더 카드 */}
       <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">

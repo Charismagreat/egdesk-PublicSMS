@@ -49,6 +49,7 @@ function DynamicTitleHandler() {
       "/youtube-shorts": "YOUTUBE 쇼츠 AI",
       "/knowledge-ai": "지식 관리 AI",
       "/google-drive": "구글 드라이브 관리 AI",
+      "/apps-script/generator": "Google Apps Script 자동 주입 AI",
       "/finance-cashflow": "자금/원가 AI",
       "/lawyer-ai": "법률 상담 AI",
       "/credit-risk": "채권 관리 AI",

@@ -3,6 +3,8 @@
  *
  * Visitors become EGDesk Auth users. Login is brokered by EGDesk so this
  * site never receives SUPABASE_URL or the anon key.
+ * The opaque session is bound to this site origin and will not work on
+ * another published site that shares the same EGDesk.
  *
  * Import this file only from pages that need visitor Google.
  *
@@ -44,10 +46,15 @@ async function parseEgdeskJson(response: Response): Promise<any> {
   return result;
 }
 
+function visitorOriginHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  return { 'X-Visitor-Origin': window.location.origin };
+}
+
 async function callVisitorAuth(tool: string, args: Record<string, unknown> = {}) {
   const response = await apiFetch('/__visitor_auth_proxy', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...visitorOriginHeaders() },
     body: JSON.stringify({ tool, arguments: args }),
   });
   return parseEgdeskJson(response);
@@ -63,6 +70,7 @@ async function callVisitorGoogle(tool: string, args: Record<string, unknown> = {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${sessionId}`,
+      ...visitorOriginHeaders(),
     },
     body: JSON.stringify({ tool, arguments: args }),
   });

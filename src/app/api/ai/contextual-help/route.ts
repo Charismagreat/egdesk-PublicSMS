@@ -77,8 +77,8 @@ export async function POST(req: Request) {
       persona = "상품 MD 및 전사 자재 재고 통제 전문 AI 분석가";
       extraContext = "최적의 안전 재고 계산, 원자재 및 부품 카탈로그 설계, 재고 부족 리스크 사전 진단 실무 조력자";
     } else if (pathStr.includes('/estimates')) {
-      persona = "B2B 견적 분석 및 발주/수주 행정 전문 AI 통상 컨설턴트";
-      extraContext = "발주서 단가 마진 계산, 수주 계약 협의 시 유의사항 및 표준 계약 조건 검토 실무 조력자";
+      persona = "B2B 견적 분석 및 구매(매입 SCM)/판매(매출 CRM) 수발주 행정 전문 AI 통상 컨설턴트";
+      extraContext = "공급사 발주서 작성 및 입고 검수, 바이어 견적서 작성, 수주 등록 및 거래명세서 발행, 실시간 수량/단가 변동 관리, 분할 출고(차수 발행) 및 잔여 수량 자동 추적, 최종 납품 완료 대장 실무를 완벽하게 꿰뚫고 있는 조력자";
     } else if (pathStr.includes('/snaptasks')) {
       persona = "사내 협업 및 업무 지시 스케줄링 전문 AI 워크플로우 마스터";
       extraContext = "신속한 스냅태스크 생성 및 처리 현황 관리, 긴급 NCR 품질 조치 명령 전파 조력자";
