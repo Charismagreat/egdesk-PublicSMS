@@ -157,9 +157,14 @@ export default async function Home() {
     });
 
     // 2.2. 매출액 & 매입액 집계 (해당 테넌트 업로드 tax_invoices & tax_exempt_invoices)
+    const rawId = tenantId.replace(/^tenant-/, '');
+    const tenantCond = (!tenantId || tenantId === 'tenant-default-id' || tenantId === 'default')
+      ? `(tenant_id = 'default' OR tenant_id = 'wontrading' OR tenant_id IS NULL OR tenant_id = '')`
+      : `(tenant_id = '${rawId}' OR tenant_id = 'tenant-${rawId}')`;
+
     const [taxInvRes, taxExemptRes] = await Promise.all([
-      executeSQL(`SELECT * FROM tax_invoices WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] })),
-      executeSQL(`SELECT * FROM tax_exempt_invoices WHERE tenant_id = '${tenantId}'`).catch(() => ({ rows: [] }))
+      executeSQL(`SELECT * FROM tax_invoices WHERE ${tenantCond}`).catch(() => ({ rows: [] })),
+      executeSQL(`SELECT * FROM tax_exempt_invoices WHERE ${tenantCond}`).catch(() => ({ rows: [] }))
     ]);
 
     const invoices = [
