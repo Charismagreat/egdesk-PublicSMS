@@ -35,12 +35,14 @@ async function verifyUserRole() {
   }
 }
 
-// 🔑 테넌트 격리 조건 생성 헬퍼
+// 🔑 테넌트 격리 조건 생성 헬퍼 (접두사 유무 양방향 완벽 호환)
 function getTenantCondition(tenantId: string): string {
   if (!tenantId || tenantId === 'tenant-default-id' || tenantId === 'default') {
     return `(tenant_id = 'tenant-default-id' OR tenant_id = 'default' OR tenant_id IS NULL OR tenant_id = '')`;
   }
-  return `tenant_id = '${tenantId}'`;
+  const rawId = tenantId.replace(/^tenant-/, '');
+  const prefixedId = `tenant-${rawId}`;
+  return `(tenant_id = '${rawId}' OR tenant_id = '${prefixedId}')`;
 }
 
 // 이중 안전 장치: 배열이 아닐 경우 빈 배열로 방어 처리

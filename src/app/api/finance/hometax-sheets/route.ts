@@ -6,7 +6,8 @@ import { smartSyncPartnersFromInvoices, InvoicePartnerInfo } from '@/lib/partner
 
 export async function POST(req: Request) {
   try {
-    const tenantId = (await getTenantId()) || 'default';
+    const rawTenant = (await getTenantId()) || 'default';
+    const tenantId = rawTenant.replace(/^tenant-/, '') || 'default';
     const body = await req.json().catch(() => ({}));
     const { invoices = [] } = body;
 
