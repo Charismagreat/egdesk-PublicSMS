@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Code, Play, Clock, RefreshCw, Layers, CheckCircle2, AlertCircle, FileCode, Wrench, Sparkles, ArrowRight } from "lucide-react";
+import { Code, Play, Clock, RefreshCw, Layers, CheckCircle2, AlertCircle, FileCode, Wrench, Sparkles, ArrowRight, Trash2, X, AlertTriangle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 export default function DriveAppsScriptManager() {
@@ -10,12 +10,26 @@ export default function DriveAppsScriptManager() {
   const [triggers, setTriggers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // 삭제 모달 상태
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteGoogleSheet, setDeleteGoogleSheet] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [alertMessage, setAlertMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   const fetchAppsScriptData = async () => {
     setLoading(true);
     try {
       const res = await apiFetch("/api/google-drive/apps-script");
-      const data = await res.json();
-      if (data.success) {
+      if (!res.ok) return;
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        return;
+      }
+
+      if (data?.success) {
         setProjects(data.projects || []);
         setTriggers(data.triggers || []);
       }
@@ -30,8 +44,69 @@ export default function DriveAppsScriptManager() {
     fetchAppsScriptData();
   }, []);
 
+  // 삭제 모달 열기 핸들러
+  const handleOpenDeleteModal = (proj: any) => {
+    setDeleteTarget(proj);
+    setDeleteGoogleSheet(false);
+  };
+
+  // 삭제 실행 핸들러
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+
+    try {
+      const res = await apiFetch("/api/google-drive/apps-script", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: deleteTarget.id,
+          scriptId: deleteTarget.scriptId,
+          spreadsheetId: deleteTarget.spreadsheetId || deleteTarget.containerId,
+          deleteGoogleSheet: deleteGoogleSheet
+        })
+      });
+
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {}
+
+      if (data?.success) {
+        setAlertMessage({ type: "success", text: data.message || "프로젝트가 성공적으로 삭제되었습니다." });
+        setDeleteTarget(null);
+        fetchAppsScriptData();
+      } else {
+        setAlertMessage({ type: "error", text: data?.error || "프로젝트 삭제에 실패했습니다." });
+      }
+    } catch (err: any) {
+      setAlertMessage({ type: "error", text: err.message || "삭제 중 오류가 발생했습니다." });
+    } finally {
+      setIsDeleting(false);
+      setTimeout(() => setAlertMessage(null), 5000);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* 알림 배너 */}
+      {alertMessage && (
+        <div className={`p-4 rounded-2xl flex items-center justify-between gap-3 text-xs font-bold ${
+          alertMessage.type === "success" 
+            ? "bg-emerald-50 text-emerald-800 border border-emerald-200" 
+            : "bg-rose-50 text-rose-800 border border-rose-200"
+        }`}>
+          <div className="flex items-center gap-2">
+            {alertMessage.type === "success" ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-rose-600" />}
+            <span>{alertMessage.text}</span>
+          </div>
+          <button onClick={() => setAlertMessage(null)} className="text-slate-400 hover:text-slate-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* ⚡ AI 시트 자동화 주입기 프로모 배너 */}
       <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 rounded-3xl p-6 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1.5">
@@ -147,16 +222,26 @@ export default function DriveAppsScriptManager() {
                     </div>
                   </div>
 
-                  {p.isTrashed ? (
-                    <span className="px-2 py-0.5 bg-slate-200 text-slate-600 text-[10px] font-bold rounded-md shrink-0 flex items-center gap-1">
-                      <span>🗑️ 휴지통 (삭제됨)</span>
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md shrink-0 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span>정상 연결 (Active)</span>
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {p.isTrashed ? (
+                      <span className="px-2 py-0.5 bg-slate-200 text-slate-600 text-[10px] font-bold rounded-md flex items-center gap-1">
+                        <span>🗑️ 휴지통 (삭제됨)</span>
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>정상 연결 (Active)</span>
+                      </span>
+                    )}
+
+                    <button
+                      onClick={() => handleOpenDeleteModal(p)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                      title="프로젝트 삭제 / 목록에서 제거"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 {p.spreadsheetUrl && (
@@ -180,6 +265,97 @@ export default function DriveAppsScriptManager() {
           </div>
         )}
       </div>
+
+      {/* 3. 스마트 프로젝트 삭제 컨펌 모달 */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-rose-600">
+                <Trash2 className="w-5 h-5" />
+                <h3 className="font-extrabold text-sm text-slate-800">Apps Script 프로젝트 삭제</h3>
+              </div>
+              <button 
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-1">
+                <div className="text-[11px] font-bold text-slate-500">대상 프로젝트:</div>
+                <div className="text-xs font-extrabold text-slate-800 break-all">{deleteTarget.name}</div>
+                <div className="text-[10px] font-mono text-slate-400 truncate">ID: {deleteTarget.scriptId || deleteTarget.id}</div>
+              </div>
+
+              {deleteTarget.isTrashed ? (
+                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200/80 text-xs text-amber-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1">
+                    <span>💡 구글 드라이브 휴지통 상태 확인됨</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-800">
+                    연결된 구글 시트 파일이 이미 구글 드라이브 휴지통에 있습니다. 이지데스크 연동 목록에서 즉시 제거합니다.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    이 프로젝트를 이지데스크 관리 목록에서 제거합니다. 삭제 옵션을 선택해 주세요:
+                  </p>
+
+                  <label className="flex items-start gap-2.5 p-3 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 cursor-pointer transition-all">
+                    <input 
+                      type="checkbox" 
+                      checked={deleteGoogleSheet} 
+                      onChange={(e) => setDeleteGoogleSheet(e.target.checked)}
+                      className="mt-0.5 rounded text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
+                    />
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-bold text-rose-700">구글 드라이브의 원본 시트 파일도 함께 휴지통으로 삭제</div>
+                      <div className="text-[10px] text-slate-500 leading-relaxed">
+                        체크 시 구글 드라이브 상의 원본 스프레드시트 파일도 함께 휴지통으로 이동합니다. (체크 해제 시 연동 목록에서만 제거)
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>삭제 처리 중...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{deleteTarget.isTrashed ? "목록에서 제거" : deleteGoogleSheet ? "시트와 함께 삭제" : "목록에서만 제거"}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
