@@ -11,8 +11,9 @@ export default function DriveAppsScriptManager() {
   const [triggers, setTriggers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 새 프로젝트 추가 모달 상태
+  // 새 프로젝트 추가 / 수정 모달 상태
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [editTargetProject, setEditTargetProject] = useState<any | null>(null);
 
   // 삭제 모달 상태
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
@@ -258,10 +259,23 @@ export default function DriveAppsScriptManager() {
                         <span>🗑️ 휴지통 (삭제됨)</span>
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span>정상 연결 (Active)</span>
-                      </span>
+                      <>
+                        <button
+                          onClick={() => {
+                            setEditTargetProject(p);
+                            setIsNewProjectModalOpen(true);
+                          }}
+                          className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-extrabold rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                          title="기존 코드를 보존하며 새로운 기능을 이어서 수정/추가합니다."
+                        >
+                          <span>✏️ 이어서 수정</span>
+                        </button>
+
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span>정상 연결 (Active)</span>
+                        </span>
+                      </>
                     )}
 
                     <button
@@ -385,16 +399,23 @@ export default function DriveAppsScriptManager() {
         </div>
       )}
 
-      {/* 4. 새 프로젝트 추가 원스톱 팝업 모달 */}
+      {/* 4. 새 프로젝트 추가 / 수정 원스톱 팝업 모달 */}
       <NewAppsScriptModal
         isOpen={isNewProjectModalOpen}
-        onClose={() => setIsNewProjectModalOpen(false)}
+        initialProject={editTargetProject}
+        onClose={() => {
+          setIsNewProjectModalOpen(false);
+          setEditTargetProject(null);
+        }}
         onSuccess={() => {
           fetchAppsScriptData();
           setAlertMessage({
             type: "success",
-            text: "새 Apps Script 프로젝트가 성공적으로 추가 및 주입되었습니다!"
+            text: editTargetProject
+              ? "Apps Script 프로젝트 기능이 성공적으로 수정 및 갱신 배포되었습니다!"
+              : "새 Apps Script 프로젝트가 성공적으로 추가 및 주입되었습니다!"
           });
+          setEditTargetProject(null);
         }}
       />
     </div>

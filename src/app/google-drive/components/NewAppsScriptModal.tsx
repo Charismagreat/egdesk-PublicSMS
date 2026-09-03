@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   X, Sparkles, FileSpreadsheet, ArrowRight, ArrowLeft, 
-  CheckCircle2, RefreshCw, Code2, Layers, Check, ExternalLink, AlertCircle, Copy, ShieldCheck
+  CheckCircle2, RefreshCw, Code2, Layers, Check, ExternalLink, AlertCircle, Copy, ShieldCheck, Edit3
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
@@ -11,10 +11,12 @@ interface NewAppsScriptModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initialProject?: any | null;
 }
 
-export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAppsScriptModalProps) {
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+export default function NewAppsScriptModal({ isOpen, onClose, onSuccess, initialProject }: NewAppsScriptModalProps) {
+  const isEditMode = !!initialProject;
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(isEditMode ? 2 : 1);
   const [sheetUrl, setSheetUrl] = useState("");
   const [prompt, setPrompt] = useState("");
   const [customTitle, setCustomTitle] = useState("");
@@ -25,6 +27,37 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
   const [injectionResult, setInjectionResult] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // initialProject 변경 시 상태 초기화
+  useEffect(() => {
+    if (initialProject) {
+      const sId = initialProject.spreadsheetId || initialProject.containerId || "";
+      const sUrl = initialProject.spreadsheetUrl || initialProject.containerUrl || (sId ? `https://docs.google.com/spreadsheets/d/${sId}/edit` : "");
+      const pId = initialProject.id || initialProject.scriptId || "";
+
+      setSheetUrl(sUrl);
+      setLastClonedOriginalUrl(sUrl);
+      setCustomTitle(initialProject.name || "");
+      setClonedSheetInfo({
+        clonedSheetId: sId,
+        clonedSheetUrl: sUrl,
+        sheetTitle: initialProject.name || "연동 구글 시트",
+        gasProjectId: pId,
+        headers: [],
+        allTabs: []
+      });
+      setCurrentStep(2); // 수정 모드는 곧바로 Step 2 (요구사항 입력)로 진입!
+    } else {
+      setCurrentStep(1);
+      setSheetUrl("");
+      setLastClonedOriginalUrl("");
+      setCustomTitle("");
+      setClonedSheetInfo(null);
+      setScriptData(null);
+      setInjectionResult(null);
+      setPrompt("");
+    }
+  }, [initialProject, isOpen]);
 
   if (!isOpen) return null;
 
@@ -192,15 +225,22 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
         {/* 모달 헤더 */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl">
-              <Sparkles className="w-5 h-5 text-indigo-600" />
+            <div className={`p-2.5 rounded-2xl ${isEditMode ? "bg-amber-50 text-amber-600" : "bg-indigo-50 text-indigo-600"}`}>
+              {isEditMode ? <Edit3 className="w-5 h-5 text-amber-600" /> : <Sparkles className="w-5 h-5 text-indigo-600" />}
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-800 tracking-tight">
-                새 Apps Script 자동화 프로젝트 추가
+              <h3 className="font-extrabold text-base text-slate-800 tracking-tight flex items-center gap-2">
+                <span>{isEditMode ? "Apps Script 프로젝트 AI 수정 / 기능 확장" : "새 Apps Script 자동화 프로젝트 추가"}</span>
+                {isEditMode && (
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full">
+                    증분 수정 모드
+                  </span>
+                )}
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                구글 시트에 자연어 AI 요구사항을 바탕으로 Apps Script를 원클릭 주입합니다.
+                {isEditMode 
+                  ? "기존에 배포된 스크립트를 보존하며 새 요구사항을 유기적으로 결합하여 갱신 배포합니다."
+                  : "구글 시트에 자연어 AI 요구사항을 바탕으로 Apps Script를 원클릭 주입합니다."}
               </p>
             </div>
           </div>
@@ -223,7 +263,7 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
                 : "bg-slate-50 border-slate-200 text-slate-400 font-medium"
           }`}>
             <div className="text-[10px] uppercase tracking-wider mb-0.5">Step 1</div>
-            <div className="text-xs truncate">시트 URL 등록</div>
+            <div className="text-xs truncate">{isEditMode ? "연동 시트 확인" : "시트 URL 등록"}</div>
           </div>
 
           <div className={`p-3 rounded-2xl border text-center transition-all ${
@@ -234,7 +274,7 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
                 : "bg-slate-50 border-slate-200 text-slate-400 font-medium"
           }`}>
             <div className="text-[10px] uppercase tracking-wider mb-0.5">Step 2</div>
-            <div className="text-xs truncate">AI 코드 생성</div>
+            <div className="text-xs truncate">{isEditMode ? "AI 코드 수정/확장" : "AI 코드 생성"}</div>
           </div>
 
           <div className={`p-3 rounded-2xl border text-center transition-all ${
@@ -243,7 +283,7 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
               : "bg-slate-50 border-slate-200 text-slate-400 font-medium"
           }`}>
             <div className="text-[10px] uppercase tracking-wider mb-0.5">Step 3</div>
-            <div className="text-xs truncate">원클릭 주입 완료</div>
+            <div className="text-xs truncate">원클릭 갱신 배포</div>
           </div>
         </div>
 
@@ -376,43 +416,72 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
             )}
 
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-700">
-                주입할 자동화 로직 및 기능 요구사항 (자연어로 작성) <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-700">
+                  {isEditMode ? "수정 또는 추가하고자 하는 기능 요구사항 (자연어)" : "주입할 자동화 로직 및 기능 요구사항 (자연어로 작성)"} <span className="text-rose-500">*</span>
+                </label>
+                {isEditMode && (
+                  <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                    ⚡ 기존 Code.gs 자동 보존 & 증분 패치
+                  </span>
+                )}
+              </div>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="예: 구글 시트 사이드바를 통해 발주서 PDF 파일을 업로드하면 드라이브에 저장하고, 2번째 행에 발주 정보를 실시간으로 자동 기입하는 사이드바 기능을 만들어줘."
+                placeholder={isEditMode 
+                  ? "예: 기존 사이드바에 파일 다운로드 버튼을 추가하고, 파일 업로드 시 2행에 기록과 함께 성공 토스트 알림을 띄우도록 수정해줘." 
+                  : "예: 구글 시트 사이드바를 통해 발주서 PDF 파일을 업로드하면 드라이브에 저장하고, 2번째 행에 발주 정보를 실시간으로 자동 기입하는 사이드바 기능을 만들어줘."}
                 rows={4}
                 className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs text-slate-800 leading-relaxed"
               />
               <div className="flex flex-wrap gap-1.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setPrompt("구글 시트 사이드바를 통해 PDF/이미지 파일과 발주 정보를 입력받아 구글 드라이브에 저장하고, '발주서 접수대장' 시트 최상단(2행)에 자동으로 기록하는 사이드바 및 파일 업로드 시스템을 구성해줘.")}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
-                >
-                  💡 추천: 발주서 사이드바 업로드 양식
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPrompt("시트가 수정될 때마다 변경 이력을 '로그' 시트에 자동으로 남기고, 특정 셀 값이 변경되면 이지데스크 웹훅으로 실시간 알림을 발송하는 트리거를 작성해줘.")}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
-                >
-                  💡 추천: 변경 감지 & 웹훅 알림
-                </button>
+                {isEditMode ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setPrompt("기존 사이드바 메뉴에 'PDF 일괄 다운로드' 버튼을 추가하고, 파일 업로드 성공 시 브라우저에 완료 토스트가 뜨도록 보강해줘.")}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
+                    >
+                      💡 추천: 사이드바 UI 버튼 추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPrompt("시트 데이터가 수정될 때마다 이지데스크 웹훅으로 변경 내역을 실시간 전송하는 onEdit 트리거를 기존 코드에 유기적으로 추가해줘.")}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
+                    >
+                      💡 추천: 실시간 웹훅 연동 추가
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setPrompt("구글 시트 사이드바를 통해 PDF/이미지 파일과 발주 정보를 입력받아 구글 드라이브에 저장하고, '발주서 접수대장' 시트 최상단(2행)에 자동으로 기록하는 사이드바 및 파일 업로드 시스템을 구성해줘.")}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
+                    >
+                      💡 추천: 발주서 사이드바 업로드 양식
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPrompt("시트가 수정될 때마다 변경 이력을 '로그' 시트에 자동으로 남기고, 특정 셀 값이 변경되면 이지데스크 웹훅으로 실시간 알림을 발송하는 트리거를 작성해줘.")}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
+                    >
+                      💡 추천: 변경 감지 & 웹훅 알림
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setCurrentStep(1)}
+                onClick={() => isEditMode ? onClose() : setCurrentStep(1)}
                 disabled={loading}
                 className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                <ArrowLeft className="w-4 h-4" />
-                <span>이전 단계</span>
+                {isEditMode ? <span>취소</span> : <><ArrowLeft className="w-4 h-4" /><span>이전 단계</span></>}
               </button>
               <button
                 type="button"
@@ -423,12 +492,12 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
                 {loading ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>AI 코드 생성 및 주입 중...</span>
+                    <span>{isEditMode ? "AI 코드 증분 수정 및 갱신 중..." : "AI 코드 생성 및 주입 중..."}</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>AI 코드 생성 & 원터치 주입</span>
+                    <span>{isEditMode ? "AI 코드 수정 & 원터치 갱신 배포" : "AI 코드 생성 & 원터치 주입"}</span>
                   </>
                 )}
               </button>
