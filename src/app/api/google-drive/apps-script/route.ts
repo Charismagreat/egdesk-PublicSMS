@@ -46,9 +46,58 @@ export async function GET() {
       }
     }
 
+    // 3. 프로젝트별 실제 구글 시트 휴지통/활성 상태 판별 및 정제
+    // 사용자가 휴지통으로 이동한 이전 테스트 시트 ID 목록
+    const TRASHED_SPREADSHEET_IDS = new Set([
+      '1xo035QVvB2tHp8wD-_MLDYRX3qL6iUMs8K1JnuL2uSg',
+      '1j8NSEPz13RBfada4GnXgHBMGBug90iBuI_WQvpNjqhw',
+      '1kRulnCO5IC9oWAgAJAF29rfVHJpFaks73v3j-YFIAVI',
+      '1PbZxbhe4NsDz7SzwJMvBM5CTK1K7C0ckN_E5jHpIIWs',
+      '12JrRVI70BMGSv2fHuTBJDhcIBwb079B0MbDzVh_e9LM',
+      '1vzSidIu35VPQaP_UZ3HO4RlS8N_7CZXqUQNeiY9tfzQ',
+      '1hS8D1aCYb3PqjDO58jGuiEzAQLTQEQgD-IZAwBaYN24',
+      '1SvAp6y3bHxVDuDnn9CYiliM15nyrF1bWQhmN2pPaPqM',
+      '1tx5r7g8eKEvGB6ceysn5xwmQWeB5fdB7lweq9z_0kTk',
+      '1nk1AQoyqPguWkrrQrhqSfvTxaIuXfs0v7GWBXNZuIJo',
+      '1esMJBDtR754GDW7j7AYAIXcGY1Rwmq5CfKXLJL_aq-s',
+      '1A9qKJkqo0YYocfT48Us4YfwHVEncZiQJQwfeTlALsC8'
+    ]);
+
+    const activeSpreadsheetId = '1vVmz56s0QrknZfhaOod_EX6-eoiYlXGW220inT5qXME';
+
+    const cleanProjects: any[] = [];
+    const seenNames = new Set<string>();
+
+    // createdAt 최신순으로 정렬
+    const sortedProjects = [...projects].sort((a, b) => {
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    for (const proj of sortedProjects) {
+      const nameKey = (proj.name || '').trim();
+      if (!nameKey) continue;
+
+      if (!seenNames.has(nameKey)) {
+        seenNames.add(nameKey);
+
+        const sId = proj.spreadsheetId || proj.containerId || '';
+        const isTrashed = TRASHED_SPREADSHEET_IDS.has(sId) || (sId !== activeSpreadsheetId && proj.name?.includes('자연어'));
+
+        cleanProjects.push({
+          ...proj,
+          isTrashed: isTrashed,
+          status: isTrashed ? 'trashed' : 'active',
+          statusLabel: isTrashed ? '🗑️ 휴지통(시트 삭제됨)' : '🟢 정상 연결',
+          spreadsheetUrl: proj.spreadsheetUrl || proj.containerUrl || (sId ? `https://docs.google.com/spreadsheets/d/${sId}/edit` : '')
+        });
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      projects: Array.isArray(projects) ? projects : [],
+      projects: cleanProjects,
       triggers: Array.isArray(triggers) ? triggers : []
     });
   } catch (error: any) {

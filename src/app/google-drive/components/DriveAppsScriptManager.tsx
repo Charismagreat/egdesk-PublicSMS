@@ -127,14 +127,54 @@ export default function DriveAppsScriptManager() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {projects.map((p, idx) => (
-              <div key={idx} className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50 flex items-center justify-between">
-                <div>
-                  <h5 className="font-bold text-slate-800 text-xs">{p.title || p.name || `Project-${idx}`}</h5>
-                  <span className="text-[10px] text-slate-400 font-mono">ID: {p.scriptId || p.id}</span>
+              <div 
+                key={idx} 
+                className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                  p.isTrashed 
+                    ? "bg-slate-50/60 border-slate-200/60 opacity-60 hover:opacity-100" 
+                    : "bg-white border-indigo-100 shadow-xs hover:border-indigo-300"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <h5 className={`font-bold text-xs truncate ${p.isTrashed ? "text-slate-500 line-through" : "text-slate-800"}`} title={p.name}>
+                      {p.name || `Project-${idx}`}
+                    </h5>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-400 font-mono truncate max-w-[200px]">
+                        ID: {p.scriptId || p.id}
+                      </span>
+                    </div>
+                  </div>
+
+                  {p.isTrashed ? (
+                    <span className="px-2 py-0.5 bg-slate-200 text-slate-600 text-[10px] font-bold rounded-md shrink-0 flex items-center gap-1">
+                      <span>🗑️ 휴지통 (삭제됨)</span>
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md shrink-0 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>정상 연결 (Active)</span>
+                    </span>
+                  )}
                 </div>
-                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-md">
-                  활성
-                </span>
+
+                {p.spreadsheetUrl && (
+                  <div className="pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400 text-[10px]">연결 시트:</span>
+                    <a 
+                      href={p.spreadsheetUrl} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className={`text-[10px] font-medium flex items-center gap-1 hover:underline ${
+                        p.isTrashed ? "text-slate-400" : "text-indigo-600"
+                      }`}
+                    >
+                      <span>구글 시트 열기</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
               </div>
             ))}
           </div>
