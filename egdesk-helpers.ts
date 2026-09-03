@@ -1523,6 +1523,10 @@ export async function searchCompanyResearch(searchText: string) {
  *
  * - Server: `POST {apiUrl}/browser-recording/tools/call`
  * - Client: `POST /__browser_recording_proxy` (see proxy.ts / middleware)
+ *
+ * File upload (standalone, not only download-chain):
+ *   list_sites → open_account → inspect_page → uploadBrowserRecordingFile(sessionId, absPath, elementIndex?)
+ *   See uploadBrowserRecordingFile() for the full caller recipe.
  */
 export async function callBrowserRecordingTool(
   toolName: string,
@@ -1572,6 +1576,8 @@ export type BrowserRecordingRunOptions = {
   datePickersByIndex?: string[];
   /** Per captureLabeledFields step, values in field order */
   labeledFieldFills?: (string | undefined)[][];
+  /** Per fileUpload step — absolute path override (empty uses the recorded path) */
+  fileUploadsByIndex?: (string | undefined)[];
 };
 
 export type BrowserRecordingScheduleOptions = {
@@ -1719,7 +1725,7 @@ export async function searchBrowserRecordingElements(sessionId: string, query: s
   return callBrowserRecordingTool('browser_recording_search_elements', { sessionId, query });
 }
 
-/** Visible form fields; password values redacted */
+/** Visible form fields (dialog-scoped). lookup = type_into then double-click a row. */
 export async function getBrowserRecordingForms(
   sessionId: string,
   scroll?: 'none' | 'up' | 'down'
@@ -1730,17 +1736,39 @@ export async function getBrowserRecordingForms(
   });
 }
 
-/** Click by last-inspect index (prefers the real link over a wrapping table cell) */
-export async function clickBrowserRecordingElement(sessionId: string, elementIndex: number) {
-  return callBrowserRecordingTool('browser_recording_click_element', { sessionId, elementIndex });
+/** Click by last-inspect index. clickCount=2 double-clicks a lookup row. */
+export async function clickBrowserRecordingElement(
+  sessionId: string,
+  elementIndex: number,
+  clickCount?: 1 | 2
+) {
+  return callBrowserRecordingTool('browser_recording_click_element', {
+    sessionId,
+    elementIndex,
+    ...(clickCount === 2 ? { clickCount: 2 } : {}),
+  });
 }
 
-/** Fill by field_id from getBrowserRecordingForms. Password fields are rejected. */
+/** Fill free-text/select by field_id (locator + verify). Rejected: passwords, lookups, file inputs. */
 export async function fillBrowserRecordingForm(
   sessionId: string,
   fields: Array<{ field_id: string; value: string }>
 ) {
   return callBrowserRecordingTool('browser_recording_fill_form', { sessionId, fields });
+}
+
+/** Type into a lookup/search field (does not bind hidden id). Then inspect and double-click a row. */
+export async function typeIntoBrowserRecording(
+  sessionId: string,
+  opts: { field_id?: string; elementIndex?: number; text: string; submit?: boolean }
+) {
+  return callBrowserRecordingTool('browser_recording_type_into', {
+    sessionId,
+    text: opts.text,
+    ...(opts.field_id ? { field_id: opts.field_id } : {}),
+    ...(opts.elementIndex !== undefined ? { elementIndex: opts.elementIndex } : {}),
+    ...(opts.submit ? { submit: true } : {}),
+  });
 }
 
 /** Press Enter / Escape / arrows in the open live session (e.g. after 메뉴검색) */
@@ -1764,6 +1792,39 @@ export async function closeBrowserRecordingSession(sessionId: string) {
 /** Workflow clicks/fills/keys logged in an open live session (no passwords) */
 export async function listBrowserRecordingSessionActions(sessionId: string) {
   return callBrowserRecordingTool('browser_recording_list_session_actions', { sessionId });
+}
+
+/**
+ * Attach a local file in an open live session (standalone fileUpload).
+ *
+ * How to call this from an MCP / helper caller:
+ * 1. Enable the browser-recording service and start the EGDesk HTTP server.
+ * 2. listBrowserRecordingSites() — navigate-only recordings (no login) use
+ *    accountKey: "__unknown_account__".
+ * 3. openBrowserRecordingAccount(siteKey, accountKey) — replays login if one
+ *    was recorded, otherwise just opens the first navigate URL. Keep Chrome open.
+ * 4. inspectBrowserRecordingPage(sessionId) (or search). Pick the
+ *    input / "[file input]" index, not a heading. Styled "Select PDF files"
+ *    buttons often do not fire a file chooser; the hidden file input does.
+ * 5. Call this helper with an absolute path on the EGDesk machine.
+ *    Omit elementIndex to use the first input[type=file].
+ * 6. Re-inspect, then listBrowserRecordingSessionActions → saveBrowserRecordingSession
+ *    to persist the upload. Replay uses the recorded path; override with
+ *    fileUploadsByIndex on runBrowserRecording.
+ *
+ * HTTP equivalent: POST /browser-recording/tools/call
+ * { tool: "browser_recording_upload_file", arguments: { sessionId, filePath, elementIndex? } }
+ */
+export async function uploadBrowserRecordingFile(
+  sessionId: string,
+  filePath: string,
+  elementIndex?: number
+) {
+  return callBrowserRecordingTool('browser_recording_upload_file', {
+    sessionId,
+    filePath,
+    ...(elementIndex !== undefined ? { elementIndex } : {}),
+  });
 }
 
 /** Save the live session as a new *.spec.js (login prefix + logged workflow). Does not close Chrome. */
