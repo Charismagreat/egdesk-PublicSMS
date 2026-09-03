@@ -408,12 +408,23 @@ ${existingCode.trim()}
 
 [🧠 AI 분석 및 OCR 자동화 작성 원칙]
 6. 사용자의 요구사항에 **이미지/PDF 파일 OCR 분석, 품목/금액 자동 추출, 텍스트 요약/생성 등의 AI 기능**이 포함된 경우:
-   - Google Apps Script 환경은 구글 클라우드에서 실행되므로, 외부 사설 도메인이나 로컬 주소(localhost, api.egdesk.co.kr 등)를 호출하면 DNS 오류가 발생합니다.
-   - 따라서 **Google 공식 Gemini REST API 엔드포인트**를 \`UrlFetchApp.fetch\`로 직접 호출하는 견고한 헬퍼 함수를 \`Code.gs\` 내에 표준 탑재하십시오:
-     - 엔드포인트: \`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent\`
-     - 파라미터 규격: \`{ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: mimeType, data: base64Data } }] }] }\`
-     - API Key 설정: 시트의 스크립트 속성(\`PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY')\`) 또는 \`EGDeskConfig.GEMINI_API_KEY\` 상수를 정의하여 호출하도록 작성하십시오.
-   - 이를 통해 DNS 오류 없이 **구글 클라우드 초고속 백본망을 통해 실시간으로 100% 안정적인 Vision OCR 및 AI 분석**이 작동하도록 완성하십시오.
+   - Google Apps Script 환경에서 완벽하고 안전하게 구동되도록, **이지데스크 AI Caller 터널링 MCP 엔드포인트**를 \`UrlFetchApp.fetch\`로 호출하는 \`EGDeskBridge.callAi\` 헬퍼 클래스를 \`Code.gs\` 하단에 표준 탑재하십시오:
+     - 엔드포인트: \`https://tunneling-service.onrender.com/t/mcp-server-fxkud1/ai-caller/tools/call\`
+     - 헤더: \`{ "X-Api-Key": "a67ddc0f-7e2b-4997-9a0b-9667a74c89d0" }\`
+     - 페이로드 규격:
+       \`\`\`json
+       {
+         "tool": "ai_caller_call",
+         "arguments": {
+           "prompt": prompt,
+           "images": fileBase64 ? [fileBase64] : [],
+           "model": "gemini-2.5-flash",
+           "temperature": 0.2
+         }
+       }
+       \`\`\`
+     - 응답 파싱: \`JSON.parse(responseText)\` -> \`data.result.content[0].text\` -> \`JSON.parse(text).content\`
+   - 이를 통해 DNS 오류 없이 전 세계 어디서든 **이지데스크 AI Caller 엔진을 통해 100% 안정적이고 초고속(5~10초)으로 Vision OCR 및 AI 자동화 분석**이 수행되도록 완성하십시오.
 
 7. 오류가 발생하더라도 구글 시트가 멈추지 않도록 \`try-catch\` 예외 처리와 친절한 토스트 알림(\`ss.toast()\`)을 제공하십시오.
 8. 응답은 반드시 지정된 JSON 규격으로만 출력하십시오.`;
