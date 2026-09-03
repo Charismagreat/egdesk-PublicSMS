@@ -629,9 +629,19 @@ ${incrementalContext}
         console.error('Apps Script MCP push error:', mcpErr.message);
       }
 
-      // B. 주입 이력 테넌트 DB에 영구 적재 (시트별 1개 레코드로 Upsert 갱신)
+      // B. 주입 이력 테넌트 DB에 영구 적재 (시트별 1개 레코드로 Upsert 갱신 및 프롬프트 히스토리 누적)
+      function extractSheetId(url?: string): string {
+        if (!url) return '';
+        const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        return match ? match[1] : '';
+      }
+
+      const normalizedSheetId = (!sheetId || sheetId === 'sheet_default') 
+        ? (extractSheetId(sheetUrl) || sheetId || 'sheet_default') 
+        : sheetId;
+
       const nowStr = new Date().toISOString();
-      const injectionKey = `gas_injection_${sheetId}`;
+      const injectionKey = `gas_injection_${normalizedSheetId}`;
 
       // 기존 주입 이력 검색
       let existingRecordRow: any = null;
@@ -646,18 +656,40 @@ ${incrementalContext}
 
       let pastVersion = 1;
       let originalCreatedAt = nowStr;
+      let promptHistory: Array<{ prompt: string; summary?: string; created_at: string; version: number; gas_project_id?: string }> = [];
+
       if (existingRecordRow && existingRecordRow.value) {
         try {
           const parsedPast = JSON.parse(existingRecordRow.value);
           pastVersion = (parsedPast.version || 1) + 1;
           originalCreatedAt = parsedPast.created_at || nowStr;
+          if (Array.isArray(parsedPast.history)) {
+            promptHistory = [...parsedPast.history];
+          } else if (parsedPast.prompt) {
+            promptHistory.push({
+              prompt: parsedPast.prompt,
+              summary: parsedPast.summary,
+              created_at: parsedPast.updated_at || parsedPast.created_at || originalCreatedAt,
+              version: parsedPast.version || 1,
+              gas_project_id: parsedPast.gas_project_id
+            });
+          }
         } catch {}
       }
 
+      // 최신 프롬프트를 히스토리 최상단에 누적
+      promptHistory.unshift({
+        prompt: prompt || summary || '자동화 스크립트 주입',
+        summary: summary || '',
+        created_at: nowStr,
+        version: pastVersion,
+        gas_project_id: gasProjectId
+      });
+
       const injectionRecord = {
-        id: `inj_${sheetId}`,
+        id: `inj_${normalizedSheetId}`,
         tenant_id: tenantId,
-        sheet_id: sheetId,
+        sheet_id: normalizedSheetId,
         sheet_url: sheetUrl,
         sheet_title: sheetTitle || '자동화 구글 시트',
         script_title: scriptTitle || '이지데스크 자동화 스크립트',
@@ -670,6 +702,7 @@ ${incrementalContext}
         gas_project_id: gasProjectId,
         is_pushed_via_mcp: isPushedViaMcp,
         version: pastVersion,
+        history: promptHistory,
         status: 'DEPLOYED',
         created_at: originalCreatedAt,
         updated_at: nowStr
@@ -709,27 +742,78 @@ ${incrementalContext}
 
     // ────────────────────────────────────────────────────────
     // ────────────────────────────────────────────────────────
-    // 4. 주입 내역 목록 조회 (List Injections)
+    // 4. 주입 내역 목록 조회 (List Injections) - 동일 시트별 자동 통합 그룹핑
     // ────────────────────────────────────────────────────────
     if (action === 'list_injections') {
       const recordsRes = await queryTable('system_settings', {
         limit: 2000
       }).catch(() => ({ rows: [] }));
 
-      const injections: any[] = [];
+      const rawInjections: any[] = [];
       (recordsRes.rows || []).forEach((row: any) => {
         if (row.deleted_at && row.deleted_at !== 'null') return;
         if (row.key && row.key.startsWith('gas_injection_') && row.value) {
           try {
             const parsed = JSON.parse(row.value);
             if (!parsed.deleted_at && parsed.status !== 'DELETED') {
-              injections.push(parsed);
+              rawInjections.push(parsed);
             }
           } catch {}
         }
       });
 
-      injections.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+      // 동일한 구글 시트 ID 또는 URL을 기준으로 단일 카드로 스마트 통합 병합
+      const sheetGroupMap = new Map<string, any>();
+
+      for (const inj of rawInjections) {
+        // 시트 고유 식별 키 도출 (URL 내의 ID 또는 sheet_id)
+        const match = inj.sheet_url?.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        const canonicalKey = (match ? match[1] : inj.sheet_id) || inj.id;
+
+        if (!sheetGroupMap.has(canonicalKey)) {
+          sheetGroupMap.set(canonicalKey, {
+            ...inj,
+            history: Array.isArray(inj.history) && inj.history.length > 0 
+              ? [...inj.history] 
+              : [{ prompt: inj.prompt, summary: inj.summary, created_at: inj.updated_at || inj.created_at, version: inj.version || 1, gas_project_id: inj.gas_project_id }]
+          });
+        } else {
+          const existing = sheetGroupMap.get(canonicalKey);
+          // 더 최신 날짜의 메타데이터로 헤더 갱신
+          const isMoreRecent = new Date(inj.updated_at || inj.created_at || 0).getTime() > new Date(existing.updated_at || existing.created_at || 0).getTime();
+          
+          const combinedHistory = [
+            ...(existing.history || []),
+            ...(Array.isArray(inj.history) && inj.history.length > 0 
+                ? inj.history 
+                : [{ prompt: inj.prompt, summary: inj.summary, created_at: inj.updated_at || inj.created_at, version: inj.version || 1, gas_project_id: inj.gas_project_id }])
+          ];
+
+          // 중복 프롬프트 제거 및 최신순 정렬
+          const seenPrompts = new Set<string>();
+          const uniqueHistory = combinedHistory.filter(h => {
+            const hash = `${h.prompt}_${h.created_at?.substring(0, 16)}`;
+            if (seenPrompts.has(hash)) return false;
+            seenPrompts.add(hash);
+            return true;
+          }).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+          if (isMoreRecent) {
+            sheetGroupMap.set(canonicalKey, {
+              ...inj,
+              sheet_title: (inj.sheet_title && inj.sheet_title !== '자동화 구글 시트') ? inj.sheet_title : existing.sheet_title,
+              history: uniqueHistory,
+              version: Math.max(existing.version || 1, inj.version || 1, uniqueHistory.length)
+            });
+          } else {
+            existing.history = uniqueHistory;
+            existing.version = Math.max(existing.version || 1, inj.version || 1, uniqueHistory.length);
+          }
+        }
+      }
+
+      const injections = Array.from(sheetGroupMap.values());
+      injections.sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
 
       return NextResponse.json({
         success: true,
