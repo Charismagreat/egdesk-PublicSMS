@@ -76,6 +76,99 @@ export async function POST(req: Request) {
     const { action } = body;
 
     // ────────────────────────────────────────────────────────
+    // 0. 새 구글 시트 즉시 자동 생성 (Create New Sheet)
+    // ────────────────────────────────────────────────────────
+    if (action === 'create_new_sheet') {
+      const { customTitle } = body;
+      const targetTitle = customTitle && customTitle.trim() 
+        ? customTitle.trim() 
+        : `[이지데스크 자동화] 스마트 업무 대장 (${new Date().toLocaleDateString('ko-KR')})`;
+
+      // 마스터 템플릿 시트 ID
+      const templateSheetId = '1vVmz56s0QrknZfhaOod_EX6-eoiYlXGW220inT5qXME';
+      let clonedSheetId = '';
+      let clonedSheetUrl = '';
+
+      try {
+        const copyRes = await callDriveTool('drive_copy', {
+          fileId: templateSheetId,
+          destName: targetTitle
+        });
+
+        if (copyRes && (copyRes.id || copyRes.fileId)) {
+          clonedSheetId = copyRes.id || copyRes.fileId;
+          clonedSheetUrl = `https://docs.google.com/spreadsheets/d/${clonedSheetId}/edit`;
+        }
+      } catch (copyErr: any) {
+        console.warn('Create new sheet copy error:', copyErr.message);
+      }
+
+      if (!clonedSheetId) {
+        return NextResponse.json({
+          success: false,
+          error: '새 구글 스프레드시트 생성에 실패했습니다. 구글 드라이브 연동 상태를 확인해 주세요.'
+        }, { status: 500 });
+      }
+
+      // 새 시트에 단일 전용 Apps Script 바인딩
+      let initialProjectId = '';
+      let initialScriptId = '';
+      let initialScriptUrl = '';
+
+      try {
+        const boundRes = await callAppsScriptToolDirect('apps_script_create_bound', {
+          fileId: clonedSheetId,
+          title: targetTitle
+        });
+        if (boundRes && (boundRes.id || boundRes.projectId)) {
+          initialProjectId = boundRes.id || boundRes.projectId;
+          initialScriptId = boundRes.scriptId || '';
+          initialScriptUrl = boundRes.scriptUrl || '';
+        }
+      } catch (boundErr: any) {
+        console.warn('Initial bound project creation note:', boundErr.message);
+      }
+
+      const nowStr = new Date().toISOString();
+      const record = {
+        tenant_id: tenantId,
+        cloned_sheet_id: clonedSheetId,
+        cloned_sheet_url: clonedSheetUrl,
+        gas_project_id: initialProjectId,
+        script_id: initialScriptId,
+        script_url: initialScriptUrl,
+        sheet_title: targetTitle,
+        headers_json: '[]',
+        all_tabs_json: '[]',
+        status: 'READY',
+        created_at: nowStr,
+        updated_at: nowStr,
+      };
+
+      try {
+        await insertRows('system_settings', [{
+          key: `gas_sheet_${clonedSheetId}`,
+          value: JSON.stringify(record),
+          tenant_id: tenantId,
+          updated_at: nowStr
+        }]);
+      } catch {}
+
+      return NextResponse.json({
+        success: true,
+        clonedSheetId,
+        clonedSheetUrl,
+        gasProjectId: initialProjectId,
+        scriptId: initialScriptId,
+        scriptUrl: initialScriptUrl,
+        sheetTitle: targetTitle,
+        headers: [],
+        allTabs: [],
+        isNewCreated: true
+      });
+    }
+
+    // ────────────────────────────────────────────────────────
     // 1. 구글 시트 복제 (Clone Sheet)
     // ────────────────────────────────────────────────────────
     if (action === 'clone_sheet') {

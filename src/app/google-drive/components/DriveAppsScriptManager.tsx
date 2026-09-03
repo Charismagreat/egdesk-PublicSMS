@@ -271,6 +271,17 @@ export default function DriveAppsScriptManager() {
                           <span>✏️ 이어서 수정</span>
                         </button>
 
+                        <button
+                          onClick={() => {
+                            setEditTargetProject(p);
+                            setIsNewProjectModalOpen(true);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all cursor-pointer"
+                          title="과거 수정 이력 조회"
+                        >
+                          <Clock className="w-3.5 h-3.5" />
+                        </button>
+
                         <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                           <span>정상 연결 (Active)</span>
