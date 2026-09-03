@@ -15,9 +15,63 @@ export async function GET(req: Request) {
       orderBy: 'created_at',
       orderDirection: 'DESC',
       limit: 5000
-    });
+    }).catch(() => ({ rows: [] }));
 
-    const allRows = logsResult?.rows || [];
+    const localRows = logsResult?.rows || [];
+
+    // 1-1. 이지데스크 AI Caller MCP의 실시간 호출 로그 (구글 시트, 외부 터널링 호출 등) 병합
+    let callerLogs: any[] = [];
+    try {
+      const callerRes = await fetch('http://localhost:8080/ai-caller/tools/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'ai_caller_get_logs',
+          arguments: { limit: 500 }
+        }),
+        cache: 'no-store'
+      });
+      if (callerRes.ok) {
+        const callerData = await callerRes.json();
+        const rawList = callerData.result ? JSON.parse(callerData.result.content[0].text) : [];
+        if (Array.isArray(rawList)) {
+          // 헬스체크용 핑(6토큰)을 제외하고 실제 비즈니스 OCR/자동화 호출만 필터링
+          callerLogs = rawList
+            .filter((l: any) => l.caller === 'mcp' || l.prompt_tokens > 20 || (l.caller && !l.caller.includes('health-check')))
+            .map((l: any) => {
+              // UTC -> KST 변환 처리
+              let kstCreatedAt = l.created_at;
+              try {
+                const utcDate = new Date(l.created_at + 'Z');
+                if (!isNaN(utcDate.getTime())) {
+                  const kstDate = new Date(utcDate.getTime() + 9 * 60 * 60 * 1000);
+                  kstCreatedAt = kstDate.toISOString().replace('T', ' ').substring(0, 19);
+                }
+              } catch {}
+
+              return {
+                id: `AIC-${l.id || Date.now()}`,
+                model: l.model || 'gemini-2.5-flash',
+                purpose: l.caller?.includes('Google Sheet') ? 'GOOGLE_SHEET_OCR' : (l.tool_name === 'ai_caller_call' ? 'VISION_OCR_ANALYSIS' : 'AI_CALLER'),
+                prompt_tokens: Number(l.prompt_tokens || 0),
+                completion_tokens: Number(l.completion_tokens || 0),
+                total_tokens: Number(l.total_tokens || 0),
+                user_name: '구글시트 자동화',
+                menu_path: '구글 시트 OCR 사이드바',
+                created_at: kstCreatedAt,
+                tenant_id: 'wontrading'
+              };
+            });
+        }
+      }
+    } catch (callerErr: any) {
+      console.warn('AI Caller logs merge note:', callerErr.message);
+    }
+
+    // 중복 제거 및 시간순 결합
+    const allRows = [...localRows, ...callerLogs].sort((a, b) => 
+      new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    );
 
     // 2. 한국 표준시 (KST, UTC+9) 기준 날짜 비교 기준선 계산
     const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000);
