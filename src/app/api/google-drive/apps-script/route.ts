@@ -8,6 +8,7 @@ export async function GET() {
     let projects: any[] = [];
     let triggers: any[] = [];
 
+    // 1. 테넌트 DB(system_settings)에 저장된 프로젝트가 있는지 우선 조회
     if (tenantId !== 'default') {
       const projDbRes = await queryTable('system_settings', {
         filters: { key: 'google_apps_script_projects', tenant_id: tenantId }
@@ -16,30 +17,33 @@ export async function GET() {
       if (projDbRes.rows && projDbRes.rows.length > 0) {
         try {
           const parsed = JSON.parse(projDbRes.rows[0].value);
-          projects = parsed.projects || [];
-          triggers = parsed.triggers || [];
+          if (Array.isArray(parsed.projects) && parsed.projects.length > 0) {
+            projects = parsed.projects;
+            triggers = parsed.triggers || [];
+          }
         } catch {}
       }
-      // 신규 테넌트에 별도 등록된 프로젝트가 없으면 빈 배열 반환
-      return NextResponse.json({
-        success: true,
-        projects: Array.isArray(projects) ? projects : [],
-        triggers: Array.isArray(triggers) ? triggers : []
-      });
     }
 
-    try {
-      const projRes = await callAppsScriptTool('apps_script_list_projects', {});
-      projects = projRes?.projects || projRes || [];
-    } catch (e: any) {
-      console.warn('Apps script list projects warn:', e.message);
+    // 2. DB에 등록된 프로젝트가 없으면 이지데스크 Apps Script MCP 서버를 직접 조회
+    if (projects.length === 0) {
+      try {
+        const projRes = await callAppsScriptTool('apps_script_list_projects', {});
+        const rawList = projRes?.projects || (Array.isArray(projRes) ? projRes : []);
+        projects = rawList;
+      } catch (e: any) {
+        console.warn('Apps script list projects warn:', e.message);
+      }
     }
 
-    try {
-      const trigRes = await callAppsScriptTool('apps_script_list_triggers', {});
-      triggers = trigRes?.triggers || trigRes || [];
-    } catch (e: any) {
-      console.warn('Apps script list triggers warn:', e.message);
+    if (triggers.length === 0) {
+      try {
+        const trigRes = await callAppsScriptTool('apps_script_list_triggers', {});
+        const rawTrigs = trigRes?.triggers || (Array.isArray(trigRes) ? trigRes : []);
+        triggers = rawTrigs;
+      } catch (e: any) {
+        console.warn('Apps script list triggers warn:', e.message);
+      }
     }
 
     return NextResponse.json({
