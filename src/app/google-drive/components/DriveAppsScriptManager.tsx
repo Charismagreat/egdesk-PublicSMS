@@ -2,13 +2,17 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Code, Play, Clock, RefreshCw, Layers, CheckCircle2, AlertCircle, FileCode, Wrench, Sparkles, ArrowRight, Trash2, X, AlertTriangle } from "lucide-react";
+import { Code, Play, Clock, RefreshCw, Layers, CheckCircle2, AlertCircle, FileCode, Wrench, Sparkles, ArrowRight, Trash2, X, AlertTriangle, Plus } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import NewAppsScriptModal from "./NewAppsScriptModal";
 
 export default function DriveAppsScriptManager() {
   const [projects, setProjects] = useState<any[]>([]);
   const [triggers, setTriggers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // 새 프로젝트 추가 모달 상태
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
 
   // 삭제 모달 상태
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
@@ -189,19 +193,45 @@ export default function DriveAppsScriptManager() {
             <FileCode className="w-4 h-4 text-amber-600" />
             연동된 Apps Script 프로젝트 목록
           </h4>
+
+          <button
+            onClick={() => setIsNewProjectModalOpen(true)}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>새 프로젝트 추가</span>
+          </button>
         </div>
 
-        {projects.length === 0 ? (
-          <div className="text-center py-10 border border-dashed border-slate-200 rounded-2xl text-slate-400">
-            <Wrench className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-            <p className="text-xs font-medium">연동된 Google Apps Script 프로젝트가 없습니다.</p>
-            <p className="text-[11px] text-slate-400 mt-1">
-              구글 시트나 드라이브에 연결된 앱스 스크립트를 이지데스크 MCP를 통해 원격 실행 및 자동화할 수 있습니다.
-            </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* 🌟 [➕ 새 프로젝트 추가] 점선 카드 */}
+          <div
+            onClick={() => setIsNewProjectModalOpen(true)}
+            className="p-5 rounded-2xl border-2 border-dashed border-indigo-200/80 bg-indigo-50/40 hover:bg-indigo-50 hover:border-indigo-400/90 transition-all cursor-pointer flex flex-col justify-between gap-3 group text-left min-h-[110px]"
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-white text-indigo-600 rounded-xl shadow-xs group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all shrink-0">
+                <Plus className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <h5 className="font-extrabold text-xs text-indigo-950 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                  <span>새 프로젝트 추가</span>
+                  <Sparkles className="w-3 h-3 text-amber-500" />
+                </h5>
+                <p className="text-[11px] text-indigo-900/70 leading-relaxed">
+                  구글 시트 URL을 등록하고 자연어로 Apps Script 코드를 자동 주입합니다.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-indigo-100/60 flex items-center justify-between text-[11px] font-bold text-indigo-600">
+              <span>원스톱 AI 주입 시작하기</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {projects.map((p, idx) => (
+
+          {/* 기존 연동 프로젝트 목록 */}
+          {projects.map((p, idx) => (
               <div 
                 key={idx} 
                 className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
@@ -263,7 +293,6 @@ export default function DriveAppsScriptManager() {
               </div>
             ))}
           </div>
-        )}
       </div>
 
       {/* 3. 스마트 프로젝트 삭제 컨펌 모달 */}
@@ -355,7 +384,21 @@ export default function DriveAppsScriptManager() {
           </div>
         </div>
       )}
+
+      {/* 4. 새 프로젝트 추가 원스톱 팝업 모달 */}
+      <NewAppsScriptModal
+        isOpen={isNewProjectModalOpen}
+        onClose={() => setIsNewProjectModalOpen(false)}
+        onSuccess={() => {
+          fetchAppsScriptData();
+          setAlertMessage({
+            type: "success",
+            text: "새 Apps Script 프로젝트가 성공적으로 추가 및 주입되었습니다!"
+          });
+        }}
+      />
     </div>
   );
 }
+
 
