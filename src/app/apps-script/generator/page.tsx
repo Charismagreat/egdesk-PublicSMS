@@ -24,6 +24,7 @@ export default function AppsScriptGeneratorPage() {
   const [prompt, setPrompt] = usePersistedState<string>("gas_gen_prompt", "");
   
   const [clonedSheetInfo, setClonedSheetInfo] = useState<any | null>(null);
+  const [lastClonedOriginalUrl, setLastClonedOriginalUrl] = useState<string>("");
   const [scriptData, setScriptData] = useState<any | null>(null);
   const [injectionResult, setInjectionResult] = useState<any | null>(null);
   const [injections, setInjections] = useState<any[]>([]);
@@ -52,12 +53,20 @@ export default function AppsScriptGeneratorPage() {
     fetchInjections();
   }, [fetchInjections]);
 
-  // 3. Step 1: 구글 시트 복제 핸들러
-  const handleCloneSheet = async (customTitle?: string) => {
-    if (!sheetUrl.trim()) {
+  // 3. Step 1: 구글 시트 복제 핸들러 (스마트 사본 재사용 가드)
+  const handleCloneSheet = async (customTitle?: string, forceReclone = false) => {
+    const trimmedUrl = sheetUrl.trim();
+    if (!trimmedUrl) {
       alert("구글 시트 URL 또는 ID를 입력해 주세요.");
       return;
     }
+
+    // 💡 스마트 가드: 이미 복제된 사본이 있고, URL이 바뀌지 않았으면 재복제 없이 즉시 Step 2로 이동!
+    if (clonedSheetInfo && lastClonedOriginalUrl === trimmedUrl && !forceReclone) {
+      setCurrentStep(2);
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await apiFetch("/api/apps-script/clone-and-inject", {
@@ -65,13 +74,15 @@ export default function AppsScriptGeneratorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "clone_sheet",
-          sheetUrl: sheetUrl.trim(),
+          sheetUrl: trimmedUrl,
           customTitle: customTitle || undefined
         })
       });
       const data = await res.json();
       if (data.success) {
         setClonedSheetInfo(data);
+        setLastClonedOriginalUrl(trimmedUrl);
+        setCurrentStep(2);
       } else {
         alert(data.error || "구글 시트 복제에 실패했습니다.");
       }

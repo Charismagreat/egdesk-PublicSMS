@@ -20,6 +20,7 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
   const [customTitle, setCustomTitle] = useState("");
   
   const [clonedSheetInfo, setClonedSheetInfo] = useState<any | null>(null);
+  const [lastClonedOriginalUrl, setLastClonedOriginalUrl] = useState<string>("");
   const [scriptData, setScriptData] = useState<any | null>(null);
   const [injectionResult, setInjectionResult] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,12 +28,20 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
 
   if (!isOpen) return null;
 
-  // 1. Step 1: 구글 시트 복제 핸들러
-  const handleCloneSheet = async () => {
-    if (!sheetUrl.trim()) {
+  // 1. Step 1: 구글 시트 복제 핸들러 (스마트 사본 재사용 가드 적용)
+  const handleProceedStep1 = async (forceReclone = false) => {
+    const trimmedUrl = sheetUrl.trim();
+    if (!trimmedUrl) {
       alert("구글 시트 URL 또는 ID를 입력해 주세요.");
       return;
     }
+
+    // 💡 스마트 가드: 이미 복제된 사본이 있고, URL이 변경되지 않았으며 강제 재복제가 아니면 즉시 Step 2로 이동!
+    if (clonedSheetInfo && lastClonedOriginalUrl === trimmedUrl && !forceReclone) {
+      setCurrentStep(2);
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await apiFetch("/api/apps-script/clone-and-inject", {
@@ -40,13 +49,14 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "clone_sheet",
-          sheetUrl: sheetUrl.trim(),
+          sheetUrl: trimmedUrl,
           customTitle: customTitle.trim() || undefined
         })
       });
       const data = await res.json();
       if (data.success) {
         setClonedSheetInfo(data);
+        setLastClonedOriginalUrl(trimmedUrl);
         setCurrentStep(2);
       } else {
         alert(data.error || "구글 시트 복제에 실패했습니다.");
@@ -274,6 +284,30 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
               </p>
             </div>
 
+            {/* 이미 복제된 사본이 존재하는 경우 상태 카드 */}
+            {clonedSheetInfo && lastClonedOriginalUrl === sheetUrl.trim() && (
+              <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs flex items-center justify-between gap-3">
+                <div className="space-y-0.5 truncate">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>이미 복제된 안전 사본이 준비되어 있습니다</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-700 truncate pl-5">
+                    {clonedSheetInfo.sheetTitle}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleProceedStep1(true)}
+                  disabled={loading}
+                  className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-lg border border-emerald-200 shrink-0 transition-all cursor-pointer"
+                  title="기존 사본 대신 새로운 사본을 다시 복제합니다."
+                >
+                  새 사본으로 다시 복제 🔄
+                </button>
+              </div>
+            )}
+
             <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200/80 text-xs text-amber-900 space-y-1">
               <div className="font-bold flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-amber-600" />
@@ -295,7 +329,7 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
               </button>
               <button
                 type="button"
-                onClick={handleCloneSheet}
+                onClick={() => handleProceedStep1(false)}
                 disabled={loading || !sheetUrl.trim()}
                 className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
               >
@@ -303,6 +337,11 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess }: NewAp
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
                     <span>시트 사본 복제 중...</span>
+                  </>
+                ) : clonedSheetInfo && lastClonedOriginalUrl === sheetUrl.trim() ? (
+                  <>
+                    <span>기존 사본으로 계속 진행</span>
+                    <ArrowRight className="w-4 h-4" />
                   </>
                 ) : (
                   <>
