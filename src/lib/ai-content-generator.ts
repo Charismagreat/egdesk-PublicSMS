@@ -47,14 +47,14 @@ export async function generateOmniChannelContent(
   popularProducts: string[]
 ): Promise<OmniChannelPack> {
   let apiKey: string | null = null;
-  let isEnabled = true;
+  let isEnabled = false; // 기본값: 비활성화(false)
   try {
     const tenantId = await getTenantId();
     apiKey = await getAppSetting('google_ai_api_key', tenantId);
 
     const enabledValue = await getAppSetting('omnichannel_ai_enabled', tenantId);
     if (enabledValue !== null) {
-      isEnabled = enabledValue !== 'false';
+      isEnabled = enabledValue === 'true';
     }
 
     if (apiKey && !apiKey.startsWith('AIzaSy')) {

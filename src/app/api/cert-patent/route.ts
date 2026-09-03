@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { queryTable, insertRows, updateRows, executeSQL, callInternalKnowledgeTool, callAiCaller } from '../../../../egdesk-helpers';
+import { queryTable, insertRows, updateRows, executeSQL, callInternalKnowledgeTool, callAiCaller, downloadFile } from '../../../../egdesk-helpers';
 import { setupDatabase } from '@/lib/setup-db';
 
 // DB 자동 동기화 래퍼
@@ -733,7 +733,7 @@ ${realContents.substring(0, 450)}...
                   file_name: updateFileName,
                   updated_at: nowStr
                 }],
-                { filters: { id: Number(existingSummary.id) } }
+                { filters: { id: String(existingSummary.id) } }
               );
               console.log(`[FOLDER SUMMARY UPDATED SUCCESS] 기존 종합 보고서(ID: ${existingSummary.id})가 최신 ${currentFolderDocs.length}건 서류 기준으로 오토 갱신(UPDATE) 되었습니다.`);
             } else {

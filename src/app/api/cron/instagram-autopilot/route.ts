@@ -5,7 +5,8 @@ import {
   queryTable, 
   listInstagramHistory, 
   createInstagramPost, 
-  generateInstagramContent 
+  generateInstagramContent,
+  listInstagramConnections 
 } from '../../../../../egdesk-helpers';
 
 /**

@@ -5,8 +5,8 @@ import { Bot, Save, Check, KeyRound, Cpu, Sparkles, AlertCircle, RefreshCw, Serv
 
 export default function AiSettingsCard() {
   const [aiModel, setAiModel] = useState("gemini-3.5-flash");
-  const [omnichannelEnabled, setOmnichannelEnabled] = useState(true);
-  const [copilotWidgetEnabled, setCopilotWidgetEnabled] = useState(true);
+  const [omnichannelEnabled, setOmnichannelEnabled] = useState(false);
+  const [copilotWidgetEnabled, setCopilotWidgetEnabled] = useState(false);
   
   // 하이브리드 AI 설정을 위한 신규 상태 선언
   const [aiProvider, setAiProvider] = useState("gemini"); // 'gemini' | 'local_llm' | 'smart_hybrid'
@@ -48,61 +48,58 @@ export default function AiSettingsCard() {
     }
   };
 
+  const safeFetchJson = async (path: string) => {
+    try {
+      const res = await apiFetch(path);
+      if (!res.ok) return { success: false };
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { success: false };
+      }
+    } catch {
+      return { success: false };
+    }
+  };
+
   useEffect(() => {
     // 1. 기존 Gemini AI 모델명 불러오기
-    apiFetch('/api/settings?key=google_ai_model')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.value) setAiModel(data.value);
-      })
-      .catch(e => console.error(e));
+    safeFetchJson('/api/settings?key=google_ai_model').then(data => {
+      if (data.success && data.value) setAiModel(data.value);
+    });
 
-    // 3. 옴니채널 AI 활성화 여부 불러오기
-    apiFetch('/api/settings?key=omnichannel_ai_enabled')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.value !== null) {
-          setOmnichannelEnabled(data.value !== 'false');
-        }
-      })
-      .catch(e => console.error(e));
+    // 3. 옴니채널 AI 활성화 여부 불러오기 (기본값: 비활성화/false)
+    safeFetchJson('/api/settings?key=omnichannel_ai_enabled').then(data => {
+      if (data.success && data.value !== null && data.value !== undefined) {
+        setOmnichannelEnabled(data.value === 'true');
+      }
+    });
 
-    // 4. 자율 마케팅 파트너 활성화 여부 불러오기
-    apiFetch('/api/settings?key=copilot_widget_enabled')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.value !== null) {
-          setCopilotWidgetEnabled(data.value !== 'false');
-        }
-      })
-      .catch(e => console.error(e));
+    // 4. 자율 마케팅 파트너 활성화 여부 불러오기 (기본값: 비활성화/false)
+    safeFetchJson('/api/settings?key=copilot_widget_enabled').then(data => {
+      if (data.success && data.value !== null && data.value !== undefined) {
+        setCopilotWidgetEnabled(data.value === 'true');
+      }
+    });
 
     // 5. 하이브리드 AI 공급자 불러오기
-    apiFetch('/api/settings?key=ai_provider')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.value) setAiProvider(data.value);
-      })
-      .catch(e => console.error(e));
+    safeFetchJson('/api/settings?key=ai_provider').then(data => {
+      if (data.success && data.value) setAiProvider(data.value);
+    });
 
     // 6. 로컬 LLM URL 불러오기
-    apiFetch('/api/settings?key=local_llm_url')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.value) {
-          setLocalLlmUrl(data.value);
-          fetchLlmModels(data.value);
-        }
-      })
-      .catch(e => console.error(e));
+    safeFetchJson('/api/settings?key=local_llm_url').then(data => {
+      if (data.success && data.value) {
+        setLocalLlmUrl(data.value);
+        fetchLlmModels(data.value);
+      }
+    });
 
     // 7. 로컬 LLM 모델명 불러오기
-    apiFetch('/api/settings?key=local_llm_model')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.value) setLocalLlmModel(data.value);
-      })
-      .catch(e => console.error(e));
+    safeFetchJson('/api/settings?key=local_llm_model').then(data => {
+      if (data.success && data.value) setLocalLlmModel(data.value);
+    });
   }, []);
 
   // 로컬 LLM 연결성 테스트 수행 함수

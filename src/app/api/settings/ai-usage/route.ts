@@ -32,8 +32,18 @@ export async function GET(req: Request) {
         cache: 'no-store'
       });
       if (callerRes.ok) {
-        const callerData = await callerRes.json();
-        const rawList = callerData.result ? JSON.parse(callerData.result.content[0].text) : [];
+        const text = await callerRes.text();
+        let callerData: any = null;
+        try {
+          callerData = JSON.parse(text);
+        } catch {}
+        
+        let rawList: any[] = [];
+        if (callerData?.result?.content?.[0]?.text) {
+          try {
+            rawList = JSON.parse(callerData.result.content[0].text);
+          } catch {}
+        }
         if (Array.isArray(rawList)) {
           // 헬스체크용 핑(6토큰)을 제외하고 실제 비즈니스 OCR/자동화 호출만 필터링
           callerLogs = rawList

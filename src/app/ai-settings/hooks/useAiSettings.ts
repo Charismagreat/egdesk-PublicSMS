@@ -3,10 +3,10 @@ import { apiFetch } from "@/lib/api";
 import { UsageSummary, PurposeStat, ModelStat, TokenLog, Pagination } from "../types";
 
 export function useAiSettings() {
-  // 1. AI 핵심 설정 관련 State
+  // 1. AI 핵심 설정 관련 State (기본값: 비활성화/false)
   const [aiModel, setAiModel] = useState("gemini-3.5-flash");
-  const [omnichannelEnabled, setOmnichannelEnabled] = useState(true);
-  const [copilotWidgetEnabled, setCopilotWidgetEnabled] = useState(true);
+  const [omnichannelEnabled, setOmnichannelEnabled] = useState(false);
+  const [copilotWidgetEnabled, setCopilotWidgetEnabled] = useState(false);
   const [aiProvider, setAiProvider] = useState("gemini"); // 'gemini' | 'local_llm' | 'smart_hybrid'
   const [localLlmUrl, setLocalLlmUrl] = useState("http://localhost:11434");
   const [localLlmModel, setLocalLlmModel] = useState("gemma2");
@@ -76,19 +76,30 @@ export function useAiSettings() {
       setIsTableCollapsed(saved === "true");
     }
 
-    // AI 설정 로드
+    const safeFetchJson = async (path: string) => {
+      try {
+        const res = await apiFetch(path);
+        if (!res.ok) return { success: false };
+        const text = await res.text();
+        try { return JSON.parse(text); } catch { return { success: false }; }
+      } catch {
+        return { success: false };
+      }
+    };
+
+    // AI 설정 로드 (기본값: 비활성화/false)
     Promise.all([
-      apiFetch("/api/settings?key=google_ai_model").then((res) => res.json()),
-      apiFetch("/api/settings?key=omnichannel_ai_enabled").then((res) => res.json()),
-      apiFetch("/api/settings?key=copilot_widget_enabled").then((res) => res.json()),
-      apiFetch("/api/settings?key=ai_provider").then((res) => res.json()),
-      apiFetch("/api/settings?key=local_llm_url").then((res) => res.json()),
-      apiFetch("/api/settings?key=local_llm_model").then((res) => res.json()),
+      safeFetchJson("/api/settings?key=google_ai_model"),
+      safeFetchJson("/api/settings?key=omnichannel_ai_enabled"),
+      safeFetchJson("/api/settings?key=copilot_widget_enabled"),
+      safeFetchJson("/api/settings?key=ai_provider"),
+      safeFetchJson("/api/settings?key=local_llm_url"),
+      safeFetchJson("/api/settings?key=local_llm_model"),
     ])
       .then(([modelData, omniData, copilotData, providerData, urlData, modelLlmData]) => {
         if (modelData.success && modelData.value) setAiModel(modelData.value);
-        if (omniData.success && omniData.value !== null) setOmnichannelEnabled(omniData.value !== "false");
-        if (copilotData.success && copilotData.value !== null) setCopilotWidgetEnabled(copilotData.value !== "false");
+        if (omniData.success && omniData.value !== null && omniData.value !== undefined) setOmnichannelEnabled(omniData.value === "true");
+        if (copilotData.success && copilotData.value !== null && copilotData.value !== undefined) setCopilotWidgetEnabled(copilotData.value === "true");
         if (providerData.success && providerData.value) setAiProvider(providerData.value);
         if (urlData.success && urlData.value) {
           setLocalLlmUrl(urlData.value);

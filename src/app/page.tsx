@@ -122,7 +122,8 @@ export default async function Home() {
     if (!copilotSetting.rows || copilotSetting.rows.length === 0) {
       copilotSetting = await queryTable('system_settings', { filters: { key: 'copilot_widget_enabled' } }).catch(() => ({ rows: [] }));
     }
-    copilotEnabled = copilotSetting.rows && copilotSetting.rows.length > 0 ? copilotSetting.rows[0].value !== 'false' : true;
+    // 기본값: 비활성화(false) — 사용자가 설정에서 명시적으로 'true'로 저장했을 때만 활성화
+    copilotEnabled = copilotSetting.rows && copilotSetting.rows.length > 0 ? copilotSetting.rows[0].value === 'true' : false;
   } catch (e: any) {
     console.warn("⚠️ 설정 로드 실패:", e.message);
   }

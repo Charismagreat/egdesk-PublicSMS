@@ -1,7 +1,7 @@
 /**
  * EGDesk Helper Functions for Next.js
  *
- * Type-safe helpers for EGDesk user data, Google Workspace (Sheets / Drive MCP + sync, Gmail, Apps Script),
+ * Type-safe helpers for EGDesk user data, Google Workspace (Sheets / Drive / Docs / Slides MCP + sync, Gmail, Apps Script),
  * FinanceHub (banks, cards, Hometax, promissory notes),
  * internal knowledge / business identity / company research (MCP), Korean law (MCP), and browser recorder replay / live browse.
  * Works in both client and server components.
@@ -18,6 +18,7 @@
  *  - Check that EGDesk is running and MCP tools are actually available before relying on them.
  *  - For app code in this repo, keep using these helpers (queryTable, etc.) — MCP is optional for agents.
  *  - If MCP tools are missing/empty, fall back to helpers + EGDESK-README.md; ask the user to install MCP from EGDesk.
+ *  - Tunnel: getEgdeskTunnel() (live prod/dev URLs + X-Api-Key). Embed into Apps Script with setupAppsScriptEgdeskTunnel().
  */
 
 import { EGDESK_CONFIG } from './egdesk.config';
@@ -1760,6 +1761,16 @@ export async function closeBrowserRecordingSession(sessionId: string) {
   return callBrowserRecordingTool('browser_recording_close_session', { sessionId });
 }
 
+/** Workflow clicks/fills/keys logged in an open live session (no passwords) */
+export async function listBrowserRecordingSessionActions(sessionId: string) {
+  return callBrowserRecordingTool('browser_recording_list_session_actions', { sessionId });
+}
+
+/** Save the live session as a new *.spec.js (login prefix + logged workflow). Does not close Chrome. */
+export async function saveBrowserRecordingSession(sessionId: string, name: string) {
+  return callBrowserRecordingTool('browser_recording_save_session', { sessionId, name });
+}
+
 // ==========================================
 // AI CENTER (workflows, entities, relations, tags)
 // ==========================================
@@ -2883,6 +2894,7 @@ export async function syncDrive(options: {
 /**
  * Call EGDesk Sheets MCP tool.
  *
+ * Auth: personal OAuth, service account, or domain-wide delegation (call getSheetsAuthStatus() first).
  * - Server: `POST {apiUrl}/sheets/tools/call`
  * - Client: `POST /__sheets_proxy`
  */
@@ -2913,6 +2925,11 @@ export async function callSheetsTool(
   }
 
   return parseEgdeskMcpToolResponse(response);
+}
+
+/** Who Sheets/Docs/Slides/Drive calls act as: personal_oauth, service_account, or domain_wide_delegation */
+export async function getSheetsAuthStatus() {
+  return callSheetsTool('sheets_auth_status', {});
 }
 
 /** Spreadsheet metadata (tabs, dimensions) */
@@ -2982,6 +2999,139 @@ export async function formatSheetHeaders(spreadsheetId: string, sheetName?: stri
 /** Tint a synced data tab */
 export async function tintSheetDataTab(spreadsheetId: string, sheetName: string) {
   return callSheetsTool('sheets_tint_data_tab', { spreadsheetId, sheetName });
+}
+
+// ==========================================
+// Google Docs (MCP)
+// ==========================================
+
+export async function callDocsTool(
+  toolName: string,
+  args: Record<string, any> = {}
+): Promise<any> {
+  const body = JSON.stringify({ tool: toolName, arguments: args });
+  const isServer = typeof window === 'undefined';
+  let response: Response;
+  if (isServer) {
+    const apiUrl =
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) ||
+      EGDESK_CONFIG.apiUrl;
+    response = await fetch(`${apiUrl}/docs/tools/call`, {
+      method: 'POST',
+      headers: buildServerEgdeskHeaders(),
+      body
+    });
+  } else {
+    response = await apiFetch('/__docs_proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+  }
+  return parseEgdeskMcpToolResponse(response);
+}
+
+export async function getGoogleDocsAuthStatus() {
+  return callDocsTool('docs_auth_status', {});
+}
+
+export async function createGoogleDoc(title: string) {
+  return callDocsTool('docs_create', { title });
+}
+
+export async function getGoogleDoc(documentId: string) {
+  return callDocsTool('docs_get', { documentId });
+}
+
+export async function getGoogleDocText(documentId: string) {
+  return callDocsTool('docs_get_text', { documentId });
+}
+
+export async function insertGoogleDocText(documentId: string, text: string, index?: number) {
+  return callDocsTool('docs_insert_text', { documentId, text, index });
+}
+
+export async function replaceGoogleDocText(
+  documentId: string,
+  findText: string,
+  replaceText: string,
+  matchCase?: boolean,
+) {
+  return callDocsTool('docs_replace_text', { documentId, findText, replaceText, matchCase });
+}
+
+// ==========================================
+// Google Slides (MCP)
+// ==========================================
+
+export async function callSlidesTool(
+  toolName: string,
+  args: Record<string, any> = {}
+): Promise<any> {
+  const body = JSON.stringify({ tool: toolName, arguments: args });
+  const isServer = typeof window === 'undefined';
+  let response: Response;
+  if (isServer) {
+    const apiUrl =
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) ||
+      EGDESK_CONFIG.apiUrl;
+    response = await fetch(`${apiUrl}/slides/tools/call`, {
+      method: 'POST',
+      headers: buildServerEgdeskHeaders(),
+      body
+    });
+  } else {
+    response = await apiFetch('/__slides_proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+  }
+  return parseEgdeskMcpToolResponse(response);
+}
+
+export async function getGoogleSlidesAuthStatus() {
+  return callSlidesTool('slides_auth_status', {});
+}
+
+export async function createGoogleSlides(title: string) {
+  return callSlidesTool('slides_create', { title });
+}
+
+export async function getGoogleSlides(presentationId: string) {
+  return callSlidesTool('slides_get', { presentationId });
+}
+
+export async function getGoogleSlidesText(presentationId: string) {
+  return callSlidesTool('slides_get_text', { presentationId });
+}
+
+export async function addGoogleSlide(
+  presentationId: string,
+  options: { text?: string; insertionIndex?: number } = {},
+) {
+  return callSlidesTool('slides_add_slide', { presentationId, ...options });
+}
+
+export async function replaceGoogleSlidesText(
+  presentationId: string,
+  findText: string,
+  replaceText: string,
+  matchCase?: boolean,
+) {
+  return callSlidesTool('slides_replace_text', { presentationId, findText, replaceText, matchCase });
+}
+
+export async function insertGoogleSlidesImage(
+  presentationId: string,
+  options: {
+    filePath?: string;
+    imageUrl?: string;
+    slideIndex?: number;
+    slideObjectId?: string;
+  },
+) {
+  return callSlidesTool('slides_insert_image', { presentationId, ...options });
 }
 
 // ==========================================
@@ -3059,6 +3209,11 @@ export async function callGmailTool(
   return parseEgdeskMcpToolResponse(response);
 }
 
+/** Who Gmail calls act as: personal_oauth, service_account, or domain_wide_delegation */
+export async function getGmailAuthStatus() {
+  return callGmailTool('gmail_auth_status', {});
+}
+
 /** Workspace → local: list domain users */
 export async function listGmailUsers() {
   return callGmailTool('gmail_list_users', {});
@@ -3080,7 +3235,7 @@ export async function searchGmailMessages(
   return callGmailTool('gmail_search_messages', { query, ...options });
 }
 
-/** Local → Workspace: send from the signed-in Google account */
+/** Local → Workspace: send via personal OAuth or service account (see getGmailAuthStatus()) */
 export async function sendGmailMessage(options: {
   to: string;
   subject: string;
@@ -3126,6 +3281,11 @@ export async function callAppsScriptTool(
   return parseEgdeskMcpToolResponse(response);
 }
 
+/** Apps Script auth mode and identity (OAuth or service account / DWD — call before create/push/run) */
+export async function getAppsScriptAuthStatus() {
+  return callAppsScriptTool('apps_script_auth_status', {});
+}
+
 /** Local → Workspace */
 export async function pushAppsScriptToGoogle(
   projectId: string,
@@ -3163,6 +3323,23 @@ export async function createAppsScriptForSpreadsheet(options: {
     scriptCode: options.scriptCode,
     force: options.force,
   });
+}
+
+/**
+ * Embed this EGDesk machine's tunnel URL + X-Api-Key into an Apps Script project
+ * (EgdeskConfig.gs / EgdeskClient.gs) and push to Google.
+ * Pass projectId to update an existing project, or fileId to create a bound script.
+ */
+export async function setupAppsScriptEgdeskTunnel(options: {
+  projectId?: string;
+  fileId?: string;
+  spreadsheetId?: string;
+  title?: string;
+  role?: 'prod' | 'dev';
+  push?: boolean;
+  force?: boolean;
+} = {}) {
+  return callAppsScriptTool('apps_script_setup_egdesk_tunnel', options);
 }
 
 /**
@@ -3378,6 +3555,37 @@ export async function setGeminiApiKey(options: {
 /** List all Google/Gemini keys in AI Keys Manager */
 export async function listGeminiApiKeys() {
   return listApiKeys({ provider: 'google' });
+}
+
+/** Tunnel URL + API key from env / egdesk.config (no live health check). */
+export function getEgdeskTunnelFromEnv(): {
+  publicUrl: string;
+  apiKey: string | undefined;
+  userDataToolsCallUrl: string;
+} {
+  const publicUrl = (
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_TUNNEL_URL) ||
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_URL) ||
+    (EGDESK_CONFIG as { tunnelUrl?: string }).tunnelUrl ||
+    EGDESK_CONFIG.apiUrl ||
+    ''
+  ).replace(/\/$/, '');
+  const apiKey =
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_EGDESK_API_KEY) ||
+    EGDESK_CONFIG.apiKey;
+  return {
+    publicUrl,
+    apiKey,
+    userDataToolsCallUrl: publicUrl ? `${publicUrl}/user-data/tools/call` : '',
+  };
+}
+
+/**
+ * Live prod/dev tunnel addresses and shared X-Api-Key from EGDesk
+ * (`egdesk_get_tunnel`). Use setupAppsScriptEgdeskTunnel() to embed them in Apps Script.
+ */
+export async function getEgdeskTunnel(role?: 'prod' | 'dev') {
+  return callEgdeskConfigTool('egdesk_get_tunnel', role ? { role } : {});
 }
 
 // ==========================================

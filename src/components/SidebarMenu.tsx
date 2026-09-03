@@ -12,7 +12,7 @@ import {
   GripVertical, Activity, Smartphone, Mic, Bot, LayoutDashboard
 } from "lucide-react";
 
-import { MENU_STATIC_MAP } from '@/lib/menu-metadata';
+import { MENU_STATIC_MAP, MENU_METADATA_LIST } from '@/lib/menu-metadata';
 
 interface SidebarMenuProps {
   userRole: string;
@@ -36,13 +36,13 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
     "/my-db"          // MY DB 센터
   ]);
 
-  // 1. 초기 렌더링 시 깜빡임이나 공백 방지를 위해 정적 기본 배열로 초기값 바인딩
+  // 1. 초기 렌더링 시 깜빡임 방지 및 기본 가나다순 배열 바인딩
   const getInitialDefaultItems = () => {
-    const baseItems = Object.entries(MENU_STATIC_MAP).map(([href, meta]) => ({
-      href,
-      label: meta.label,
-      icon: meta.icon,
-      color: meta.color
+    const baseItems = MENU_METADATA_LIST.map(item => ({
+      href: item.href,
+      label: item.label,
+      icon: item.icon,
+      color: item.color
     }));
 
     const filtered = baseItems.filter(item => {
@@ -98,9 +98,16 @@ export default function SidebarMenu({ userRole, userUsername = "" }: SidebarMenu
   const fetchAndApplyMenuSettings = async () => {
     try {
       const res = await apiFetch("/api/settings/menu");
-      const data = await res.json();
+      if (!res.ok) return;
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        return;
+      }
 
-      if (data.success && data.menuSettings) {
+      if (data?.success && data.menuSettings) {
         const settings: MenuSettingItem[] = data.menuSettings;
 
         // 1. DB 설정을 토대로 활성화 및 순서 결합

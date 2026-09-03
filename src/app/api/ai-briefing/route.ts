@@ -29,9 +29,9 @@ export async function GET(req: Request) {
 
     const generateContent = searchParams.get('generateContent') === 'true';
 
-    // 3. 옴니채널 AI 활성화 상태 확인
+    // 3. 옴니채널 AI 활성화 상태 확인 (기본값: 비활성화/false)
     const enabledRes = await queryTable('system_settings', { filters: { key: 'omnichannel_ai_enabled' } });
-    const omnichannelAiEnabled = enabledRes.rows && enabledRes.rows.length > 0 ? enabledRes.rows[0].value !== 'false' : true;
+    const omnichannelAiEnabled = enabledRes.rows && enabledRes.rows.length > 0 ? enabledRes.rows[0].value === 'true' : false;
 
     // 4. 옴니채널 AI 크리에이티브 콘텐츠 생성
     let contentPack = null;
