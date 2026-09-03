@@ -306,11 +306,11 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess, initial
                   </span>
                 )}
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {isEditMode 
-                  ? "기존에 배포된 스크립트를 보존하며 새 요구사항을 유기적으로 결합하여 갱신 배포합니다."
-                  : "시트 주소 입력 없이 새 시트를 자동 생성하거나, 기존 시트를 복제하여 원클릭 주입합니다."}
-              </p>
+              {isEditMode && (
+                <p className="text-xs text-slate-500 mt-0.5">
+                  기존에 배포된 스크립트를 보존하며 새 요구사항을 유기적으로 결합하여 갱신 배포합니다.
+                </p>
+              )}
             </div>
           </div>
 
@@ -598,42 +598,96 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess, initial
                 rows={4}
                 className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs text-slate-800 leading-relaxed"
               />
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {isEditMode ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setPrompt("기존 사이드바 메뉴에 'PDF 일괄 다운로드' 버튼을 추가하고, 파일 업로드 성공 시 브라우저에 완료 토스트가 뜨도록 보강해줘.")}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
-                    >
-                      💡 추천: 사이드바 UI 버튼 추가
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPrompt("시트 데이터가 수정될 때마다 이지데스크 웹훅으로 변경 내역을 실시간 전송하는 onEdit 트리거를 기존 코드에 유기적으로 추가해줘.")}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
-                    >
-                      💡 추천: 실시간 웹훅 연동 추가
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setPrompt("구글 시트 사이드바를 통해 PDF/이미지 파일과 발주 정보를 입력받아 구글 드라이브에 저장하고, '발주서 접수대장' 시트 최상단(2행)에 자동으로 기록하는 사이드바 및 파일 업로드 시스템을 구성해줘.")}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
-                    >
-                      💡 추천: 발주서 사이드바 업로드 양식
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPrompt("시트가 수정될 때마다 변경 이력을 '로그' 시트에 자동으로 남기고, 특정 셀 값이 변경되면 이지데스크 웹훅으로 실시간 알림을 발송하는 트리거를 작성해줘.")}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
-                    >
-                      💡 추천: 변경 감지 & 웹훅 알림
-                    </button>
-                  </>
-                )}
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[10px] font-extrabold text-slate-400 block">
+                  ⚡ 실전 자동화 템플릿 추천 (클릭 시 자동 입력):
+                </span>
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                  {isEditMode ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("기존 사이드바 메뉴에 'PDF/엑셀 일괄 다운로드' 버튼을 추가하고, 파일 업로드 성공 시 브라우저에 완료 토스트 알림이 뜨도록 UI를 보강해줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        🎨 사이드바 다운로드 버튼 추가
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("시트 데이터가 수정될 때마다 이지데스크 웹훅으로 변경 내역을 실시간 전송하는 onEdit(e) 트리거를 기존 코드에 유기적으로 추가해줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        ⚡ 실시간 onEdit 웹훅 연동
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("상단 커스텀 메뉴에 '현재 선택된 행 거래처에 메일 발송' 기능을 추가하고, 템플릿 본문에 시트 셀 데이터를 채워 자동 발송하도록 코드를 확장해줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        📧 거래처 이메일 원클릭 발송 메뉴
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("금액이나 사업자등록번호 입력 시 유효성 검사(10자리 정규식 및 음수 방지)를 수행하여 서식 오류 시 경고창을 띄우는 가드 로직을 추가해줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        🛡️ 입력 데이터 유효성 검사 가드
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("상단 메뉴에 '시트 데이터 정렬 및 중복 행 자동 제거' 기능을 추가하여 원클릭으로 대장을 깔끔하게 정돈할 수 있게 해줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        🧹 데이터 정렬 & 중복 자동 제거
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("구글 시트 사이드바를 통해 PDF/이미지 파일과 발주 정보를 입력받아 구글 드라이브에 저장하고, '발주서 접수대장' 시트 최상단(2행)에 자동으로 기록하는 사이드바 및 파일 업로드 시스템을 구성해줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        📑 발주서/영수증 사이드바 업로드 양식
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("사이드바에서 영수증이나 세금계산서 이미지를 첨부하면 이지데스크 AI Vision OCR을 호출하여 공급가액, 세액, 거래처명을 자동 추출하고 시트 행에 자동 기입하는 시스템을 작성해줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        👁️ AI Vision OCR 자동 판독 & 행 기입
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("시트 데이터가 수정될 때마다 변경 이력을 '로그' 시트에 자동으로 남기고, 특정 셀 값이 '승인'으로 변경되면 이지데스크 웹훅으로 실시간 알림을 발송하는 트리거를 작성해줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        🔔 변경 감지 & 웹훅 실시간 알림
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("매일 자정에 당일 입력된 대장 데이터를 '일일_마감' 시트로 자동 복사 백업하고 총 수량과 합계 금액을 자동 계산하는 시간 기반 일일 자동 마감 트리거를 구성해줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        🔄 매일 자정 데이터 자동 백업 & 마감
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("선택한 행의 견적/발주 데이터를 PDF 형식으로 자동 렌더링하여 거래처 담당자 이메일로 원클릭 첨부 발송하는 상단 커스텀 메뉴를 만들어줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        📊 원클릭 PDF 생성 & 이메일 자동 발송
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("외부 환율/원자재 공공데이터 API를 주기적으로 호출하여 시트 내 기준 단가와 환율을 실시간으로 자동 업데이트하는 연동 함수를 작성해줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        🌐 외부 API 연동 & 환율/단가 자동 갱신
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
