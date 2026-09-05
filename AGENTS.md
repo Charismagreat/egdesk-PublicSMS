@@ -168,5 +168,40 @@ See `.agents/rules/egdesk-dev-context.md` for full details.
    - 백엔드 API 라우트는 `recordOcrCorrection`을 호출하여 원시 판독값과 사용자 최종 수정값 간의 차이점(Diff)을 자동 감지하고 `ai_ocr_feedback_corrections` 테이블에 적재하여 다음 OCR 분석 시 스스로 보정하도록 자율 학습 피드백 루프를 보장해야 합니다.
 <!-- END:ocr-fewshot-correction-rules -->
 
+<!-- BEGIN:egdesk-tunnel-rules -->
+## 이지데스크 공용 터널(EGDesk Tunnel) 및 원격 클라우드 연동 원칙
+
+1. **Google Apps Script(클라우드)의 `localhost` 호출 절대 금지 (DNS 오류 방지)**:
+   - Google Apps Script(`UrlFetchApp.fetch`)나 외부 웹훅은 로컬 머신이 아닌 해외 Google 클라우드 데이터센터에서 실행됩니다.
+   - 따라서 `http://localhost:4000`, `http://localhost:4002`, `http://localhost:4005` 같은 로컬 루프백 주소를 외부 클라이언트에 전달해서는 안 됩니다 (호출 시 100% `DNS 오류` 발생).
+2. **이지데스크 정식 공용 터널 엔드포인트 표준 사용**:
+   - 원격 클라이언트(Apps Script, 외부 웹훅, 모바일 원격 클라이언트 등)가 이지데스크 AI Caller나 My DB를 호출해야 할 때는 반드시 `egdesk_get_tunnel`로 조회되는 활성 공용 터널 주소를 사용해야 합니다:
+     - **호출 URL**: `https://tunneling-service.onrender.com/t/mcp-server-fxkud1/{service}/tools/call`
+     - **필수 인증 헤더**: `X-Api-Key: a67ddc0f-7e2b-4997-9a0b-9667a74c89d0`
+3. **AI OCR 및 파일 분석 전송 규격 준수**:
+   - 이미지 및 PDF 파일을 AI Caller 터널로 보낼 때는 Gemini 네이티브 파일 첨부 규격을 준수합니다:
+     ```json
+     {
+       "tool": "ai_caller_call",
+       "arguments": {
+         "caller": "publicsms-gas-ocr",
+         "model": "gemini-3.8-flash",
+         "temperature": 0.1,
+         "prompt": "문서 분석 지침...",
+         "files": [
+           {
+             "name": "파일명.png",
+             "content": "Base64문자열",
+             "encoding": "base64",
+             "mimeType": "image/png 또는 application/pdf"
+           }
+         ]
+       }
+     }
+     ```
+4. **외부 연동 스크립트 배포 시 터널 주소 주입 의무화**:
+   - Google 스프레드시트 연동 스크립트, 웹훅 콜백 및 외부 연계 코드 생성 시 로컬 주소 대신 이지데스크 공용 터널 주소 및 `X-Api-Key`를 주입하여 어디서든 안정적으로 동작하도록 보장합니다.
+<!-- END:egdesk-tunnel-rules -->
+
 
 
