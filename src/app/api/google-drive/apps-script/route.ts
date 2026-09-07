@@ -52,11 +52,25 @@ export async function GET() {
 
     if (triggers.length === 0) {
       try {
-        const trigRes = await callAppsScriptTool('apps_script_list_triggers', {});
-        const rawTrigs = trigRes?.triggers || (Array.isArray(trigRes) ? trigRes : []);
-        triggers = rawTrigs;
-      } catch (e: any) {
-        console.warn('Apps script list triggers warn:', e.message);
+        const schedRes = await queryTable('system_settings', {
+          filters: { key: `gas_schedules_${tenantId}`, tenant_id: tenantId }
+        }).catch(() => ({ rows: [] }));
+        if (schedRes.rows && schedRes.rows.length > 0) {
+          const parsedScheds = JSON.parse(schedRes.rows[0].value || '[]');
+          if (Array.isArray(parsedScheds)) {
+            triggers = parsedScheds.filter((s: any) => !s.deleted_at && s.status === 'ACTIVE');
+          }
+        }
+      } catch {}
+
+      if (triggers.length === 0) {
+        try {
+          const trigRes = await callAppsScriptTool('apps_script_list_triggers', {});
+          const rawTrigs = trigRes?.triggers || (Array.isArray(trigRes) ? trigRes : []);
+          triggers = rawTrigs;
+        } catch (e: any) {
+          console.warn('Apps script list triggers warn:', e.message);
+        }
       }
     }
 

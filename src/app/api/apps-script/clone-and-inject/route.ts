@@ -124,6 +124,17 @@ export async function POST(req: Request) {
           initialProjectId = boundRes.id || boundRes.projectId;
           initialScriptId = boundRes.scriptId || '';
           initialScriptUrl = boundRes.scriptUrl || '';
+
+          // 이지데스크 터널 클라이언트 인프라 자동 주입 (EgdeskConfig.gs, EgdeskClient.gs, appsscript.json)
+          try {
+            await callAppsScriptToolDirect('apps_script_setup_egdesk_tunnel', {
+              projectId: initialProjectId,
+              push: false
+            });
+            console.log(`[AppsScript] Successfully pre-injected egdesk tunnel files into new bound project: ${initialProjectId}`);
+          } catch (tunnelErr: any) {
+            console.warn('[AppsScript] Tunnel pre-injection warning for new project:', tunnelErr.message);
+          }
         }
       } catch (boundErr: any) {
         console.warn('Initial bound project creation note:', boundErr.message);
@@ -347,6 +358,17 @@ export async function POST(req: Request) {
             initialProjectId = boundRes.id || boundRes.projectId;
             initialScriptId = boundRes.scriptId || '';
             initialScriptUrl = boundRes.scriptUrl || '';
+
+            // 이지데스크 터널 클라이언트 인프라 자동 주입 (EgdeskConfig.gs, EgdeskClient.gs, appsscript.json)
+            try {
+              await callAppsScriptToolDirect('apps_script_setup_egdesk_tunnel', {
+                projectId: initialProjectId,
+                push: false
+              });
+              console.log(`[AppsScript] Successfully pre-injected egdesk tunnel files into cloned bound project: ${initialProjectId}`);
+            } catch (tunnelErr: any) {
+              console.warn('[AppsScript] Tunnel pre-injection warning for cloned project:', tunnelErr.message);
+            }
           }
         } catch (boundErr: any) {
           console.warn('Initial bound project creation note:', boundErr.message);
@@ -489,38 +511,76 @@ ${existingCode.trim()}
 `;
       }
 
-      const systemPrompt = `당신은 Google Apps Script(GAS) 및 Google Workspace 스프레드시트 자동화 최고 전문가입니다.
+      const systemPrompt = `당신은 Google Apps Script(GAS) 및 Google Workspace 스프레드시트 자동화 최고 수석 엔지니어입니다.
 사용자가 자연어로 요청한 비즈니스 로직을 완벽하고 신뢰성 높은 Google Apps Script (JavaScript V8 런타임) 코드로 작성해야 합니다.
+
+[⚡ 이지데스크 터널 클라이언트 인프라 환경 (사전 주입 완료)]:
+* 중요: 이 프로젝트는 이지데스크 터널 설정 시스템(apps_script_setup_egdesk_tunnel)을 통해 다음 파일들이 이미 함께 주입되어 즉시 사용할 수 있습니다.
+1. EgdeskConfig.gs: getEgdeskConfig() 함수 제공 (활성 공용 터널 URL 및 인증 X-Api-Key 자동 보유)
+2. EgdeskClient.gs: 강력한 터널 통신 클라이언트 유틸리티 함수 사전 제공:
+   - egdeskToolsCall(service, tool, args): 이지데스크의 모든 백엔드 MCP 도구를 원격 호출 (예: service 'ai-caller', 'user-data' 등)
+   - egdeskUserDataCall(tool, args): My DB 도구(user_data_*) 원격 호출
+   - egdeskUserDataSql(query): My DB에 SQL 쿼리 직접 실행 및 결과 반환
+   - egdeskUserDataListTables(): DB 테이블 목록 조회
+   - testEgdeskTunnel(): 터널 연결 상태 점검 및 UI 알림 함수
+3. appsscript.json: UrlFetchApp 외부 요청 권한("https://www.googleapis.com/auth/script.external_request") 사전 등록 완료
 
 [작성 및 증분 리팩토링 핵심 지침]
 1. **기존 코드가 제공된 경우**: 기존의 작동 가능한 함수와 설계를 계승하며 사용자의 추가/수정 요청을 자연스럽게 반영하여 완성된 단일 코드를 도출하십시오.
 2. 구글 스프레드시트에 존재하는 **모든 탭(시트)의 이름과 각 탭의 컬럼 헤더, 실제 샘플 데이터 구조를 철저히 파악**하여 코드를 작성하십시오.
 3. 시트를 가져올 때는 단순 \`getActiveSheet()\` 대신, 반드시 정확한 시트명을 지정하는 \`SpreadsheetApp.getActiveSpreadsheet().getSheetByName("탭이름")\`을 사용하여 탭 전환 시에도 오작동이 없도록 견고하게 작성하십시오.
 4. 사용자가 상단 메뉴바에서 직관적으로 실행할 수 있도록 \`onOpen()\` 트리거 함수와 \`SpreadsheetApp.getUi().createMenu('[⚡ 이지데스크 자동화]')...\` 커스텀 메뉴를 필수로 포함하십시오.
+   - 메뉴 항목 중 하나로 '🔌 이지데스크 터널 연결 점검'을 포함하여 이미 주입된 \`testEgdeskTunnel()\` 함수를 연결해 두면 사용자가 즉시 연동 상태를 확인할 수 있어 매우 좋습니다.
 5. 데이터 변경 감지가 필요한 경우 \`onEdit(e)\` 트리거에서 수정된 시트 이름(\`e.range.getSheet().getName()\`)과 열 번호를 엄격히 검증하여 다른 탭의 입력으로 인한 오작동을 원천 차단하십시오.
 
-[🧠 AI 분석 및 OCR 자동화 작성 원칙]
-6. 사용자의 요구사항에 **이미지/PDF 파일 OCR 분석, 품목/금액 자동 추출, 텍스트 요약/생성 등의 AI 기능**이 포함된 경우:
-   - Google Apps Script 환경에서 완벽하고 안전하게 구동되도록, **이지데스크 AI Caller 터널링 MCP 엔드포인트**를 \`UrlFetchApp.fetch\`로 호출하는 \`EGDeskBridge.callAi\` 헬퍼 클래스를 \`Code.gs\` 하단에 표준 탑재하십시오:
-     - 엔드포인트: \`https://tunneling-service.onrender.com/t/mcp-server-fxkud1/ai-caller/tools/call\`
-     - 헤더: \`{ "X-Api-Key": "a67ddc0f-7e2b-4997-9a0b-9667a74c89d0" }\`
-     - 페이로드 규격:
-       \`\`\`json
-       {
-         "tool": "ai_caller_call",
-         "arguments": {
-           "prompt": prompt,
-           "images": fileBase64 ? [fileBase64] : [],
-           "model": "gemini-2.5-flash",
-           "temperature": 0.2
+[🧠 AI 분석 및 OCR / 데이터베이스 자동화 작성 원칙 - EgdeskClient 적극 활용]
+6. 사용자 개인 API 키 요구 금지:
+   - 사용자에게 Gemini API 키나 개인 키 설정을 요구하지 마십시오.
+   - 모든 AI/OCR 호출은 이지데스크 중앙 AI Caller에서 일괄 처리되므로 이미 주입된 \`EgdeskClient.gs\`의 함수를 바로 사용합니다.
+7. 사용자의 요구사항에 **이미지/PDF 파일 OCR 분석, 품목/금액 자동 추출, 텍스트 요약/생성 등의 AI 기능**이 포함된 경우:
+   - 더 이상 Code.gs 내부에 길고 복잡한 UrlFetchApp 저수준 코드나 하드코딩된 API Key 상수를 넣을 필요가 없습니다!
+   - 이미 사전 제공되는 \`egdeskToolsCall('ai-caller', 'ai_caller_call', { ... })\` 함수를 호출하여 AI/OCR 분석을 구현하십시오.
+   - 사이드바나 다이얼로그를 통해 이미지나 PDF를 입력받는 경우:
+     - HTML 사이드바에 파일 선택(<input type="file">)과 실행 버튼을 제공하고, FileReader로 Base64로 인코딩한 뒤 google.script.run으로 GAS 서버 함수를 호출하게 하십시오.
+     - GAS 서버 함수에서는 다음과 같이 초고속(gemini-3.8-flash)으로 비전 OCR을 실행합니다:
+       \`\`\`javascript
+       const toolRes = egdeskToolsCall('ai-caller', 'ai_caller_call', {
+         caller: 'publicsms-gas-ocr',
+         model: 'gemini-3.8-flash',
+         temperature: 0.1,
+         prompt: '첨부된 문서를 정밀 분석하여 각 컬럼에 맞는 JSON 규격으로 추출하세요.',
+         files: [{ name: fileName, content: fileData, encoding: 'base64', mimeType: mimeType }]
+       });
+       \`\`\`
+   - ⚠️ [AI Caller 응답 파싱 헬퍼 함수 - Code.gs에 필수 포함]:
+     - egdeskToolsCall이 반환한 객체에서 텍스트를 추출하고 마크다운 백틱을 제거하여 JSON을 파싱하는 함수를 포함하세요:
+       \`\`\`javascript
+       function parseAiCallerResponse(toolRes) {
+         var text = "";
+         if (toolRes && toolRes.result && toolRes.result.content && toolRes.result.content[0] && toolRes.result.content[0].text) {
+           text = toolRes.result.content[0].text;
+         } else if (toolRes && toolRes.content && toolRes.content[0] && toolRes.content[0].text) {
+           text = toolRes.content[0].text;
+         } else if (typeof toolRes.result === "string") {
+           text = toolRes.result;
+         } else {
+           text = JSON.stringify(toolRes);
+         }
+         var cleanJson = text.trim();
+         if (cleanJson.startsWith('\`\`\`')) {
+           cleanJson = cleanJson.replace(/^\`\`\`(?:json)?\\s*/i, '').replace(/\\s*\`\`\`$/, '').trim();
+         }
+         try {
+           return JSON.parse(cleanJson);
+         } catch (e) {
+           return { rawText: text, error: e.toString() };
          }
        }
        \`\`\`
-     - 응답 파싱: \`JSON.parse(responseText)\` -> \`data.result.content[0].text\` -> \`JSON.parse(text).content\`
-   - 이를 통해 DNS 오류 없이 전 세계 어디서든 **이지데스크 AI Caller 엔진을 통해 100% 안정적이고 초고속(5~10초)으로 Vision OCR 및 AI 자동화 분석**이 수행되도록 완성하십시오.
-
-7. 오류가 발생하더라도 구글 시트가 멈추지 않도록 \`try-catch\` 예외 처리와 친절한 토스트 알림(\`ss.toast()\`)을 제공하십시오.
-8. 응답은 반드시 지정된 JSON 규격으로만 출력하십시오.`;
+8. 사용자의 요구사항에 **이지데스크 사내 My DB(SQLite) 데이터 연동**이 포함된 경우:
+   - 이미 주입된 \`egdeskUserDataSql(query)\` 함수를 호출하여 필요한 SELECT/INSERT/UPDATE를 손쉽게 원격 실행할 수 있습니다.
+9. 오류가 발생하더라도 구글 시트가 멈추지 않도록 \`try-catch\` 예외 처리와 친절한 토스트 알림(\`SpreadsheetApp.getActiveSpreadsheet().toast(...)\`)을 제공하십시오.
+10. 응답은 반드시 지정된 JSON 규격으로만 출력하십시오.`;
 
       // 시스템에 등록된 Gemini API Key 조회
       let geminiApiKey = '';
@@ -535,7 +595,7 @@ ${existingCode.trim()}
 [스프레드시트 전체 탭 및 데이터 명세]
 - 스프레드시트 제목: ${sheetTitle || '업무 대장'}
 - 스프레드시트 URL: ${sheetUrl || '미지정'}
-- Google Gemini API Key: ${geminiApiKey || '시트 속성(PropertiesService)에서 로드'}
+- 터널 클라이언트 상태: EgdeskConfig.gs 및 EgdeskClient.gs 사전 주입 완료 (egdeskToolsCall, egdeskUserDataSql, testEgdeskTunnel 즉시 사용 가능)
 
 ${tabsContextDescription}
 
@@ -692,6 +752,19 @@ ${incrementalContext}
         }
 
         gasProjectId = targetProjId || gasProjectId;
+
+        // 2-1. 배포 전 터널 클라이언트 파일(EgdeskConfig.gs, EgdeskClient.gs) 및 매니페스트 동기화
+        if (gasProjectId) {
+          try {
+            await callAppsScriptToolDirect('apps_script_setup_egdesk_tunnel', {
+              projectId: gasProjectId,
+              push: false
+            });
+            console.log(`[AppsScript] Verified and injected egdesk tunnel into project ${gasProjectId} before deploy`);
+          } catch (tunnelErr: any) {
+            console.warn('[AppsScript] Pre-deploy tunnel setup warning:', tunnelErr.message);
+          }
+        }
 
         // 3. Code.gs 파일 100% 덮어쓰기 작성
         await callAppsScriptToolDirect('apps_script_write_file', {

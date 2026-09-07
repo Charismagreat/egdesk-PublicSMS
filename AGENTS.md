@@ -199,8 +199,9 @@ See `.agents/rules/egdesk-dev-context.md` for full details.
        }
      }
      ```
-4. **외부 연동 스크립트 배포 시 터널 주소 주입 의무화**:
-   - Google 스프레드시트 연동 스크립트, 웹훅 콜백 및 외부 연계 코드 생성 시 로컬 주소 대신 이지데스크 공용 터널 주소 및 `X-Api-Key`를 주입하여 어디서든 안정적으로 동작하도록 보장합니다.
+4. **신규 Apps Script 코드 생성 시 터널 자동 주입 강제 및 표준 클라이언트 사용**:
+   - Apps Script 프로젝트 생성/배포 시 `apps_script_setup_egdesk_tunnel` 도구를 자동 실행하여 `EgdeskConfig.gs` 및 `EgdeskClient.gs`를 클라우드에 사전 주입합니다.
+   - 코드 생성 AI(`src/app/api/apps-script/clone-and-inject/route.ts`)는 저수준 `UrlFetchApp`이나 키 하드코딩 대신, 사전 주입된 `egdeskToolsCall('ai-caller', 'ai_caller_call', ...)`, `egdeskUserDataSql(query)`, `testEgdeskTunnel()` 함수를 자율 활용하여 간결하고 신뢰성 높은 자동화 코드를 생성합니다.
 <!-- END:egdesk-tunnel-rules -->
 
 

@@ -306,11 +306,6 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess, initial
                   </span>
                 )}
               </h3>
-              {isEditMode && (
-                <p className="text-xs text-slate-500 mt-0.5">
-                  기존에 배포된 스크립트를 보존하며 새 요구사항을 유기적으로 결합하여 갱신 배포합니다.
-                </p>
-              )}
             </div>
           </div>
 
@@ -652,10 +647,17 @@ export default function NewAppsScriptModal({ isOpen, onClose, onSuccess, initial
                       </button>
                       <button
                         type="button"
-                        onClick={() => setPrompt("사이드바에서 영수증이나 세금계산서 이미지를 첨부하면 이지데스크 AI Vision OCR을 호출하여 공급가액, 세액, 거래처명을 자동 추출하고 시트 행에 자동 기입하는 시스템을 작성해줘.")}
+                        onClick={() => setPrompt("사이드바에서 영수증이나 세금계산서 이미지를 첨부하면 사전 주입된 이지데스크 터널 클라이언트(egdeskToolsCall)를 통해 AI Vision OCR을 호출하여 공급가액, 세액, 거래처명을 자동 추출하고 시트 행에 자동 기입하는 시스템을 작성해줘.")}
                         className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
                       >
                         👁️ AI Vision OCR 자동 판독 & 행 기입
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt("상단 메뉴바에 '[⚡ 이지데스크 자동화]' 메뉴를 만들고, '🔌 이지데스크 터널 연결 점검' 메뉴를 클릭하면 사전 주입된 testEgdeskTunnel() 함수가 실행되어 백엔드 통신 상태를 토스트로 알리도록 구성해줘.")}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent text-slate-700 text-[10px] font-bold rounded-xl transition-all cursor-pointer text-left"
+                      >
+                        🔌 이지데스크 터널 점검 메뉴 등록
                       </button>
                       <button
                         type="button"

@@ -1126,6 +1126,14 @@ If the user is asking about how to use the system, menus, manuals, guides, or tr
   \`[RND_SPACE_PREVIEW:{"entrance_image": "/images/rnd/entrance_good.jpg", "layout_image": "/images/rnd/layout_need_improvement.jpg", "signage_status": "PASS", "partition_status": "FAIL", "overall_status": "보완필요", "inspector_notes": "이지봇 분석 결과: 출입구 현판은 적합하게 감지되었으나, 내부 파티션 높이가 1.05m로 추정되어 법정 기준(1.2m)에 미달하여 보완이 필요합니다."}]\`
 - [중요 📝] 만약 사용자가 R&D 연구일지 작성을 요청하거나 음성 스케치/Git 커밋 로그/Jira 태스크 내역을 보내면서 일지 초안 작성을 요구하는 상황이 명백히 감지되면, R&D 필수 4대 구성 요건(1. 연구 배경, 2. 실험 방법, 3. 결과 분석, 4. 향후 계획)에 부합하는 정밀하고 학술적인 일지 본문 내용을 지능적으로 자동 작문하고, 다른 설명 글을 완전히 생략하고 오직 다음 형식의 단독 메시지로만 응답해 주세요 (JSON 외에 다른 일반 텍스트나 사족을 절대 덧붙이지 마세요):
   \`[RND_LOG_PREVIEW:{"author_id": 3, "work_date": "오늘날짜(YYYY-MM-DD)", "raw_source": "VOICE 또는 GITHUB 또는 JIRA", "raw_content": "사용자가 보내온 원문 또는 요약 텍스트", "ai_generated_title": "AI가 요약한 R&D 제목", "ai_generated_content": "1. 연구 배경: ...\\n2. 실험 방법: ...\\n3. 결과 분석: ...\\n4. 향후 계획: ..."}]\`
+- [중요 ⚡ 구글 스프레드시트 & Apps Script(GAS) 터널링 안내 원칙]:
+  - 사용자가 구글 시트 연동, Apps Script 스크립트 작성, 외부 AI/OCR 연동, My DB 원격 쿼리 등을 질문할 경우:
+    1. 모든 구글 Apps Script 프로젝트는 \`apps_script_setup_egdesk_tunnel\`을 통해 터널 설정 및 클라이언트 유틸리티(\`EgdeskConfig.gs\`, \`EgdeskClient.gs\`)가 사전 주입되어 있음을 안내하세요.
+    2. 구글 클라우드는 \`localhost\` 호출 시 100% DNS 에러가 발생하므로 공용 터널을 사용해야 하며, 사용자가 직접 복잡한 코드를 짤 필요 없이 이미 주입된 표준 헬퍼 함수를 호출하면 됨을 설명하세요:
+       - \`egdeskToolsCall('ai-caller', 'ai_caller_call', { ... })\`: 초고속 Gemini AI Caller 및 파일/문서 OCR 호출
+       - \`egdeskUserDataSql(query)\`: 사내 My DB(SQLite) 원격 조회 및 업데이트
+       - \`testEgdeskTunnel()\`: 상단 메뉴 연동 및 연결 상태 원클릭 테스트
+    3. 사용자에게 별도의 개인 API 키 입력을 요구하지 않고 이지데스크가 중앙에서 일괄 제어함을 안심시켜 주세요.
 
 ${manualContext ? `\n============================\n[공식 시스템 매뉴얼 지식 베이스 (RAG)]\n${manualContext}\n\n-> 지시사항: 사용자가 시스템 사용법, 메뉴 구조, 가이드라인 등을 묻고 있습니다. 지어내지 말고, 위 매뉴얼 내용에 기반하여 가장 정확하고 친절하게 대답해 주세요.\n============================\n` : ''}
 [현재 보고 있는 페이지 URL]:
